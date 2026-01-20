@@ -1,0 +1,66 @@
+name: "Software Development"
+description: "Build high-quality software with structured workflows"
+version: "1.0.0"
+domain: "software"
+
+workflow:
+  phases:
+    - name: "research"
+      description: "Understand requirements and explore options"
+    - name: "design"
+      description: "Design architecture and data models"
+    - name: "implement"
+      description: "Write code and tests"
+    - name: "test"
+      description: "Validate implementation"
+    - name: "review"
+      description: "Code review and quality check"
+
+artifacts:
+  required:
+    - spec.md
+    - plan.md
+    - tasks.md
+  optional:
+    - data-model.md
+    - contracts/
+    - quickstart.md
+    - research.md
+    - checklists/
+
+paths:
+  workspace: "<!-- SOURCE_DIR -->"
+  tests: "<!-- TESTS_DIR -->"
+  deliverables: "contracts/"
+  documentation: "docs/"
+
+validation:
+  checks:
+    - git_clean
+    - all_tests_pass
+    - kanban_complete
+    - no_clarification_markers
+
+# Custom validators (optional)
+custom_validators:
+  enabled: false
+  path: ".kittify/validators/"
+
+mcp_tools:
+  required:
+    - filesystem
+    - git
+  recommended:
+    - code-search
+    - test-runner
+
+agent_context: |
+  You are a software development agent following best practices.
+
+  Key principles:
+  - Follow the project constitution
+  - Write clean, maintainable code
+  - Test your implementations
+  - Document your decisions
+
+  <!-- ADD_PROJECT_SPECIFIC_AGENT_CONTEXT -->

@@ -1,0 +1,189 @@
+// Link AI Newsletter Engine - Database Schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgvector(map: "vector")]
+}
+
+// ==================== ARTICLE MODELS ====================
+
+model Article {
+  id        String   @id @default(cuid())
+  sourceUrl String   @unique
+  title     String
+  content   String   @db.Text
+  author    String?
+  publishedAt DateTime
+
+  // AI-generated content
+  embedding      Float[]  // pgvector embedding
+  relevanceScore Float?
+  summary        String?  @db.Text
+  category       String[]
+
+  // Status tracking
+  status    ArticleStatus @default(PENDING_REVIEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  editions EditionArticle[]
+
+  @@index([status])
+  @@index([relevanceScore(sort: Desc)])
+  @@index([publishedAt(sort: Desc)])
+}
+
+enum ArticleStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// ==================== INTERNAL PROJECTS ====================
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @db.Text
+  team        String
+  projectDate DateTime
+  impact      String?  @db.Text
+  imageUrl    String?
+  featured    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  editions EditionProject[]
+
+  @@index([featured])
+}
+
+// ==================== NEWSLETTER EDITIONS ====================
+
+model Edition {
+  id     String @id @default(cuid())
+  week   Int
+  year   Int
+  status EditionStatus @default(DRAFT)
+
+  finalizedAt DateTime?
+  sentAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  articles EditionArticle[]
+  projects EditionProject[]
+
+  @@unique([week, year])
+  @@index([status])
+}
+
+enum EditionStatus {
+  DRAFT
+  FINALIZED
+  SENT
+}
+
+// Join table: Edition <-> Articles (with ordering)
+model EditionArticle {
+  edition   Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  editionId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId String
+  order     Int
+
+  @@id([editionId, articleId])
+  @@index([editionId, order])
+}
+
+// Join table: Edition <-> Projects (with ordering)
+model EditionProject {
+  edition   Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  editionId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  order     Int
+
+  @@id([editionId, projectId])
+  @@index([editionId, order])
+}
+
+// ==================== SUBSCRIBERS ====================
+
+model Subscriber {
+  id     String  @id @default(cuid())
+  email  String  @unique
+  name   String?
+  active Boolean @default(true)
+
+  // Preferences
+  preferredLanguage String @default("en") // en, pt-pt, pt-br, es, ar
+  preferredStyle    String @default("comprehensive") // executive, technical, comprehensive
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  events EmailEvent[]
+
+  @@index([active])
+  @@index([email])
+}
+
+// ==================== EMAIL TRACKING ====================
+
+model EmailEvent {
+  id String @id @default(cuid())
+
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  subscriberId String
+
+  editionId String
+  eventType EmailEventType
+  timestamp DateTime @default(now())
+
+  // Optional metadata (click URL, bounce reason, etc.)
+  metadata Json?
+
+  @@index([subscriberId, eventType])
+  @@index([editionId, eventType])
+  @@index([timestamp])
+}
+
+enum EmailEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  UNSUBSCRIBED
+}
+
+// ==================== RSS SOURCES ====================
+
+model RSSSource {
+  id       String  @id @default(cuid())
+  name     String
+  url      String  @unique
+  category String
+  active   Boolean @default(true)
+
+  lastFetchedAt DateTime?
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}

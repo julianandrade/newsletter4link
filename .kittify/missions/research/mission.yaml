@@ -1,0 +1,53 @@
+name: "Research"
+description: "Structured research and discovery workflow"
+version: "1.0.0"
+domain: "research"
+
+workflow:
+  phases:
+    - name: "question"
+      description: "Define the research question"
+    - name: "methodology"
+      description: "Design research approach"
+    - name: "gather"
+      description: "Collect data and information"
+    - name: "analyze"
+      description: "Analyze findings"
+    - name: "synthesize"
+      description: "Draw conclusions"
+    - name: "publish"
+      description: "Document and share results"
+
+artifacts:
+  required:
+    - spec.md
+    - plan.md
+    - tasks.md
+    - findings.md
+  optional:
+    - research.md
+    - data-model.md
+
+paths:
+  workspace: "src/"
+  deliverables: "docs/"
+  documentation: "docs/"
+
+validation:
+  checks:
+    - git_clean
+    - kanban_complete
+    - no_clarification_markers
+
+mcp_tools:
+  required:
+    - filesystem
+    - git
+  recommended:
+    - web-search
+    - pdf-reader
+
+agent_context: |
+  You are a research agent conducting structured investigation.
+  Follow the research methodology and document findings thoroughly.
+  Maintain objectivity and cite sources appropriately.
