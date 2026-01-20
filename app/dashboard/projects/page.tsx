@@ -1,13 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppHeader } from "@/components/app-header";
+import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit2, Trash2, Star, StarOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Plus, Pencil, Trash2, Star, Users, Calendar } from "lucide-react";
 
 interface Project {
   id: string;
@@ -24,7 +34,9 @@ interface Project {
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -63,7 +75,7 @@ export default function ProjectsPage() {
       imageUrl: "",
     });
     setEditingId(null);
-    setShowForm(false);
+    setDialogOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,21 +112,31 @@ export default function ProjectsPage() {
       imageUrl: project.imageUrl || "",
     });
     setEditingId(project.id);
-    setShowForm(true);
+    setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this project?")) return;
+  const handleDeleteClick = (project: Project) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
 
     try {
-      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/projects/${projectToDelete.id}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
 
       if (data.success) {
-        setProjects(projects.filter((p) => p.id !== id));
+        setProjects(projects.filter((p) => p.id !== projectToDelete.id));
       }
     } catch (error) {
       console.error("Error deleting project:", error);
+    } finally {
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
     }
   };
 
@@ -140,43 +162,54 @@ export default function ProjectsPage() {
     }
   };
 
+  const openAddDialog = () => {
+    resetForm();
+    setDialogOpen(true);
+  };
+
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Internal Projects</h1>
-          <p className="text-slate-600">Loading projects...</p>
-        </div>
+      <div className="flex flex-col flex-1">
+        <AppHeader title="Projects" />
+        <main className="flex-1 p-6">
+          <p className="text-muted-foreground">Loading projects...</p>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+    <div className="flex flex-col flex-1">
+      <AppHeader title="Projects" />
+
+      <main className="flex-1 p-6 space-y-6">
+        {/* Header with Add Button */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Internal Projects</h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              Manage Link's AI projects and achievements
+            <p className="text-muted-foreground">
+              Manage Link&apos;s AI projects and achievements
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Project
-          </Button>
-        </div>
-
-        {showForm && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>
-                {editingId ? "Edit Project" : "Add New Project"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openAddDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[525px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingId ? "Edit Project" : "Add New Project"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingId
+                    ? "Update the project details below."
+                    : "Fill in the details for your new project."}
+                </DialogDescription>
+              </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="name">Project Name *</Label>
                   <Input
                     id="name"
@@ -184,11 +217,12 @@ export default function ProjectsPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
+                    placeholder="Enter project name"
                     required
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="description">Description *</Label>
                   <Textarea
                     id="description"
@@ -196,13 +230,14 @@ export default function ProjectsPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
+                    placeholder="Describe what this project does"
                     rows={3}
                     required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="team">Team *</Label>
                     <Input
                       id="team"
@@ -210,11 +245,12 @@ export default function ProjectsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, team: e.target.value })
                       }
+                      placeholder="e.g., Data Science"
                       required
                     />
                   </div>
 
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="projectDate">Date *</Label>
                     <Input
                       id="projectDate"
@@ -228,7 +264,7 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="impact">Impact / Results</Label>
                   <Textarea
                     id="impact"
@@ -241,7 +277,7 @@ export default function ProjectsPage() {
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="imageUrl">Image URL (optional)</Label>
                   <Input
                     id="imageUrl"
@@ -254,112 +290,144 @@ export default function ProjectsPage() {
                   />
                 </div>
 
-                <div className="flex gap-2">
-                  <Button type="submit">
-                    {editingId ? "Update Project" : "Create Project"}
-                  </Button>
+                <DialogFooter>
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Cancel
                   </Button>
-                </div>
+                  <Button type="submit">
+                    {editingId ? "Update Project" : "Create Project"}
+                  </Button>
+                </DialogFooter>
               </form>
-            </CardContent>
-          </Card>
-        )}
+            </DialogContent>
+          </Dialog>
+        </div>
 
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Project</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete &quot;{projectToDelete?.name}
+                &quot;? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Project Cards Grid */}
         {projects.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
-              <p className="text-slate-600 dark:text-slate-400">
-                No projects yet. Add your first project to showcase Link's AI
-                work.
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <p className="text-muted-foreground text-center">
+                No projects yet. Add your first project to showcase Link&apos;s
+                AI work.
               </p>
+              <Button className="mt-4" onClick={openAddDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Your First Project
+              </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
-              <Card key={project.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {project.featured && (
-                          <Badge variant="success">Featured</Badge>
-                        )}
-                        <span className="text-sm text-slate-600 dark:text-slate-400">
-                          {project.team}
-                        </span>
-                      </div>
-                      <CardTitle className="text-xl">{project.name}</CardTitle>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        {new Date(project.projectDate).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "long",
-                            year: "numeric",
-                          }
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent>
-                  <p className="text-slate-700 dark:text-slate-300 mb-3">
-                    {project.description}
-                  </p>
-
-                  {project.impact && (
-                    <div className="mb-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                      <p className="text-sm font-semibold mb-1">Impact:</p>
-                      <p className="text-sm text-slate-700 dark:text-slate-300">
-                        {project.impact}
-                      </p>
-                    </div>
+              <Card key={project.id} className="flex flex-col">
+                <CardContent className="flex-1 pt-6">
+                  {/* Featured Badge */}
+                  {project.featured && (
+                    <Badge variant="default" className="mb-3 gap-1">
+                      <Star className="h-3 w-3 fill-current" />
+                      Featured
+                    </Badge>
                   )}
 
-                  <div className="flex gap-2 pt-3 border-t">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toggleFeatured(project.id, project.featured)}
-                    >
-                      {project.featured ? (
-                        <>
-                          <StarOff className="w-4 h-4 mr-1" />
-                          Unfeature
-                        </>
-                      ) : (
-                        <>
-                          <Star className="w-4 h-4 mr-1" />
-                          Feature in Newsletter
-                        </>
+                  {/* Project Name */}
+                  <h3 className="text-lg font-semibold mb-2">{project.name}</h3>
+
+                  {/* Team and Date */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <Badge variant="secondary" className="gap-1">
+                      <Users className="h-3 w-3" />
+                      {project.team}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(project.projectDate).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          year: "numeric",
+                        }
                       )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(project)}
-                    >
-                      <Edit2 className="w-4 h-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDelete(project.id)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
+                    </span>
                   </div>
+
+                  {/* Description */}
+                  <CardDescription className="line-clamp-3 mb-3">
+                    {project.description}
+                  </CardDescription>
+
+                  {/* Impact */}
+                  {project.impact && (
+                    <div className="p-3 bg-muted rounded-lg mb-3">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">
+                        Impact
+                      </p>
+                      <p className="text-sm">{project.impact}</p>
+                    </div>
+                  )}
                 </CardContent>
+
+                {/* Actions Row */}
+                <div className="flex items-center gap-1 p-4 pt-0 border-t mt-auto">
+                  <Button
+                    size="sm"
+                    variant={project.featured ? "secondary" : "ghost"}
+                    onClick={() => toggleFeatured(project.id, project.featured)}
+                    title={project.featured ? "Remove from featured" : "Feature in newsletter"}
+                  >
+                    <Star
+                      className={`h-4 w-4 ${
+                        project.featured ? "fill-current" : ""
+                      }`}
+                    />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleEdit(project)}
+                    title="Edit project"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDeleteClick(project)}
+                    title="Delete project"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
