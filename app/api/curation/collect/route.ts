@@ -1,44 +1,54 @@
-import { NextResponse } from "next/server";
-import { runCurationPipeline } from "@/lib/curation/curator";
+import { runCurationPipelineWithStreaming } from "@/lib/curation/curator";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 minutes
-
-/**
- * POST /api/curation/collect
- * Manually trigger the content curation pipeline
- */
-export async function POST() {
-  try {
-    console.log("API: Starting curation collection...");
-
-    const result = await runCurationPipeline();
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Curation pipeline completed",
-        result,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("API: Curation collection failed:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
-}
+export const maxDuration = 300; // 5 minutes (only works on Pro plan)
 
 /**
  * GET /api/curation/collect
- * Trigger curation via GET (for manual browser testing)
+ * Stream curation progress using Server-Sent Events
+ * This prevents timeout by keeping the connection alive
  */
 export async function GET() {
-  return POST();
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const sendEvent = (event: string, data: any) => {
+        const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(encoder.encode(message));
+      };
+
+      try {
+        sendEvent("start", { message: "Starting curation pipeline..." });
+
+        await runCurationPipelineWithStreaming((update) => {
+          sendEvent("progress", update);
+        });
+
+        sendEvent("complete", { message: "Curation pipeline completed!" });
+        controller.close();
+      } catch (error) {
+        sendEvent("error", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+/**
+ * POST /api/curation/collect
+ * Same as GET but supports POST requests
+ */
+export async function POST() {
+  return GET();
 }
