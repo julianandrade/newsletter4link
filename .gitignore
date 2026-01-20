@@ -40,3 +40,6 @@ yarn-error.log*
 # Prisma
 /lib/generated/prisma
 prisma/migrations/**/migration_lock.toml
+
+# Playwright test screenshots
+.playwright-mcp/
