@@ -86,7 +86,7 @@ export async function fetchRSSFeed(
         title: item.title,
         link: item.link,
         content,
-        author: item.creator || item.author,
+        author: item.creator || (item as any).author,
         publishedAt,
         sourceUrl: url,
         sourceName,
