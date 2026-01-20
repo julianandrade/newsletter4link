@@ -71,13 +71,13 @@ export async function POST(request: Request) {
     const year = now.getFullYear();
 
     const emailData = {
-      articles: articles.map((article) => ({
+      articles: articles.map((article: any) => ({
         title: article.title,
         summary: article.summary || "",
         sourceUrl: article.sourceUrl,
         category: article.category,
       })),
-      projects: projects.map((project) => ({
+      projects: projects.map((project: any) => ({
         name: project.name,
         description: project.description,
         team: project.team,
