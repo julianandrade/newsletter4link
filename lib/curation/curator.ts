@@ -197,6 +197,11 @@ export async function runCurationPipelineWithStreaming(
           `${article.title}\n\n${article.content}`
         );
 
+        // Validate embedding
+        if (!Array.isArray(embedding) || embedding.length === 0) {
+          throw new Error("Invalid embedding generated");
+        }
+
         // Check for duplicates
         const duplicateCheck = await checkForDuplicates(
           article.link,

@@ -10,17 +10,40 @@ const openai = new OpenAI({
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
+    // Validate API key
+    if (!config.ai.openai.apiKey || config.ai.openai.apiKey === 'undefined') {
+      console.error("OpenAI API key is missing or undefined");
+      throw new Error("OpenAI API key is not configured");
+    }
+
     // Truncate text if too long (ada-002 has 8191 token limit)
     const truncatedText = text.substring(0, 8000);
+
+    console.log(`Generating embedding for text (${truncatedText.length} chars)...`);
 
     const response = await openai.embeddings.create({
       model: config.ai.openai.embeddingModel,
       input: truncatedText,
     });
 
-    return response.data[0].embedding;
+    const embedding = response.data[0]?.embedding;
+
+    if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+      console.error("Invalid embedding response:", JSON.stringify(response).substring(0, 200));
+      throw new Error("Invalid embedding response from OpenAI");
+    }
+
+    console.log(`Successfully generated embedding with ${embedding.length} dimensions`);
+    return embedding;
   } catch (error) {
     console.error("Error generating embedding:", error);
+    if (error instanceof Error) {
+      console.error("Error details:", {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.substring(0, 500)
+      });
+    }
     throw new Error(
       `Failed to generate embedding: ${error instanceof Error ? error.message : "Unknown error"}`
     );
