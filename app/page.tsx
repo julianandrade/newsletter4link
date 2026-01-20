@@ -1,22 +1,24 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-center font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-4">
-          Link AI Newsletter Engine
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+      <div className="text-center space-y-6 px-4">
+        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          Newsletter Engine
         </h1>
-        <p className="text-center text-gray-600 dark:text-gray-400">
-          Autonomous AI-powered newsletter curation and delivery system
+        <p className="text-lg text-muted-foreground max-w-md mx-auto">
+          AI-powered content curation for Link's internal newsletter
         </p>
-        <div className="mt-8 flex gap-4 justify-center">
-          <a
-            href="/dashboard/review"
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
+        <Button asChild size="lg">
+          <Link href="/dashboard">
             Go to Dashboard
-          </a>
-        </div>
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
       </div>
-    </main>
+    </div>
   );
 }
