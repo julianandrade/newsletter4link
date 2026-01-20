@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function UnsubscribePage() {
+function UnsubscribeContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     "loading"
@@ -33,51 +33,68 @@ export default function UnsubscribePage() {
           setMessage(data.error || "Failed to unsubscribe");
         }
       })
-      .catch((error) => {
+      .catch(() => {
         setStatus("error");
         setMessage("An error occurred. Please try again.");
       });
   }, [searchParams]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="max-w-md w-full text-center">
-        <h1 className="text-3xl font-bold mb-4">
-          {status === "loading" && "Processing..."}
-          {status === "success" && "Unsubscribed"}
-          {status === "error" && "Error"}
-        </h1>
+    <div className="max-w-md w-full text-center">
+      <h1 className="text-3xl font-bold mb-4">
+        {status === "loading" && "Processing..."}
+        {status === "success" && "Unsubscribed"}
+        {status === "error" && "Error"}
+      </h1>
 
-        <p className="text-gray-600 dark:text-gray-400 mb-8">{message}</p>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">{message}</p>
 
-        {status === "success" && (
-          <div className="space-y-4">
-            <p className="text-sm">
-              You will no longer receive newsletters from Link Consulting AI
-              Newsletter.
-            </p>
-            <p className="text-sm text-gray-500">
-              If you change your mind, please contact your administrator to
-              re-subscribe.
-            </p>
-          </div>
-        )}
-
-        {status === "error" && (
-          <p className="text-sm text-gray-500">
-            Please contact support if you continue to experience issues.
+      {status === "success" && (
+        <div className="space-y-4">
+          <p className="text-sm">
+            You will no longer receive newsletters from Link Consulting AI
+            Newsletter.
           </p>
-        )}
-
-        <div className="mt-8">
-          <a
-            href="/"
-            className="text-blue-600 hover:text-blue-700 underline text-sm"
-          >
-            Return to home
-          </a>
+          <p className="text-sm text-gray-500">
+            If you change your mind, please contact your administrator to
+            re-subscribe.
+          </p>
         </div>
+      )}
+
+      {status === "error" && (
+        <p className="text-sm text-gray-500">
+          Please contact support if you continue to experience issues.
+        </p>
+      )}
+
+      <div className="mt-8">
+        <a
+          href="/"
+          className="text-blue-600 hover:text-blue-700 underline text-sm"
+        >
+          Return to home
+        </a>
       </div>
+    </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="max-w-md w-full text-center">
+      <h1 className="text-3xl font-bold mb-4">Processing...</h1>
+      <p className="text-gray-600 dark:text-gray-400">Please wait...</p>
+    </div>
+  );
+}
+
+export default function UnsubscribePage() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <Suspense fallback={<LoadingFallback />}>
+        <UnsubscribeContent />
+      </Suspense>
     </main>
   );
 }

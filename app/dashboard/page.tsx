@@ -15,75 +15,92 @@ import {
   Mail,
   Calendar,
   Activity,
+  Loader2,
 } from "lucide-react";
+
+interface Stats {
+  pendingArticles: number;
+  approvedArticles: number;
+  totalProjects: number;
+  lastSent: string;
+  isReadyToSend: boolean;
+}
 
 export default function DashboardHome() {
   const [isRunningCuration, setIsRunningCuration] = useState(false);
-  const [stats, setStats] = useState({
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<Stats>({
     pendingArticles: 0,
-    approvedThisWeek: 0,
-    editionsSent: 0,
+    approvedArticles: 0,
+    totalProjects: 0,
     lastSent: "Never",
     isReadyToSend: false,
   });
 
   useEffect(() => {
-    // Fetch stats from API
-    Promise.all([
-      fetch("/api/articles/pending").then((r) => r.json()),
-      fetch("/api/articles/approved").then((r) => r.json()),
-      fetch("/api/email/editions").then((r) => r.json()),
-    ])
-      .then(([pending, approved, editions]) => {
-        const pendingCount = pending.data?.length || 0;
-        const approvedCount = approved.data?.length || 0;
-        const editionsData = editions.data || [];
-        const editionsSentCount = editionsData.length;
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.status === "healthy" && data.stats) {
+          const { articles, projects, latestEdition } = data.stats;
 
-        // Get the last sent date
-        let lastSentDate = "Never";
-        if (editionsData.length > 0) {
-          const mostRecent = editionsData[0];
-          if (mostRecent.sentAt) {
-            lastSentDate = new Date(mostRecent.sentAt).toLocaleDateString("en-US", {
+          let lastSentDate = "Never";
+          if (latestEdition?.sentAt) {
+            lastSentDate = new Date(latestEdition.sentAt).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
               year: "numeric",
             });
           }
-        }
 
-        setStats({
-          pendingArticles: pendingCount,
-          approvedThisWeek: approvedCount,
-          editionsSent: editionsSentCount,
-          lastSent: lastSentDate,
-          isReadyToSend: approvedCount > 0,
-        });
+          setStats({
+            pendingArticles: articles?.pending || 0,
+            approvedArticles: articles?.approved || 0,
+            totalProjects: projects?.total || 0,
+            lastSent: lastSentDate,
+            isReadyToSend: (articles?.approved || 0) > 0,
+          });
+        }
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
   const handleRunCuration = async () => {
     setIsRunningCuration(true);
     try {
-      window.location.href = "/api/curation/collect";
+      const response = await fetch("/api/curation/collect", { method: "POST" });
+      if (response.ok) {
+        window.location.reload();
+      }
     } catch (error) {
       console.error("Failed to run curation:", error);
+    } finally {
       setIsRunningCuration(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col flex-1">
+        <AppHeader title="Dashboard" />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col flex-1">
       <AppHeader title="Dashboard" />
 
-      <main className="flex-1 p-6 space-y-8">
-        {/* Section 1: Quick Actions */}
+      <div className="flex-1 p-6 space-y-8">
+        {/* Quick Actions */}
         <section>
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
           <div className="grid gap-4 md:grid-cols-3">
-            {/* Run Curation Card */}
+            {/* Run Curation */}
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center space-y-4">
@@ -93,7 +110,7 @@ export default function DashboardHome() {
                   <div>
                     <h3 className="font-medium">Run Curation</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Fetch and score new articles from RSS feeds
+                      Fetch and score new articles
                     </p>
                   </div>
                   <Button
@@ -101,13 +118,20 @@ export default function DashboardHome() {
                     disabled={isRunningCuration}
                     className="w-full"
                   >
-                    {isRunningCuration ? "Running..." : "Start Curation"}
+                    {isRunningCuration ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Running...
+                      </>
+                    ) : (
+                      "Start Curation"
+                    )}
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Review Articles Card */}
+            {/* Review Articles */}
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center space-y-4">
@@ -116,7 +140,7 @@ export default function DashboardHome() {
                     {stats.pendingArticles > 0 && (
                       <Badge
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                        className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 text-xs"
                       >
                         {stats.pendingArticles > 99 ? "99+" : stats.pendingArticles}
                       </Badge>
@@ -126,9 +150,8 @@ export default function DashboardHome() {
                     <h3 className="font-medium">Review Articles</h3>
                     <p className="text-sm text-muted-foreground mt-1">
                       {stats.pendingArticles === 0
-                        ? "No articles pending review"
-                        : `${stats.pendingArticles} article${stats.pendingArticles === 1 ? "" : "s"} awaiting review`
-                      }
+                        ? "No articles pending"
+                        : `${stats.pendingArticles} pending review`}
                     </p>
                   </div>
                   <Button variant="outline" className="w-full" asChild>
@@ -138,7 +161,7 @@ export default function DashboardHome() {
               </CardContent>
             </Card>
 
-            {/* Send Newsletter Card */}
+            {/* Send Newsletter */}
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center space-y-4">
@@ -147,18 +170,13 @@ export default function DashboardHome() {
                   </div>
                   <div>
                     <h3 className="font-medium">Send Newsletter</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {stats.isReadyToSend ? (
-                        <span className="flex items-center justify-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-green-500" />
-                          Ready to send
-                        </span>
-                      ) : (
-                        <span className="flex items-center justify-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-gray-400" />
-                          No approved articles
-                        </span>
-                      )}
+                    <p className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          stats.isReadyToSend ? "bg-green-500" : "bg-gray-400"
+                        }`}
+                      />
+                      {stats.isReadyToSend ? "Ready to send" : "No approved articles"}
                     </p>
                   </div>
                   <Button variant="outline" className="w-full" asChild>
@@ -170,13 +188,13 @@ export default function DashboardHome() {
           </div>
         </section>
 
-        {/* Section 2: Metrics */}
+        {/* Metrics */}
         <section>
           <h2 className="text-lg font-semibold mb-4">Metrics</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Articles</CardTitle>
+                <CardTitle className="text-sm font-medium">Pending</CardTitle>
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -187,23 +205,23 @@ export default function DashboardHome() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Approved This Week</CardTitle>
+                <CardTitle className="text-sm font-medium">Approved</CardTitle>
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.approvedThisWeek}</div>
+                <div className="text-2xl font-bold">{stats.approvedArticles}</div>
                 <p className="text-xs text-muted-foreground">Ready for newsletter</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Editions Sent</CardTitle>
+                <CardTitle className="text-sm font-medium">Projects</CardTitle>
                 <Mail className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.editionsSent}</div>
-                <p className="text-xs text-muted-foreground">Total newsletters sent</p>
+                <div className="text-2xl font-bold">{stats.totalProjects}</div>
+                <p className="text-xs text-muted-foreground">Total projects</p>
               </CardContent>
             </Card>
 
@@ -220,7 +238,7 @@ export default function DashboardHome() {
           </div>
         </section>
 
-        {/* Section 3: Activity Feed */}
+        {/* Activity */}
         <section>
           <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
           <Card>
@@ -232,7 +250,7 @@ export default function DashboardHome() {
             </CardContent>
           </Card>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
