@@ -107,12 +107,12 @@ export interface CurationStats {
 
 // ==================== Subscriber Types ====================
 
-export interface SubscriberWithStats = Subscriber & {
+export interface SubscriberWithStats extends Subscriber {
   emailsSent: number;
   opensCount: number;
   clicksCount: number;
   lastOpened?: Date;
-};
+}
 
 export interface ImportSubscribersResult {
   success: number;
