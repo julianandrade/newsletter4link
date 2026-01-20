@@ -57,11 +57,11 @@ export async function POST(request: Request) {
       edition = {
         week,
         year,
-        articles: articles.map((article, index) => ({
+        articles: articles.map((article: any, index: number) => ({
           article,
           order: index,
         })),
-        projects: projects.map((project, index) => ({
+        projects: projects.map((project: any, index: number) => ({
           project,
           order: index,
         })),
