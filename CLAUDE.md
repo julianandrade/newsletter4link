@@ -16,7 +16,8 @@ AI-powered internal newsletter engine for Link company. Automatically curates ar
 - Resend for email delivery
 - React Email for templates
 
-**Repository:** Internal project
+**Repository:** https://github.com/julianandrade/newsletter4link
+**Live Site:** https://newsletter4link.vercel.app
 
 ---
 
@@ -145,7 +146,8 @@ RESEND_API_KEY=re_...
 RESEND_FROM_EMAIL=newsletter@yourcompany.com
 
 # App Config
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=https://newsletter4link.vercel.app  # Production
+# For local: http://localhost:3000
 ```
 
 ### Local Development
@@ -197,12 +199,18 @@ npm test -- path/to/test
 ## Deployment
 
 **Environments:**
-- **Staging:** TBD
-- **Production:** Vercel
+- **Production:** https://newsletter4link.vercel.app
+- **Repository:** https://github.com/julianandrade/newsletter4link
 
 **Deploy Process:**
-- Push to main triggers Vercel deploy
-- Set environment variables in Vercel dashboard
+- Push to master triggers automatic Vercel deployment
+- All environment variables configured in Vercel dashboard
+- Build includes Prisma client generation and Next.js optimization
+
+**Build Requirements:**
+- Node.js 18+
+- PostgreSQL with pgvector extension
+- All environment variables must be set in Vercel project settings
 
 ---
 
