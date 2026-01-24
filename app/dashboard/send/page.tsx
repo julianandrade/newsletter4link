@@ -1,12 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppHeader } from "@/components/app-header";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Send, Mail, Eye, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Send,
+  Mail,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  FileText,
+  Briefcase,
+  Users,
+  Monitor,
+  Smartphone,
+} from "lucide-react";
 
 interface NewsletterData {
   articles: Array<{
@@ -29,7 +48,7 @@ export default function SendPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<NewsletterData | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string>("");
-  const [showPreview, setShowPreview] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [testEmail, setTestEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sendingAll, setSendingAll] = useState(false);
@@ -38,6 +57,7 @@ export default function SendPage() {
     text: string;
   } | null>(null);
   const [subscriberCount, setSubscriberCount] = useState(0);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   useEffect(() => {
     loadPreview();
@@ -119,14 +139,7 @@ export default function SendPage() {
   };
 
   const handleSendAll = async () => {
-    if (
-      !confirm(
-        `Are you sure you want to send this newsletter to ${subscriberCount} subscribers? This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
+    setShowConfirmDialog(false);
     setSendingAll(true);
     setMessage(null);
 
@@ -158,13 +171,14 @@ export default function SendPage() {
     }
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Send Newsletter</h1>
-          <div className="flex items-center gap-2 text-slate-600">
-            <Loader2 className="w-4 h-4 animate-spin" />
+      <div className="flex flex-col h-full">
+        <AppHeader title="Send Newsletter" />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin" />
             <span>Loading newsletter preview...</span>
           </div>
         </div>
@@ -172,15 +186,17 @@ export default function SendPage() {
     );
   }
 
+  // No articles state
   if (!data || data.articles.length === 0) {
     return (
-      <div className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Send Newsletter</h1>
-          <Card>
-            <CardContent className="p-12 text-center">
+      <div className="flex flex-col h-full">
+        <AppHeader title="Send Newsletter" />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <Card className="max-w-md">
+            <CardContent className="p-8 text-center">
               <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-              <p className="text-slate-600 dark:text-slate-400 mb-4">
+              <h2 className="text-lg font-semibold mb-2">No Articles Ready</h2>
+              <p className="text-muted-foreground mb-6">
                 No approved articles found. Please approve some articles before
                 sending a newsletter.
               </p>
@@ -195,227 +211,256 @@ export default function SendPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Send Newsletter</h1>
-          <p className="text-slate-600 dark:text-slate-400">
-            Week {data.week}, {data.year}
-          </p>
-        </div>
+    <div className="flex flex-col h-full">
+      <AppHeader title="Send Newsletter" />
 
+      <div className="flex-1 p-6 overflow-auto">
         {/* Status Message */}
         {message && (
-          <Card
-            className={`mb-6 ${
+          <div
+            className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
               message.type === "success"
-                ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                : "border-red-500 bg-red-50 dark:bg-red-900/20"
+                ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
             }`}
           >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                {message.type === "success" ? (
-                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                )}
-                <p
-                  className={
-                    message.type === "success"
-                      ? "text-green-800 dark:text-green-200"
-                      : "text-red-800 dark:text-red-200"
-                  }
-                >
-                  {message.text}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+            {message.type === "success" ? (
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            )}
+            <p
+              className={
+                message.type === "success"
+                  ? "text-green-800 dark:text-green-200"
+                  : "text-red-800 dark:text-red-200"
+              }
+            >
+              {message.text}
+            </p>
+          </div>
         )}
 
-        {/* Summary */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Newsletter Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                  Articles
-                </p>
-                <p className="text-2xl font-bold">{data.articles.length}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                  Projects
-                </p>
-                <p className="text-2xl font-bold">{data.projects.length}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                  Subscribers
-                </p>
-                <p className="text-2xl font-bold">{subscriberCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Content Preview */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Content Preview</CardTitle>
-              <Button
-                variant="outline"
-                onClick={() => setShowPreview(!showPreview)}
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                {showPreview ? "Hide" : "Show"} Email Preview
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!showPreview ? (
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Articles ({data.articles.length})</h4>
-                  <div className="space-y-2">
-                    {data.articles.map((article, index) => (
-                      <div key={index} className="flex items-start gap-2">
-                        <Badge variant="outline">{index + 1}</Badge>
-                        <div>
-                          <p className="text-sm font-medium">{article.title}</p>
-                          <p className="text-xs text-slate-600 dark:text-slate-400">
-                            {article.category.join(", ")}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+        {/* Two-Panel Layout */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left Panel - Preview (60%) */}
+          <div className="lg:w-[60%]">
+            <Card className="h-full">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Email Preview</CardTitle>
+                    <CardDescription>
+                      Week {data.week}, {data.year}
+                    </CardDescription>
+                  </div>
+                  {/* Desktop/Mobile Toggle */}
+                  <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+                    <Button
+                      variant={previewMode === "desktop" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-8 px-3"
+                      onClick={() => setPreviewMode("desktop")}
+                    >
+                      <Monitor className="w-4 h-4 mr-1.5" />
+                      Desktop
+                    </Button>
+                    <Button
+                      variant={previewMode === "mobile" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-8 px-3"
+                      onClick={() => setPreviewMode("mobile")}
+                    >
+                      <Smartphone className="w-4 h-4 mr-1.5" />
+                      Mobile
+                    </Button>
                   </div>
                 </div>
-
-                {data.projects.length > 0 && (
-                  <div className="pt-4 border-t">
-                    <h4 className="font-semibold mb-2">
-                      Internal Projects ({data.projects.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {data.projects.map((project, index) => (
-                        <div key={index} className="flex items-start gap-2">
-                          <Badge variant="secondary">{index + 1}</Badge>
-                          <div>
-                            <p className="text-sm font-medium">{project.name}</p>
-                            <p className="text-xs text-slate-600 dark:text-slate-400">
-                              {project.team}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {/* Email Preview Container */}
+                <div className="bg-muted/30 rounded-lg p-4 flex justify-center">
+                  <div
+                    className={`bg-white dark:bg-zinc-900 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${
+                      previewMode === "desktop" ? "w-full" : "w-[375px]"
+                    }`}
+                  >
+                    <iframe
+                      srcDoc={previewHtml}
+                      className="w-full h-[600px] border-0"
+                      title="Newsletter Preview"
+                    />
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900 overflow-auto max-h-[600px]">
-                <iframe
-                  srcDoc={previewHtml}
-                  className="w-full h-[600px] border-0"
-                  title="Newsletter Preview"
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        {/* Send Test Email */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Send Test Email</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label htmlFor="testEmail">Email Address</Label>
-                <Input
-                  id="testEmail"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={testEmail}
-                  onChange={(e) => setTestEmail(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendTest();
-                  }}
-                />
-              </div>
-              <div className="flex items-end">
+          {/* Right Panel - Actions (40%) */}
+          <div className="lg:w-[40%] flex flex-col gap-4">
+            {/* Summary Card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Newsletter Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <span className="text-sm font-medium">Articles ready</span>
+                    </div>
+                    <span className="text-xl font-bold">{data.articles.length}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                        <Briefcase className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <span className="text-sm font-medium">Featured projects</span>
+                    </div>
+                    <span className="text-xl font-bold">{data.projects.length}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                        <Users className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      </div>
+                      <span className="text-sm font-medium">Subscribers</span>
+                    </div>
+                    <span className="text-xl font-bold">{subscriberCount}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Test Email Card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Send Test Email</CardTitle>
+                <CardDescription>
+                  Preview the newsletter in your inbox before sending
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="testEmail" className="sr-only">
+                      Email Address
+                    </Label>
+                    <Input
+                      id="testEmail"
+                      type="email"
+                      placeholder="your@email.com"
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSendTest();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSendTest}
+                    disabled={sending || !testEmail}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {sending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="w-4 h-4 mr-2" />
+                        Send Test
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Send Newsletter Card */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Send Newsletter</CardTitle>
+                <CardDescription>
+                  Send to {subscriberCount} active subscriber{subscriberCount !== 1 ? "s" : ""}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
                 <Button
-                  onClick={handleSendTest}
-                  disabled={sending || !testEmail}
+                  onClick={() => setShowConfirmDialog(true)}
+                  disabled={sendingAll || subscriberCount === 0 || data.articles.length === 0}
+                  className="w-full"
+                  size="lg"
                 >
-                  {sending ? (
+                  {sendingAll ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Sending...
                     </>
                   ) : (
                     <>
-                      <Mail className="w-4 h-4 mr-2" />
-                      Send Test
+                      <Send className="w-4 h-4 mr-2" />
+                      Send Newsletter
                     </>
                   )}
                 </Button>
-              </div>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-              Test the newsletter before sending to all subscribers
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Send to All Subscribers */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Send to All Subscribers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800 mb-4">
-              <div>
-                <p className="font-semibold text-orange-900 dark:text-orange-200">
-                  Ready to send
+                <p className="text-xs text-muted-foreground mt-3 text-center">
+                  This action cannot be undone
                 </p>
-                <p className="text-sm text-orange-700 dark:text-orange-300">
-                  This will send the newsletter to {subscriberCount} active
-                  subscribers
-                </p>
-              </div>
-              <Button
-                onClick={handleSendAll}
-                disabled={sendingAll || subscriberCount === 0}
-                size="lg"
-              >
-                {sendingAll ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" />
-                    Send Newsletter
-                  </>
-                )}
-              </Button>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              ⚠️ This action cannot be undone. Make sure you've sent a test
-              email first.
-            </p>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Newsletter?</DialogTitle>
+            <DialogDescription>
+              You are about to send this newsletter to{" "}
+              <strong>{subscriberCount}</strong> subscriber{subscriberCount !== 1 ? "s" : ""}.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-muted rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Articles:</span>
+                <span className="font-medium">{data.articles.length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Projects:</span>
+                <span className="font-medium">{data.projects.length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Week:</span>
+                <span className="font-medium">
+                  Week {data.week}, {data.year}
+                </span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendAll}>
+              <Send className="w-4 h-4 mr-2" />
+              Confirm Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
