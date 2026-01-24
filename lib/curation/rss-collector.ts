@@ -103,19 +103,64 @@ export async function fetchRSSFeed(
 }
 
 /**
- * Fetch all configured RSS feeds
+ * Fetch all RSS feeds from database (or fallback to config)
+ * Filters articles by max age in days
  */
-export async function fetchAllRSSFeeds(): Promise<RSSArticle[]> {
+export async function fetchAllRSSFeeds(maxAgeDays: number = 7): Promise<RSSArticle[]> {
   const allArticles: RSSArticle[] = [];
 
-  for (const source of config.rssSources) {
+  // Calculate cutoff date
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+
+  // Try to get sources from database first
+  let sources: { name: string; url: string; category: string }[] = [];
+
+  try {
+    const dbSources = await getActiveRSSSources();
+    if (dbSources.length > 0) {
+      sources = dbSources;
+    } else {
+      // Fall back to config if no sources in DB
+      sources = [...config.rssSources];
+    }
+  } catch {
+    // Fall back to config if DB query fails
+    sources = [...config.rssSources];
+  }
+
+  for (const source of sources) {
     try {
       console.log(`Fetching RSS feed: ${source.name}...`);
       const articles = await fetchRSSFeed(source.url, source.name);
-      allArticles.push(...articles);
-      console.log(`✓ Fetched ${articles.length} articles from ${source.name}`);
+
+      // Filter articles by date
+      const filteredArticles = articles.filter(
+        (article) => article.publishedAt >= cutoffDate
+      );
+
+      allArticles.push(...filteredArticles);
+      console.log(
+        `✓ Fetched ${filteredArticles.length} articles from ${source.name} (${articles.length - filteredArticles.length} filtered by date)`
+      );
+
+      // Update last fetched timestamp
+      try {
+        await updateRSSSourceFetchedAt(source.url);
+      } catch {
+        // Ignore if source doesn't exist in DB
+      }
     } catch (error) {
       console.error(`✗ Failed to fetch ${source.name}`);
+      // Update error in database
+      try {
+        await updateRSSSourceFetchedAt(
+          source.url,
+          error instanceof Error ? error.message : "Unknown error"
+        );
+      } catch {
+        // Ignore if source doesn't exist in DB
+      }
       // Continue with other sources even if one fails
     }
   }

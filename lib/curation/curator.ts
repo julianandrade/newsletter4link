@@ -8,6 +8,14 @@ import {
   categorizeArticle,
 } from "@/lib/ai/claude";
 import { config } from "@/lib/config";
+import { getSettings, AppSettings } from "@/lib/settings";
+import {
+  updateJobStats,
+  addJobLog,
+  completeJob,
+  failJob,
+  isJobCancelled,
+} from "./job-manager";
 
 export interface CurationResult {
   total: number;
@@ -151,12 +159,20 @@ export async function runCurationPipeline(): Promise<CurationResult> {
   }
 }
 
+export class CurationCancelledError extends Error {
+  constructor() {
+    super("Curation job was cancelled");
+    this.name = "CurationCancelledError";
+  }
+}
+
 /**
- * Streaming version of curation pipeline
+ * Streaming version of curation pipeline with job tracking
  * Sends progress updates via callback to prevent timeouts
  */
 export async function runCurationPipelineWithStreaming(
-  onProgress: (update: any) => void
+  onProgress: (update: any) => void,
+  jobId?: string
 ): Promise<CurationResult> {
   const result: CurationResult = {
     total: 0,
@@ -167,21 +183,58 @@ export async function runCurationPipelineWithStreaming(
     errors: [],
   };
 
+  // Get settings from database
+  let settings: AppSettings;
+  try {
+    settings = await getSettings();
+  } catch {
+    // Fall back to config if settings fetch fails
+    settings = {
+      relevanceThreshold: config.curation.relevanceThreshold,
+      maxArticlesPerEdition: config.curation.maxArticlesPerEdition,
+      vectorSimilarityThreshold: config.curation.vectorSimilarityThreshold,
+      articleMaxAgeDays: 7,
+      aiModel: config.ai.anthropic.model,
+      embeddingModel: config.ai.openai.embeddingModel,
+    };
+  }
+
+  const log = async (level: "info" | "warn" | "error", message: string, data?: Record<string, unknown>) => {
+    if (jobId) {
+      await addJobLog(jobId, level, message, data);
+    }
+  };
+
   try {
     onProgress({ stage: "fetch", message: "Fetching RSS feeds..." });
+    await log("info", "Starting curation pipeline");
 
-    // Step 1: Fetch all RSS feeds
-    const articles = await fetchAllRSSFeeds();
+    // Step 1: Fetch all RSS feeds with date filtering
+    const articles = await fetchAllRSSFeeds(settings.articleMaxAgeDays);
     result.total = articles.length;
+
+    if (jobId) {
+      await updateJobStats(jobId, { totalFound: articles.length });
+    }
 
     onProgress({
       stage: "fetch_complete",
       message: `Fetched ${articles.length} articles`,
       total: articles.length,
     });
+    await log("info", `Fetched ${articles.length} articles from RSS feeds`);
 
     // Step 2: Process each article
     for (let i = 0; i < articles.length; i++) {
+      // Check for cancellation before each article
+      if (jobId && await isJobCancelled(jobId)) {
+        onProgress({
+          stage: "cancelled",
+          message: "Curation cancelled by user",
+        });
+        throw new CurationCancelledError();
+      }
+
       const article = articles[i];
 
       try {
@@ -205,7 +258,8 @@ export async function runCurationPipelineWithStreaming(
         // Check for duplicates
         const duplicateCheck = await checkForDuplicates(
           article.link,
-          embedding
+          embedding,
+          settings.vectorSimilarityThreshold
         );
 
         if (duplicateCheck.isDuplicate) {
@@ -214,6 +268,9 @@ export async function runCurationPipelineWithStreaming(
             message: `Duplicate detected: ${article.title.substring(0, 50)}`,
           });
           result.duplicates++;
+          if (jobId) {
+            await updateJobStats(jobId, { duplicates: result.duplicates });
+          }
           continue;
         }
 
@@ -229,8 +286,8 @@ export async function runCurationPipelineWithStreaming(
           score: relevanceScore,
         });
 
-        // Skip low-scoring articles
-        if (relevanceScore < config.curation.relevanceThreshold) {
+        // Skip low-scoring articles using dynamic threshold
+        if (relevanceScore < settings.relevanceThreshold) {
           onProgress({
             stage: "rejected",
             message: `Low score, rejecting: ${article.title.substring(0, 50)}`,
@@ -252,6 +309,9 @@ export async function runCurationPipelineWithStreaming(
             },
           });
 
+          if (jobId) {
+            await updateJobStats(jobId, { lowScore: result.lowScore });
+          }
           continue;
         }
 
@@ -293,15 +353,29 @@ export async function runCurationPipelineWithStreaming(
         result.curated++;
         result.processed++;
 
+        if (jobId) {
+          await updateJobStats(jobId, {
+            processed: result.processed,
+            curated: result.curated,
+          });
+        }
+
         // Add delay to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (error) {
+        if (error instanceof CurationCancelledError) {
+          throw error;
+        }
         const errorMsg = `Error processing "${article.title}": ${error instanceof Error ? error.message : "Unknown error"}`;
         onProgress({
           stage: "error",
           message: errorMsg,
         });
         result.errors.push(errorMsg);
+        if (jobId) {
+          await updateJobStats(jobId, { errorsCount: result.errors.length });
+          await log("error", errorMsg);
+        }
         continue;
       }
     }
@@ -311,15 +385,35 @@ export async function runCurationPipelineWithStreaming(
       message: "Curation pipeline complete",
       result,
     });
+    await log("info", "Curation pipeline completed successfully", {
+      curated: result.curated,
+      duplicates: result.duplicates,
+      lowScore: result.lowScore,
+      errors: result.errors.length,
+    });
+
+    if (jobId) {
+      await completeJob(jobId);
+    }
 
     return result;
   } catch (error) {
+    if (error instanceof CurationCancelledError) {
+      // Job already marked as cancelled in cancelJob()
+      throw error;
+    }
+
     const errorMsg = `Fatal error in curation pipeline: ${error instanceof Error ? error.message : "Unknown error"}`;
     onProgress({
       stage: "fatal_error",
       message: errorMsg,
     });
     result.errors.push(errorMsg);
+
+    if (jobId) {
+      await failJob(jobId, errorMsg);
+    }
+
     throw error;
   }
 }

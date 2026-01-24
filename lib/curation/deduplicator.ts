@@ -91,7 +91,8 @@ export async function isDuplicateByContent(
  */
 export async function checkForDuplicates(
   url: string,
-  embedding: number[]
+  embedding: number[],
+  threshold?: number
 ): Promise<{
   isDuplicate: boolean;
   reason?: "url" | "content";
@@ -107,12 +108,12 @@ export async function checkForDuplicates(
   }
 
   // Then check content similarity (slower)
-  const contentCheck = await isDuplicateByContent(embedding);
-  if (contentCheck.isDuplicate) {
+  const similarArticles = await findSimilarArticles(embedding, threshold);
+  if (similarArticles.length > 0) {
     return {
       isDuplicate: true,
       reason: "content",
-      similarArticles: contentCheck.similarArticles,
+      similarArticles,
     };
   }
 

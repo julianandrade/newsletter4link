@@ -187,3 +187,58 @@ model RSSSource {
 
   @@index([active])
 }
+
+// ==================== SETTINGS ====================
+
+model Settings {
+  id                        String   @id @default("default")
+  relevanceThreshold        Float    @default(6.0)
+  maxArticlesPerEdition     Int      @default(10)
+  vectorSimilarityThreshold Float    @default(0.85)
+  articleMaxAgeDays         Int      @default(7)
+  aiModel                   String   @default("claude-3-5-sonnet-20241022")
+  embeddingModel            String   @default("text-embedding-ada-002")
+  updatedAt                 DateTime @updatedAt
+}
+
+// ==================== CURATION JOBS ====================
+
+model CurationJob {
+  id          String            @id @default(cuid())
+  status      CurationJobStatus @default(RUNNING)
+  totalFound  Int               @default(0)
+  processed   Int               @default(0)
+  duplicates  Int               @default(0)
+  lowScore    Int               @default(0)
+  curated     Int               @default(0)
+  errorsCount Int               @default(0)
+  startedAt   DateTime          @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+  logs        Json              @default("[]")
+
+  @@index([status])
+  @@index([startedAt(sort: Desc)])
+}
+
+enum CurationJobStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ==================== EMAIL TEMPLATES ====================
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  designJson  Json?
+  html        String   @db.Text
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}

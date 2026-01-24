@@ -1,4 +1,5 @@
-import { runCurationPipelineWithStreaming } from "@/lib/curation/curator";
+import { runCurationPipelineWithStreaming, CurationCancelledError } from "@/lib/curation/curator";
+import { createJob, getCurrentJob } from "@/lib/curation/job-manager";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes (only works on Pro plan)
@@ -19,18 +20,43 @@ export async function GET() {
       };
 
       try {
-        sendEvent("start", { message: "Starting curation pipeline..." });
+        // Check if there's already a running job
+        const existingJob = await getCurrentJob();
+        if (existingJob) {
+          sendEvent("error", {
+            error: "A curation job is already running",
+            jobId: existingJob.id,
+          });
+          controller.close();
+          return;
+        }
+
+        // Create a new job
+        const job = await createJob();
+        sendEvent("start", {
+          message: "Starting curation pipeline...",
+          jobId: job.id,
+        });
 
         await runCurationPipelineWithStreaming((update) => {
-          sendEvent("progress", update);
-        });
+          sendEvent("progress", { ...update, jobId: job.id });
+        }, job.id);
 
-        sendEvent("complete", { message: "Curation pipeline completed!" });
+        sendEvent("complete", {
+          message: "Curation pipeline completed!",
+          jobId: job.id,
+        });
         controller.close();
       } catch (error) {
-        sendEvent("error", {
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
+        if (error instanceof CurationCancelledError) {
+          sendEvent("cancelled", {
+            message: "Curation job was cancelled",
+          });
+        } else {
+          sendEvent("error", {
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
         controller.close();
       }
     },

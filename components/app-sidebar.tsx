@@ -9,6 +9,9 @@ import {
   Send,
   ChevronLeft,
   ChevronRight,
+  History,
+  Layout,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,7 +31,10 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/review", label: "Review Articles", icon: FileText },
   { href: "/dashboard/projects", label: "Projects", icon: Briefcase },
+  { href: "/dashboard/curation", label: "Curation", icon: History },
+  { href: "/dashboard/templates", label: "Templates", icon: Layout },
   { href: "/dashboard/send", label: "Send Newsletter", icon: Send },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {

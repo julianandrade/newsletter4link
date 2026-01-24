@@ -16,6 +16,7 @@ import {
   Calendar,
   Activity,
   Loader2,
+  StopCircle,
 } from "lucide-react";
 
 interface Stats {
@@ -40,10 +41,12 @@ export default function DashboardHome() {
     running: boolean;
     message: string;
     progress?: { current: number; total: number };
+    jobId?: string;
   }>({
     running: false,
     message: "",
   });
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const fetchStats = () => {
     fetch("/api/status")
@@ -85,16 +88,17 @@ export default function DashboardHome() {
 
     eventSource.addEventListener("start", (e) => {
       const data = JSON.parse(e.data);
-      setCurationStatus({ running: true, message: data.message });
+      setCurationStatus({ running: true, message: data.message, jobId: data.jobId });
     });
 
     eventSource.addEventListener("progress", (e) => {
       const data = JSON.parse(e.data);
-      setCurationStatus({
+      setCurationStatus((prev) => ({
         running: true,
         message: data.message || "Processing...",
         progress: data.current && data.total ? { current: data.current, total: data.total } : undefined,
-      });
+        jobId: data.jobId || prev.jobId,
+      }));
     });
 
     eventSource.addEventListener("complete", (e) => {
@@ -102,6 +106,15 @@ export default function DashboardHome() {
       setCurationStatus({ running: false, message: "✓ " + data.message });
       eventSource.close();
       // Refresh stats
+      setTimeout(() => {
+        fetchStats();
+        setCurationStatus({ running: false, message: "" });
+      }, 3000);
+    });
+
+    eventSource.addEventListener("cancelled", () => {
+      setCurationStatus({ running: false, message: "Curation cancelled" });
+      eventSource.close();
       setTimeout(() => {
         fetchStats();
         setCurationStatus({ running: false, message: "" });
@@ -118,6 +131,25 @@ export default function DashboardHome() {
       setCurationStatus({ running: false, message: "✗ Connection failed" });
       eventSource.close();
     };
+  };
+
+  const handleCancelCuration = async () => {
+    setIsCancelling(true);
+    try {
+      const response = await fetch("/api/curation/cancel", { method: "POST" });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to cancel");
+      }
+      setCurationStatus((prev) => ({
+        ...prev,
+        message: "Cancelling...",
+      }));
+    } catch (error) {
+      console.error("Failed to cancel curation:", error);
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   if (isLoading) {
@@ -142,11 +174,29 @@ export default function DashboardHome() {
             <CardContent className="pt-6">
               <div className="flex items-center space-x-2">
                 {curationStatus.running && <Loader2 className="h-4 w-4 animate-spin" />}
-                <p className="text-sm">{curationStatus.message}</p>
+                <p className="text-sm flex-1">{curationStatus.message}</p>
                 {curationStatus.progress && (
-                  <span className="text-xs text-muted-foreground ml-auto">
+                  <span className="text-xs text-muted-foreground">
                     {curationStatus.progress.current}/{curationStatus.progress.total}
                   </span>
+                )}
+                {curationStatus.running && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelCuration}
+                    disabled={isCancelling}
+                    className="ml-4"
+                  >
+                    {isCancelling ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <StopCircle className="h-4 w-4 mr-1" />
+                        Cancel
+                      </>
+                    )}
+                  </Button>
                 )}
               </div>
             </CardContent>
