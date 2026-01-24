@@ -40,7 +40,7 @@ export default function DashboardLayout({
       </button>
 
       {/* Sidebar */}
-      <aside className={`w-64 border-r bg-muted/40 flex flex-col fixed md:relative inset-y-0 left-0 z-40 transform transition-transform duration-200 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside className={`w-64 border-r bg-muted/40 flex-col fixed md:relative inset-y-0 left-0 z-40 ${mobileMenuOpen ? 'flex' : 'hidden md:flex'}`}>
         {/* Logo */}
         <div className="p-6 border-b">
           <Link href="/dashboard" className="flex items-center gap-3">
