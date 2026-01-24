@@ -10,6 +10,7 @@ export async function GET() {
         name: true,
         description: true,
         isActive: true,
+        isDefault: true,
         createdAt: true,
         updatedAt: true,
       },

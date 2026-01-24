@@ -25,7 +25,17 @@ import {
   Users,
   Monitor,
   Smartphone,
+  Palette,
+  Star,
+  Check,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface NewsletterData {
   articles: Array<{
@@ -44,6 +54,14 @@ interface NewsletterData {
   year: number;
 }
 
+interface EmailTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
 export default function SendPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<NewsletterData | null>(null);
@@ -59,17 +77,56 @@ export default function SendPage() {
   const [subscriberCount, setSubscriberCount] = useState(0);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+  // Template state
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("default");
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [settingDefault, setSettingDefault] = useState(false);
+
   useEffect(() => {
-    loadPreview();
+    loadTemplates();
     loadSubscriberCount();
   }, []);
 
-  const loadPreview = async () => {
+  const loadTemplates = async () => {
     try {
+      setLoadingTemplates(true);
+      const res = await fetch("/api/templates");
+      if (res.ok) {
+        const templateList: EmailTemplate[] = await res.json();
+        setTemplates(templateList);
+
+        // Auto-select the default template, or keep "default" (React Email)
+        const defaultTemplate = templateList.find((t) => t.isDefault);
+        if (defaultTemplate) {
+          setSelectedTemplateId(defaultTemplate.id);
+          // Load preview with the default template
+          loadPreview(defaultTemplate.id);
+        } else {
+          // No default template, use the built-in React Email template
+          loadPreview();
+        }
+      } else {
+        // No templates available, just load default preview
+        loadPreview();
+      }
+    } catch (error) {
+      console.error("Error loading templates:", error);
+      loadPreview();
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const loadPreview = async (templateId?: string) => {
+    try {
+      setLoading(true);
       const res = await fetch("/api/email/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          templateId: templateId && templateId !== "default" ? templateId : undefined,
+        }),
       });
 
       const result = await res.json();
@@ -85,6 +142,44 @@ export default function SendPage() {
       setMessage({ type: "error", text: "Failed to load preview" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTemplateChange = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    loadPreview(templateId);
+  };
+
+  const handleSetDefault = async () => {
+    if (selectedTemplateId === "default") {
+      // Cannot set built-in template as default via API
+      // Could clear all isDefault flags, but for now just show a message
+      setMessage({ type: "error", text: "The built-in template is always available" });
+      return;
+    }
+
+    setSettingDefault(true);
+    try {
+      const res = await fetch(`/api/templates/${selectedTemplateId}/set-default`, {
+        method: "POST",
+      });
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setMessage({ type: "success", text: result.message });
+        // Refresh templates to update isDefault flags
+        const templatesRes = await fetch("/api/templates");
+        if (templatesRes.ok) {
+          setTemplates(await templatesRes.json());
+        }
+      } else {
+        setMessage({ type: "error", text: result.error || "Failed to set default" });
+      }
+    } catch (error) {
+      console.error("Error setting default template:", error);
+      setMessage({ type: "error", text: "Failed to set default template" });
+    } finally {
+      setSettingDefault(false);
     }
   };
 
@@ -247,33 +342,92 @@ export default function SendPage() {
           <div className="lg:w-[60%]">
             <Card className="h-full">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Email Preview</CardTitle>
-                    <CardDescription>
-                      Week {data.week}, {data.year}
-                    </CardDescription>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Email Preview</CardTitle>
+                      <CardDescription>
+                        Week {data.week}, {data.year}
+                      </CardDescription>
+                    </div>
+                    {/* Desktop/Mobile Toggle */}
+                    <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+                      <Button
+                        variant={previewMode === "desktop" ? "secondary" : "ghost"}
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={() => setPreviewMode("desktop")}
+                      >
+                        <Monitor className="w-4 h-4 mr-1.5" />
+                        Desktop
+                      </Button>
+                      <Button
+                        variant={previewMode === "mobile" ? "secondary" : "ghost"}
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={() => setPreviewMode("mobile")}
+                      >
+                        <Smartphone className="w-4 h-4 mr-1.5" />
+                        Mobile
+                      </Button>
+                    </div>
                   </div>
-                  {/* Desktop/Mobile Toggle */}
-                  <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-                    <Button
-                      variant={previewMode === "desktop" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-8 px-3"
-                      onClick={() => setPreviewMode("desktop")}
+
+                  {/* Template Selector */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Palette className="w-4 h-4" />
+                      <span>Template:</span>
+                    </div>
+                    <Select
+                      value={selectedTemplateId}
+                      onValueChange={handleTemplateChange}
+                      disabled={loadingTemplates || loading}
                     >
-                      <Monitor className="w-4 h-4 mr-1.5" />
-                      Desktop
-                    </Button>
-                    <Button
-                      variant={previewMode === "mobile" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-8 px-3"
-                      onClick={() => setPreviewMode("mobile")}
-                    >
-                      <Smartphone className="w-4 h-4 mr-1.5" />
-                      Mobile
-                    </Button>
+                      <SelectTrigger className="w-[240px]">
+                        <SelectValue placeholder="Select template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">
+                          <div className="flex items-center gap-2">
+                            <span>Built-in Template</span>
+                          </div>
+                        </SelectItem>
+                        {templates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            <div className="flex items-center gap-2">
+                              <span>{template.name}</span>
+                              {template.isDefault && (
+                                <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedTemplateId !== "default" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSetDefault}
+                        disabled={settingDefault || templates.find(t => t.id === selectedTemplateId)?.isDefault}
+                        className="h-8"
+                      >
+                        {settingDefault ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : templates.find(t => t.id === selectedTemplateId)?.isDefault ? (
+                          <>
+                            <Check className="w-4 h-4 mr-1.5 text-green-500" />
+                            Default
+                          </>
+                        ) : (
+                          <>
+                            <Star className="w-4 h-4 mr-1.5" />
+                            Set as default
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
