@@ -4,6 +4,7 @@ import {
   Head,
   Heading,
   Html,
+  Img,
   Link,
   Preview,
   Section,
@@ -25,6 +26,7 @@ interface Project {
   team: string;
   impact?: string;
   projectDate: string;
+  imageUrl?: string;
 }
 
 interface NewsletterEmailProps {
@@ -34,6 +36,8 @@ interface NewsletterEmailProps {
   year: number;
   subscriberId?: string;
   previewText?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
 }
 
 export const NewsletterEmail = ({
@@ -43,6 +47,8 @@ export const NewsletterEmail = ({
   year = 2026,
   subscriberId = "",
   previewText = "This week's top AI and tech stories",
+  logoUrl,
+  bannerUrl,
 }: NewsletterEmailProps) => {
   return (
     <Html>
@@ -50,9 +56,32 @@ export const NewsletterEmail = ({
       <Preview>{previewText}</Preview>
       <Body style={main}>
         <Container style={container}>
+          {/* Banner - shown at very top if provided */}
+          {bannerUrl && (
+            <Section style={bannerSection}>
+              <Img
+                src={bannerUrl}
+                alt="Newsletter Banner"
+                width="600"
+                style={bannerImage}
+              />
+            </Section>
+          )}
+
           {/* Header */}
-          <Section style={header}>
-            <Heading style={h1}>🤖 Link AI Newsletter</Heading>
+          <Section style={bannerUrl ? headerWithBanner : header}>
+            {logoUrl ? (
+              <Img
+                src={logoUrl}
+                alt="Link AI Newsletter"
+                width="48"
+                height="48"
+                style={logoImage}
+              />
+            ) : null}
+            <Heading style={h1}>
+              {!logoUrl && "🤖 "}Link AI Newsletter
+            </Heading>
             <Text style={subtitle}>
               Week {week}, {year}
             </Text>
@@ -113,6 +142,14 @@ export const NewsletterEmail = ({
 
                 {projects.map((project, index) => (
                   <div key={index} style={projectBlock}>
+                    {project.imageUrl && (
+                      <Img
+                        src={project.imageUrl}
+                        alt={project.name}
+                        width="100%"
+                        style={projectImage}
+                      />
+                    )}
                     <Heading as="h3" style={h3}>
                       {project.name}
                     </Heading>
@@ -188,11 +225,37 @@ const container = {
   maxWidth: "600px",
 };
 
+const bannerSection = {
+  padding: "0",
+  margin: "0",
+};
+
+const bannerImage = {
+  width: "100%",
+  maxWidth: "600px",
+  height: "auto",
+  display: "block",
+  borderRadius: "8px 8px 0 0",
+};
+
 const header = {
   padding: "32px 40px",
   textAlign: "center" as const,
   backgroundColor: "#1e293b",
   borderRadius: "8px 8px 0 0",
+};
+
+const headerWithBanner = {
+  padding: "32px 40px",
+  textAlign: "center" as const,
+  backgroundColor: "#1e293b",
+  borderRadius: "0",
+};
+
+const logoImage = {
+  margin: "0 auto 12px",
+  display: "block",
+  borderRadius: "8px",
 };
 
 const h1 = {
@@ -284,6 +347,14 @@ const projectBlock = {
   borderRadius: "8px",
   marginBottom: "16px",
   border: "1px solid #e2e8f0",
+};
+
+const projectImage = {
+  width: "100%",
+  height: "auto",
+  borderRadius: "6px",
+  marginBottom: "16px",
+  display: "block",
 };
 
 const projectMeta = {

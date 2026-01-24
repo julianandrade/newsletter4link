@@ -19,6 +19,7 @@ interface Project {
   team: string;
   impact?: string;
   projectDate: string;
+  imageUrl?: string;
 }
 
 interface NewsletterData {
@@ -60,17 +61,44 @@ export async function sendEmail(
 }
 
 /**
+ * Fetch branding settings from database
+ */
+async function getBrandingSettings(): Promise<{
+  logoUrl?: string;
+  bannerUrl?: string;
+}> {
+  try {
+    const settings = await prisma.brandingSettings.findUnique({
+      where: { id: "default" },
+    });
+
+    return {
+      logoUrl: settings?.logoUrl ?? undefined,
+      bannerUrl: settings?.bannerUrl ?? undefined,
+    };
+  } catch (error) {
+    console.error("Error fetching branding settings:", error);
+    return {};
+  }
+}
+
+/**
  * Render newsletter email to HTML
  */
 export async function renderNewsletterEmail(
   data: NewsletterData,
   subscriberId?: string
 ): Promise<string> {
+  // Fetch branding settings from database
+  const branding = await getBrandingSettings();
+
   const html = await render(
     NewsletterEmail({
       ...data,
       subscriberId,
       previewText: `Week ${data.week}, ${data.year}: ${data.articles[0]?.title || "AI & Tech Updates"}`,
+      logoUrl: branding.logoUrl,
+      bannerUrl: branding.bannerUrl,
     })
   );
 
