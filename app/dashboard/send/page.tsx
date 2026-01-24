@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -16,448 +17,175 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Send,
-  Mail,
+  Plus,
   Loader2,
-  CheckCircle,
-  AlertCircle,
   FileText,
   Briefcase,
-  Users,
-  Monitor,
-  Smartphone,
-  Palette,
-  Star,
-  Check,
-  Pencil,
-  Eye,
+  Calendar,
+  Clock,
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Inbox,
+  ChevronRight,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  EmailEditor,
-  type Article as EditorArticle,
-  type Project as EditorProject,
-  type EditedNewsletterData,
-  type CustomBlock,
-} from "@/components/email-editor";
 
-interface NewsletterData {
-  articles: Array<{
-    id?: string;
-    title: string;
-    summary: string;
-    sourceUrl: string;
-    category: string[];
-  }>;
-  projects: Array<{
-    id?: string;
-    name: string;
-    description: string;
-    team: string;
-    impact?: string;
-    imageUrl?: string;
-    projectDate?: string;
-  }>;
+interface Edition {
+  id: string;
   week: number;
   year: number;
+  status: "DRAFT" | "FINALIZED" | "SENT";
+  finalizedAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  articleCount: number;
+  projectCount: number;
 }
 
-interface EmailTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  isActive: boolean;
-  isDefault: boolean;
+function getStatusBadge(status: Edition["status"]) {
+  switch (status) {
+    case "DRAFT":
+      return <Badge variant="secondary">Draft</Badge>;
+    case "FINALIZED":
+      return <Badge variant="warning">Finalized</Badge>;
+    case "SENT":
+      return <Badge variant="success">Sent</Badge>;
+    default:
+      return <Badge variant="outline">{status}</Badge>;
+  }
 }
 
-export default function SendPage() {
+function formatDate(dateString: string | null) {
+  if (!dateString) return "-";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getCurrentWeekAndYear(): { week: number; year: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+
+  // Calculate ISO week number
+  const tempDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  tempDate.setUTCDate(tempDate.getUTCDate() + 4 - (tempDate.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tempDate.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((tempDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+  return { week, year };
+}
+
+export default function EditionsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<NewsletterData | null>(null);
-  const [previewHtml, setPreviewHtml] = useState<string>("");
-  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
-  const [testEmail, setTestEmail] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendingAll, setSendingAll] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-  const [subscriberCount, setSubscriberCount] = useState(0);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [editions, setEditions] = useState<Edition[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Template state
-  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("default");
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
-  const [settingDefault, setSettingDefault] = useState(false);
-
-  // Edit mode state
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editedData, setEditedData] = useState<EditedNewsletterData | null>(null);
-  const [hasEdits, setHasEdits] = useState(false);
+  // Create edition dialog state
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [newEditionWeek, setNewEditionWeek] = useState<number>(1);
+  const [newEditionYear, setNewEditionYear] = useState<number>(2026);
 
   useEffect(() => {
-    loadTemplates();
-    loadSubscriberCount();
+    loadEditions();
+
+    // Set default week/year for new edition
+    const { week, year } = getCurrentWeekAndYear();
+    setNewEditionWeek(week);
+    setNewEditionYear(year);
   }, []);
 
-  // Convert NewsletterData to EmailEditor format
-  const convertToEditorFormat = useCallback((newsletterData: NewsletterData): { articles: EditorArticle[]; projects: EditorProject[] } => {
-    const articles: EditorArticle[] = newsletterData.articles.map((article, index) => ({
-      id: article.id || `article-${index}`,
-      title: article.title,
-      summary: article.summary,
-      sourceUrl: article.sourceUrl,
-      category: article.category,
-    }));
-
-    const projects: EditorProject[] = newsletterData.projects.map((project, index) => ({
-      id: project.id || `project-${index}`,
-      name: project.name,
-      description: project.description,
-      team: project.team,
-      impact: project.impact,
-      imageUrl: project.imageUrl,
-      projectDate: project.projectDate || new Date().toISOString(),
-    }));
-
-    return { articles, projects };
-  }, []);
-
-  // Handle data changes from the editor
-  const handleEditorDataChange = useCallback((newData: EditedNewsletterData) => {
-    setEditedData(newData);
-    setHasEdits(true);
-  }, []);
-
-  // Toggle edit mode
-  const handleToggleEditMode = useCallback(async (enabled: boolean) => {
-    setIsEditMode(enabled);
-
-    if (!enabled && hasEdits && editedData) {
-      // Switching back to preview mode with edits - regenerate preview
-      await regeneratePreviewWithEdits();
-    }
-  }, [hasEdits, editedData]);
-
-  // Regenerate preview with edited data
-  const regeneratePreviewWithEdits = async () => {
-    if (!editedData || !data) return;
-
+  const loadEditions = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/email/preview", {
+      setError(null);
+
+      const res = await fetch("/api/editions");
+      const result = await res.json();
+
+      if (result.success) {
+        setEditions(result.data);
+      } else {
+        setError(result.error || "Failed to load editions");
+      }
+    } catch (err) {
+      console.error("Error loading editions:", err);
+      setError("Failed to load editions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateEdition = async () => {
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      const res = await fetch("/api/editions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
-          customData: {
-            articles: editedData.articles.map((a) => ({
-              title: a.title,
-              summary: a.summary,
-              sourceUrl: a.sourceUrl,
-              category: a.category,
-            })),
-            projects: editedData.projects.map((p) => ({
-              name: p.name,
-              description: p.description,
-              team: p.team,
-              impact: p.impact,
-              projectDate: p.projectDate,
-            })),
-            customBlocks: editedData.customBlocks,
-            week: data.week,
-            year: data.year,
-          },
+          week: newEditionWeek,
+          year: newEditionYear,
+          autoPopulate: true,
         }),
       });
 
       const result = await res.json();
 
       if (result.success) {
-        setPreviewHtml(result.html);
+        setShowCreateDialog(false);
+        // Navigate to the new edition
+        router.push(`/dashboard/send/${result.data.id}`);
       } else {
-        setMessage({ type: "error", text: result.error || "Failed to regenerate preview" });
+        setCreateError(result.error || "Failed to create edition");
       }
-    } catch (error) {
-      console.error("Error regenerating preview:", error);
-      setMessage({ type: "error", text: "Failed to regenerate preview" });
+    } catch (err) {
+      console.error("Error creating edition:", err);
+      setCreateError("Failed to create edition");
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
-  const loadTemplates = async () => {
-    try {
-      setLoadingTemplates(true);
-      const res = await fetch("/api/templates");
-      if (res.ok) {
-        const templateList: EmailTemplate[] = await res.json();
-        setTemplates(templateList);
-
-        // Auto-select the default template, or keep "default" (React Email)
-        const defaultTemplate = templateList.find((t) => t.isDefault);
-        if (defaultTemplate) {
-          setSelectedTemplateId(defaultTemplate.id);
-          // Load preview with the default template
-          loadPreview(defaultTemplate.id);
-        } else {
-          // No default template, use the built-in React Email template
-          loadPreview();
-        }
-      } else {
-        // No templates available, just load default preview
-        loadPreview();
-      }
-    } catch (error) {
-      console.error("Error loading templates:", error);
-      loadPreview();
-    } finally {
-      setLoadingTemplates(false);
-    }
-  };
-
-  const loadPreview = async (templateId?: string) => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/email/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: templateId && templateId !== "default" ? templateId : undefined,
-        }),
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        setData(result.data);
-        setPreviewHtml(result.html);
-      } else {
-        setMessage({ type: "error", text: result.error || "Failed to load preview" });
-      }
-    } catch (error) {
-      console.error("Error loading preview:", error);
-      setMessage({ type: "error", text: "Failed to load preview" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTemplateChange = (templateId: string) => {
-    setSelectedTemplateId(templateId);
-    loadPreview(templateId);
-  };
-
-  const handleSetDefault = async () => {
-    if (selectedTemplateId === "default") {
-      // Cannot set built-in template as default via API
-      // Could clear all isDefault flags, but for now just show a message
-      setMessage({ type: "error", text: "The built-in template is always available" });
-      return;
-    }
-
-    setSettingDefault(true);
-    try {
-      const res = await fetch(`/api/templates/${selectedTemplateId}/set-default`, {
-        method: "POST",
-      });
-      const result = await res.json();
-
-      if (res.ok && result.success) {
-        setMessage({ type: "success", text: result.message });
-        // Refresh templates to update isDefault flags
-        const templatesRes = await fetch("/api/templates");
-        if (templatesRes.ok) {
-          setTemplates(await templatesRes.json());
-        }
-      } else {
-        setMessage({ type: "error", text: result.error || "Failed to set default" });
-      }
-    } catch (error) {
-      console.error("Error setting default template:", error);
-      setMessage({ type: "error", text: "Failed to set default template" });
-    } finally {
-      setSettingDefault(false);
-    }
-  };
-
-  const loadSubscriberCount = async () => {
-    try {
-      const res = await fetch("/api/subscribers");
-      const result = await res.json();
-      if (result.success) {
-        setSubscriberCount(result.count || 0);
-      }
-    } catch (error) {
-      console.error("Error loading subscriber count:", error);
-    }
-  };
-
-  const handleSendTest = async () => {
-    if (!testEmail) {
-      setMessage({ type: "error", text: "Please enter an email address" });
-      return;
-    }
-
-    setSending(true);
-    setMessage(null);
-
-    try {
-      // Build request body with optional custom data
-      const requestBody: Record<string, unknown> = {
-        email: testEmail,
-        templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
-      };
-
-      // Include edited data if available
-      if (hasEdits && editedData && data) {
-        requestBody.customData = {
-          articles: editedData.articles.map((a) => ({
-            title: a.title,
-            summary: a.summary,
-            sourceUrl: a.sourceUrl,
-            category: a.category,
-          })),
-          projects: editedData.projects.map((p) => ({
-            name: p.name,
-            description: p.description,
-            team: p.team,
-            impact: p.impact,
-            projectDate: p.projectDate,
-          })),
-          customBlocks: editedData.customBlocks,
-          week: data.week,
-          year: data.year,
-        };
-      }
-
-      const res = await fetch("/api/email/send-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        setMessage({
-          type: "success",
-          text: `Test email sent to ${testEmail}!`,
-        });
-        setTestEmail("");
-      } else {
-        setMessage({
-          type: "error",
-          text: result.error || "Failed to send test email",
-        });
-      }
-    } catch (error) {
-      console.error("Error sending test:", error);
-      setMessage({ type: "error", text: "Failed to send test email" });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleSendAll = async () => {
-    setShowConfirmDialog(false);
-    setSendingAll(true);
-    setMessage(null);
-
-    try {
-      // Build request body with optional custom data
-      const requestBody: Record<string, unknown> = {
-        templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
-      };
-
-      // Include edited data if available
-      if (hasEdits && editedData && data) {
-        requestBody.customData = {
-          articles: editedData.articles.map((a) => ({
-            title: a.title,
-            summary: a.summary,
-            sourceUrl: a.sourceUrl,
-            category: a.category,
-          })),
-          projects: editedData.projects.map((p) => ({
-            name: p.name,
-            description: p.description,
-            team: p.team,
-            impact: p.impact,
-            projectDate: p.projectDate,
-          })),
-          customBlocks: editedData.customBlocks,
-          week: data.week,
-          year: data.year,
-        };
-      }
-
-      const res = await fetch("/api/email/send-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        setMessage({
-          type: "success",
-          text: result.message || "Newsletter sent successfully!",
-        });
-      } else {
-        setMessage({
-          type: "error",
-          text: result.error || "Failed to send newsletter",
-        });
-      }
-    } catch (error) {
-      console.error("Error sending newsletter:", error);
-      setMessage({ type: "error", text: "Failed to send newsletter" });
-    } finally {
-      setSendingAll(false);
-    }
+  const handleEditionClick = (editionId: string) => {
+    router.push(`/dashboard/send/${editionId}`);
   };
 
   // Loading state
   if (loading) {
     return (
       <div className="flex flex-col h-full">
-        <AppHeader title="Send Newsletter" />
+        <AppHeader title="Newsletter Editions" />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin" />
-            <span>Loading newsletter preview...</span>
+            <span>Loading editions...</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // No articles state
-  if (!data || data.articles.length === 0) {
+  // Error state
+  if (error) {
     return (
       <div className="flex flex-col h-full">
-        <AppHeader title="Send Newsletter" />
+        <AppHeader title="Newsletter Editions" />
         <div className="flex-1 flex items-center justify-center p-6">
           <Card className="max-w-md">
             <CardContent className="p-8 text-center">
-              <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-              <h2 className="text-lg font-semibold mb-2">No Articles Ready</h2>
-              <p className="text-muted-foreground mb-6">
-                No approved articles found. Please approve some articles before
-                sending a newsletter.
-              </p>
-              <Button onClick={() => (window.location.href = "/dashboard/review")}>
-                Go to Review Articles
-              </Button>
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-lg font-semibold mb-2">Error Loading Editions</h2>
+              <p className="text-muted-foreground mb-6">{error}</p>
+              <Button onClick={loadEditions}>Try Again</Button>
             </CardContent>
           </Card>
         </div>
@@ -465,386 +193,287 @@ export default function SendPage() {
     );
   }
 
+  // Empty state
+  if (editions.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <AppHeader title="Newsletter Editions" />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <Card className="max-w-md">
+            <CardContent className="p-8 text-center">
+              <Inbox className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-lg font-semibold mb-2">No Editions Yet</h2>
+              <p className="text-muted-foreground mb-6">
+                Create your first newsletter edition to get started. Editions help you organize
+                and track your newsletters by week.
+              </p>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create First Edition
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Create Edition Dialog */}
+        <CreateEditionDialog
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          week={newEditionWeek}
+          year={newEditionYear}
+          onWeekChange={setNewEditionWeek}
+          onYearChange={setNewEditionYear}
+          onSubmit={handleCreateEdition}
+          creating={creating}
+          error={createError}
+        />
+      </div>
+    );
+  }
+
+  // Editions list
   return (
     <div className="flex flex-col h-full">
-      <AppHeader title="Send Newsletter" />
+      <AppHeader title="Newsletter Editions" />
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Status Message */}
-        {message && (
-          <div
-            className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
-              message.type === "success"
-                ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-            }`}
-          >
-            {message.type === "success" ? (
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-            )}
-            <p
-              className={
-                message.type === "success"
-                  ? "text-green-800 dark:text-green-200"
-                  : "text-red-800 dark:text-red-200"
-              }
-            >
-              {message.text}
+        {/* Header with Create Button */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-semibold">All Editions</h2>
+            <p className="text-sm text-muted-foreground">
+              {editions.length} edition{editions.length !== 1 ? "s" : ""} total
             </p>
           </div>
-        )}
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Edition
+          </Button>
+        </div>
 
-        {/* Two-Panel Layout */}
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left Panel - Preview/Editor (60%) */}
-          <div className="lg:w-[60%]">
-            <Card className="h-full">
-              <CardHeader className="pb-3">
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>{isEditMode ? "Edit Content" : "Email Preview"}</CardTitle>
-                      <CardDescription>
-                        Week {data.week}, {data.year}
-                        {hasEdits && <span className="ml-2 text-orange-500">(edited)</span>}
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {/* Edit Mode Toggle */}
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="edit-mode" className="text-sm text-muted-foreground flex items-center gap-1.5">
-                          {isEditMode ? <Pencil className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          {isEditMode ? "Editing" : "Preview"}
-                        </Label>
-                        <Switch
-                          id="edit-mode"
-                          checked={isEditMode}
-                          onCheckedChange={handleToggleEditMode}
-                        />
-                      </div>
-                      {/* Desktop/Mobile Toggle - only show in preview mode */}
-                      {!isEditMode && (
-                        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-                          <Button
-                            variant={previewMode === "desktop" ? "secondary" : "ghost"}
-                            size="sm"
-                            className="h-8 px-3"
-                            onClick={() => setPreviewMode("desktop")}
-                          >
-                            <Monitor className="w-4 h-4 mr-1.5" />
-                            Desktop
-                          </Button>
-                          <Button
-                            variant={previewMode === "mobile" ? "secondary" : "ghost"}
-                            size="sm"
-                            className="h-8 px-3"
-                            onClick={() => setPreviewMode("mobile")}
-                          >
-                            <Smartphone className="w-4 h-4 mr-1.5" />
-                            Mobile
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Template Selector - only show in preview mode */}
-                  {!isEditMode && (
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Palette className="w-4 h-4" />
-                        <span>Template:</span>
-                      </div>
-                      <Select
-                        value={selectedTemplateId}
-                        onValueChange={handleTemplateChange}
-                        disabled={loadingTemplates || loading}
-                      >
-                        <SelectTrigger className="w-[240px]">
-                          <SelectValue placeholder="Select template" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="default">
-                            <div className="flex items-center gap-2">
-                              <span>Built-in Template</span>
-                            </div>
-                          </SelectItem>
-                          {templates.map((template) => (
-                            <SelectItem key={template.id} value={template.id}>
-                              <div className="flex items-center gap-2">
-                                <span>{template.name}</span>
-                                {template.isDefault && (
-                                  <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedTemplateId !== "default" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleSetDefault}
-                          disabled={settingDefault || templates.find(t => t.id === selectedTemplateId)?.isDefault}
-                          className="h-8"
-                        >
-                          {settingDefault ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : templates.find(t => t.id === selectedTemplateId)?.isDefault ? (
-                            <>
-                              <Check className="w-4 h-4 mr-1.5 text-green-500" />
-                              Default
-                            </>
-                          ) : (
-                            <>
-                              <Star className="w-4 h-4 mr-1.5" />
-                              Set as default
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {isEditMode ? (
-                  /* Email Editor */
-                  <div className="bg-muted/30 rounded-lg overflow-hidden" style={{ height: "600px" }}>
-                    <EmailEditor
-                      articles={editedData?.articles || convertToEditorFormat(data).articles}
-                      projects={editedData?.projects || convertToEditorFormat(data).projects}
-                      week={data.week}
-                      year={data.year}
-                      onDataChange={handleEditorDataChange}
-                    />
-                  </div>
-                ) : (
-                  /* Email Preview Container */
-                  <div className="bg-muted/30 rounded-lg p-4 flex justify-center">
-                    <div
-                      className={`bg-white dark:bg-zinc-900 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${
-                        previewMode === "desktop" ? "w-full" : "w-[375px]"
-                      }`}
-                    >
-                      <iframe
-                        srcDoc={previewHtml}
-                        className="w-full h-[600px] border-0"
-                        title="Newsletter Preview"
-                      />
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Panel - Actions (40%) */}
-          <div className="lg:w-[40%] flex flex-col gap-4">
-            {/* Summary Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Newsletter Summary</CardTitle>
-                {hasEdits && (
-                  <CardDescription className="text-orange-500">
-                    Content has been edited
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <span className="text-sm font-medium">Articles ready</span>
-                    </div>
-                    <span className="text-xl font-bold">
-                      {hasEdits && editedData ? editedData.articles.length : data.articles.length}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                        <Briefcase className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      </div>
-                      <span className="text-sm font-medium">Featured projects</span>
-                    </div>
-                    <span className="text-xl font-bold">
-                      {hasEdits && editedData ? editedData.projects.length : data.projects.length}
-                    </span>
-                  </div>
-
-                  {hasEdits && editedData && editedData.customBlocks.length > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                          <Pencil className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                        </div>
-                        <span className="text-sm font-medium">Custom blocks</span>
-                      </div>
-                      <span className="text-xl font-bold">{editedData.customBlocks.length}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                        <Users className="w-4 h-4 text-green-600 dark:text-green-400" />
-                      </div>
-                      <span className="text-sm font-medium">Subscribers</span>
-                    </div>
-                    <span className="text-xl font-bold">{subscriberCount}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Test Email Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Send Test Email</CardTitle>
-                <CardDescription>
-                  Preview the newsletter in your inbox before sending
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="testEmail" className="sr-only">
-                      Email Address
-                    </Label>
-                    <Input
-                      id="testEmail"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSendTest();
-                      }}
-                    />
-                  </div>
-                  <Button
-                    onClick={handleSendTest}
-                    disabled={sending || !testEmail}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    {sending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="w-4 h-4 mr-2" />
-                        Send Test
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Send Newsletter Card */}
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Send Newsletter</CardTitle>
-                <CardDescription>
-                  Send to {subscriberCount} active subscriber{subscriberCount !== 1 ? "s" : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <Button
-                  onClick={() => setShowConfirmDialog(true)}
-                  disabled={sendingAll || subscriberCount === 0 || data.articles.length === 0}
-                  className="w-full"
-                  size="lg"
+        {/* Editions Table/Cards */}
+        <Card>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {editions.map((edition) => (
+                <div
+                  key={edition.id}
+                  className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => handleEditionClick(edition.id)}
                 >
-                  {sendingAll ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" />
-                      Send Newsletter
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground mt-3 text-center">
-                  This action cannot be undone
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+                  {/* Left: Week/Year and Status */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          Week {edition.week}, {edition.year}
+                        </span>
+                        {getStatusBadge(edition.status)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Created {formatDate(edition.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Middle: Counts */}
+                  <div className="hidden md:flex items-center gap-6">
+                    <div className="flex items-center gap-2 text-sm">
+                      <FileText className="w-4 h-4 text-muted-foreground" />
+                      <span>{edition.articleCount} articles</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Briefcase className="w-4 h-4 text-muted-foreground" />
+                      <span>{edition.projectCount} projects</span>
+                    </div>
+                  </div>
+
+                  {/* Right: Sent Date or Status Indicator */}
+                  <div className="flex items-center gap-4">
+                    {edition.status === "SENT" && edition.sentAt ? (
+                      <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                        <Send className="w-4 h-4" />
+                        <span>{formatDate(edition.sentAt)}</span>
+                      </div>
+                    ) : edition.status === "FINALIZED" ? (
+                      <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Ready to send</span>
+                      </div>
+                    ) : (
+                      <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="w-4 h-4" />
+                        <span>In progress</span>
+                      </div>
+                    )}
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">
+                    {editions.filter((e) => e.status === "DRAFT").length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Draft Editions</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">
+                    {editions.filter((e) => e.status === "FINALIZED").length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Ready to Send</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">
+                    {editions.filter((e) => e.status === "SENT").length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Sent Editions</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Send Newsletter?</DialogTitle>
-            <DialogDescription>
-              You are about to send this newsletter to{" "}
-              <strong>{subscriberCount}</strong> subscriber{subscriberCount !== 1 ? "s" : ""}.
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="bg-muted rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Articles:</span>
-                <span className="font-medium">
-                  {hasEdits && editedData ? editedData.articles.length : data.articles.length}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Projects:</span>
-                <span className="font-medium">
-                  {hasEdits && editedData ? editedData.projects.length : data.projects.length}
-                </span>
-              </div>
-              {hasEdits && editedData && editedData.customBlocks.length > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Custom blocks:</span>
-                  <span className="font-medium">{editedData.customBlocks.length}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Week:</span>
-                <span className="font-medium">
-                  Week {data.week}, {data.year}
-                </span>
-              </div>
-              {hasEdits && (
-                <div className="mt-2 pt-2 border-t">
-                  <p className="text-xs text-orange-500">
-                    This newsletter includes edited content
-                  </p>
-                </div>
-              )}
+      {/* Create Edition Dialog */}
+      <CreateEditionDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        week={newEditionWeek}
+        year={newEditionYear}
+        onWeekChange={setNewEditionWeek}
+        onYearChange={setNewEditionYear}
+        onSubmit={handleCreateEdition}
+        creating={creating}
+        error={createError}
+      />
+    </div>
+  );
+}
+
+interface CreateEditionDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  week: number;
+  year: number;
+  onWeekChange: (week: number) => void;
+  onYearChange: (year: number) => void;
+  onSubmit: () => void;
+  creating: boolean;
+  error: string | null;
+}
+
+function CreateEditionDialog({
+  open,
+  onOpenChange,
+  week,
+  year,
+  onWeekChange,
+  onYearChange,
+  onSubmit,
+  creating,
+  error,
+}: CreateEditionDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Edition</DialogTitle>
+          <DialogDescription>
+            Create a new newsletter edition. Approved articles and featured projects
+            will be automatically added.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4 space-y-4">
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="week">Week Number</Label>
+              <Input
+                id="week"
+                type="number"
+                min={1}
+                max={53}
+                value={week}
+                onChange={(e) => onWeekChange(parseInt(e.target.value) || 1)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="year">Year</Label>
+              <Input
+                id="year"
+                type="number"
+                min={2000}
+                max={2100}
+                value={year}
+                onChange={(e) => onYearChange(parseInt(e.target.value) || 2026)}
+              />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSendAll}>
-              <Send className="w-4 h-4 mr-2" />
-              Confirm Send
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+
+          <p className="text-sm text-muted-foreground">
+            This will create a draft edition for Week {week}, {year} and automatically
+            populate it with approved articles and featured projects.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
+            Cancel
+          </Button>
+          <Button onClick={onSubmit} disabled={creating}>
+            {creating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Edition
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
