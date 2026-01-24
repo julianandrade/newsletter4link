@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,8 @@ import {
   Palette,
   Star,
   Check,
+  Pencil,
+  Eye,
 } from "lucide-react";
 import {
   Select,
@@ -36,19 +39,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  EmailEditor,
+  type Article as EditorArticle,
+  type Project as EditorProject,
+  type EditedNewsletterData,
+  type CustomBlock,
+} from "@/components/email-editor";
 
 interface NewsletterData {
   articles: Array<{
+    id?: string;
     title: string;
     summary: string;
     sourceUrl: string;
     category: string[];
   }>;
   projects: Array<{
+    id?: string;
     name: string;
     description: string;
     team: string;
     impact?: string;
+    imageUrl?: string;
+    projectDate?: string;
   }>;
   week: number;
   year: number;
@@ -83,10 +97,101 @@ export default function SendPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [settingDefault, setSettingDefault] = useState(false);
 
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedData, setEditedData] = useState<EditedNewsletterData | null>(null);
+  const [hasEdits, setHasEdits] = useState(false);
+
   useEffect(() => {
     loadTemplates();
     loadSubscriberCount();
   }, []);
+
+  // Convert NewsletterData to EmailEditor format
+  const convertToEditorFormat = useCallback((newsletterData: NewsletterData): { articles: EditorArticle[]; projects: EditorProject[] } => {
+    const articles: EditorArticle[] = newsletterData.articles.map((article, index) => ({
+      id: article.id || `article-${index}`,
+      title: article.title,
+      summary: article.summary,
+      sourceUrl: article.sourceUrl,
+      category: article.category,
+    }));
+
+    const projects: EditorProject[] = newsletterData.projects.map((project, index) => ({
+      id: project.id || `project-${index}`,
+      name: project.name,
+      description: project.description,
+      team: project.team,
+      impact: project.impact,
+      imageUrl: project.imageUrl,
+      projectDate: project.projectDate || new Date().toISOString(),
+    }));
+
+    return { articles, projects };
+  }, []);
+
+  // Handle data changes from the editor
+  const handleEditorDataChange = useCallback((newData: EditedNewsletterData) => {
+    setEditedData(newData);
+    setHasEdits(true);
+  }, []);
+
+  // Toggle edit mode
+  const handleToggleEditMode = useCallback(async (enabled: boolean) => {
+    setIsEditMode(enabled);
+
+    if (!enabled && hasEdits && editedData) {
+      // Switching back to preview mode with edits - regenerate preview
+      await regeneratePreviewWithEdits();
+    }
+  }, [hasEdits, editedData]);
+
+  // Regenerate preview with edited data
+  const regeneratePreviewWithEdits = async () => {
+    if (!editedData || !data) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch("/api/email/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
+          customData: {
+            articles: editedData.articles.map((a) => ({
+              title: a.title,
+              summary: a.summary,
+              sourceUrl: a.sourceUrl,
+              category: a.category,
+            })),
+            projects: editedData.projects.map((p) => ({
+              name: p.name,
+              description: p.description,
+              team: p.team,
+              impact: p.impact,
+              projectDate: p.projectDate,
+            })),
+            customBlocks: editedData.customBlocks,
+            week: data.week,
+            year: data.year,
+          },
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        setPreviewHtml(result.html);
+      } else {
+        setMessage({ type: "error", text: result.error || "Failed to regenerate preview" });
+      }
+    } catch (error) {
+      console.error("Error regenerating preview:", error);
+      setMessage({ type: "error", text: "Failed to regenerate preview" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadTemplates = async () => {
     try {
@@ -205,13 +310,38 @@ export default function SendPage() {
     setMessage(null);
 
     try {
+      // Build request body with optional custom data
+      const requestBody: Record<string, unknown> = {
+        email: testEmail,
+        templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
+      };
+
+      // Include edited data if available
+      if (hasEdits && editedData && data) {
+        requestBody.customData = {
+          articles: editedData.articles.map((a) => ({
+            title: a.title,
+            summary: a.summary,
+            sourceUrl: a.sourceUrl,
+            category: a.category,
+          })),
+          projects: editedData.projects.map((p) => ({
+            name: p.name,
+            description: p.description,
+            team: p.team,
+            impact: p.impact,
+            projectDate: p.projectDate,
+          })),
+          customBlocks: editedData.customBlocks,
+          week: data.week,
+          year: data.year,
+        };
+      }
+
       const res = await fetch("/api/email/send-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: testEmail,
-          templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await res.json();
@@ -242,12 +372,37 @@ export default function SendPage() {
     setMessage(null);
 
     try {
+      // Build request body with optional custom data
+      const requestBody: Record<string, unknown> = {
+        templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
+      };
+
+      // Include edited data if available
+      if (hasEdits && editedData && data) {
+        requestBody.customData = {
+          articles: editedData.articles.map((a) => ({
+            title: a.title,
+            summary: a.summary,
+            sourceUrl: a.sourceUrl,
+            category: a.category,
+          })),
+          projects: editedData.projects.map((p) => ({
+            name: p.name,
+            description: p.description,
+            team: p.team,
+            impact: p.impact,
+            projectDate: p.projectDate,
+          })),
+          customBlocks: editedData.customBlocks,
+          week: data.week,
+          year: data.year,
+        };
+      }
+
       const res = await fetch("/api/email/send-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await res.json();
@@ -343,114 +498,146 @@ export default function SendPage() {
 
         {/* Two-Panel Layout */}
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left Panel - Preview (60%) */}
+          {/* Left Panel - Preview/Editor (60%) */}
           <div className="lg:w-[60%]">
             <Card className="h-full">
               <CardHeader className="pb-3">
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle>Email Preview</CardTitle>
+                      <CardTitle>{isEditMode ? "Edit Content" : "Email Preview"}</CardTitle>
                       <CardDescription>
                         Week {data.week}, {data.year}
+                        {hasEdits && <span className="ml-2 text-orange-500">(edited)</span>}
                       </CardDescription>
                     </div>
-                    {/* Desktop/Mobile Toggle */}
-                    <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-                      <Button
-                        variant={previewMode === "desktop" ? "secondary" : "ghost"}
-                        size="sm"
-                        className="h-8 px-3"
-                        onClick={() => setPreviewMode("desktop")}
-                      >
-                        <Monitor className="w-4 h-4 mr-1.5" />
-                        Desktop
-                      </Button>
-                      <Button
-                        variant={previewMode === "mobile" ? "secondary" : "ghost"}
-                        size="sm"
-                        className="h-8 px-3"
-                        onClick={() => setPreviewMode("mobile")}
-                      >
-                        <Smartphone className="w-4 h-4 mr-1.5" />
-                        Mobile
-                      </Button>
+                    <div className="flex items-center gap-4">
+                      {/* Edit Mode Toggle */}
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="edit-mode" className="text-sm text-muted-foreground flex items-center gap-1.5">
+                          {isEditMode ? <Pencil className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {isEditMode ? "Editing" : "Preview"}
+                        </Label>
+                        <Switch
+                          id="edit-mode"
+                          checked={isEditMode}
+                          onCheckedChange={handleToggleEditMode}
+                        />
+                      </div>
+                      {/* Desktop/Mobile Toggle - only show in preview mode */}
+                      {!isEditMode && (
+                        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+                          <Button
+                            variant={previewMode === "desktop" ? "secondary" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3"
+                            onClick={() => setPreviewMode("desktop")}
+                          >
+                            <Monitor className="w-4 h-4 mr-1.5" />
+                            Desktop
+                          </Button>
+                          <Button
+                            variant={previewMode === "mobile" ? "secondary" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3"
+                            onClick={() => setPreviewMode("mobile")}
+                          >
+                            <Smartphone className="w-4 h-4 mr-1.5" />
+                            Mobile
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Template Selector */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Palette className="w-4 h-4" />
-                      <span>Template:</span>
-                    </div>
-                    <Select
-                      value={selectedTemplateId}
-                      onValueChange={handleTemplateChange}
-                      disabled={loadingTemplates || loading}
-                    >
-                      <SelectTrigger className="w-[240px]">
-                        <SelectValue placeholder="Select template" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">
-                          <div className="flex items-center gap-2">
-                            <span>Built-in Template</span>
-                          </div>
-                        </SelectItem>
-                        {templates.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
+                  {/* Template Selector - only show in preview mode */}
+                  {!isEditMode && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Palette className="w-4 h-4" />
+                        <span>Template:</span>
+                      </div>
+                      <Select
+                        value={selectedTemplateId}
+                        onValueChange={handleTemplateChange}
+                        disabled={loadingTemplates || loading}
+                      >
+                        <SelectTrigger className="w-[240px]">
+                          <SelectValue placeholder="Select template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">
                             <div className="flex items-center gap-2">
-                              <span>{template.name}</span>
-                              {template.isDefault && (
-                                <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                              )}
+                              <span>Built-in Template</span>
                             </div>
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedTemplateId !== "default" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleSetDefault}
-                        disabled={settingDefault || templates.find(t => t.id === selectedTemplateId)?.isDefault}
-                        className="h-8"
-                      >
-                        {settingDefault ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : templates.find(t => t.id === selectedTemplateId)?.isDefault ? (
-                          <>
-                            <Check className="w-4 h-4 mr-1.5 text-green-500" />
-                            Default
-                          </>
-                        ) : (
-                          <>
-                            <Star className="w-4 h-4 mr-1.5" />
-                            Set as default
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              <div className="flex items-center gap-2">
+                                <span>{template.name}</span>
+                                {template.isDefault && (
+                                  <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedTemplateId !== "default" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSetDefault}
+                          disabled={settingDefault || templates.find(t => t.id === selectedTemplateId)?.isDefault}
+                          className="h-8"
+                        >
+                          {settingDefault ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : templates.find(t => t.id === selectedTemplateId)?.isDefault ? (
+                            <>
+                              <Check className="w-4 h-4 mr-1.5 text-green-500" />
+                              Default
+                            </>
+                          ) : (
+                            <>
+                              <Star className="w-4 h-4 mr-1.5" />
+                              Set as default
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                {/* Email Preview Container */}
-                <div className="bg-muted/30 rounded-lg p-4 flex justify-center">
-                  <div
-                    className={`bg-white dark:bg-zinc-900 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${
-                      previewMode === "desktop" ? "w-full" : "w-[375px]"
-                    }`}
-                  >
-                    <iframe
-                      srcDoc={previewHtml}
-                      className="w-full h-[600px] border-0"
-                      title="Newsletter Preview"
+                {isEditMode ? (
+                  /* Email Editor */
+                  <div className="bg-muted/30 rounded-lg overflow-hidden" style={{ height: "600px" }}>
+                    <EmailEditor
+                      articles={editedData?.articles || convertToEditorFormat(data).articles}
+                      projects={editedData?.projects || convertToEditorFormat(data).projects}
+                      week={data.week}
+                      year={data.year}
+                      onDataChange={handleEditorDataChange}
                     />
                   </div>
-                </div>
+                ) : (
+                  /* Email Preview Container */
+                  <div className="bg-muted/30 rounded-lg p-4 flex justify-center">
+                    <div
+                      className={`bg-white dark:bg-zinc-900 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${
+                        previewMode === "desktop" ? "w-full" : "w-[375px]"
+                      }`}
+                    >
+                      <iframe
+                        srcDoc={previewHtml}
+                        className="w-full h-[600px] border-0"
+                        title="Newsletter Preview"
+                      />
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -461,6 +648,11 @@ export default function SendPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Newsletter Summary</CardTitle>
+                {hasEdits && (
+                  <CardDescription className="text-orange-500">
+                    Content has been edited
+                  </CardDescription>
+                )}
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="space-y-3">
@@ -471,7 +663,9 @@ export default function SendPage() {
                       </div>
                       <span className="text-sm font-medium">Articles ready</span>
                     </div>
-                    <span className="text-xl font-bold">{data.articles.length}</span>
+                    <span className="text-xl font-bold">
+                      {hasEdits && editedData ? editedData.articles.length : data.articles.length}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
@@ -481,8 +675,22 @@ export default function SendPage() {
                       </div>
                       <span className="text-sm font-medium">Featured projects</span>
                     </div>
-                    <span className="text-xl font-bold">{data.projects.length}</span>
+                    <span className="text-xl font-bold">
+                      {hasEdits && editedData ? editedData.projects.length : data.projects.length}
+                    </span>
                   </div>
+
+                  {hasEdits && editedData && editedData.customBlocks.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                          <Pencil className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <span className="text-sm font-medium">Custom blocks</span>
+                      </div>
+                      <span className="text-xl font-bold">{editedData.customBlocks.length}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-3">
@@ -595,18 +803,35 @@ export default function SendPage() {
             <div className="bg-muted rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Articles:</span>
-                <span className="font-medium">{data.articles.length}</span>
+                <span className="font-medium">
+                  {hasEdits && editedData ? editedData.articles.length : data.articles.length}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Projects:</span>
-                <span className="font-medium">{data.projects.length}</span>
+                <span className="font-medium">
+                  {hasEdits && editedData ? editedData.projects.length : data.projects.length}
+                </span>
               </div>
+              {hasEdits && editedData && editedData.customBlocks.length > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Custom blocks:</span>
+                  <span className="font-medium">{editedData.customBlocks.length}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Week:</span>
                 <span className="font-medium">
                   Week {data.week}, {data.year}
                 </span>
               </div>
+              {hasEdits && (
+                <div className="mt-2 pt-2 border-t">
+                  <p className="text-xs text-orange-500">
+                    This newsletter includes edited content
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
