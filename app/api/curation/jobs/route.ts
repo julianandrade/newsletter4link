@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getJobs } from "@/lib/curation/job-manager";
+import { getJobs, deleteJobsOlderThan } from "@/lib/curation/job-manager";
 import { CurationJobStatus } from "@prisma/client";
 
 export async function GET(request: Request) {
@@ -21,6 +21,47 @@ export async function GET(request: Request) {
     console.error("Error fetching curation jobs:", error);
     return NextResponse.json(
       { error: "Failed to fetch curation jobs" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/curation/jobs?olderThanDays=30
+ * Bulk delete jobs older than specified number of days
+ */
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const olderThanDaysParam = searchParams.get("olderThanDays");
+
+    if (!olderThanDaysParam) {
+      return NextResponse.json(
+        { error: "olderThanDays query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const olderThanDays = parseInt(olderThanDaysParam);
+
+    if (isNaN(olderThanDays) || olderThanDays < 1) {
+      return NextResponse.json(
+        { error: "olderThanDays must be a positive integer" },
+        { status: 400 }
+      );
+    }
+
+    const deletedCount = await deleteJobsOlderThan(olderThanDays);
+
+    return NextResponse.json({
+      success: true,
+      deletedCount,
+      message: `Deleted ${deletedCount} job(s) older than ${olderThanDays} day(s)`,
+    });
+  } catch (error) {
+    console.error("Error deleting curation jobs:", error);
+    return NextResponse.json(
+      { error: "Failed to delete curation jobs" },
       { status: 500 }
     );
   }

@@ -220,3 +220,41 @@ export async function isJobCancelled(jobId: string): Promise<boolean> {
 
   return job?.status === "CANCELLED";
 }
+
+/**
+ * Delete a job by ID
+ * Returns the deleted job or null if not found
+ */
+export async function deleteJob(jobId: string) {
+  try {
+    return await prisma.curationJob.delete({
+      where: { id: jobId },
+    });
+  } catch (error) {
+    // Job not found
+    return null;
+  }
+}
+
+/**
+ * Delete jobs older than specified number of days
+ * Returns the count of deleted jobs
+ */
+export async function deleteJobsOlderThan(days: number) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  const result = await prisma.curationJob.deleteMany({
+    where: {
+      startedAt: {
+        lt: cutoffDate,
+      },
+      // Don't delete currently running jobs
+      status: {
+        not: "RUNNING",
+      },
+    },
+  });
+
+  return result.count;
+}
