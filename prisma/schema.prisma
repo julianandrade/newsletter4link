@@ -237,8 +237,32 @@ model EmailTemplate {
   designJson  Json?
   html        String   @db.Text
   isActive    Boolean  @default(false)
+  isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([isActive])
+  @@index([isDefault])
+}
+
+// ==================== BRANDING & MEDIA ====================
+
+model BrandingSettings {
+  id        String   @id @default("default")
+  logoUrl   String?
+  bannerUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MediaAsset {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  type      String   // e.g., "image/png", "image/jpeg"
+  size      Int      // file size in bytes
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt(sort: Desc)])
 }
