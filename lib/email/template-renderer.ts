@@ -16,6 +16,8 @@ interface Project {
   description: string;
   team: string;
   impact: string | null;
+  imageUrl?: string | null;
+  projectDate?: Date | string;
 }
 
 interface RenderContext {
@@ -77,6 +79,7 @@ function renderProjects(projects: Project[]): string {
     .map(
       (project) => `
     <div style="margin-bottom: 24px; padding: 16px; background-color: #f0fdf4; border-radius: 8px; border-left: 4px solid #22c55e;">
+      ${project.imageUrl ? `<img src="${project.imageUrl}" alt="${project.name}" style="width: 100%; max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 12px; display: block;" />` : ""}
       <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #111827;">${project.name}</h3>
       <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;">${project.description}</p>
       <p style="margin: 0; font-size: 12px; color: #6b7280;">Team: ${project.team}</p>

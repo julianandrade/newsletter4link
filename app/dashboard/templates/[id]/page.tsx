@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, ArrowLeft, Eye, CheckCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Save, ArrowLeft, Eye, CheckCircle, Info, Code, Copy, Check, X } from "lucide-react";
 import Link from "next/link";
 import type { EditorRef, EmailEditorProps } from "react-email-editor";
 
@@ -60,6 +62,57 @@ const editorOptions: EmailEditorProps["options"] = {
   },
 };
 
+// Merge tags documentation for the info panel
+const mergeTagsDocs = [
+  {
+    tag: "{{articles}}",
+    name: "Articles",
+    description: "Renders the curated articles section with titles, summaries, categories, and links",
+  },
+  {
+    tag: "{{projects}}",
+    name: "Projects",
+    description: "Renders featured internal projects with images, descriptions, team info, and impact statements",
+  },
+  {
+    tag: "{{week}}",
+    name: "Week Number",
+    description: "Current ISO week number (1-52)",
+  },
+  {
+    tag: "{{year}}",
+    name: "Year",
+    description: "Current year (e.g., 2026)",
+  },
+  {
+    tag: "{{unsubscribe_url}}",
+    name: "Unsubscribe URL",
+    description: "Personalized unsubscribe link for each subscriber",
+  },
+];
+
+// Sample project data for preview
+const sampleProjects = [
+  {
+    id: "sample-1",
+    name: "AI Document Analyzer",
+    description: "An intelligent document processing system that extracts key information from PDFs and images using advanced OCR and NLP techniques.",
+    team: "Innovation Lab",
+    impact: "Reduced document processing time by 85%",
+    imageUrl: "https://placehold.co/560x200/e0f2fe/0369a1?text=AI+Document+Analyzer",
+    projectDate: new Date().toISOString(),
+  },
+  {
+    id: "sample-2",
+    name: "Smart Meeting Assistant",
+    description: "Real-time meeting transcription and summarization tool that generates action items and follow-up tasks automatically.",
+    team: "Productivity Tools",
+    impact: "Saves 2 hours per employee weekly",
+    imageUrl: null,
+    projectDate: new Date().toISOString(),
+  },
+];
+
 interface Template {
   id: string;
   name: string;
@@ -82,6 +135,10 @@ export default function EditTemplatePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [designLoaded, setDesignLoaded] = useState(false);
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   useEffect(() => {
     if (!templateId) return;
@@ -111,6 +168,96 @@ export default function EditTemplatePage() {
   const handleEditorReady: EmailEditorProps["onReady"] = useCallback((unlayer: any) => {
     emailEditorRef.current = { editor: unlayer } as EditorRef;
     setIsEditorReady(true);
+  }, []);
+
+  const copyTag = useCallback((tag: string) => {
+    navigator.clipboard.writeText(tag);
+    setCopiedTag(tag);
+    setTimeout(() => setCopiedTag(null), 2000);
+  }, []);
+
+  const handlePreview = useCallback(() => {
+    if (!emailEditorRef.current?.editor) return;
+
+    setIsLoadingPreview(true);
+    emailEditorRef.current.editor.exportHtml((data) => {
+      const { html } = data;
+
+      // Sample articles for preview
+      const sampleArticles = [
+        {
+          id: "sample-art-1",
+          title: "OpenAI Releases GPT-5 with Revolutionary Reasoning",
+          summary: "The latest model shows unprecedented ability in complex problem-solving and multi-step reasoning tasks.",
+          sourceUrl: "https://example.com/article-1",
+          category: ["AI Models", "Research"],
+          relevanceScore: 9.5,
+        },
+        {
+          id: "sample-art-2",
+          title: "Enterprise AI Adoption Reaches New Heights in 2026",
+          summary: "Survey shows 78% of Fortune 500 companies now use AI in core business processes.",
+          sourceUrl: "https://example.com/article-2",
+          category: ["Industry", "Enterprise"],
+          relevanceScore: 8.8,
+        },
+      ];
+
+      // Render articles HTML
+      const articlesHtml = sampleArticles
+        .map(
+          (article) => `
+          <div style="margin-bottom: 24px; padding: 16px; background-color: #f9fafb; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #111827;">
+              <a href="${article.sourceUrl}" style="color: #2563eb; text-decoration: none;">${article.title}</a>
+            </h3>
+            <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;">${article.summary}</p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${article.category
+                .map(
+                  (cat) =>
+                    `<span style="display: inline-block; padding: 2px 8px; background-color: #e5e7eb; border-radius: 4px; font-size: 12px; color: #374151;">${cat}</span>`
+                )
+                .join("")}
+            </div>
+          </div>
+        `
+        )
+        .join("");
+
+      // Render projects HTML with images
+      const projectsHtml = sampleProjects
+        .map(
+          (project) => `
+          <div style="margin-bottom: 24px; padding: 16px; background-color: #f0fdf4; border-radius: 8px; border-left: 4px solid #22c55e;">
+            ${project.imageUrl ? `<img src="${project.imageUrl}" alt="${project.name}" style="width: 100%; max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 12px; display: block;" />` : ""}
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #111827;">${project.name}</h3>
+            <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;">${project.description}</p>
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">Team: ${project.team}</p>
+            ${project.impact ? `<p style="margin: 8px 0 0 0; font-style: italic; color: #059669; font-size: 14px;">"${project.impact}"</p>` : ""}
+          </div>
+        `
+        )
+        .join("");
+
+      // Get current week and year
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const week = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+      const year = now.getFullYear();
+
+      // Replace merge tags
+      let rendered = html;
+      rendered = rendered.replace(/\{\{articles\}\}/g, articlesHtml);
+      rendered = rendered.replace(/\{\{projects\}\}/g, projectsHtml);
+      rendered = rendered.replace(/\{\{week\}\}/g, String(week));
+      rendered = rendered.replace(/\{\{year\}\}/g, String(year));
+      rendered = rendered.replace(/\{\{unsubscribe_url\}\}/g, "#unsubscribe-preview");
+
+      setPreviewHtml(rendered);
+      setShowPreview(true);
+      setIsLoadingPreview(false);
+    });
   }, []);
 
   const handleSave = async () => {
@@ -249,6 +396,61 @@ export default function EditTemplatePage() {
           </CardContent>
         </Card>
 
+        {/* Merge Tags Reference */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Code className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Available Merge Tags</CardTitle>
+            </div>
+            <CardDescription>
+              Click any tag to copy it. Insert these in your template to add dynamic content.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TooltipProvider>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {mergeTagsDocs.map((item) => (
+                  <div
+                    key={item.tag}
+                    className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <code className="text-sm font-mono bg-background px-2 py-0.5 rounded border">
+                          {item.tag}
+                        </code>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => copyTag(item.tag)}
+                            >
+                              {copiedTag === item.tag ? (
+                                <Check className="h-3 w-3 text-green-600" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {copiedTag === item.tag ? "Copied!" : "Copy tag"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </TooltipProvider>
+          </CardContent>
+        </Card>
+
         {/* Editor */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -259,6 +461,18 @@ export default function EditTemplatePage() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handlePreview}
+                disabled={!isEditorReady || isLoadingPreview}
+              >
+                {isLoadingPreview ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="mr-2 h-4 w-4" />
+                )}
+                Preview with Sample Data
+              </Button>
               <Button onClick={handleSave} disabled={isSaving || !isEditorReady}>
                 {isSaving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -284,6 +498,43 @@ export default function EditTemplatePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Preview Modal */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Template Preview
+            </DialogTitle>
+            <DialogDescription>
+              Preview with sample articles, projects (including images), and merge tags rendered.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto border rounded-lg bg-white">
+            {previewHtml ? (
+              <iframe
+                srcDoc={previewHtml}
+                title="Template Preview"
+                className="w-full h-[600px] border-0"
+                sandbox="allow-same-origin"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-64 text-muted-foreground">
+                No preview available
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Sample data includes 2 articles and 2 projects (one with image, one without)
+            </p>
+            <Button variant="outline" onClick={() => setShowPreview(false)}>
+              Close Preview
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
