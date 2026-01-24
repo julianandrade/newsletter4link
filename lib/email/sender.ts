@@ -1,10 +1,7 @@
-import { Resend } from "resend";
 import { render } from "@react-email/components";
 import NewsletterEmail from "@/emails/newsletter";
-import { config } from "@/lib/config";
 import { prisma } from "@/lib/db";
-
-const resend = new Resend(config.email.resend.apiKey);
+import { sendEmailViaProvider, getProviderSettings } from "./provider";
 
 interface Article {
   title: string;
@@ -30,34 +27,14 @@ interface NewsletterData {
 }
 
 /**
- * Send email to a single recipient
+ * Send email to a single recipient using the configured provider
  */
 export async function sendEmail(
   to: string,
   subject: string,
   html: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  try {
-    const { data, error } = await resend.emails.send({
-      from: `${config.email.from.name} <${config.email.from.email}>`,
-      to,
-      subject,
-      html,
-    });
-
-    if (error) {
-      console.error("Resend error:", error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, messageId: data?.id };
-  } catch (error) {
-    console.error("Error sending email:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
+  return sendEmailViaProvider(to, subject, html);
 }
 
 /**
@@ -186,8 +163,10 @@ export async function sendNewsletterToAll(
     const total = subscribers.length;
     console.log(`Sending newsletter to ${total} subscribers...`);
 
+    // Get provider-specific batch settings
+    const { batchSize, rateLimitDelay } = getProviderSettings();
+
     // Send in batches to avoid rate limiting
-    const batchSize = config.email.batchSize;
     const batches = [];
 
     for (let i = 0; i < subscribers.length; i += batchSize) {
@@ -231,9 +210,7 @@ export async function sendNewsletterToAll(
 
       // Wait between batches to respect rate limits
       if (batchIndex < batches.length - 1) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, config.email.rateLimitDelay)
-        );
+        await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
       }
     }
 

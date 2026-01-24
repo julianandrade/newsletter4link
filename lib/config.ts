@@ -28,8 +28,16 @@ export const config = {
 
   // Email
   email: {
+    provider: (process.env.EMAIL_PROVIDER || "resend") as "resend" | "graph",
     resend: {
       apiKey: process.env.RESEND_API_KEY!,
+      webhookSecret: process.env.RESEND_WEBHOOK_SECRET,
+    },
+    graph: {
+      tenantId: process.env.AZURE_TENANT_ID,
+      clientId: process.env.AZURE_CLIENT_ID,
+      clientSecret: process.env.AZURE_CLIENT_SECRET,
+      senderEmail: process.env.GRAPH_SENDER_EMAIL,
     },
     from: {
       email: process.env.FROM_EMAIL || "newsletter@linkconsulting.com",
