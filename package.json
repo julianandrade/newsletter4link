@@ -19,6 +19,8 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@azure/identity": "^4.13.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "@radix-ui/react-avatar": "^1.1.11",
