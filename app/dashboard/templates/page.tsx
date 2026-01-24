@@ -34,7 +34,8 @@ export default function TemplatesPage() {
     fetch("/api/templates")
       .then((r) => r.json())
       .then((data) => {
-        setTemplates(data || []);
+        // Ensure we always set an array, even if API returns error object
+        setTemplates(Array.isArray(data) ? data : []);
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
