@@ -46,10 +46,9 @@ interface RSSSource {
 }
 
 const AI_MODELS = [
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet (Recommended)" },
-  { value: "claude-3-opus-20240229", label: "Claude 3 Opus" },
-  { value: "claude-3-sonnet-20240229", label: "Claude 3 Sonnet" },
-  { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku (Fast)" },
+  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Recommended)" },
+  { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
+  { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku (Fast)" },
 ];
 
 const EMBEDDING_MODELS = [

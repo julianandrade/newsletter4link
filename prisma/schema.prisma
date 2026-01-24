@@ -196,7 +196,7 @@ model Settings {
   maxArticlesPerEdition     Int      @default(10)
   vectorSimilarityThreshold Float    @default(0.85)
   articleMaxAgeDays         Int      @default(7)
-  aiModel                   String   @default("claude-3-5-sonnet-20241022")
+  aiModel                   String   @default("claude-sonnet-4-20250514")
   embeddingModel            String   @default("text-embedding-ada-002")
   updatedAt                 DateTime @updatedAt
 }

@@ -81,56 +81,105 @@ export default function DashboardHome() {
     fetchStats();
   }, []);
 
-  const handleRunCuration = () => {
+  const handleRunCuration = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     setCurationStatus({ running: true, message: "Connecting..." });
 
-    const eventSource = new EventSource("/api/curation/collect");
+    try {
+      const response = await fetch("/api/curation/collect", {
+        method: "GET",
+        headers: {
+          "Accept": "text/event-stream",
+        },
+      });
 
-    eventSource.addEventListener("start", (e) => {
-      const data = JSON.parse(e.data);
-      setCurationStatus({ running: true, message: data.message, jobId: data.jobId });
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
 
-    eventSource.addEventListener("progress", (e) => {
-      const data = JSON.parse(e.data);
-      setCurationStatus((prev) => ({
-        running: true,
-        message: data.message || "Processing...",
-        progress: data.current && data.total ? { current: data.current, total: data.total } : undefined,
-        jobId: data.jobId || prev.jobId,
-      }));
-    });
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
 
-    eventSource.addEventListener("complete", (e) => {
-      const data = JSON.parse(e.data);
-      setCurationStatus({ running: false, message: "✓ " + data.message });
-      eventSource.close();
-      // Refresh stats
-      setTimeout(() => {
-        fetchStats();
-        setCurationStatus({ running: false, message: "" });
-      }, 3000);
-    });
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-    eventSource.addEventListener("cancelled", () => {
-      setCurationStatus({ running: false, message: "Curation cancelled" });
-      eventSource.close();
-      setTimeout(() => {
-        fetchStats();
-        setCurationStatus({ running: false, message: "" });
-      }, 3000);
-    });
+      const processEvent = (eventType: string, dataStr: string) => {
+        try {
+          const data = JSON.parse(dataStr);
 
-    eventSource.addEventListener("error", (e: any) => {
-      const data = e.data ? JSON.parse(e.data) : {};
-      setCurationStatus({ running: false, message: "✗ Error: " + (data.error || "Connection failed") });
-      eventSource.close();
-    });
+          switch (eventType) {
+            case "start":
+              setCurationStatus({ running: true, message: data.message, jobId: data.jobId });
+              break;
+            case "progress":
+              setCurationStatus((prev) => ({
+                running: true,
+                message: data.message || "Processing...",
+                progress: data.current && data.total ? { current: data.current, total: data.total } : undefined,
+                jobId: data.jobId || prev.jobId,
+              }));
+              break;
+            case "complete":
+              setCurationStatus({ running: false, message: "✓ " + data.message });
+              setTimeout(() => {
+                fetchStats();
+                setCurationStatus({ running: false, message: "" });
+              }, 3000);
+              break;
+            case "cancelled":
+              setCurationStatus({ running: false, message: "Curation cancelled" });
+              setTimeout(() => {
+                fetchStats();
+                setCurationStatus({ running: false, message: "" });
+              }, 3000);
+              break;
+            case "error":
+              setCurationStatus({ running: false, message: "✗ Error: " + (data.error || "Unknown error") });
+              break;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
 
-    eventSource.onerror = () => {
-      setCurationStatus({ running: false, message: "✗ Connection failed" });
-      eventSource.close();
-    };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE format: "event: <type>\ndata: <json>\n\n"
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          const lines = event.split("\n");
+          let eventType = "message";
+          let dataStr = "";
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.substring(7).trim();
+            } else if (line.startsWith("data: ")) {
+              dataStr = line.substring(6);
+            }
+          }
+
+          if (dataStr) {
+            processEvent(eventType, dataStr);
+          }
+        }
+      }
+    } catch (error) {
+      setCurationStatus({
+        running: false,
+        message: "✗ Error: " + (error instanceof Error ? error.message : "Connection failed")
+      });
+    }
   };
 
   const handleCancelCuration = async () => {
@@ -221,6 +270,7 @@ export default function DashboardHome() {
                     </p>
                   </div>
                   <Button
+                    type="button"
                     onClick={handleRunCuration}
                     disabled={curationStatus.running}
                     className="w-full"
