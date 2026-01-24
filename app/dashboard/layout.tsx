@@ -1,30 +1,21 @@
-"use client";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { DashboardShell } from "@/components/dashboard-shell";
 
-import { useState } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
-import { cn } from "@/lib/utils";
-
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  return (
-    <div className="min-h-screen bg-background">
-      <AppSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-      <main
-        className={cn(
-          "transition-all duration-300",
-          sidebarCollapsed ? "ml-16" : "ml-64"
-        )}
-      >
-        {children}
-      </main>
-    </div>
-  );
+  if (error || !user) {
+    redirect("/login");
+  }
+
+  return <DashboardShell user={user}>{children}</DashboardShell>;
 }

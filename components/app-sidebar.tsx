@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   FileText,
@@ -12,6 +12,7 @@ import {
   History,
   Layout,
   Settings,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,10 +22,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  user: User;
 }
 
 const navItems = [
@@ -37,8 +41,15 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
-export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
+export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   return (
     <aside
@@ -98,8 +109,42 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           </TooltipProvider>
         </nav>
 
-        {/* Toggle Button */}
-        <div className="border-t p-2">
+        {/* User & Toggle */}
+        <div className="border-t p-2 space-y-2">
+          {/* User Info */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="w-full justify-center"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p className="font-medium">{user.email}</p>
+                <p className="text-xs text-muted-foreground">Sign out</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="px-2 py-1">
+              <p className="text-sm font-medium truncate">{user.email}</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="w-full justify-start px-0 h-auto py-1 text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-3 w-3 mr-2" />
+                Sign out
+              </Button>
+            </div>
+          )}
+
+          {/* Toggle Button */}
           <Button
             variant="ghost"
             size="sm"
