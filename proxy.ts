@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Public routes that don't need auth
   const publicPaths = ["/login", "/unsubscribe", "/api/cron"];
   const isPublicPath = publicPaths.some((path) =>
