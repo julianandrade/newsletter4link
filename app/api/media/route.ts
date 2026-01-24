@@ -12,8 +12,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
-    const limit = parseInt(searchParams.get("limit") ?? "50", 10);
-    const offset = parseInt(searchParams.get("offset") ?? "0", 10);
+    const limitParam = parseInt(searchParams.get("limit") ?? "50", 10);
+    const offsetParam = parseInt(searchParams.get("offset") ?? "0", 10);
+    const limit = Math.min(Math.max(isNaN(limitParam) ? 50 : limitParam, 1), 100);
+    const offset = Math.max(isNaN(offsetParam) ? 0 : offsetParam, 0);
 
     const where = type ? { type: { startsWith: type } } : {};
 
@@ -99,6 +101,11 @@ export async function DELETE(request: Request) {
         // Continue with database deletion even if storage deletion fails
         // The file might have been manually deleted
       }
+    } else {
+      console.warn(
+        `Media asset ${id} has no extractable storage path from URL: ${mediaAsset.url}. ` +
+          "This may indicate an orphaned storage file that requires manual cleanup."
+      );
     }
 
     // Delete from database
