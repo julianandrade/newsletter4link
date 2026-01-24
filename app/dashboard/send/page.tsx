@@ -208,7 +208,10 @@ export default function SendPage() {
       const res = await fetch("/api/email/send-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: testEmail }),
+        body: JSON.stringify({
+          email: testEmail,
+          templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
+        }),
       });
 
       const result = await res.json();
@@ -242,7 +245,9 @@ export default function SendPage() {
       const res = await fetch("/api/email/send-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          templateId: selectedTemplateId !== "default" ? selectedTemplateId : undefined,
+        }),
       });
 
       const result = await res.json();

@@ -149,3 +149,32 @@ export async function renderActiveTemplate(context: RenderContext): Promise<stri
 
   return renderTemplate(template.html, context);
 }
+
+/**
+ * Get a template by ID
+ */
+export async function getTemplateById(templateId: string) {
+  return await prisma.emailTemplate.findUnique({
+    where: { id: templateId },
+    select: { id: true, name: true, html: true },
+  });
+}
+
+/**
+ * Render a specific template by ID with the given context
+ */
+export async function renderTemplateById(
+  templateId: string,
+  context: RenderContext
+): Promise<{ html: string; templateName: string } | null> {
+  const template = await getTemplateById(templateId);
+
+  if (!template) {
+    return null;
+  }
+
+  return {
+    html: renderTemplate(template.html, context),
+    templateName: template.name,
+  };
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { sendTestNewsletter } from "@/lib/email/sender";
+import { sendTestNewsletter, sendEmail } from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
+import { renderTemplateById } from "@/lib/email/template-renderer";
 
 export const dynamic = "force-dynamic";
 
@@ -8,12 +9,13 @@ export const dynamic = "force-dynamic";
  * POST /api/email/send-test
  * Send a test newsletter to a specific email address
  *
- * Body: { email: string, editionId?: string }
+ * Body: { email: string, editionId?: string, templateId?: string }
+ * - templateId: specific template to use (optional, uses React Email component if omitted)
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, editionId } = body;
+    const { email, editionId, templateId } = body;
 
     if (!email) {
       return NextResponse.json(
@@ -72,24 +74,46 @@ export async function POST(request: Request) {
 
     const emailData = {
       articles: articles.map((article: any) => ({
+        id: article.id,
         title: article.title,
         summary: article.summary || "",
         sourceUrl: article.sourceUrl,
         category: article.category,
+        relevanceScore: article.relevanceScore,
       })),
       projects: projects.map((project: any) => ({
+        id: project.id,
         name: project.name,
         description: project.description,
         team: project.team,
-        impact: project.impact || undefined,
+        impact: project.impact || null,
         projectDate: project.projectDate.toISOString(),
       })),
       week,
       year,
     };
 
-    // Send test email
-    const result = await sendTestNewsletter(email, emailData);
+    // Send test email - use custom template if specified
+    let result;
+    if (templateId) {
+      // Render using the custom template
+      const templateResult = await renderTemplateById(templateId, emailData);
+      if (!templateResult) {
+        return NextResponse.json(
+          { success: false, error: "Template not found" },
+          { status: 404 }
+        );
+      }
+
+      result = await sendEmail(
+        email,
+        `[TEST] Link AI Newsletter - Week ${week}, ${year}`,
+        templateResult.html
+      );
+    } else {
+      // Use the default React Email component
+      result = await sendTestNewsletter(email, emailData);
+    }
 
     if (result.success) {
       return NextResponse.json({
