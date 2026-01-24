@@ -24,7 +24,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, ExternalLink, Image, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 interface Settings {
   relevanceThreshold: number;
@@ -206,6 +207,7 @@ export default function SettingsPage() {
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="rss">RSS Feeds</TabsTrigger>
             <TabsTrigger value="ai">AI Settings</TabsTrigger>
+            <TabsTrigger value="branding">Branding</TabsTrigger>
           </TabsList>
 
           {/* General Settings */}
@@ -503,6 +505,37 @@ export default function SettingsPage() {
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Settings
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Branding Settings */}
+          <TabsContent value="branding">
+            <Card>
+              <CardHeader>
+                <CardTitle>Branding</CardTitle>
+                <CardDescription>
+                  Customize the appearance of your newsletters with logos and banners
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link
+                  href="/dashboard/settings/branding"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Image className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium">Logo & Banner Settings</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Upload and manage your newsletter branding images
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </Link>
               </CardContent>
             </Card>
           </TabsContent>
