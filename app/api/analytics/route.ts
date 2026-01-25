@@ -17,6 +17,9 @@ function getStyleLabel(style: string): string {
   return style.charAt(0).toUpperCase() + style.slice(1);
 }
 
+// Engagement health thresholds
+const NEW_SUBSCRIBER_THRESHOLD = 3; // Subscribers with fewer than this many sends are "New"
+
 interface SegmentData {
   count: number;
   subscriberIds: string[];
@@ -353,10 +356,13 @@ export async function GET(request: NextRequest) {
     );
 
     // Get latest OPENED or CLICKED event timestamp per subscriber
+    // Only query events from last 90 days since older events won't change classification
+    // (subscribers with no activity in 90+ days automatically fall to "At Risk")
     const activityEvents = await prisma.emailEvent.findMany({
       where: {
         subscriberId: { in: allSubscriberIds },
         eventType: { in: ["OPENED", "CLICKED"] },
+        timestamp: { gte: ninetyDaysAgo },
       },
       select: {
         subscriberId: true,
@@ -383,8 +389,8 @@ export async function GET(request: NextRequest) {
       const sentCount = sentCountBySubscriber.get(subscriberId) || 0;
       const lastActivity = latestActivityBySubscriber.get(subscriberId);
 
-      // Priority 1: New subscriber (received < 3 SENT events)
-      if (sentCount < 3) {
+      // Priority 1: New subscriber (received fewer than threshold SENT events)
+      if (sentCount < NEW_SUBSCRIBER_THRESHOLD) {
         newCount++;
         continue;
       }
