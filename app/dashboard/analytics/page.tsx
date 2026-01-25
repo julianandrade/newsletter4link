@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +26,9 @@ import {
   Calendar,
   FileText,
   Link as LinkIcon,
+  Globe,
+  Sparkles,
+  Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -35,6 +39,20 @@ interface Edition {
   week: number;
   year: number;
   sentAt: string | null;
+}
+
+interface LanguageSegment {
+  language: string;
+  label: string;
+  count: number;
+  openRate: number;
+}
+
+interface StyleSegment {
+  style: string;
+  label: string;
+  count: number;
+  openRate: number;
 }
 
 interface AnalyticsData {
@@ -64,6 +82,10 @@ interface AnalyticsData {
     opens: number;
     clicks: number;
   }>;
+  segmentation?: {
+    byLanguage: LanguageSegment[];
+    byStyle: StyleSegment[];
+  };
 }
 
 export default function AnalyticsPage() {
@@ -327,6 +349,78 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
+        {/* Subscriber Segmentation */}
+        {data?.segmentation && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Subscriber Segmentation
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="language">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="language" className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    By Language
+                  </TabsTrigger>
+                  <TabsTrigger value="style" className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    By Style
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="language">
+                  {data.segmentation.byLanguage.length > 0 ? (
+                    <div className="space-y-3">
+                      {data.segmentation.byLanguage.map((segment) => (
+                        <SegmentBar
+                          key={segment.language}
+                          label={segment.label}
+                          count={segment.count}
+                          openRate={segment.openRate}
+                          total={data.segmentation!.byLanguage.reduce(
+                            (sum, s) => sum + s.count,
+                            0
+                          )}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No subscriber language data available
+                    </p>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="style">
+                  {data.segmentation.byStyle.length > 0 ? (
+                    <div className="space-y-3">
+                      {data.segmentation.byStyle.map((segment) => (
+                        <SegmentBar
+                          key={segment.style}
+                          label={segment.label}
+                          count={segment.count}
+                          openRate={segment.openRate}
+                          total={data.segmentation!.byStyle.reduce(
+                            (sum, s) => sum + s.count,
+                            0
+                          )}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No subscriber style data available
+                    </p>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Top Links */}
         <Card>
           <CardHeader>
@@ -459,4 +553,35 @@ function truncateUrl(url: string): string {
   } catch {
     return url.substring(0, 50) + (url.length > 50 ? "..." : "");
   }
+}
+
+interface SegmentBarProps {
+  label: string;
+  count: number;
+  openRate: number;
+  total: number;
+}
+
+function SegmentBar({ label, count, openRate, total }: SegmentBarProps) {
+  const percentage = total > 0 ? (count / total) * 100 : 0;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span>{count} subscribers</span>
+          <span className="font-medium text-foreground">
+            {openRate.toFixed(1)}% open rate
+          </span>
+        </div>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary rounded-full transition-all duration-300"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
 }

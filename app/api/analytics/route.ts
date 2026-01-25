@@ -3,6 +3,33 @@ import { prisma } from "@/lib/db";
 
 type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
 
+// Language label mappings
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English",
+  "pt-pt": "Portuguese (PT)",
+  "pt-br": "Portuguese (BR)",
+  es: "Spanish",
+  ar: "Arabic",
+};
+
+// Style labels are title case of the value
+function getStyleLabel(style: string): string {
+  return style.charAt(0).toUpperCase() + style.slice(1);
+}
+
+interface SegmentData {
+  count: number;
+  subscriberIds: string[];
+}
+
+interface SegmentResult {
+  language?: string;
+  style?: string;
+  label: string;
+  count: number;
+  openRate: number;
+}
+
 function getDateRangeFilter(
   dateRange: DateRange | null,
   startDate: string | null,
@@ -202,11 +229,113 @@ export async function GET(request: NextRequest) {
       .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
+    // Get subscriber segmentation data
+    const activeSubscribers = await prisma.subscriber.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        preferredLanguage: true,
+        preferredStyle: true,
+      },
+    });
+
+    // Group subscribers by language and style
+    const byLanguageMap: Record<string, SegmentData> = {};
+    const byStyleMap: Record<string, SegmentData> = {};
+
+    for (const subscriber of activeSubscribers) {
+      const lang = subscriber.preferredLanguage || "en";
+      const style = subscriber.preferredStyle || "comprehensive";
+
+      if (!byLanguageMap[lang]) {
+        byLanguageMap[lang] = { count: 0, subscriberIds: [] };
+      }
+      byLanguageMap[lang].count++;
+      byLanguageMap[lang].subscriberIds.push(subscriber.id);
+
+      if (!byStyleMap[style]) {
+        byStyleMap[style] = { count: 0, subscriberIds: [] };
+      }
+      byStyleMap[style].count++;
+      byStyleMap[style].subscriberIds.push(subscriber.id);
+    }
+
+    // Get all subscriber IDs for open rate calculation
+    const allSubscriberIds = activeSubscribers.map((s) => s.id);
+
+    // Get DELIVERED and OPENED events per subscriber for open rate calculation
+    // We need delivered count per subscriber to calculate accurate open rates
+    const deliveredEvents = await prisma.emailEvent.groupBy({
+      by: ["subscriberId"],
+      where: {
+        ...whereClause,
+        subscriberId: { in: allSubscriberIds },
+        eventType: "DELIVERED",
+      },
+      _count: { id: true },
+    });
+
+    const openedEvents = await prisma.emailEvent.groupBy({
+      by: ["subscriberId"],
+      where: {
+        ...whereClause,
+        subscriberId: { in: allSubscriberIds },
+        eventType: "OPENED",
+      },
+      _count: { id: true },
+    });
+
+    // Create maps for quick lookup
+    const deliveredBySubscriber = new Map(
+      deliveredEvents.map((e) => [e.subscriberId, e._count.id])
+    );
+    const openedBySubscriber = new Map(
+      openedEvents.map((e) => [e.subscriberId, e._count.id])
+    );
+
+    // Calculate open rate for each segment
+    function calculateSegmentOpenRate(subscriberIds: string[]): number {
+      let totalDelivered = 0;
+      let totalOpened = 0;
+
+      for (const id of subscriberIds) {
+        totalDelivered += deliveredBySubscriber.get(id) || 0;
+        totalOpened += openedBySubscriber.get(id) || 0;
+      }
+
+      return totalDelivered > 0 ? (totalOpened / totalDelivered) * 100 : 0;
+    }
+
+    // Build segmentation results
+    const byLanguage: SegmentResult[] = Object.entries(byLanguageMap)
+      .map(([language, data]) => ({
+        language,
+        label: LANGUAGE_LABELS[language] || language,
+        count: data.count,
+        openRate: calculateSegmentOpenRate(data.subscriberIds),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const byStyle: SegmentResult[] = Object.entries(byStyleMap)
+      .map(([style, data]) => ({
+        style,
+        label: getStyleLabel(style),
+        count: data.count,
+        openRate: calculateSegmentOpenRate(data.subscriberIds),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const segmentation = {
+      byLanguage,
+      byStyle,
+    };
+
     return NextResponse.json({
       editions,
       metrics,
       topLinks,
       timeline,
+      segmentation,
     });
   } catch (error) {
     console.error("Analytics API error:", error);
