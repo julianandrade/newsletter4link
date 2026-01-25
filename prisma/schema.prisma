@@ -139,6 +139,8 @@ model Subscriber {
 
   @@index([active])
   @@index([email])
+  @@index([preferredLanguage, active])
+  @@index([preferredStyle, active])
 }
 
 // ==================== EMAIL TRACKING ====================
@@ -159,6 +161,8 @@ model EmailEvent {
   @@index([subscriberId, eventType])
   @@index([editionId, eventType])
   @@index([timestamp])
+  @@index([eventType, timestamp])
+  @@index([editionId, eventType, timestamp])
 }
 
 enum EmailEventType {
