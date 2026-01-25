@@ -177,12 +177,10 @@ export default function EditTemplatePage() {
   }, []);
 
   const handlePreview = useCallback(() => {
-    if (!emailEditorRef.current?.editor) return;
-
     setIsLoadingPreview(true);
-    emailEditorRef.current.editor.exportHtml((data) => {
-      const { html } = data;
 
+    // Determine which HTML to use: editor export or stored template
+    const processHtml = (html: string) => {
       // Sample articles for preview
       const sampleArticles = [
         {
@@ -257,8 +255,20 @@ export default function EditTemplatePage() {
       setPreviewHtml(rendered);
       setShowPreview(true);
       setIsLoadingPreview(false);
-    });
-  }, []);
+    };
+
+    // If template has no designJson (HTML-only template), use stored HTML
+    // Otherwise, export from the Unlayer editor
+    if (!template?.designJson && template?.html) {
+      processHtml(template.html);
+    } else if (emailEditorRef.current?.editor) {
+      emailEditorRef.current.editor.exportHtml((data) => {
+        processHtml(data.html);
+      });
+    } else {
+      setIsLoadingPreview(false);
+    }
+  }, [template]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -451,20 +461,24 @@ export default function EditTemplatePage() {
           </CardContent>
         </Card>
 
-        {/* Editor */}
+        {/* Editor or HTML Preview */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Design Your Template</CardTitle>
+              <CardTitle>
+                {template?.designJson ? "Design Your Template" : "Template Preview"}
+              </CardTitle>
               <CardDescription>
-                Use the drag-and-drop editor. Use merge tags for dynamic content.
+                {template?.designJson
+                  ? "Use the drag-and-drop editor. Use merge tags for dynamic content."
+                  : "This is an HTML-only template. You can preview it with sample data below."}
               </CardDescription>
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 onClick={handlePreview}
-                disabled={!isEditorReady || isLoadingPreview}
+                disabled={isLoadingPreview || (!template?.designJson && !template?.html)}
               >
                 {isLoadingPreview ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -473,28 +487,59 @@ export default function EditTemplatePage() {
                 )}
                 Preview with Sample Data
               </Button>
-              <Button onClick={handleSave} disabled={isSaving || !isEditorReady}>
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Save Template
-              </Button>
+              {!!template?.designJson && (
+                <Button onClick={handleSave} disabled={isSaving || !isEditorReady}>
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save Template
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-lg overflow-hidden">
-              <EmailEditor
-                ref={emailEditorRef}
-                onReady={handleEditorReady}
-                options={editorOptions}
-                minHeight="600px"
-                appearance={{
-                  theme: "modern_light",
-                }}
-              />
-            </div>
+            {template?.designJson ? (
+              <div className="border rounded-lg overflow-hidden">
+                <EmailEditor
+                  ref={emailEditorRef}
+                  onReady={handleEditorReady}
+                  options={editorOptions}
+                  minHeight="600px"
+                  appearance={{
+                    theme: "modern_light",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        HTML-Only Template
+                      </p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                        This template was created as raw HTML and cannot be edited in the visual editor.
+                        Click "Preview with Sample Data" to see how it looks with content.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="border rounded-lg bg-muted/30">
+                  <div className="p-3 border-b bg-muted/50 flex items-center gap-2">
+                    <Code className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">HTML Source</span>
+                    <span className="text-xs text-muted-foreground">({template?.html?.length || 0} characters)</span>
+                  </div>
+                  <pre className="p-4 text-xs overflow-auto max-h-[400px] text-muted-foreground">
+                    <code>{template?.html?.substring(0, 2000)}{(template?.html?.length || 0) > 2000 ? '\n\n... (truncated)' : ''}</code>
+                  </pre>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
