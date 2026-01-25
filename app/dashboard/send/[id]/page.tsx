@@ -617,14 +617,14 @@ export default function EditionDetailPage() {
             <div className="flex items-center gap-4">
               <div className="flex-1 max-w-xs">
                 <Select
-                  value={selectedTemplateId}
-                  onValueChange={setSelectedTemplateId}
+                  value={selectedTemplateId || "default"}
+                  onValueChange={(value) => setSelectedTemplateId(value === "default" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Default Template" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Default Template</SelectItem>
+                    <SelectItem value="default">Default Template</SelectItem>
                     {templates.map((template) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
@@ -634,7 +634,7 @@ export default function EditionDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {selectedTemplateId && (
+              {selectedTemplateId && selectedTemplateId !== "default" && (
                 <Button
                   variant="outline"
                   size="sm"
