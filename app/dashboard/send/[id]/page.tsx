@@ -1170,8 +1170,8 @@ export default function EditionDetailPage() {
           </Card>
         )}
 
-        {/* Content Mode Toggle - only for draft editions */}
-        {isEditable && (
+        {/* Content Mode Toggle - for draft and finalized editions */}
+        {(isEditable || isFinalized) && (
           <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">

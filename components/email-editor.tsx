@@ -240,6 +240,7 @@ function InlineEditor({
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: false,
