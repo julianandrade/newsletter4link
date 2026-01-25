@@ -260,12 +260,38 @@ export async function createSubscriber(data: {
 }
 
 /**
- * Unsubscribe user
+ * Unsubscribe user and record the unsubscribe event
  */
 export async function unsubscribeUser(id: string) {
-  return await prisma.subscriber.update({
-    where: { id },
-    data: { active: false },
+  return await prisma.$transaction(async (tx) => {
+    // Update subscriber to inactive
+    const subscriber = await tx.subscriber.update({
+      where: { id },
+      data: { active: false },
+    });
+
+    // Find the subscriber's most recent SENT event to get the editionId
+    const lastSentEvent = await tx.emailEvent.findFirst({
+      where: {
+        subscriberId: id,
+        eventType: "SENT",
+      },
+      orderBy: { timestamp: "desc" },
+    });
+
+    // Only create unsubscribe event if we have an editionId to link to
+    if (lastSentEvent) {
+      await tx.emailEvent.create({
+        data: {
+          subscriberId: id,
+          editionId: lastSentEvent.editionId,
+          eventType: "UNSUBSCRIBED",
+          metadata: { source: "unsubscribe_link" },
+        },
+      });
+    }
+
+    return subscriber;
   });
 }
 
