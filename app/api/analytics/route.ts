@@ -122,10 +122,39 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const topLinks = Object.entries(linkCounts)
+    const topLinksBasic = Object.entries(linkCounts)
       .map(([url, clicks]) => ({ url, clicks }))
       .sort((a, b) => b.clicks - a.clicks)
       .slice(0, 10);
+
+    // Extract URLs to query for article information
+    const urls = topLinksBasic.map((link) => link.url);
+
+    // Query Article table to match URLs with article titles
+    const articles = await prisma.article.findMany({
+      where: { sourceUrl: { in: urls } },
+      select: { sourceUrl: true, title: true, category: true },
+    });
+
+    // Build a map of URL -> article info for quick lookup
+    const articleMap = new Map(
+      articles.map((article) => [
+        article.sourceUrl,
+        { title: article.title, category: article.category },
+      ])
+    );
+
+    // Enhance topLinks with article information
+    const topLinks = topLinksBasic.map((link) => {
+      const articleInfo = articleMap.get(link.url);
+      return {
+        url: link.url,
+        clicks: link.clicks,
+        title: articleInfo?.title || humanizeUrl(link.url),
+        category: articleInfo?.category || [],
+        isArticle: !!articleInfo,
+      };
+    });
 
     // Get engagement timeline based on date range
     const timelineStartDate = getDateRangeFilter(dateRange, startDate, endDate);
@@ -185,5 +214,59 @@ export async function GET(request: NextRequest) {
       { error: "Failed to fetch analytics" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Creates a human-readable title from a URL
+ * e.g., "https://techcrunch.com/2026/01/ai-breakthrough/" -> "AI Breakthrough - TechCrunch"
+ */
+function humanizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, "");
+
+    // Extract domain name and format it nicely
+    const domainParts = hostname.split(".");
+    const siteName =
+      domainParts.length > 1
+        ? domainParts[domainParts.length - 2]
+        : domainParts[0];
+    const formattedSiteName =
+      siteName.charAt(0).toUpperCase() + siteName.slice(1);
+
+    // Extract meaningful path segments
+    const pathSegments = parsed.pathname
+      .split("/")
+      .filter((segment) => {
+        // Filter out empty segments, numeric-only segments (dates, IDs), and common noise
+        return (
+          segment &&
+          !/^\d+$/.test(segment) &&
+          !/^\d{4}$/.test(segment) && // year
+          !/^\d{2}$/.test(segment) && // month/day
+          !["index", "article", "post", "blog", "news"].includes(
+            segment.toLowerCase()
+          )
+        );
+      })
+      .slice(-2); // Take last 2 meaningful segments
+
+    if (pathSegments.length > 0) {
+      // Convert slug to title case: "ai-breakthrough" -> "AI Breakthrough"
+      const title = pathSegments
+        .map((segment) =>
+          segment
+            .replace(/[-_]/g, " ")
+            .replace(/\b\w/g, (char) => char.toUpperCase())
+        )
+        .join(" - ");
+      return `${title} - ${formattedSiteName}`;
+    }
+
+    return formattedSiteName;
+  } catch {
+    // If URL parsing fails, return a truncated version
+    return url.length > 60 ? url.substring(0, 57) + "..." : url;
   }
 }

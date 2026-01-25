@@ -23,7 +23,10 @@ import {
   CheckCircle2,
   UserMinus,
   Calendar,
+  FileText,
+  Link as LinkIcon,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
 
@@ -52,6 +55,9 @@ interface AnalyticsData {
   topLinks: Array<{
     url: string;
     clicks: number;
+    title: string;
+    category: string[];
+    isArticle: boolean;
   }>;
   timeline: Array<{
     date: string;
@@ -331,28 +337,61 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             {data?.topLinks && data.topLinks.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {data.topLinks.map((link, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between"
+                    className="flex items-start justify-between gap-4 pb-3 border-b last:border-0 last:pb-0"
                   >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-sm text-muted-foreground w-6">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <span className="text-sm text-muted-foreground w-6 pt-0.5 flex-shrink-0">
                         {index + 1}.
                       </span>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:underline truncate flex items-center gap-1"
-                      >
-                        {truncateUrl(link.url)}
-                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                      </a>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          {link.isArticle ? (
+                            <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          ) : (
+                            <LinkIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          )}
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-foreground hover:text-blue-600 hover:underline truncate flex items-center gap-1.5"
+                            title={link.url}
+                          >
+                            {link.title}
+                            <ExternalLink className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-muted-foreground truncate max-w-[300px]">
+                            {truncateUrl(link.url)}
+                          </span>
+                          {link.category && link.category.length > 0 && (
+                            <div className="flex gap-1 flex-wrap">
+                              {link.category.slice(0, 3).map((cat) => (
+                                <Badge
+                                  key={cat}
+                                  variant="secondary"
+                                  className="text-[10px] px-1.5 py-0"
+                                >
+                                  {cat}
+                                </Badge>
+                              ))}
+                              {link.category.length > 3 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  +{link.category.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-sm font-medium ml-4">
-                      {link.clicks} clicks
+                    <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                      {link.clicks} {link.clicks === 1 ? "click" : "clicks"}
                     </span>
                   </div>
                 ))}
