@@ -1,10 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
+
+function getDateRangeFilter(
+  dateRange: DateRange | null,
+  startDate: string | null,
+  endDate: string | null
+): Date | null {
+  if (dateRange === "custom" && startDate) {
+    return new Date(startDate);
+  }
+
+  const daysMap: Record<string, number> = {
+    "7d": 7,
+    "14d": 14,
+    "30d": 30,
+    "90d": 90,
+  };
+
+  const days = dateRange ? daysMap[dateRange] : 14; // Default to 14 days
+  if (!days) return null;
+
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date;
+}
+
+function getEndDateFilter(
+  dateRange: DateRange | null,
+  endDate: string | null
+): Date | null {
+  if (dateRange === "custom" && endDate) {
+    // Set to end of day
+    const date = new Date(endDate);
+    date.setHours(23, 59, 59, 999);
+    return date;
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const editionId = searchParams.get("editionId");
+    const dateRange = searchParams.get("dateRange") as DateRange | null;
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     // Get all sent editions
     const editions = await prisma.edition.findMany({
@@ -78,15 +120,25 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.clicks - a.clicks)
       .slice(0, 10);
 
-    // Get engagement timeline (last 14 days)
-    const fourteenDaysAgo = new Date();
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    // Get engagement timeline based on date range
+    const timelineStartDate = getDateRangeFilter(dateRange, startDate, endDate);
+    const timelineEndDate = getEndDateFilter(dateRange, endDate);
+
+    const timelineTimestampFilter: { gte?: Date; lte?: Date } = {};
+    if (timelineStartDate) {
+      timelineTimestampFilter.gte = timelineStartDate;
+    }
+    if (timelineEndDate) {
+      timelineTimestampFilter.lte = timelineEndDate;
+    }
 
     const timelineEvents = await prisma.emailEvent.findMany({
       where: {
         ...whereClause,
         eventType: { in: ["OPENED", "CLICKED"] },
-        timestamp: { gte: fourteenDaysAgo },
+        ...(Object.keys(timelineTimestampFilter).length > 0
+          ? { timestamp: timelineTimestampFilter }
+          : {}),
       },
       select: {
         eventType: true,

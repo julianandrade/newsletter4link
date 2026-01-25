@@ -10,6 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Mail,
   MailOpen,
@@ -20,7 +22,10 @@ import {
   ExternalLink,
   CheckCircle2,
   UserMinus,
+  Calendar,
 } from "lucide-react";
+
+type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
 
 interface Edition {
   id: string;
@@ -60,10 +65,13 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [selectedEdition, setSelectedEdition] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange>("14d");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
 
   useEffect(() => {
     fetchAnalytics();
-  }, [selectedEdition]);
+  }, [selectedEdition, dateRange, customStartDate, customEndDate]);
 
   const fetchAnalytics = async () => {
     setIsLoading(true);
@@ -73,6 +81,15 @@ export default function AnalyticsPage() {
       const params = new URLSearchParams();
       if (selectedEdition !== "all") {
         params.set("editionId", selectedEdition);
+      }
+      params.set("dateRange", dateRange);
+      if (dateRange === "custom") {
+        if (customStartDate) {
+          params.set("startDate", customStartDate);
+        }
+        if (customEndDate) {
+          params.set("endDate", customEndDate);
+        }
       }
 
       const response = await fetch(`/api/analytics?${params}`);
@@ -134,22 +151,78 @@ export default function AnalyticsPage() {
       <AppHeader title="Analytics" />
 
       <div className="flex-1 p-6 space-y-6">
-        {/* Edition Selector */}
-        <div className="flex items-center justify-between">
+        {/* Filters */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="text-lg font-semibold">Email Performance</h2>
-          <Select value={selectedEdition} onValueChange={setSelectedEdition}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select edition" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Editions</SelectItem>
-              {data?.editions.map((edition) => (
-                <SelectItem key={edition.id} value={edition.id}>
-                  Week {edition.week}, {edition.year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Date Range Selector */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                Timeline Range
+              </Label>
+              <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Date range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="14d">Last 14 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="90d">Last 90 days</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Custom Date Inputs */}
+            {dateRange === "custom" && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="startDate" className="text-xs text-muted-foreground">
+                    Start Date
+                  </Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="w-[140px]"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="endDate" className="text-xs text-muted-foreground">
+                    End Date
+                  </Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="w-[140px]"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Edition Selector */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Edition</Label>
+              <Select value={selectedEdition} onValueChange={setSelectedEdition}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select edition" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Editions</SelectItem>
+                  {data?.editions.map((edition) => (
+                    <SelectItem key={edition.id} value={edition.id}>
+                      Week {edition.week}, {edition.year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         {/* Key Metrics */}
