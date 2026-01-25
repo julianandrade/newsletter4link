@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentEdition, markEditionAsSent } from "@/lib/queries";
 import { renderTemplateById } from "@/lib/email/template-renderer";
 import { config } from "@/lib/config";
+import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -36,16 +37,40 @@ interface CustomData {
 
 /**
  * POST /api/email/send-all
- * Send newsletter to all active subscribers
+ * Send newsletter to all active subscribers (or selected subset)
  *
- * Body: { editionId?: string, templateId?: string, customData?: CustomData }
+ * Body: {
+ *   editionId?: string,
+ *   templateId?: string,
+ *   customData?: CustomData,
+ *   subscriberIds?: string[],  // Optional: filter to specific subscribers
+ *   provider?: "resend" | "graph"  // Optional: override default provider
+ * }
  * - templateId: specific template to use (optional, uses React Email component if omitted)
  * - customData: custom edited data to use (optional, overrides database data)
+ * - subscriberIds: send only to these subscriber IDs (optional, sends to all if omitted)
+ * - provider: override the default email provider (optional)
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { editionId, templateId, customData } = body;
+    const { editionId, templateId, customData, subscriberIds, provider } = body;
+
+    // Validate provider if specified
+    if (provider && !["resend", "graph"].includes(provider)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid provider. Must be 'resend' or 'graph'." },
+        { status: 400 }
+      );
+    }
+
+    // Check if specified provider is configured
+    if (provider && !isSpecificProviderConfigured(provider)) {
+      return NextResponse.json(
+        { success: false, error: `Provider '${provider}' is not configured.` },
+        { status: 400 }
+      );
+    }
 
     // Get edition
     let edition;
@@ -181,16 +206,22 @@ export async function POST(request: Request) {
       );
     }
 
+    // Build subscriber filter
+    const subscriberFilter: { active: true; id?: { in: string[] } } = { active: true };
+    if (subscriberIds && Array.isArray(subscriberIds) && subscriberIds.length > 0) {
+      subscriberFilter.id = { in: subscriberIds };
+    }
+
     // Get subscriber count
     const subscriberCount = await prisma.subscriber.count({
-      where: { active: true },
+      where: subscriberFilter,
     });
 
     if (subscriberCount === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "No active subscribers found",
+          error: subscriberIds ? "No matching active subscribers found" : "No active subscribers found",
         },
         { status: 400 }
       );
@@ -249,14 +280,16 @@ export async function POST(request: Request) {
       templateHtml = templateResult.html;
     }
 
-    // Send to all subscribers
+    // Send to subscribers (all or filtered)
     let result;
     if (templateHtml) {
       // Use custom template - send directly with pre-rendered HTML
       result = await sendNewsletterWithTemplate(
         templateHtml,
         emailData,
-        edition.id
+        edition.id,
+        subscriberFilter,
+        provider
       );
     } else {
       // Use default React Email component
@@ -266,10 +299,12 @@ export async function POST(request: Request) {
         result = await sendNewsletterWithTemplate(
           html,
           emailData,
-          edition.id
+          edition.id,
+          subscriberFilter,
+          provider
         );
       } else {
-        result = await sendNewsletterToAll(emailData, edition.id);
+        result = await sendNewsletterToAllWithOptions(emailData, edition.id, subscriberFilter, provider);
       }
     }
 
@@ -383,13 +418,21 @@ interface EmailData {
   projects: unknown[];
 }
 
+interface SubscriberFilter {
+  active: true;
+  id?: { in: string[] };
+}
+
 /**
  * Send newsletter to all subscribers using a pre-rendered template HTML
+ * Supports filtering by subscriber IDs and overriding the email provider
  */
 async function sendNewsletterWithTemplate(
   templateHtml: string,
   data: EmailData,
-  editionId: string
+  editionId: string,
+  subscriberFilter: SubscriberFilter = { active: true },
+  providerOverride?: "resend" | "graph"
 ): Promise<{
   success: boolean;
   sent: number;
@@ -404,16 +447,19 @@ async function sendNewsletterWithTemplate(
   };
 
   try {
-    // Get all active subscribers
+    // Get subscribers based on filter
     const subscribers = await prisma.subscriber.findMany({
-      where: { active: true },
+      where: subscriberFilter,
     });
 
     const total = subscribers.length;
-    console.log(`Sending newsletter with template to ${total} subscribers...`);
+    console.log(`Sending newsletter with template to ${total} subscribers${providerOverride ? ` via ${providerOverride}` : ""}...`);
 
-    // Send in batches to avoid rate limiting
-    const batchSize = config.email.batchSize;
+    // Get batch settings (use provider-specific settings if provider is overridden)
+    const { batchSize, rateLimitDelay } = providerOverride
+      ? getProviderSettings()
+      : { batchSize: config.email.batchSize, rateLimitDelay: config.email.rateLimitDelay };
+
     const batches = [];
 
     for (let i = 0; i < subscribers.length; i += batchSize) {
@@ -426,11 +472,19 @@ async function sendNewsletterWithTemplate(
       // Send all emails in batch concurrently
       const promises = batch.map(async (subscriber) => {
         try {
-          const emailResult = await sendEmail(
-            subscriber.email,
-            `Link AI Newsletter - Week ${data.week}, ${data.year}`,
-            templateHtml
-          );
+          // Use provider override if specified, otherwise use default sendEmail
+          const emailResult = providerOverride
+            ? await sendEmailWithProvider(
+                providerOverride,
+                subscriber.email,
+                `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+                templateHtml
+              )
+            : await sendEmail(
+                subscriber.email,
+                `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+                templateHtml
+              );
 
           if (emailResult.success) {
             // Log email event
@@ -441,6 +495,7 @@ async function sendNewsletterWithTemplate(
                 eventType: "SENT",
                 metadata: {
                   messageId: emailResult.messageId,
+                  provider: providerOverride || config.email.provider,
                 },
               },
             });
@@ -481,7 +536,7 @@ async function sendNewsletterWithTemplate(
       // Wait between batches to respect rate limits
       if (batchIndex < batches.length - 1) {
         await new Promise((resolve) =>
-          setTimeout(resolve, config.email.rateLimitDelay)
+          setTimeout(resolve, rateLimitDelay)
         );
       }
     }
@@ -502,4 +557,29 @@ async function sendNewsletterWithTemplate(
       ],
     };
   }
+}
+
+/**
+ * Send newsletter to subscribers with filtering and provider options
+ * Wraps sendNewsletterToAll with additional options
+ */
+async function sendNewsletterToAllWithOptions(
+  data: EmailData,
+  editionId: string,
+  subscriberFilter: SubscriberFilter = { active: true },
+  providerOverride?: "resend" | "graph"
+): Promise<{
+  success: boolean;
+  sent: number;
+  failed: number;
+  errors: string[];
+}> {
+  // If no special options, use the standard function
+  if (!subscriberFilter.id && !providerOverride) {
+    return sendNewsletterToAll(data as any, editionId);
+  }
+
+  // Otherwise, render the email and use the template sender with options
+  const html = await renderNewsletterEmail(data as any);
+  return sendNewsletterWithTemplate(html, data, editionId, subscriberFilter, providerOverride);
 }

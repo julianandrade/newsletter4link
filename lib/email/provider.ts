@@ -74,6 +74,33 @@ export async function sendEmailViaProvider(
 }
 
 /**
+ * Send email using a specific provider (override env-based selection)
+ * Allows explicit provider selection from the UI
+ */
+export async function sendEmailWithProvider(
+  provider: "resend" | "graph",
+  to: string,
+  subject: string,
+  html: string
+): Promise<SendEmailResult> {
+  if (provider === "graph") {
+    return sendEmailViaGraph(to, subject, html);
+  }
+
+  return sendEmailViaResend(to, subject, html);
+}
+
+/**
+ * Check if a specific provider is configured
+ */
+export function isSpecificProviderConfigured(provider: "resend" | "graph"): boolean {
+  if (provider === "graph") {
+    return isGraphConfigured();
+  }
+  return !!config.email.resend.apiKey;
+}
+
+/**
  * Send email via Resend
  */
 async function sendEmailViaResend(
