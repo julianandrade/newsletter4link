@@ -64,6 +64,7 @@
     "react-email-editor": "^1.7.11",
     "resend": "^6.8.0",
     "rss-parser": "^3.13.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.4.0"

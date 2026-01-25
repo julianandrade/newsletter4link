@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { EditionArticlePicker, Article } from "@/components/edition-article-picker";
 import { EditionProjectPicker, Project } from "@/components/edition-project-picker";
+import { EmailEditor, EditedNewsletterData, Article as EditorArticle, Project as EditorProject, CustomBlock } from "@/components/email-editor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +56,8 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  Pencil,
+  List,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -158,6 +162,11 @@ export default function EditionDetailPage() {
   const [selectedArticles, setSelectedArticles] = useState<Article[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
+
+  // Edit mode state
+  const [contentMode, setContentMode] = useState<"select" | "edit">("select");
+  const [editedData, setEditedData] = useState<EditedNewsletterData | null>(null);
+  const [isEditDirty, setIsEditDirty] = useState(false);
 
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState(false);
@@ -278,6 +287,46 @@ export default function EditionDetailPage() {
     setIsDirty(true);
   };
 
+  // Switch to edit mode and initialize editor data
+  const handleEnterEditMode = useCallback(() => {
+    const editorArticles: EditorArticle[] = selectedArticles.map((a) => ({
+      id: a.id,
+      title: a.title,
+      summary: a.summary || "",
+      sourceUrl: a.sourceUrl || "",
+      category: a.category || [],
+    }));
+
+    const editorProjects: EditorProject[] = selectedProjects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description || "",
+      team: p.team || "",
+      impact: p.impact || undefined,
+      imageUrl: p.imageUrl || undefined,
+      projectDate: p.projectDate || new Date().toISOString(),
+    }));
+
+    setEditedData({
+      articles: editorArticles,
+      projects: editorProjects,
+      customBlocks: [],
+    });
+    setContentMode("edit");
+    setIsEditDirty(false);
+  }, [selectedArticles, selectedProjects]);
+
+  // Handle changes from the EmailEditor
+  const handleEditorDataChange = useCallback((data: EditedNewsletterData) => {
+    setEditedData(data);
+    setIsEditDirty(true);
+  }, []);
+
+  // Switch back to select mode
+  const handleExitEditMode = useCallback(() => {
+    setContentMode("select");
+  }, []);
+
   // Save draft
   const handleSaveDraft = async () => {
     if (!edition) return;
@@ -323,12 +372,25 @@ export default function EditionDetailPage() {
     setPreviewHtml(null);
 
     try {
+      // Build customData from editedData if in edit mode
+      let customData = undefined;
+      if (contentMode === "edit" && editedData) {
+        customData = {
+          articles: editedData.articles,
+          projects: editedData.projects,
+          customBlocks: editedData.customBlocks,
+          week: edition.week,
+          year: edition.year,
+        };
+      }
+
       const res = await fetch("/api/email/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           editionId,
           templateId: selectedTemplateId || undefined,
+          customData,
         }),
       });
 
@@ -338,11 +400,11 @@ export default function EditionDetailPage() {
         setPreviewHtml(result.html);
         setShowPreviewDialog(true);
       } else {
-        setError(result.error || "Failed to generate preview");
+        toast.error(result.error || "Failed to generate preview");
       }
     } catch (err) {
       console.error("Error generating preview:", err);
-      setError("Failed to generate preview");
+      toast.error("Failed to generate preview");
     } finally {
       setPreviewing(false);
     }
@@ -422,12 +484,25 @@ export default function EditionDetailPage() {
     setSendResult(null);
 
     try {
+      // Build customData from editedData if in edit mode
+      let customData = undefined;
+      if (contentMode === "edit" && editedData) {
+        customData = {
+          articles: editedData.articles,
+          projects: editedData.projects,
+          customBlocks: editedData.customBlocks,
+          week: edition.week,
+          year: edition.year,
+        };
+      }
+
       const res = await fetch("/api/email/send-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           editionId,
           templateId: selectedTemplateId || undefined,
+          customData,
           // Only pass subscriberIds if not all are selected
           subscriberIds: selectedSubscriberIds.length < subscribers.length
             ? selectedSubscriberIds
@@ -446,6 +521,7 @@ export default function EditionDetailPage() {
       });
 
       if (result.success) {
+        toast.success(`Newsletter sent to ${result.data?.sent || 0} subscribers`);
         // Reload edition to get updated status
         await loadEdition();
       }
@@ -976,18 +1052,66 @@ export default function EditionDetailPage() {
           </Card>
         )}
 
-        {/* Content Tabs */}
-        <Tabs defaultValue="articles" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="articles" className="gap-2">
-              <FileText className="w-4 h-4" />
-              Articles ({selectedArticleIds.length})
-            </TabsTrigger>
-            <TabsTrigger value="projects" className="gap-2">
-              <Briefcase className="w-4 h-4" />
-              Projects ({selectedProjectIds.length})
-            </TabsTrigger>
-          </TabsList>
+        {/* Content Mode Toggle - only for draft editions */}
+        {isEditable && (
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium">Content Mode</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {contentMode === "select"
+                      ? "Select which articles and projects to include"
+                      : "Edit article summaries, project descriptions, and add custom content"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={contentMode === "select" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setContentMode("select")}
+                  >
+                    <List className="w-4 h-4 mr-2" />
+                    Select Content
+                  </Button>
+                  <Button
+                    variant={contentMode === "edit" ? "default" : "outline"}
+                    size="sm"
+                    onClick={contentMode === "edit" ? undefined : handleEnterEditMode}
+                    disabled={selectedArticleIds.length === 0 && selectedProjectIds.length === 0}
+                  >
+                    <Pencil className="w-4 h-4 mr-2" />
+                    Edit Content
+                    {isEditDirty && contentMode === "edit" && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        Edited
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              {contentMode === "edit" && isEditDirty && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                  Content has been edited. Changes will be included when you preview or send.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Content Tabs - for Select mode */}
+        {contentMode === "select" && (
+          <Tabs defaultValue="articles" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="articles" className="gap-2">
+                <FileText className="w-4 h-4" />
+                Articles ({selectedArticleIds.length})
+              </TabsTrigger>
+              <TabsTrigger value="projects" className="gap-2">
+                <Briefcase className="w-4 h-4" />
+                Projects ({selectedProjectIds.length})
+              </TabsTrigger>
+            </TabsList>
 
           <TabsContent value="articles">
             {isSent ? (
@@ -1107,7 +1231,42 @@ export default function EditionDetailPage() {
               />
             )}
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        )}
+
+        {/* Email Editor - for Edit mode */}
+        {contentMode === "edit" && editedData && edition && (
+          <Card>
+            <CardHeader className="border-b">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <Pencil className="w-4 h-4" />
+                    Edit Content
+                  </CardTitle>
+                  <CardDescription>
+                    Edit article summaries, project descriptions, and add custom content blocks
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleExitEditMode}>
+                  <List className="w-4 h-4 mr-2" />
+                  Back to Selection
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="h-[600px]">
+                <EmailEditor
+                  articles={editedData.articles}
+                  projects={editedData.projects}
+                  week={edition.week}
+                  year={edition.year}
+                  onDataChange={handleEditorDataChange}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Preview Dialog */}

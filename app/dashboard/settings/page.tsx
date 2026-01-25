@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +25,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, Plus, Pencil, Trash2, ExternalLink, Image, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
@@ -69,6 +80,7 @@ export default function SettingsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<RSSSource | null>(null);
   const [sourceForm, setSourceForm] = useState({ name: "", url: "", category: "" });
+  const [deleteTarget, setDeleteTarget] = useState<RSSSource | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -129,19 +141,23 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteSource = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this RSS source?")) return;
+  const handleDeleteSource = async () => {
+    if (!deleteTarget) return;
 
     try {
-      const response = await fetch(`/api/rss-sources/${id}`, {
+      const response = await fetch(`/api/rss-sources/${deleteTarget.id}`, {
         method: "DELETE",
       });
 
       if (!response.ok) throw new Error("Failed to delete source");
 
-      setRssSources((prev) => prev.filter((s) => s.id !== id));
+      setRssSources((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      toast.success("RSS source deleted successfully");
     } catch (error) {
+      toast.error("Failed to delete RSS source");
       console.error("Error deleting source:", error);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -181,8 +197,9 @@ export default function SettingsPage() {
       }
 
       setIsDialogOpen(false);
+      toast.success(editingSource ? "RSS source updated" : "RSS source added");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to save source");
+      toast.error(error instanceof Error ? error.message : "Failed to save source");
     }
   };
 
@@ -422,7 +439,7 @@ export default function SettingsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDeleteSource(source.id)}
+                            onClick={() => setDeleteTarget(source)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -541,6 +558,27 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete RSS Source</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteTarget?.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSource}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

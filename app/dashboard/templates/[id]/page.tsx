@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -272,12 +273,12 @@ export default function EditTemplatePage() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("Please enter a template name");
+      toast.error("Please enter a template name");
       return;
     }
 
     if (!emailEditorRef.current?.editor) {
-      alert("Editor is not ready");
+      toast.error("Editor is not ready");
       return;
     }
 
@@ -308,9 +309,9 @@ export default function EditTemplatePage() {
           // Refresh template data
           const updated = await response.json();
           setTemplate(updated);
-          alert("Template saved successfully!");
+          toast.success("Template saved successfully!");
         } catch (error) {
-          alert(error instanceof Error ? error.message : "Failed to save template");
+          toast.error(error instanceof Error ? error.message : "Failed to save template");
         } finally {
           setIsSaving(false);
         }

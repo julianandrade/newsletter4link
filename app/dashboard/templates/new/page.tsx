@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,12 +75,12 @@ export default function NewTemplatePage() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("Please enter a template name");
+      toast.error("Please enter a template name");
       return;
     }
 
     if (!emailEditorRef.current?.editor) {
-      alert("Editor is not ready");
+      toast.error("Editor is not ready");
       return;
     }
 
@@ -107,9 +108,10 @@ export default function NewTemplatePage() {
             throw new Error(errorData.error || "Failed to save template");
           }
 
+          toast.success("Template created successfully!");
           router.push("/dashboard/templates");
         } catch (error) {
-          alert(error instanceof Error ? error.message : "Failed to save template");
+          toast.error(error instanceof Error ? error.message : "Failed to save template");
           setIsSaving(false);
         }
       });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import {
   Card,
@@ -157,8 +158,9 @@ export default function TemplatesPage() {
       }
 
       setTemplates((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      toast.success("Template deleted successfully");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to delete template");
+      toast.error(error instanceof Error ? error.message : "Failed to delete template");
     } finally {
       setDeleteTarget(null);
     }
