@@ -37,8 +37,15 @@ import {
   Upload,
   FileUp,
   Link,
+  Search,
+  ArrowUpDown,
+  X,
 } from "lucide-react";
 import { OPML_PRESETS } from "@/lib/config";
+
+type SortOption = "name" | "category" | "createdAt" | "lastFetchedAt";
+type SortDirection = "asc" | "desc";
+type StatusFilter = "all" | "active" | "inactive";
 
 /**
  * RSS Source from the API
@@ -151,6 +158,13 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     skipped: number;
     errors: Array<{ name: string; url: string; error: string }>;
   } | null>(null);
+
+  // Search, filter, and sort state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   /**
    * Fetch all RSS sources
@@ -482,8 +496,58 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     }
   };
 
-  // Group sources by category for display
-  const sourcesByCategory = sources.reduce(
+  // Get unique categories from sources
+  const availableCategories = Array.from(
+    new Set(sources.map((s) => s.category || "Other"))
+  ).sort();
+
+  // Filter and sort sources
+  const filteredSources = sources
+    .filter((source) => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = source.name.toLowerCase().includes(query);
+        const matchesUrl = source.url.toLowerCase().includes(query);
+        if (!matchesName && !matchesUrl) return false;
+      }
+
+      // Category filter
+      if (categoryFilter !== "all") {
+        if ((source.category || "Other") !== categoryFilter) return false;
+      }
+
+      // Status filter
+      if (statusFilter === "active" && !source.active) return false;
+      if (statusFilter === "inactive" && source.active) return false;
+
+      return true;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortBy) {
+        case "name":
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case "category":
+          comparison = (a.category || "Other").localeCompare(b.category || "Other");
+          break;
+        case "createdAt":
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        case "lastFetchedAt":
+          const aTime = a.lastFetchedAt ? new Date(a.lastFetchedAt).getTime() : 0;
+          const bTime = b.lastFetchedAt ? new Date(b.lastFetchedAt).getTime() : 0;
+          comparison = aTime - bTime;
+          break;
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+  // Group filtered sources by category for display
+  const sourcesByCategory = filteredSources.reduce(
     (acc, source) => {
       const cat = source.category || "Other";
       if (!acc[cat]) acc[cat] = [];
@@ -492,6 +556,16 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     },
     {} as Record<string, RSSSource[]>
   );
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || categoryFilter !== "all" || statusFilter !== "all";
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+  };
 
   return (
     <div className={cn("space-y-6", className)}>
