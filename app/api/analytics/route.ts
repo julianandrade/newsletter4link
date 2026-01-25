@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
     const opened = counts["OPENED"] || 0;
     const clicked = counts["CLICKED"] || 0;
     const bounced = counts["BOUNCED"] || 0;
+    const unsubscribed = counts["UNSUBSCRIBED"] || 0;
 
     const metrics = {
       sent,
@@ -46,9 +47,12 @@ export async function GET(request: NextRequest) {
       opened,
       clicked,
       bounced,
+      unsubscribed,
       openRate: delivered > 0 ? (opened / delivered) * 100 : 0,
       clickRate: opened > 0 ? (clicked / opened) * 100 : 0,
       bounceRate: sent > 0 ? (bounced / sent) * 100 : 0,
+      deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
+      unsubscribeRate: delivered > 0 ? (unsubscribed / delivered) * 100 : 0,
     };
 
     // Get top clicked links
