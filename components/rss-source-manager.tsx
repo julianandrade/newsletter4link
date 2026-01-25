@@ -575,6 +575,11 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
           <h2 className="text-lg font-semibold">RSS Sources</h2>
           <p className="text-sm text-muted-foreground">
             Manage RSS feeds for article curation
+            {sources.length > 0 && (
+              <span className="ml-1">
+                ({filteredSources.length} of {sources.length} shown)
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -588,6 +593,90 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
           </Button>
         </div>
       </div>
+
+      {/* Search, Filter, and Sort Toolbar */}
+      {sources.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or URL..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-9"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter */}
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {availableCategories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Status Filter */}
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Sort */}
+          <Select
+            value={`${sortBy}-${sortDirection}`}
+            onValueChange={(v) => {
+              const [field, dir] = v.split("-") as [SortOption, SortDirection];
+              setSortBy(field);
+              setSortDirection(dir);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <ArrowUpDown className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+              <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+              <SelectItem value="category-asc">Category (A-Z)</SelectItem>
+              <SelectItem value="category-desc">Category (Z-A)</SelectItem>
+              <SelectItem value="createdAt-desc">Newest First</SelectItem>
+              <SelectItem value="createdAt-asc">Oldest First</SelectItem>
+              <SelectItem value="lastFetchedAt-desc">Recently Fetched</SelectItem>
+              <SelectItem value="lastFetchedAt-asc">Least Recently Fetched</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-1" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
@@ -612,7 +701,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state - no sources at all */}
       {!loading && sources.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -629,8 +718,25 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
         </Card>
       )}
 
+      {/* No results state - sources exist but none match filters */}
+      {!loading && sources.length > 0 && filteredSources.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No matching sources</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Try adjusting your search or filters
+            </p>
+            <Button variant="outline" onClick={clearFilters}>
+              <X className="h-4 w-4" />
+              Clear Filters
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Sources list grouped by category */}
-      {!loading && sources.length > 0 && (
+      {!loading && filteredSources.length > 0 && (
         <div className="space-y-6">
           {Object.entries(sourcesByCategory)
             .sort(([a], [b]) => a.localeCompare(b))
