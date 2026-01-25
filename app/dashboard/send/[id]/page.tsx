@@ -49,7 +49,20 @@ import {
   AlertCircle,
   Lock,
   Palette,
+  Users,
+  Mail,
+  Search,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 // Types
 interface Template {
@@ -58,6 +71,20 @@ interface Template {
   description: string | null;
   isActive: boolean;
   isDefault: boolean;
+}
+
+interface Subscriber {
+  id: string;
+  email: string;
+  name: string | null;
+  active: boolean;
+}
+
+interface EmailProvider {
+  id: "resend" | "graph";
+  name: string;
+  configured: boolean;
+  fromEmail: string | null;
 }
 
 interface EditionDetail {
@@ -114,6 +141,17 @@ export default function EditionDetailPage() {
   // Template state
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+
+  // Subscriber state
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [selectedSubscriberIds, setSelectedSubscriberIds] = useState<string[]>([]);
+  const [subscriberSearch, setSubscriberSearch] = useState("");
+  const [recipientsExpanded, setRecipientsExpanded] = useState(false);
+
+  // Provider state
+  const [providers, setProviders] = useState<EmailProvider[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<"resend" | "graph" | null>(null);
+  const [defaultProvider, setDefaultProvider] = useState<"resend" | "graph">("resend");
 
   // Selection state
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
@@ -191,6 +229,36 @@ export default function EditionDetailPage() {
           if (defaultTemplate) {
             setSelectedTemplateId(defaultTemplate.id);
           }
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  // Load subscribers
+  useEffect(() => {
+    fetch("/api/subscribers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.subscribers)) {
+          const activeSubscribers = data.subscribers.filter((s: Subscriber) => s.active);
+          setSubscribers(activeSubscribers);
+          // Select all by default
+          setSelectedSubscriberIds(activeSubscribers.map((s: Subscriber) => s.id));
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  // Load email providers
+  useEffect(() => {
+    fetch("/api/email/providers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.providers)) {
+          setProviders(data.providers);
+          setDefaultProvider(data.default || "resend");
+          // Set selected provider to default
+          setSelectedProvider(data.default || "resend");
         }
       })
       .catch(console.error);
@@ -341,6 +409,15 @@ export default function EditionDetailPage() {
   const handleSend = async () => {
     if (!edition) return;
 
+    // Validate recipients
+    if (selectedSubscriberIds.length === 0) {
+      setSendResult({
+        success: false,
+        message: "Please select at least one recipient",
+      });
+      return;
+    }
+
     setSending(true);
     setSendResult(null);
 
@@ -351,6 +428,12 @@ export default function EditionDetailPage() {
         body: JSON.stringify({
           editionId,
           templateId: selectedTemplateId || undefined,
+          // Only pass subscriberIds if not all are selected
+          subscriberIds: selectedSubscriberIds.length < subscribers.length
+            ? selectedSubscriberIds
+            : undefined,
+          // Only pass provider if different from default
+          provider: selectedProvider !== defaultProvider ? selectedProvider : undefined,
         }),
       });
 
@@ -377,10 +460,45 @@ export default function EditionDetailPage() {
     }
   };
 
+  // Check if send is allowed
+  const canSend = selectedSubscriberIds.length > 0 &&
+    (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true);
+
   // Check if edition is editable
   const isEditable = edition?.status === "DRAFT";
   const isFinalized = edition?.status === "FINALIZED";
   const isSent = edition?.status === "SENT";
+
+  // Filtered subscribers for search
+  const filteredSubscribers = subscribers.filter((s) => {
+    const searchLower = subscriberSearch.toLowerCase();
+    return (
+      s.email.toLowerCase().includes(searchLower) ||
+      (s.name && s.name.toLowerCase().includes(searchLower))
+    );
+  });
+
+  // Configured providers count
+  const configuredProviders = providers.filter((p) => p.configured);
+  const showProviderToggle = configuredProviders.length > 1;
+
+  // Get selected provider info
+  const selectedProviderInfo = providers.find((p) => p.id === selectedProvider);
+
+  // Subscriber selection handlers
+  const handleSelectAllSubscribers = () => {
+    setSelectedSubscriberIds(subscribers.map((s) => s.id));
+  };
+
+  const handleDeselectAllSubscribers = () => {
+    setSelectedSubscriberIds([]);
+  };
+
+  const handleToggleSubscriber = (id: string) => {
+    setSelectedSubscriberIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
 
   // Loading state
   if (loading) {
@@ -524,11 +642,11 @@ export default function EditionDetailPage() {
             {isFinalized && (
               <Button
                 onClick={() => setShowSendDialog(true)}
-                disabled={sending}
+                disabled={sending || !canSend}
                 className="bg-green-600 hover:bg-green-700"
               >
                 <Send className="w-4 h-4 mr-2" />
-                Send Newsletter
+                Send to {selectedSubscriberIds.length} Subscriber{selectedSubscriberIds.length !== 1 ? "s" : ""}
               </Button>
             )}
           </div>
@@ -654,6 +772,209 @@ export default function EditionDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Email Provider Selection - only show when finalized and multiple providers configured */}
+        {isFinalized && showProviderToggle && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-muted-foreground" />
+                <CardTitle className="text-base font-medium">Email Provider</CardTitle>
+              </div>
+              <CardDescription>
+                Select which email service to use for sending
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup
+                value={selectedProvider || defaultProvider}
+                onValueChange={(value: string) => setSelectedProvider(value as "resend" | "graph")}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              >
+                {providers.map((provider) => (
+                  <div key={provider.id} className="relative">
+                    <div
+                      className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-colors ${
+                        selectedProvider === provider.id
+                          ? "border-primary bg-primary/5"
+                          : "border-muted hover:border-muted-foreground/50"
+                      } ${!provider.configured ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      onClick={() => provider.configured && setSelectedProvider(provider.id)}
+                    >
+                      <RadioGroupItem
+                        value={provider.id}
+                        id={`provider-${provider.id}`}
+                        disabled={!provider.configured}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <Label
+                          htmlFor={`provider-${provider.id}`}
+                          className={`font-medium ${!provider.configured ? "cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          {provider.name}
+                          {provider.id === defaultProvider && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              Default
+                            </Badge>
+                          )}
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {provider.configured ? (
+                            <>From: {provider.fromEmail}</>
+                          ) : (
+                            <span className="text-yellow-600">Not configured</span>
+                          )}
+                        </p>
+                        {provider.configured && (
+                          <Badge variant="outline" className="mt-2 text-xs text-green-600 border-green-300">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Ready
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </RadioGroup>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Provider info when only one configured */}
+        {isFinalized && !showProviderToggle && configuredProviders.length === 1 && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-muted-foreground" />
+                <CardTitle className="text-base font-medium">Email Provider</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className="font-medium">{configuredProviders[0].name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    From: {configuredProviders[0].fromEmail}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Recipients Selection - only show when finalized */}
+        {isFinalized && (
+          <Card className="mb-6">
+            <Collapsible open={recipientsExpanded} onOpenChange={setRecipientsExpanded}>
+              <CardHeader className="pb-3">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <CardTitle className="text-base font-medium">Recipients</CardTitle>
+                        <CardDescription>
+                          {selectedSubscriberIds.length} of {subscribers.length} subscribers selected
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      {recipientsExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  {/* Search and actions */}
+                  <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search subscribers..."
+                        value={subscriberSearch}
+                        onChange={(e) => setSubscriberSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSelectAllSubscribers}
+                        disabled={selectedSubscriberIds.length === subscribers.length}
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDeselectAllSubscribers}
+                        disabled={selectedSubscriberIds.length === 0}
+                      >
+                        Deselect All
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Subscriber list */}
+                  <div className="border rounded-lg max-h-64 overflow-y-auto">
+                    {filteredSubscribers.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        {subscriberSearch ? "No subscribers match your search" : "No active subscribers"}
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {filteredSubscribers.map((subscriber) => (
+                          <div
+                            key={subscriber.id}
+                            className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                            onClick={() => handleToggleSubscriber(subscriber.id)}
+                          >
+                            <Checkbox
+                              checked={selectedSubscriberIds.includes(subscriber.id)}
+                              onCheckedChange={() => handleToggleSubscriber(subscriber.id)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {subscriber.name || subscriber.email}
+                              </p>
+                              {subscriber.name && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {subscriber.email}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Selection summary */}
+                  <div className="mt-3 text-sm text-muted-foreground">
+                    {selectedSubscriberIds.length === 0 ? (
+                      <span className="text-yellow-600 font-medium">
+                        No recipients selected - select at least one to send
+                      </span>
+                    ) : (
+                      <span>
+                        Sending to <strong>{selectedSubscriberIds.length}</strong> subscriber
+                        {selectedSubscriberIds.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+        )}
 
         {/* Content Tabs */}
         <Tabs defaultValue="articles" className="space-y-4">
@@ -879,7 +1200,13 @@ export default function EditionDetailPage() {
                 </div>
               ) : (
                 <>
-                  This will send the newsletter to all active subscribers. This action cannot
+                  This will send the newsletter to{" "}
+                  <strong>
+                    {selectedSubscriberIds.length === subscribers.length
+                      ? "all active"
+                      : selectedSubscriberIds.length}
+                  </strong>{" "}
+                  subscriber{selectedSubscriberIds.length !== 1 ? "s" : ""}. This action cannot
                   be undone.
                   <br />
                   <br />
@@ -888,6 +1215,17 @@ export default function EditionDetailPage() {
                   <strong>Content:</strong> {selectedArticleIds.length} article
                   {selectedArticleIds.length !== 1 ? "s" : ""}, {selectedProjectIds.length}{" "}
                   project{selectedProjectIds.length !== 1 ? "s" : ""}
+                  <br />
+                  <strong>Recipients:</strong> {selectedSubscriberIds.length} of {subscribers.length} subscribers
+                  {selectedProviderInfo && (
+                    <>
+                      <br />
+                      <strong>Provider:</strong> {selectedProviderInfo.name}
+                      {selectedProviderInfo.fromEmail && (
+                        <span className="text-muted-foreground"> ({selectedProviderInfo.fromEmail})</span>
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </AlertDialogDescription>
@@ -902,7 +1240,7 @@ export default function EditionDetailPage() {
                 <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleSend}
-                  disabled={sending}
+                  disabled={sending || !canSend}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   {sending ? (
@@ -913,7 +1251,7 @@ export default function EditionDetailPage() {
                   ) : (
                     <>
                       <Send className="w-4 h-4 mr-2" />
-                      Send Now
+                      Send to {selectedSubscriberIds.length}
                     </>
                   )}
                 </AlertDialogAction>
