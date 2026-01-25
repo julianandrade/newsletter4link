@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -16,26 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Trash2, ExternalLink, Image, ChevronRight } from "lucide-react";
+import { Loader2, Image, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 interface Settings {
@@ -45,16 +24,6 @@ interface Settings {
   articleMaxAgeDays: number;
   aiModel: string;
   embeddingModel: string;
-}
-
-interface RSSSource {
-  id: string;
-  name: string;
-  url: string;
-  category: string;
-  active: boolean;
-  lastFetchedAt: string | null;
-  lastError: string | null;
 }
 
 const AI_MODELS = [
@@ -73,24 +42,12 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [rssSources, setRssSources] = useState<RSSSource[]>([]);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // RSS Source dialog state
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingSource, setEditingSource] = useState<RSSSource | null>(null);
-  const [sourceForm, setSourceForm] = useState({ name: "", url: "", category: "" });
-  const [deleteTarget, setDeleteTarget] = useState<RSSSource | null>(null);
-
   useEffect(() => {
-    Promise.all([
-      fetch("/api/settings").then((r) => r.json()),
-      fetch("/api/rss-sources").then((r) => r.json()),
-    ])
-      .then(([settingsData, sourcesData]) => {
-        setSettings(settingsData);
-        setRssSources(sourcesData);
-      })
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => setSettings(data))
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, []);
@@ -123,86 +80,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleToggleSource = async (source: RSSSource) => {
-    try {
-      const response = await fetch(`/api/rss-sources/${source.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: !source.active }),
-      });
-
-      if (!response.ok) throw new Error("Failed to update source");
-
-      setRssSources((prev) =>
-        prev.map((s) => (s.id === source.id ? { ...s, active: !s.active } : s))
-      );
-    } catch (error) {
-      console.error("Error toggling source:", error);
-    }
-  };
-
-  const handleDeleteSource = async () => {
-    if (!deleteTarget) return;
-
-    try {
-      const response = await fetch(`/api/rss-sources/${deleteTarget.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) throw new Error("Failed to delete source");
-
-      setRssSources((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-      toast.success("RSS source deleted successfully");
-    } catch (error) {
-      toast.error("Failed to delete RSS source");
-      console.error("Error deleting source:", error);
-    } finally {
-      setDeleteTarget(null);
-    }
-  };
-
-  const handleOpenDialog = (source?: RSSSource) => {
-    if (source) {
-      setEditingSource(source);
-      setSourceForm({ name: source.name, url: source.url, category: source.category });
-    } else {
-      setEditingSource(null);
-      setSourceForm({ name: "", url: "", category: "" });
-    }
-    setIsDialogOpen(true);
-  };
-
-  const handleSaveSource = async () => {
-    try {
-      const method = editingSource ? "PUT" : "POST";
-      const url = editingSource ? `/api/rss-sources/${editingSource.id}` : "/api/rss-sources";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sourceForm),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to save source");
-      }
-
-      const saved = await response.json();
-
-      if (editingSource) {
-        setRssSources((prev) => prev.map((s) => (s.id === saved.id ? saved : s)));
-      } else {
-        setRssSources((prev) => [saved, ...prev]);
-      }
-
-      setIsDialogOpen(false);
-      toast.success(editingSource ? "RSS source updated" : "RSS source added");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save source");
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex flex-col flex-1">
@@ -222,7 +99,6 @@ export default function SettingsPage() {
         <Tabs defaultValue="general" className="space-y-6">
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="rss">RSS Feeds</TabsTrigger>
             <TabsTrigger value="ai">AI Settings</TabsTrigger>
             <TabsTrigger value="branding">Branding</TabsTrigger>
           </TabsList>
@@ -327,127 +203,6 @@ export default function SettingsPage() {
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Settings
                 </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* RSS Feeds */}
-          <TabsContent value="rss">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>RSS Sources</CardTitle>
-                  <CardDescription>Manage RSS feeds for article curation</CardDescription>
-                </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => handleOpenDialog()}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Source
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>{editingSource ? "Edit RSS Source" : "Add RSS Source"}</DialogTitle>
-                      <DialogDescription>
-                        {editingSource ? "Update the RSS feed details" : "Add a new RSS feed to curate articles from"}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="source-name">Name</Label>
-                        <Input
-                          id="source-name"
-                          value={sourceForm.name}
-                          onChange={(e) => setSourceForm((prev) => ({ ...prev, name: e.target.value }))}
-                          placeholder="TechCrunch AI"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="source-url">URL</Label>
-                        <Input
-                          id="source-url"
-                          type="url"
-                          value={sourceForm.url}
-                          onChange={(e) => setSourceForm((prev) => ({ ...prev, url: e.target.value }))}
-                          placeholder="https://example.com/feed.xml"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="source-category">Category</Label>
-                        <Input
-                          id="source-category"
-                          value={sourceForm.category}
-                          onChange={(e) => setSourceForm((prev) => ({ ...prev, category: e.target.value }))}
-                          placeholder="AI News"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleSaveSource}>Save</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {rssSources.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No RSS sources configured. Add one to get started.
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    {rssSources.map((source) => (
-                      <div
-                        key={source.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium">{source.name}</h3>
-                            <span className="text-xs bg-muted px-2 py-0.5 rounded">
-                              {source.category}
-                            </span>
-                          </div>
-                          <a
-                            href={source.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-muted-foreground hover:underline flex items-center gap-1"
-                          >
-                            {source.url.substring(0, 50)}...
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                          {source.lastError && (
-                            <p className="text-xs text-red-500 mt-1">{source.lastError}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <Switch
-                            checked={source.active}
-                            onCheckedChange={() => handleToggleSource(source)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(source)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(source)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -558,27 +313,6 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete RSS Source</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deleteTarget?.name}&quot;? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteSource}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

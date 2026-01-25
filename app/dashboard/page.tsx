@@ -18,6 +18,10 @@ import {
   Loader2,
   StopCircle,
   ChevronDown,
+  Newspaper,
+  UserPlus,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,6 +38,34 @@ interface Stats {
   totalProjects: number;
   lastSent: string;
   isReadyToSend: boolean;
+}
+
+interface ActivityItem {
+  id: string;
+  type: "curation" | "article" | "edition" | "subscriber";
+  action: string;
+  description: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+function formatActivityTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function DashboardHome() {
@@ -61,6 +93,10 @@ export default function DashboardHome() {
   const [rssSources, setRssSources] = useState<Array<{ id: string; name: string; category: string }>>([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
+
+  // Activity feed state
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
 
   const fetchStats = () => {
     fetch("/api/status")
@@ -107,6 +143,24 @@ export default function DashboardHome() {
       })
       .catch(console.error)
       .finally(() => setSourcesLoading(false));
+  }, []);
+
+  // Fetch activity feed on mount
+  const fetchActivities = () => {
+    setActivitiesLoading(true);
+    fetch("/api/activity")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.activities) {
+          setActivities(data.activities);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setActivitiesLoading(false));
+  };
+
+  useEffect(() => {
+    fetchActivities();
   }, []);
 
   const handleRunCuration = async (e: React.MouseEvent) => {
@@ -482,13 +536,79 @@ export default function DashboardHome() {
 
         {/* Activity */}
         <section>
-          <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Recent Activity</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchActivities}
+              disabled={activitiesLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${activitiesLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
           <Card>
             <CardContent className="pt-6">
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Activity className="h-10 w-10 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Activity feed coming soon.</p>
-              </div>
+              {activitiesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : activities.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Activity className="h-10 w-10 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No recent activity.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activities.map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-3">
+                      <div className="mt-0.5">
+                        {activity.type === "curation" && activity.action === "completed" && (
+                          <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900">
+                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                        )}
+                        {activity.type === "curation" && activity.action === "started" && (
+                          <div className="p-1.5 rounded-full bg-blue-100 dark:bg-blue-900">
+                            <Play className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                        )}
+                        {activity.type === "curation" && activity.action === "failed" && (
+                          <div className="p-1.5 rounded-full bg-red-100 dark:bg-red-900">
+                            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          </div>
+                        )}
+                        {activity.type === "article" && activity.action === "approved" && (
+                          <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900">
+                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                        )}
+                        {activity.type === "article" && activity.action === "rejected" && (
+                          <div className="p-1.5 rounded-full bg-red-100 dark:bg-red-900">
+                            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          </div>
+                        )}
+                        {activity.type === "edition" && (
+                          <div className="p-1.5 rounded-full bg-purple-100 dark:bg-purple-900">
+                            <Newspaper className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                          </div>
+                        )}
+                        {activity.type === "subscriber" && (
+                          <div className="p-1.5 rounded-full bg-blue-100 dark:bg-blue-900">
+                            <UserPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatActivityTime(activity.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

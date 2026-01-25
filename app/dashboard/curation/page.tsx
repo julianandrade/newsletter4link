@@ -38,7 +38,18 @@ import {
   Calendar,
   ArrowUpDown,
   Rss,
+  Play,
+  StopCircle,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { RSSSourceManager } from "@/components/rss-source-manager";
 
 interface CurationJob {
@@ -106,6 +117,21 @@ export default function CurationHistoryPage() {
   const [rerunningJobId, setRerunningJobId] = useState<string | null>(null);
   const [rerunError, setRerunError] = useState<string | null>(null);
 
+  // Curation state
+  const [curationStatus, setCurationStatus] = useState<{
+    running: boolean;
+    message: string;
+    progress?: { current: number; total: number };
+    jobId?: string;
+  }>({
+    running: false,
+    message: "",
+  });
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [rssSources, setRssSources] = useState<Array<{ id: string; name: string; category: string }>>([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+
   const fetchJobs = () => {
     setIsLoading(true);
     const params = new URLSearchParams({ page: page.toString(), limit: "10" });
@@ -162,6 +188,132 @@ export default function CurationHistoryPage() {
   useEffect(() => {
     fetchJobs();
   }, [page, statusFilter, sortField, sortOrder, dateFrom, dateTo]);
+
+  // Fetch RSS sources on mount
+  useEffect(() => {
+    fetch("/api/rss-sources")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRssSources(data.filter((s: { active: boolean }) => s.active));
+        }
+      })
+      .catch(console.error)
+      .finally(() => setSourcesLoading(false));
+  }, []);
+
+  const handleRunCuration = async () => {
+    setCurationStatus({ running: true, message: "Connecting..." });
+
+    try {
+      const url = selectedSourceIds.length > 0
+        ? `/api/curation/collect?sourceIds=${selectedSourceIds.join(",")}`
+        : "/api/curation/collect";
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Accept": "text/event-stream" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const processEvent = (eventType: string, dataStr: string) => {
+        try {
+          const data = JSON.parse(dataStr);
+          switch (eventType) {
+            case "start":
+              setCurationStatus({ running: true, message: data.message, jobId: data.jobId });
+              break;
+            case "progress":
+              setCurationStatus((prev) => ({
+                running: true,
+                message: data.message || "Processing...",
+                progress: data.current && data.total ? { current: data.current, total: data.total } : undefined,
+                jobId: data.jobId || prev.jobId,
+              }));
+              break;
+            case "complete":
+              setCurationStatus({ running: false, message: "✓ " + data.message });
+              setTimeout(() => {
+                fetchJobs();
+                setCurationStatus({ running: false, message: "" });
+              }, 3000);
+              break;
+            case "cancelled":
+              setCurationStatus({ running: false, message: "Curation cancelled" });
+              setTimeout(() => {
+                fetchJobs();
+                setCurationStatus({ running: false, message: "" });
+              }, 3000);
+              break;
+            case "error":
+              setCurationStatus({ running: false, message: "✗ Error: " + (data.error || "Unknown error") });
+              break;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          const lines = event.split("\n");
+          let eventType = "message";
+          let dataStr = "";
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.substring(7).trim();
+            } else if (line.startsWith("data: ")) {
+              dataStr = line.substring(6);
+            }
+          }
+
+          if (dataStr) {
+            processEvent(eventType, dataStr);
+          }
+        }
+      }
+    } catch (error) {
+      setCurationStatus({
+        running: false,
+        message: "✗ Error: " + (error instanceof Error ? error.message : "Connection failed"),
+      });
+    }
+  };
+
+  const handleCancelCuration = async () => {
+    setIsCancelling(true);
+    try {
+      const response = await fetch("/api/curation/cancel", { method: "POST" });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to cancel");
+      }
+      setCurationStatus((prev) => ({ ...prev, message: "Cancelling..." }));
+    } catch (error) {
+      console.error("Failed to cancel curation:", error);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleBulkDelete = async () => {
     setIsDeleting(true);
@@ -255,6 +407,119 @@ export default function CurationHistoryPage() {
 
           {/* Jobs Tab */}
           <TabsContent value="jobs" className="space-y-6">
+            {/* Run Curation */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Play className="h-4 w-4" />
+                  Run Curation
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Curation Status Message */}
+                {curationStatus.message && (
+                  <div className="flex items-center gap-2 mb-4 p-3 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900">
+                    {curationStatus.running && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <p className="text-sm flex-1">{curationStatus.message}</p>
+                    {curationStatus.progress && (
+                      <span className="text-xs text-muted-foreground">
+                        {curationStatus.progress.current}/{curationStatus.progress.total}
+                      </span>
+                    )}
+                    {curationStatus.running && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelCuration}
+                        disabled={isCancelling}
+                      >
+                        {isCancelling ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <StopCircle className="h-4 w-4 mr-1" />
+                            Cancel
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-end gap-4">
+                  {/* RSS Source Selector */}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Feed Selection</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-[200px] justify-between"
+                          disabled={sourcesLoading || curationStatus.running}
+                        >
+                          {sourcesLoading
+                            ? "Loading feeds..."
+                            : selectedSourceIds.length === 0
+                              ? "All Feeds"
+                              : `${selectedSourceIds.length} feed(s) selected`}
+                          <ChevronDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuLabel>Select RSS Feeds</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem
+                          checked={selectedSourceIds.length === 0}
+                          onCheckedChange={() => setSelectedSourceIds([])}
+                        >
+                          All Feeds
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuSeparator />
+                        {rssSources.map((source) => (
+                          <DropdownMenuCheckboxItem
+                            key={source.id}
+                            checked={selectedSourceIds.includes(source.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedSourceIds((prev) =>
+                                checked
+                                  ? [...prev, source.id]
+                                  : prev.filter((id) => id !== source.id)
+                              );
+                            }}
+                          >
+                            <span className="flex items-center gap-2">
+                              {source.name}
+                              <Badge variant="secondary" className="text-xs">
+                                {source.category}
+                              </Badge>
+                            </span>
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Start Button */}
+                  <Button
+                    onClick={handleRunCuration}
+                    disabled={curationStatus.running}
+                  >
+                    {curationStatus.running ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Running...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-2 h-4 w-4" />
+                        Start Curation
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Filters */}
             <Card>
               <CardHeader className="pb-4">
@@ -282,29 +547,23 @@ export default function CurationHistoryPage() {
                   {/* Date From */}
                   <div className="flex flex-col gap-2">
                     <span className="text-sm text-muted-foreground">From Date</span>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-                        className="pl-10 w-[160px]"
-                      />
-                    </div>
+                    <Input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                      className="w-[150px]"
+                    />
                   </div>
 
                   {/* Date To */}
                   <div className="flex flex-col gap-2">
                     <span className="text-sm text-muted-foreground">To Date</span>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-                        className="pl-10 w-[160px]"
-                      />
-                    </div>
+                    <Input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                      className="w-[150px]"
+                    />
                   </div>
 
                   {/* Sort Field */}

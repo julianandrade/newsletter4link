@@ -231,7 +231,10 @@ export async function runCurationPipelineWithStreaming(
       message: `Fetched ${articles.length} articles`,
       total: articles.length,
     });
-    await log("info", `Fetched ${articles.length} articles from RSS feeds`);
+    await log("info", `Fetched ${articles.length} articles from RSS feeds`, {
+      articleTitles: articles.slice(0, 20).map((a) => a.title), // Log first 20 titles
+      truncated: articles.length > 20,
+    });
 
     // Step 2: Process each article
     for (let i = 0; i < articles.length; i++) {
@@ -276,6 +279,11 @@ export async function runCurationPipelineWithStreaming(
             stage: "duplicate",
             message: `Duplicate detected: ${article.title.substring(0, 50)}`,
           });
+          await log("info", `Duplicate: ${article.title.substring(0, 80)}`, {
+            reason: duplicateCheck.reason,
+            sourceUrl: article.link,
+            sourceName: article.sourceName,
+          });
           result.duplicates++;
           if (jobId) {
             await updateJobStats(jobId, { duplicates: result.duplicates });
@@ -300,6 +308,12 @@ export async function runCurationPipelineWithStreaming(
           onProgress({
             stage: "rejected",
             message: `Low score, rejecting: ${article.title.substring(0, 50)}`,
+          });
+          await log("info", `Rejected (score ${relevanceScore}): ${article.title.substring(0, 80)}`, {
+            score: relevanceScore,
+            threshold: settings.relevanceThreshold,
+            sourceUrl: article.link,
+            sourceName: article.sourceName,
           });
           result.lowScore++;
 
@@ -357,6 +371,12 @@ export async function runCurationPipelineWithStreaming(
         onProgress({
           stage: "curated",
           message: `Successfully curated: ${article.title.substring(0, 50)}`,
+        });
+        await log("info", `Curated (score ${relevanceScore}): ${article.title.substring(0, 80)}`, {
+          score: relevanceScore,
+          categories,
+          sourceUrl: article.link,
+          sourceName: article.sourceName,
         });
 
         result.curated++;

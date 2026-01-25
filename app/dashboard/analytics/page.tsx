@@ -264,11 +264,17 @@ export default function AnalyticsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Editions</SelectItem>
-                  {data?.editions.map((edition) => (
-                    <SelectItem key={edition.id} value={edition.id}>
-                      Week {edition.week}, {edition.year}
-                    </SelectItem>
-                  ))}
+                  {data?.editions && data.editions.length > 0 ? (
+                    data.editions.map((edition) => (
+                      <SelectItem key={edition.id} value={edition.id}>
+                        Week {edition.week}, {edition.year}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No newsletters sent yet
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
