@@ -61,6 +61,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Collapsible,
@@ -150,7 +151,11 @@ export default function EditionDetailPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [selectedSubscriberIds, setSelectedSubscriberIds] = useState<string[]>([]);
   const [subscriberSearch, setSubscriberSearch] = useState("");
-  const [recipientsExpanded, setRecipientsExpanded] = useState(false);
+  const [recipientsExpanded, setRecipientsExpanded] = useState(true);
+
+  // Recipient mode: "all" (all subscribers), "selected" (pick subscribers), "adhoc" (type emails)
+  const [recipientMode, setRecipientMode] = useState<"all" | "selected" | "adhoc">("adhoc");
+  const [adHocEmails, setAdHocEmails] = useState("");
 
   // Provider state
   const [providers, setProviders] = useState<EmailProvider[]>([]);
@@ -471,11 +476,25 @@ export default function EditionDetailPage() {
   const handleSend = async () => {
     if (!edition) return;
 
-    // Validate recipients
-    if (selectedSubscriberIds.length === 0) {
+    // Validate recipients based on mode
+    if (recipientMode === "all" && subscribers.length === 0) {
       setSendResult({
         success: false,
-        message: "Please select at least one recipient",
+        message: "No subscribers available",
+      });
+      return;
+    }
+    if (recipientMode === "selected" && selectedSubscriberIds.length === 0) {
+      setSendResult({
+        success: false,
+        message: "Please select at least one subscriber",
+      });
+      return;
+    }
+    if (recipientMode === "adhoc" && parsedAdHocEmails.length === 0) {
+      setSendResult({
+        success: false,
+        message: "Please enter at least one valid email address",
       });
       return;
     }
@@ -496,20 +515,27 @@ export default function EditionDetailPage() {
         };
       }
 
+      // Build request body based on recipient mode
+      const requestBody: Record<string, unknown> = {
+        editionId,
+        templateId: selectedTemplateId || undefined,
+        customData,
+        // Only pass provider if different from default
+        provider: selectedProvider !== defaultProvider ? selectedProvider : undefined,
+      };
+
+      // Add recipient params based on mode
+      if (recipientMode === "adhoc") {
+        requestBody.emails = parsedAdHocEmails;
+      } else if (recipientMode === "selected") {
+        requestBody.subscriberIds = selectedSubscriberIds;
+      }
+      // For "all" mode, don't pass subscriberIds - API will send to all
+
       const res = await fetch("/api/email/send-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          editionId,
-          templateId: selectedTemplateId || undefined,
-          customData,
-          // Only pass subscriberIds if not all are selected
-          subscriberIds: selectedSubscriberIds.length < subscribers.length
-            ? selectedSubscriberIds
-            : undefined,
-          // Only pass provider if different from default
-          provider: selectedProvider !== defaultProvider ? selectedProvider : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await res.json();
@@ -536,10 +562,6 @@ export default function EditionDetailPage() {
     }
   };
 
-  // Check if send is allowed
-  const canSend = selectedSubscriberIds.length > 0 &&
-    (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true);
-
   // Check if edition is editable
   const isEditable = edition?.status === "DRAFT";
   const isFinalized = edition?.status === "FINALIZED";
@@ -553,6 +575,29 @@ export default function EditionDetailPage() {
       (s.name && s.name.toLowerCase().includes(searchLower))
     );
   });
+
+  // Parse ad-hoc emails (comma or newline separated)
+  const parsedAdHocEmails = adHocEmails
+    .split(/[,\n]/)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+
+  // Calculate recipient count based on mode
+  const getRecipientCount = () => {
+    switch (recipientMode) {
+      case "all":
+        return subscribers.length;
+      case "selected":
+        return selectedSubscriberIds.length;
+      case "adhoc":
+        return parsedAdHocEmails.length;
+    }
+  };
+  const recipientCount = getRecipientCount();
+
+  // Check if send is allowed
+  const canSend = recipientCount > 0 &&
+    (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true);
 
   // Configured providers count
   const configuredProviders = providers.filter((p) => p.configured);
@@ -722,7 +767,7 @@ export default function EditionDetailPage() {
                 className="bg-green-600 hover:bg-green-700"
               >
                 <Send className="w-4 h-4 mr-2" />
-                Send to {selectedSubscriberIds.length} Subscriber{selectedSubscriberIds.length !== 1 ? "s" : ""}
+                Send to {recipientCount} Recipient{recipientCount !== 1 ? "s" : ""}
               </Button>
             )}
           </div>
@@ -952,7 +997,7 @@ export default function EditionDetailPage() {
                       <div>
                         <CardTitle className="text-base font-medium">Recipients</CardTitle>
                         <CardDescription>
-                          {selectedSubscriberIds.length} of {subscribers.length} subscribers selected
+                          {recipientCount} {recipientMode === "adhoc" ? "email" : "subscriber"}{recipientCount !== 1 ? "s" : ""} selected
                         </CardDescription>
                       </div>
                     </div>
@@ -968,84 +1013,157 @@ export default function EditionDetailPage() {
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pt-0">
-                  {/* Search and actions */}
-                  <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search subscribers..."
-                        value={subscriberSearch}
-                        onChange={(e) => setSubscriberSearch(e.target.value)}
-                        className="pl-9"
+                  {/* Recipient mode selector */}
+                  <RadioGroup
+                    value={recipientMode}
+                    onValueChange={(value: string) => setRecipientMode(value as "all" | "selected" | "adhoc")}
+                    className="mb-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="adhoc" id="mode-adhoc" />
+                      <Label htmlFor="mode-adhoc" className="cursor-pointer">
+                        Ad-hoc emails (enter manually)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        value="all"
+                        id="mode-all"
+                        disabled={subscribers.length === 0}
                       />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSelectAllSubscribers}
-                        disabled={selectedSubscriberIds.length === subscribers.length}
+                      <Label
+                        htmlFor="mode-all"
+                        className={`cursor-pointer ${subscribers.length === 0 ? "text-muted-foreground" : ""}`}
                       >
-                        Select All
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDeselectAllSubscribers}
-                        disabled={selectedSubscriberIds.length === 0}
-                      >
-                        Deselect All
-                      </Button>
+                        All subscribers ({subscribers.length})
+                      </Label>
                     </div>
-                  </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        value="selected"
+                        id="mode-selected"
+                        disabled={subscribers.length === 0}
+                      />
+                      <Label
+                        htmlFor="mode-selected"
+                        className={`cursor-pointer ${subscribers.length === 0 ? "text-muted-foreground" : ""}`}
+                      >
+                        Select specific subscribers
+                      </Label>
+                    </div>
+                  </RadioGroup>
 
-                  {/* Subscriber list */}
-                  <div className="border rounded-lg max-h-64 overflow-y-auto">
-                    {filteredSubscribers.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground">
-                        {subscriberSearch ? "No subscribers match your search" : "No active subscribers"}
-                      </div>
-                    ) : (
-                      <div className="divide-y">
-                        {filteredSubscribers.map((subscriber) => (
-                          <div
-                            key={subscriber.id}
-                            className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
-                            onClick={() => handleToggleSubscriber(subscriber.id)}
+                  {/* Ad-hoc email input */}
+                  {recipientMode === "adhoc" && (
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Enter email addresses (one per line or comma-separated)&#10;example@company.com&#10;another@company.com"
+                        value={adHocEmails}
+                        onChange={(e) => setAdHocEmails(e.target.value)}
+                        rows={5}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        {parsedAdHocEmails.length > 0 ? (
+                          <>
+                            <span className="text-green-600 font-medium">{parsedAdHocEmails.length}</span> valid email{parsedAdHocEmails.length !== 1 ? "s" : ""} detected
+                          </>
+                        ) : (
+                          <span className="text-yellow-600">Enter at least one valid email address</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Subscriber selection (for "selected" mode) */}
+                  {recipientMode === "selected" && (
+                    <>
+                      {/* Search and actions */}
+                      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search subscribers..."
+                            value={subscriberSearch}
+                            onChange={(e) => setSubscriberSearch(e.target.value)}
+                            className="pl-9"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleSelectAllSubscribers}
+                            disabled={selectedSubscriberIds.length === subscribers.length}
                           >
-                            <Checkbox
-                              checked={selectedSubscriberIds.includes(subscriber.id)}
-                              onCheckedChange={() => handleToggleSubscriber(subscriber.id)}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">
-                                {subscriber.name || subscriber.email}
-                              </p>
-                              {subscriber.name && (
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {subscriber.email}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                            Select All
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDeselectAllSubscribers}
+                            disabled={selectedSubscriberIds.length === 0}
+                          >
+                            Deselect All
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Selection summary */}
-                  <div className="mt-3 text-sm text-muted-foreground">
-                    {selectedSubscriberIds.length === 0 ? (
-                      <span className="text-yellow-600 font-medium">
-                        No recipients selected - select at least one to send
-                      </span>
-                    ) : (
-                      <span>
-                        Sending to <strong>{selectedSubscriberIds.length}</strong> subscriber
-                        {selectedSubscriberIds.length !== 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
+                      {/* Subscriber list */}
+                      <div className="border rounded-lg max-h-64 overflow-y-auto">
+                        {filteredSubscribers.length === 0 ? (
+                          <div className="p-4 text-center text-muted-foreground">
+                            {subscriberSearch ? "No subscribers match your search" : "No active subscribers"}
+                          </div>
+                        ) : (
+                          <div className="divide-y">
+                            {filteredSubscribers.map((subscriber) => (
+                              <div
+                                key={subscriber.id}
+                                className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                                onClick={() => handleToggleSubscriber(subscriber.id)}
+                              >
+                                <Checkbox
+                                  checked={selectedSubscriberIds.includes(subscriber.id)}
+                                  onCheckedChange={() => handleToggleSubscriber(subscriber.id)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">
+                                    {subscriber.name || subscriber.email}
+                                  </p>
+                                  {subscriber.name && (
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {subscriber.email}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Selection summary */}
+                      <div className="mt-3 text-sm text-muted-foreground">
+                        {selectedSubscriberIds.length === 0 ? (
+                          <span className="text-yellow-600 font-medium">
+                            No subscribers selected
+                          </span>
+                        ) : (
+                          <span>
+                            <strong>{selectedSubscriberIds.length}</strong> subscriber{selectedSubscriberIds.length !== 1 ? "s" : ""} selected
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* All subscribers info */}
+                  {recipientMode === "all" && subscribers.length > 0 && (
+                    <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                      Newsletter will be sent to all <strong>{subscribers.length}</strong> active subscriber{subscribers.length !== 1 ? "s" : ""}.
+                    </div>
+                  )}
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>
@@ -1360,13 +1478,9 @@ export default function EditionDetailPage() {
               ) : (
                 <>
                   This will send the newsletter to{" "}
-                  <strong>
-                    {selectedSubscriberIds.length === subscribers.length
-                      ? "all active"
-                      : selectedSubscriberIds.length}
-                  </strong>{" "}
-                  subscriber{selectedSubscriberIds.length !== 1 ? "s" : ""}. This action cannot
-                  be undone.
+                  <strong>{recipientCount}</strong>{" "}
+                  {recipientMode === "adhoc" ? "email address" : "subscriber"}
+                  {recipientCount !== 1 ? "es" : ""}. This action cannot be undone.
                   <br />
                   <br />
                   <strong>Edition:</strong> Week {edition.week}, {edition.year}
@@ -1375,7 +1489,14 @@ export default function EditionDetailPage() {
                   {selectedArticleIds.length !== 1 ? "s" : ""}, {selectedProjectIds.length}{" "}
                   project{selectedProjectIds.length !== 1 ? "s" : ""}
                   <br />
-                  <strong>Recipients:</strong> {selectedSubscriberIds.length} of {subscribers.length} subscribers
+                  <strong>Recipients:</strong>{" "}
+                  {recipientMode === "adhoc" ? (
+                    <>{recipientCount} ad-hoc email{recipientCount !== 1 ? "s" : ""}</>
+                  ) : recipientMode === "all" ? (
+                    <>All {subscribers.length} subscribers</>
+                  ) : (
+                    <>{selectedSubscriberIds.length} of {subscribers.length} subscribers</>
+                  )}
                   {selectedProviderInfo && (
                     <>
                       <br />
@@ -1410,7 +1531,7 @@ export default function EditionDetailPage() {
                   ) : (
                     <>
                       <Send className="w-4 h-4 mr-2" />
-                      Send to {selectedSubscriberIds.length}
+                      Send to {recipientCount}
                     </>
                   )}
                 </AlertDialogAction>
