@@ -70,7 +70,10 @@ export default function AnalyticsPage() {
   const [customEndDate, setCustomEndDate] = useState<string>("");
 
   useEffect(() => {
-    fetchAnalytics();
+    // Only fetch when not in custom mode, or when both custom dates are filled
+    if (dateRange !== "custom" || (customStartDate && customEndDate)) {
+      fetchAnalytics();
+    }
   }, [selectedEdition, dateRange, customStartDate, customEndDate]);
 
   const fetchAnalytics = async () => {
@@ -186,6 +189,7 @@ export default function AnalyticsPage() {
                     id="startDate"
                     type="date"
                     value={customStartDate}
+                    max={customEndDate || undefined}
                     onChange={(e) => setCustomStartDate(e.target.value)}
                     className="w-[140px]"
                   />
@@ -198,6 +202,7 @@ export default function AnalyticsPage() {
                     id="endDate"
                     type="date"
                     value={customEndDate}
+                    min={customStartDate || undefined}
                     onChange={(e) => setCustomEndDate(e.target.value)}
                     className="w-[140px]"
                   />

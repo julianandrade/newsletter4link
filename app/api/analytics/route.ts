@@ -9,7 +9,11 @@ function getDateRangeFilter(
   endDate: string | null
 ): Date | null {
   if (dateRange === "custom" && startDate) {
-    return new Date(startDate);
+    const date = new Date(startDate);
+    if (isNaN(date.getTime())) {
+      return null; // Invalid date, fall back to default
+    }
+    return date;
   }
 
   const daysMap: Record<string, number> = {
@@ -32,8 +36,11 @@ function getEndDateFilter(
   endDate: string | null
 ): Date | null {
   if (dateRange === "custom" && endDate) {
-    // Set to end of day
     const date = new Date(endDate);
+    if (isNaN(date.getTime())) {
+      return null; // Invalid date, fall back to default
+    }
+    // Set to end of day
     date.setHours(23, 59, 59, 999);
     return date;
   }
