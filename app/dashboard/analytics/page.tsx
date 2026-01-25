@@ -18,6 +18,8 @@ import {
   Loader2,
   TrendingUp,
   ExternalLink,
+  CheckCircle2,
+  UserMinus,
 } from "lucide-react";
 
 interface Edition {
@@ -35,9 +37,12 @@ interface AnalyticsData {
     opened: number;
     clicked: number;
     bounced: number;
+    unsubscribed: number;
     openRate: number;
     clickRate: number;
     bounceRate: number;
+    deliveryRate: number;
+    unsubscribeRate: number;
   };
   topLinks: Array<{
     url: string;
@@ -116,9 +121,12 @@ export default function AnalyticsPage() {
     opened: 0,
     clicked: 0,
     bounced: 0,
+    unsubscribed: 0,
     openRate: 0,
     clickRate: 0,
     bounceRate: 0,
+    deliveryRate: 0,
+    unsubscribeRate: 0,
   };
 
   return (
@@ -145,7 +153,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Key Metrics */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Emails Sent</CardTitle>
@@ -200,6 +208,36 @@ export default function AnalyticsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {metrics.bounced} bounced
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Delivery Rate</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {metrics.deliveryRate.toFixed(1)}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {metrics.delivered}/{metrics.sent} delivered
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Unsubscribe Rate</CardTitle>
+              <UserMinus className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {metrics.unsubscribeRate.toFixed(1)}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {metrics.unsubscribed} unsubscribed
               </p>
             </CardContent>
           </Card>
