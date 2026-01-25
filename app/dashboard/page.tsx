@@ -17,7 +17,16 @@ import {
   Activity,
   Loader2,
   StopCircle,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Stats {
   pendingArticles: number;
@@ -47,6 +56,11 @@ export default function DashboardHome() {
     message: "",
   });
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // RSS source selection state
+  const [rssSources, setRssSources] = useState<Array<{ id: string; name: string; category: string }>>([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
 
   const fetchStats = () => {
     fetch("/api/status")
@@ -81,6 +95,20 @@ export default function DashboardHome() {
     fetchStats();
   }, []);
 
+  // Fetch RSS sources on mount
+  useEffect(() => {
+    fetch("/api/rss-sources")
+      .then((r) => r.json())
+      .then((data) => {
+        // API returns array directly, filter only active sources
+        if (Array.isArray(data)) {
+          setRssSources(data.filter((s: { active: boolean }) => s.active));
+        }
+      })
+      .catch(console.error)
+      .finally(() => setSourcesLoading(false));
+  }, []);
+
   const handleRunCuration = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -88,7 +116,12 @@ export default function DashboardHome() {
     setCurationStatus({ running: true, message: "Connecting..." });
 
     try {
-      const response = await fetch("/api/curation/collect", {
+      // Build URL with source filter
+      const url = selectedSourceIds.length > 0
+        ? `/api/curation/collect?sourceIds=${selectedSourceIds.join(",")}`
+        : "/api/curation/collect";
+
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Accept": "text/event-stream",
@@ -269,6 +302,58 @@ export default function DashboardHome() {
                       Fetch and score new articles
                     </p>
                   </div>
+
+                  {/* RSS Source Selector */}
+                  <div className="w-full">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between"
+                          disabled={sourcesLoading || curationStatus.running}
+                        >
+                          {sourcesLoading
+                            ? "Loading feeds..."
+                            : selectedSourceIds.length === 0
+                              ? "All Feeds"
+                              : `${selectedSourceIds.length} feed(s) selected`}
+                          <ChevronDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuLabel>Select RSS Feeds</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem
+                          checked={selectedSourceIds.length === 0}
+                          onCheckedChange={() => setSelectedSourceIds([])}
+                        >
+                          All Feeds
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuSeparator />
+                        {rssSources.map((source) => (
+                          <DropdownMenuCheckboxItem
+                            key={source.id}
+                            checked={selectedSourceIds.includes(source.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedSourceIds((prev) =>
+                                checked
+                                  ? [...prev, source.id]
+                                  : prev.filter((id) => id !== source.id)
+                              );
+                            }}
+                          >
+                            <span className="flex items-center gap-2">
+                              {source.name}
+                              <Badge variant="secondary" className="text-xs">
+                                {source.category}
+                              </Badge>
+                            </span>
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
                   <Button
                     type="button"
                     onClick={handleRunCuration}

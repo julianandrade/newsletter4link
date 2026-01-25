@@ -8,8 +8,16 @@ export const maxDuration = 300; // 5 minutes (only works on Pro plan)
  * GET /api/curation/collect
  * Stream curation progress using Server-Sent Events
  * This prevents timeout by keeping the connection alive
+ *
+ * Query params:
+ * - sourceIds: comma-separated list of RSS source IDs to curate (optional, defaults to all)
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // Parse sourceIds from query params
+  const { searchParams } = new URL(request.url);
+  const sourceIdsParam = searchParams.get("sourceIds");
+  const sourceIds = sourceIdsParam ? sourceIdsParam.split(",").filter(Boolean) : undefined;
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -33,14 +41,17 @@ export async function GET() {
 
         // Create a new job
         const job = await createJob();
+        const feedsDescription = sourceIds && sourceIds.length > 0
+          ? `${sourceIds.length} selected feed(s)`
+          : "all feeds";
         sendEvent("start", {
-          message: "Starting curation pipeline...",
+          message: `Starting curation pipeline for ${feedsDescription}...`,
           jobId: job.id,
         });
 
         await runCurationPipelineWithStreaming((update) => {
           sendEvent("progress", { ...update, jobId: job.id });
-        }, job.id);
+        }, job.id, sourceIds);
 
         sendEvent("complete", {
           message: "Curation pipeline completed!",
@@ -75,6 +86,6 @@ export async function GET() {
  * POST /api/curation/collect
  * Same as GET but supports POST requests
  */
-export async function POST() {
-  return GET();
+export async function POST(request: Request) {
+  return GET(request);
 }

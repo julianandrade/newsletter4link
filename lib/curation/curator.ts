@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { fetchAllRSSFeeds } from "./rss-collector";
+import { fetchAllRSSFeeds, fetchRSSFeedsByIds } from "./rss-collector";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 import { checkForDuplicates } from "./deduplicator";
 import {
@@ -169,10 +169,14 @@ export class CurationCancelledError extends Error {
 /**
  * Streaming version of curation pipeline with job tracking
  * Sends progress updates via callback to prevent timeouts
+ * @param onProgress - Callback for progress updates
+ * @param jobId - Optional job ID for tracking
+ * @param sourceIds - Optional array of RSS source IDs to filter (if empty/undefined, fetches all)
  */
 export async function runCurationPipelineWithStreaming(
   onProgress: (update: any) => void,
-  jobId?: string
+  jobId?: string,
+  sourceIds?: string[]
 ): Promise<CurationResult> {
   const result: CurationResult = {
     total: 0,
@@ -206,11 +210,16 @@ export async function runCurationPipelineWithStreaming(
   };
 
   try {
-    onProgress({ stage: "fetch", message: "Fetching RSS feeds..." });
-    await log("info", "Starting curation pipeline");
+    const feedsDescription = sourceIds && sourceIds.length > 0
+      ? `${sourceIds.length} selected feed(s)`
+      : "all feeds";
+    onProgress({ stage: "fetch", message: `Fetching ${feedsDescription}...` });
+    await log("info", `Starting curation pipeline for ${feedsDescription}`);
 
-    // Step 1: Fetch all RSS feeds with date filtering
-    const articles = await fetchAllRSSFeeds(settings.articleMaxAgeDays);
+    // Step 1: Fetch RSS feeds (filtered if sourceIds provided)
+    const articles = sourceIds && sourceIds.length > 0
+      ? await fetchRSSFeedsByIds(sourceIds, settings.articleMaxAgeDays)
+      : await fetchAllRSSFeeds(settings.articleMaxAgeDays);
     result.total = articles.length;
 
     if (jobId) {

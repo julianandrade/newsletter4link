@@ -215,6 +215,57 @@ export async function getActiveRSSSources() {
 }
 
 /**
+ * Fetch RSS feeds by specific source IDs
+ * Only fetches from sources that exist and are active
+ */
+export async function fetchRSSFeedsByIds(
+  sourceIds: string[],
+  maxAgeDays: number = 7
+): Promise<RSSArticle[]> {
+  const allArticles: RSSArticle[] = [];
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+
+  // Get sources from database by IDs (only active ones)
+  const sources = await prisma.rSSSource.findMany({
+    where: {
+      id: { in: sourceIds },
+      active: true,
+    },
+  });
+
+  for (const source of sources) {
+    try {
+      console.log(`Fetching RSS feed: ${source.name}...`);
+      const articles = await fetchRSSFeed(source.url, source.name);
+
+      // Filter articles by date
+      const filteredArticles = articles.filter(
+        (article) => article.publishedAt >= cutoffDate
+      );
+
+      allArticles.push(...filteredArticles);
+      console.log(
+        `✓ Fetched ${filteredArticles.length} articles from ${source.name} (${articles.length - filteredArticles.length} filtered by date)`
+      );
+
+      // Update last fetched timestamp
+      await updateRSSSourceFetchedAt(source.url);
+    } catch (error) {
+      console.error(`✗ Failed to fetch ${source.name}`);
+      // Update error in database
+      await updateRSSSourceFetchedAt(
+        source.url,
+        error instanceof Error ? error.message : "Unknown error"
+      );
+      // Continue with other sources even if one fails
+    }
+  }
+
+  return allArticles;
+}
+
+/**
  * Initialize default RSS sources in database
  */
 export async function seedRSSSources() {
