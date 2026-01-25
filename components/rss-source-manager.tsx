@@ -34,7 +34,11 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
+  Upload,
+  FileUp,
+  Link,
 } from "lucide-react";
+import { OPML_PRESETS } from "@/lib/config";
 
 /**
  * RSS Source from the API
@@ -70,6 +74,7 @@ const RSS_CATEGORIES = [
   "Design",
   "Development",
   "AI & ML",
+  "Security",
   "Marketing",
   "Product",
   "Leadership",
@@ -132,6 +137,19 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     id: string;
     success: boolean;
     message: string;
+  } | null>(null);
+
+  // Import dialog state
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importMethod, setImportMethod] = useState<"url" | "file">("url");
+  const [importUrl, setImportUrl] = useState("");
+  const [importCategory, setImportCategory] = useState("Security");
+  const [importActiveByDefault, setImportActiveByDefault] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    skipped: number;
+    errors: Array<{ name: string; url: string; error: string }>;
   } | null>(null);
 
   /**
@@ -343,6 +361,127 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     }
   };
 
+  /**
+   * Open import dialog
+   */
+  const handleOpenImport = () => {
+    setImportMethod("url");
+    setImportUrl(OPML_PRESETS[0]?.url || "");
+    setImportCategory("Security");
+    setImportActiveByDefault(false);
+    setImportResult(null);
+    setIsImportDialogOpen(true);
+  };
+
+  /**
+   * Handle file upload for OPML import
+   */
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const content = await file.text();
+
+      const response = await fetch("/api/rss-sources/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opmlContent: content,
+          category: importCategory,
+          activeByDefault: importActiveByDefault,
+          skipDuplicates: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to import OPML");
+      }
+
+      setImportResult({
+        imported: data.imported,
+        skipped: data.skipped,
+        errors: data.errors || [],
+      });
+
+      // Refresh sources list
+      fetchSources();
+    } catch (err) {
+      setImportResult({
+        imported: 0,
+        skipped: 0,
+        errors: [
+          {
+            name: "Import Error",
+            url: "",
+            error: err instanceof Error ? err.message : "Failed to import",
+          },
+        ],
+      });
+    } finally {
+      setImporting(false);
+      // Reset file input
+      e.target.value = "";
+    }
+  };
+
+  /**
+   * Import from URL
+   */
+  const handleImportFromUrl = async () => {
+    if (!importUrl.trim()) return;
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const response = await fetch("/api/rss-sources/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opmlUrl: importUrl.trim(),
+          category: importCategory,
+          activeByDefault: importActiveByDefault,
+          skipDuplicates: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to import OPML");
+      }
+
+      setImportResult({
+        imported: data.imported,
+        skipped: data.skipped,
+        errors: data.errors || [],
+      });
+
+      // Refresh sources list
+      fetchSources();
+    } catch (err) {
+      setImportResult({
+        imported: 0,
+        skipped: 0,
+        errors: [
+          {
+            name: "Import Error",
+            url: "",
+            error: err instanceof Error ? err.message : "Failed to import",
+          },
+        ],
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // Group sources by category for display
   const sourcesByCategory = sources.reduce(
     (acc, source) => {
@@ -364,10 +503,16 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
             Manage RSS feeds for article curation
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4" />
-          Add Source
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleOpenImport}>
+            <Upload className="h-4 w-4" />
+            Import OPML
+          </Button>
+          <Button onClick={handleCreate}>
+            <Plus className="h-4 w-4" />
+            Add Source
+          </Button>
+        </div>
       </div>
 
       {/* Error state */}
@@ -577,6 +722,185 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
               {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
               Delete
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import OPML Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Import RSS Feeds from OPML</DialogTitle>
+            <DialogDescription>
+              Import multiple RSS feeds at once from an OPML file or URL.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Import method tabs */}
+            <div className="flex gap-2">
+              <Button
+                variant={importMethod === "url" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setImportMethod("url")}
+                className="flex-1"
+              >
+                <Link className="h-4 w-4" />
+                From URL
+              </Button>
+              <Button
+                variant={importMethod === "file" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setImportMethod("file")}
+                className="flex-1"
+              >
+                <FileUp className="h-4 w-4" />
+                Upload File
+              </Button>
+            </div>
+
+            {/* URL input */}
+            {importMethod === "url" && (
+              <div className="space-y-2">
+                <Label htmlFor="import-url">OPML URL</Label>
+                <Input
+                  id="import-url"
+                  type="url"
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://example.com/feeds.opml"
+                />
+                {OPML_PRESETS.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Preset:</span>{" "}
+                    <button
+                      type="button"
+                      onClick={() => setImportUrl(OPML_PRESETS[0].url)}
+                      className="text-primary hover:underline"
+                    >
+                      {OPML_PRESETS[0].name}
+                    </button>
+                    <span className="ml-1">({OPML_PRESETS[0].description})</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* File upload */}
+            {importMethod === "file" && (
+              <div className="space-y-2">
+                <Label htmlFor="import-file">OPML File</Label>
+                <Input
+                  id="import-file"
+                  type="file"
+                  accept=".opml,.xml,text/xml,application/xml"
+                  onChange={handleFileUpload}
+                  disabled={importing}
+                />
+              </div>
+            )}
+
+            {/* Import options */}
+            <div className="space-y-3 border-t pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="import-category">Default Category</Label>
+                <Select
+                  value={importCategory}
+                  onValueChange={setImportCategory}
+                >
+                  <SelectTrigger id="import-category">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RSS_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Feeds will use their OPML category if available, or this default.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="import-active" className="cursor-pointer">
+                    Activate on import
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Enable feeds immediately for curation
+                  </p>
+                </div>
+                <Switch
+                  id="import-active"
+                  checked={importActiveByDefault}
+                  onCheckedChange={setImportActiveByDefault}
+                />
+              </div>
+            </div>
+
+            {/* Import result */}
+            {importResult && (
+              <div
+                className={cn(
+                  "p-3 rounded-md text-sm",
+                  importResult.errors.length > 0 && importResult.imported === 0
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200"
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  {importResult.errors.length > 0 && importResult.imported === 0 ? (
+                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-medium">
+                      {importResult.imported > 0
+                        ? `Successfully imported ${importResult.imported} feed${importResult.imported !== 1 ? "s" : ""}`
+                        : "Import failed"}
+                    </p>
+                    {importResult.skipped > 0 && (
+                      <p className="text-xs mt-1">
+                        {importResult.skipped} duplicate{importResult.skipped !== 1 ? "s" : ""} skipped
+                      </p>
+                    )}
+                    {importResult.errors.length > 0 && (
+                      <ul className="text-xs mt-1 list-disc list-inside">
+                        {importResult.errors.slice(0, 3).map((e, i) => (
+                          <li key={i}>{e.error}</li>
+                        ))}
+                        {importResult.errors.length > 3 && (
+                          <li>...and {importResult.errors.length - 3} more errors</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(false)}
+              disabled={importing}
+            >
+              {importResult && importResult.imported > 0 ? "Done" : "Cancel"}
+            </Button>
+            {importMethod === "url" && (
+              <Button
+                onClick={handleImportFromUrl}
+                disabled={importing || !importUrl.trim()}
+              >
+                {importing && <Loader2 className="h-4 w-4 animate-spin" />}
+                Import Feeds
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

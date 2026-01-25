@@ -99,6 +99,16 @@ export const config = {
   ],
 } as const;
 
+// OPML Import Presets
+export const OPML_PRESETS = [
+  {
+    name: "AllInfoSecNews",
+    url: "https://raw.githubusercontent.com/malcolm-heath/allinfosecnews2opml/main/allinfosecnews_sources.opml",
+    description: "458 InfoSec RSS feeds (news, podcasts, vendor blogs, advisories)",
+    suggestedCategory: "Security",
+  },
+] as const;
+
 // Validation helper
 export function validateConfig() {
   const required = {
