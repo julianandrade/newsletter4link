@@ -330,12 +330,108 @@ export async function GET(request: NextRequest) {
       byStyle,
     };
 
+    // Calculate engagement health scoring with subscriber classification
+    // Priority: New (if <3 sends) -> Active (if activity in 30d) -> Dormant (if activity in 30-90d) -> At Risk
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const ninetyDaysAgo = new Date(now);
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    // Get SENT events count per subscriber to identify "New" subscribers
+    const sentEventsPerSubscriber = await prisma.emailEvent.groupBy({
+      by: ["subscriberId"],
+      where: {
+        subscriberId: { in: allSubscriberIds },
+        eventType: "SENT",
+      },
+      _count: { id: true },
+    });
+
+    const sentCountBySubscriber = new Map(
+      sentEventsPerSubscriber.map((e) => [e.subscriberId, e._count.id])
+    );
+
+    // Get latest OPENED or CLICKED event timestamp per subscriber
+    const activityEvents = await prisma.emailEvent.findMany({
+      where: {
+        subscriberId: { in: allSubscriberIds },
+        eventType: { in: ["OPENED", "CLICKED"] },
+      },
+      select: {
+        subscriberId: true,
+        timestamp: true,
+      },
+      orderBy: { timestamp: "desc" },
+    });
+
+    // Build map of subscriber -> latest activity timestamp
+    const latestActivityBySubscriber = new Map<string, Date>();
+    for (const event of activityEvents) {
+      if (!latestActivityBySubscriber.has(event.subscriberId)) {
+        latestActivityBySubscriber.set(event.subscriberId, event.timestamp);
+      }
+    }
+
+    // Classify subscribers
+    let activeCount = 0;
+    let dormantCount = 0;
+    let atRiskCount = 0;
+    let newCount = 0;
+
+    for (const subscriberId of allSubscriberIds) {
+      const sentCount = sentCountBySubscriber.get(subscriberId) || 0;
+      const lastActivity = latestActivityBySubscriber.get(subscriberId);
+
+      // Priority 1: New subscriber (received < 3 SENT events)
+      if (sentCount < 3) {
+        newCount++;
+        continue;
+      }
+
+      // Priority 2: Active (opened/clicked in last 30 days)
+      if (lastActivity && lastActivity >= thirtyDaysAgo) {
+        activeCount++;
+        continue;
+      }
+
+      // Priority 3: Dormant (last activity 30-90 days ago)
+      if (lastActivity && lastActivity >= ninetyDaysAgo && lastActivity < thirtyDaysAgo) {
+        dormantCount++;
+        continue;
+      }
+
+      // Priority 4: At Risk (no activity in 90+ days or never engaged)
+      atRiskCount++;
+    }
+
+    const totalSubscribers = allSubscriberIds.length;
+    const engagementHealth = {
+      active: {
+        count: activeCount,
+        percentage: totalSubscribers > 0 ? (activeCount / totalSubscribers) * 100 : 0,
+      },
+      dormant: {
+        count: dormantCount,
+        percentage: totalSubscribers > 0 ? (dormantCount / totalSubscribers) * 100 : 0,
+      },
+      atRisk: {
+        count: atRiskCount,
+        percentage: totalSubscribers > 0 ? (atRiskCount / totalSubscribers) * 100 : 0,
+      },
+      new: {
+        count: newCount,
+        percentage: totalSubscribers > 0 ? (newCount / totalSubscribers) * 100 : 0,
+      },
+    };
+
     return NextResponse.json({
       editions,
       metrics,
       topLinks,
       timeline,
       segmentation,
+      engagementHealth,
     });
   } catch (error) {
     console.error("Analytics API error:", error);
