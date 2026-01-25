@@ -28,6 +28,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
   Loader2,
   Save,
   Eye,
@@ -40,9 +48,18 @@ import {
   Clock,
   AlertCircle,
   Lock,
+  Palette,
 } from "lucide-react";
 
 // Types
+interface Template {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
 interface EditionDetail {
   id: string;
   week: number;
@@ -93,6 +110,10 @@ export default function EditionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [edition, setEdition] = useState<EditionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Template state
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   // Selection state
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
@@ -157,6 +178,24 @@ export default function EditionDetailPage() {
     loadEdition();
   }, [loadEdition]);
 
+  // Load templates
+  useEffect(() => {
+    fetch("/api/templates")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          // Filter to only show templates with designJson (editable in Unlayer)
+          setTemplates(data);
+          // Set default template if one exists
+          const defaultTemplate = data.find((t: Template) => t.isDefault);
+          if (defaultTemplate) {
+            setSelectedTemplateId(defaultTemplate.id);
+          }
+        }
+      })
+      .catch(console.error);
+  }, []);
+
   // Handle article selection change
   const handleArticleSelectionChange = (ids: string[], articles: Article[]) => {
     setSelectedArticleIds(ids);
@@ -219,7 +258,10 @@ export default function EditionDetailPage() {
       const res = await fetch("/api/email/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editionId }),
+        body: JSON.stringify({
+          editionId,
+          templateId: selectedTemplateId || undefined,
+        }),
       });
 
       const result = await res.json();
@@ -306,7 +348,10 @@ export default function EditionDetailPage() {
       const res = await fetch("/api/email/send-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editionId }),
+        body: JSON.stringify({
+          editionId,
+          templateId: selectedTemplateId || undefined,
+        }),
       });
 
       const result = await res.json();
@@ -556,6 +601,59 @@ export default function EditionDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Template Selection */}
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Palette className="w-5 h-5 text-muted-foreground" />
+              <CardTitle className="text-base font-medium">Email Template</CardTitle>
+            </div>
+            <CardDescription>
+              Select a template to use for this newsletter
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="flex-1 max-w-xs">
+                <Select
+                  value={selectedTemplateId}
+                  onValueChange={setSelectedTemplateId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Default Template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Default Template</SelectItem>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                        {template.isDefault && " (Default)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedTemplateId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(`/dashboard/templates/${selectedTemplateId}`, '_blank')}
+                >
+                  Edit Template
+                </Button>
+              )}
+            </div>
+            {templates.length === 0 && (
+              <p className="text-sm text-muted-foreground mt-2">
+                No custom templates available.{" "}
+                <a href="/dashboard/templates" className="text-primary hover:underline">
+                  Create one
+                </a>
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Content Tabs */}
         <Tabs defaultValue="articles" className="space-y-4">
