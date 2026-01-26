@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { EditionStatus } from "@prisma/client";
+import { EditionStatus, Prisma } from "@prisma/client";
 
 /**
  * GET /api/editions/:id
@@ -74,6 +74,8 @@ export async function GET(
       sentAt: edition.sentAt,
       createdAt: edition.createdAt,
       updatedAt: edition.updatedAt,
+      editorDesignJson: edition.editorDesignJson,
+      templateId: edition.templateId,
       articles: edition.articles.map((ea) => ({
         ...ea.article,
         order: ea.order,
@@ -114,7 +116,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, articles, projects } = body;
+    const { status, articles, projects, editorDesignJson, templateId } = body;
 
     // Check if edition exists
     const existingEdition = await prisma.edition.findUnique({
@@ -143,11 +145,17 @@ export async function PATCH(
     }
 
     // Prepare update data
-    const updateData: {
-      status?: EditionStatus;
-      finalizedAt?: Date | null;
-      sentAt?: Date | null;
-    } = {};
+    const updateData: Prisma.EditionUpdateInput = {};
+
+    // Handle editorDesignJson and templateId updates
+    if (editorDesignJson !== undefined) {
+      updateData.editorDesignJson = editorDesignJson === null
+        ? Prisma.JsonNull
+        : editorDesignJson;
+    }
+    if (templateId !== undefined) {
+      updateData.templateId = templateId;
+    }
 
     // Handle status updates
     if (status !== undefined) {
@@ -329,6 +337,8 @@ export async function PATCH(
       sentAt: updatedEdition.sentAt,
       createdAt: updatedEdition.createdAt,
       updatedAt: updatedEdition.updatedAt,
+      editorDesignJson: updatedEdition.editorDesignJson,
+      templateId: updatedEdition.templateId,
       articles: updatedEdition.articles.map((ea) => ({
         ...ea.article,
         order: ea.order,

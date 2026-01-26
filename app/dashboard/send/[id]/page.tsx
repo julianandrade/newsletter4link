@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { EditionArticlePicker, Article } from "@/components/edition-article-picker";
 import { EditionProjectPicker, Project } from "@/components/edition-project-picker";
-import { EmailEditor, EditedNewsletterData, Article as EditorArticle, Project as EditorProject, CustomBlock } from "@/components/email-editor";
+import { EditionUnlayerEditor, EditionUnlayerEditorRef } from "@/components/edition-unlayer-editor";
+import { replaceContentMergeTags, type Article as ContentArticle, type Project as ContentProject } from "@/lib/email/content-renderer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,7 @@ interface Template {
   description: string | null;
   isActive: boolean;
   isDefault: boolean;
+  designJson: object | null;
 }
 
 interface Subscriber {
@@ -105,6 +107,8 @@ interface EditionDetail {
   projects: Array<Project & { order: number }>;
   articleCount: number;
   projectCount: number;
+  editorDesignJson: object | null;
+  templateId: string | null;
 }
 
 // Status badge component
@@ -170,8 +174,10 @@ export default function EditionDetailPage() {
 
   // Edit mode state
   const [contentMode, setContentMode] = useState<"select" | "edit">("select");
-  const [editedData, setEditedData] = useState<EditedNewsletterData | null>(null);
-  const [isEditDirty, setIsEditDirty] = useState(false);
+  const [isEditorReady, setIsEditorReady] = useState(false);
+  const [isEditorDirty, setIsEditorDirty] = useState(false);
+  const [editorDesign, setEditorDesign] = useState<object | null>(null);
+  const editorRef = useRef<EditionUnlayerEditorRef>(null);
 
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState(false);
@@ -215,6 +221,14 @@ export default function EditionDetailPage() {
         setSelectedProjectIds(projectIds);
         setSelectedProjects(data.projects);
         setIsDirty(false);
+
+        // Initialize editor design and template if present
+        if (data.editorDesignJson) {
+          setEditorDesign(data.editorDesignJson);
+        }
+        if (data.templateId) {
+          setSelectedTemplateId(data.templateId);
+        }
       } else {
         setError(result.error || "Failed to load edition");
       }
@@ -237,16 +251,19 @@ export default function EditionDetailPage() {
       .then((data) => {
         if (Array.isArray(data)) {
           // Filter to only show templates with designJson (editable in Unlayer)
-          setTemplates(data);
-          // Set default template if one exists
-          const defaultTemplate = data.find((t: Template) => t.isDefault);
-          if (defaultTemplate) {
-            setSelectedTemplateId(defaultTemplate.id);
+          const templatesWithDesign = data.filter((t: Template) => t.designJson);
+          setTemplates(templatesWithDesign);
+          // Set default template if one exists and no template already selected
+          if (!selectedTemplateId) {
+            const defaultTemplate = templatesWithDesign.find((t: Template) => t.isDefault);
+            if (defaultTemplate) {
+              setSelectedTemplateId(defaultTemplate.id);
+            }
           }
         }
       })
       .catch(console.error);
-  }, []);
+  }, [selectedTemplateId]);
 
   // Load subscribers
   useEffect(() => {
@@ -292,43 +309,61 @@ export default function EditionDetailPage() {
     setIsDirty(true);
   };
 
-  // Switch to edit mode and initialize editor data
+  // Handle template selection - load design into editor
+  const handleTemplateChange = useCallback(async (templateId: string) => {
+    setSelectedTemplateId(templateId);
+
+    if (templateId && templateId !== "default") {
+      // Find template and load its design
+      const template = templates.find((t) => t.id === templateId);
+      if (template?.designJson && editorRef.current?.isReady()) {
+        editorRef.current.loadDesign(template.designJson);
+        setEditorDesign(template.designJson);
+      } else if (template?.designJson) {
+        // Editor not ready yet, store design to load when ready
+        setEditorDesign(template.designJson);
+      }
+    }
+  }, [templates]);
+
+  // Switch to edit mode
   const handleEnterEditMode = useCallback(() => {
-    const editorArticles: EditorArticle[] = selectedArticles.map((a) => ({
-      id: a.id,
-      title: a.title,
-      summary: a.summary || "",
-      sourceUrl: a.sourceUrl || "",
-      category: a.category || [],
-    }));
-
-    const editorProjects: EditorProject[] = selectedProjects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description || "",
-      team: p.team || "",
-      impact: p.impact || undefined,
-      imageUrl: p.imageUrl || undefined,
-      projectDate: p.projectDate || new Date().toISOString(),
-    }));
-
-    setEditedData({
-      articles: editorArticles,
-      projects: editorProjects,
-      customBlocks: [],
-    });
+    // If we have a saved design, use it; otherwise try to load from selected template
+    if (!editorDesign && selectedTemplateId) {
+      const template = templates.find((t) => t.id === selectedTemplateId);
+      if (template?.designJson) {
+        setEditorDesign(template.designJson);
+      }
+    }
     setContentMode("edit");
-    setIsEditDirty(false);
-  }, [selectedArticles, selectedProjects]);
+    setIsEditorDirty(false);
+  }, [editorDesign, selectedTemplateId, templates]);
 
-  // Handle changes from the EmailEditor
-  const handleEditorDataChange = useCallback((data: EditedNewsletterData) => {
-    setEditedData(data);
-    setIsEditDirty(true);
+  // Handle editor ready
+  const handleEditorReady = useCallback(() => {
+    setIsEditorReady(true);
+    // Load design if one is pending
+    if (editorDesign && editorRef.current) {
+      editorRef.current.loadDesign(editorDesign);
+    }
+  }, [editorDesign]);
+
+  // Handle editor design change
+  const handleEditorDesignChange = useCallback(() => {
+    setIsEditorDirty(true);
   }, []);
 
   // Switch back to select mode
-  const handleExitEditMode = useCallback(() => {
+  const handleExitEditMode = useCallback(async () => {
+    // Save current design before exiting
+    if (editorRef.current?.isReady()) {
+      try {
+        const design = await editorRef.current.saveDesign();
+        setEditorDesign(design);
+      } catch (err) {
+        console.error("Failed to save design:", err);
+      }
+    }
     setContentMode("select");
   }, []);
 
@@ -338,6 +373,17 @@ export default function EditionDetailPage() {
 
     setSaving(true);
     try {
+      // Save current editor design if in edit mode
+      let designToSave = editorDesign;
+      if (contentMode === "edit" && editorRef.current?.isReady()) {
+        try {
+          designToSave = await editorRef.current.saveDesign();
+          setEditorDesign(designToSave);
+        } catch (err) {
+          console.error("Failed to save editor design:", err);
+        }
+      }
+
       const res = await fetch(`/api/editions/${editionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -350,6 +396,8 @@ export default function EditionDetailPage() {
             projectId: id,
             order: index + 1,
           })),
+          editorDesignJson: designToSave,
+          templateId: selectedTemplateId || null,
         }),
       });
 
@@ -358,6 +406,8 @@ export default function EditionDetailPage() {
       if (result.success) {
         setEdition(result.data);
         setIsDirty(false);
+        setIsEditorDirty(false);
+        toast.success("Draft saved");
       } else {
         setError(result.error || "Failed to save draft");
       }
@@ -377,35 +427,59 @@ export default function EditionDetailPage() {
     setPreviewHtml(null);
 
     try {
-      // Build customData from editedData if in edit mode
-      let customData = undefined;
-      if (contentMode === "edit" && editedData) {
-        customData = {
-          articles: editedData.articles,
-          projects: editedData.projects,
-          customBlocks: editedData.customBlocks,
+      let html: string | null = null;
+
+      // If in edit mode with Unlayer, export HTML directly and replace merge tags
+      if (contentMode === "edit" && editorRef.current?.isReady()) {
+        const { html: exportedHtml } = await editorRef.current.exportHtml();
+
+        // Convert articles and projects to content renderer format
+        const contentArticles: ContentArticle[] = selectedArticles.map((a) => ({
+          id: a.id,
+          title: a.title,
+          summary: a.summary,
+          sourceUrl: a.sourceUrl || "",
+          category: a.category || [],
+        }));
+
+        const contentProjects: ContentProject[] = selectedProjects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          team: p.team || "",
+          impact: p.impact,
+          imageUrl: p.imageUrl,
+        }));
+
+        // Replace merge tags with actual content
+        html = replaceContentMergeTags(exportedHtml, {
+          articles: contentArticles,
+          projects: contentProjects,
           week: edition.week,
           year: edition.year,
-        };
-      }
+        });
 
-      const res = await fetch("/api/email/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          editionId,
-          templateId: selectedTemplateId || undefined,
-          customData,
-        }),
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        setPreviewHtml(result.html);
+        setPreviewHtml(html);
         setShowPreviewDialog(true);
       } else {
-        toast.error(result.error || "Failed to generate preview");
+        // Use server-side preview for select mode
+        const res = await fetch("/api/email/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            editionId,
+            templateId: selectedTemplateId || undefined,
+          }),
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+          setPreviewHtml(result.html);
+          setShowPreviewDialog(true);
+        } else {
+          toast.error(result.error || "Failed to generate preview");
+        }
       }
     } catch (err) {
       console.error("Error generating preview:", err);
@@ -503,26 +577,49 @@ export default function EditionDetailPage() {
     setSendResult(null);
 
     try {
-      // Build customData from editedData if in edit mode
-      let customData = undefined;
-      if (contentMode === "edit" && editedData) {
-        customData = {
-          articles: editedData.articles,
-          projects: editedData.projects,
-          customBlocks: editedData.customBlocks,
-          week: edition.week,
-          year: edition.year,
-        };
-      }
-
       // Build request body based on recipient mode
       const requestBody: Record<string, unknown> = {
         editionId,
         templateId: selectedTemplateId || undefined,
-        customData,
         // Only pass provider if different from default
         provider: selectedProvider !== defaultProvider ? selectedProvider : undefined,
       };
+
+      // If in edit mode with Unlayer, export and include custom HTML
+      if (contentMode === "edit" && editorRef.current?.isReady()) {
+        const { html: exportedHtml, design } = await editorRef.current.exportHtml();
+
+        // Convert articles and projects to content renderer format
+        const contentArticles: ContentArticle[] = selectedArticles.map((a) => ({
+          id: a.id,
+          title: a.title,
+          summary: a.summary,
+          sourceUrl: a.sourceUrl || "",
+          category: a.category || [],
+        }));
+
+        const contentProjects: ContentProject[] = selectedProjects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          team: p.team || "",
+          impact: p.impact,
+          imageUrl: p.imageUrl,
+        }));
+
+        // Replace merge tags with actual content
+        const finalHtml = replaceContentMergeTags(exportedHtml, {
+          articles: contentArticles,
+          projects: contentProjects,
+          week: edition.week,
+          year: edition.year,
+        });
+
+        requestBody.customHtml = finalHtml;
+
+        // Also save the design
+        setEditorDesign(design);
+      }
 
       // Add recipient params based on mode
       if (recipientMode === "adhoc") {
@@ -691,7 +788,7 @@ export default function EditionDetailPage() {
                   Week {edition.week}, {edition.year}
                 </h1>
                 {getStatusBadge(edition.status)}
-                {isDirty && isEditable && (
+                {(isDirty || isEditorDirty) && isEditable && (
                   <Badge variant="outline" className="text-yellow-600 border-yellow-400">
                     Unsaved changes
                   </Badge>
@@ -712,7 +809,7 @@ export default function EditionDetailPage() {
               <Button
                 variant="outline"
                 onClick={handleSaveDraft}
-                disabled={saving || !isDirty}
+                disabled={saving || (!isDirty && !isEditorDirty)}
               >
                 {saving ? (
                   <>
@@ -857,7 +954,7 @@ export default function EditionDetailPage() {
               <div className="flex-1 max-w-xs">
                 <Select
                   value={selectedTemplateId || "default"}
-                  onValueChange={(value) => setSelectedTemplateId(value === "default" ? "" : value)}
+                  onValueChange={(value) => handleTemplateChange(value === "default" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Default Template" />
@@ -1196,11 +1293,11 @@ export default function EditionDetailPage() {
                     variant={contentMode === "edit" ? "default" : "outline"}
                     size="sm"
                     onClick={contentMode === "edit" ? undefined : handleEnterEditMode}
-                    disabled={selectedArticleIds.length === 0 && selectedProjectIds.length === 0}
+                    disabled={!selectedTemplateId && !editorDesign}
                   >
                     <Pencil className="w-4 h-4 mr-2" />
-                    Edit Content
-                    {isEditDirty && contentMode === "edit" && (
+                    Edit Layout
+                    {isEditorDirty && contentMode === "edit" && (
                       <Badge variant="secondary" className="ml-2 text-xs">
                         Edited
                       </Badge>
@@ -1208,9 +1305,14 @@ export default function EditionDetailPage() {
                   </Button>
                 </div>
               </div>
-              {contentMode === "edit" && isEditDirty && (
+              {contentMode === "edit" && isEditorDirty && (
                 <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
-                  Content has been edited. Changes will be included when you preview or send.
+                  Layout has been edited. Changes will be included when you preview or send.
+                </p>
+              )}
+              {!selectedTemplateId && !editorDesign && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Select a template above to enable layout editing.
                 </p>
               )}
             </CardContent>
@@ -1352,18 +1454,18 @@ export default function EditionDetailPage() {
           </Tabs>
         )}
 
-        {/* Email Editor - for Edit mode */}
-        {contentMode === "edit" && editedData && edition && (
+        {/* Unlayer Editor - for Edit mode */}
+        {contentMode === "edit" && edition && (
           <Card>
             <CardHeader className="border-b">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-medium flex items-center gap-2">
                     <Pencil className="w-4 h-4" />
-                    Edit Content
+                    Edit Email Layout
                   </CardTitle>
                   <CardDescription>
-                    Edit article summaries, project descriptions, and add custom content blocks
+                    Drag and drop elements, edit text, and customize your newsletter design
                   </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleExitEditMode}>
@@ -1373,13 +1475,29 @@ export default function EditionDetailPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="h-[600px]">
-                <EmailEditor
-                  articles={editedData.articles}
-                  projects={editedData.projects}
+              <div className="h-[700px]">
+                <EditionUnlayerEditor
+                  ref={editorRef}
+                  design={editorDesign}
+                  articles={selectedArticles.map((a) => ({
+                    id: a.id,
+                    title: a.title,
+                    summary: a.summary,
+                    sourceUrl: a.sourceUrl || "",
+                    category: a.category || [],
+                  }))}
+                  projects={selectedProjects.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    description: p.description || "",
+                    team: p.team || "",
+                    impact: p.impact,
+                    imageUrl: p.imageUrl,
+                  }))}
                   week={edition.week}
                   year={edition.year}
-                  onDataChange={handleEditorDataChange}
+                  onReady={handleEditorReady}
+                  onDesignChange={handleEditorDesignChange}
                 />
               </div>
             </CardContent>
