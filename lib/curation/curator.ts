@@ -202,6 +202,7 @@ export async function runCurationPipelineWithStreaming(
       articleMaxAgeDays: 7,
       aiModel: config.ai.anthropic.model,
       embeddingModel: config.ai.openai.embeddingModel,
+      brandVoicePrompt: null,
     };
   }
 
