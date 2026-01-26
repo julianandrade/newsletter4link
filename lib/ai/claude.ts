@@ -11,16 +11,21 @@ const anthropic = new Anthropic({
  */
 export async function scoreArticleRelevance(
   title: string,
-  content: string
+  content: string,
+  brandVoicePrompt?: string | null
 ): Promise<number> {
   try {
+    const brandContext = brandVoicePrompt
+      ? `\n\nBRAND VOICE CONTEXT:\n${brandVoicePrompt}\n\nConsider the above brand context when scoring relevance.`
+      : "";
+
     const message = await anthropic.messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 500,
       messages: [
         {
           role: "user",
-          content: `You are an AI content curator for Link Consulting's internal AI/tech newsletter. The audience is tech professionals and executives interested in AI developments, practical applications, and industry trends.
+          content: `You are an AI content curator for Link Consulting's internal AI/tech newsletter. The audience is tech professionals and executives interested in AI developments, practical applications, and industry trends.${brandContext}
 
 Score the following article for relevance on a scale of 0-10, where:
 - 10 = Highly relevant, groundbreaking AI news that everyone should know
@@ -71,16 +76,21 @@ Respond with ONLY a single number from 0-10. No explanation needed.`,
  */
 export async function summarizeArticle(
   title: string,
-  content: string
+  content: string,
+  brandVoicePrompt?: string | null
 ): Promise<string> {
   try {
+    const brandContext = brandVoicePrompt
+      ? `\n\nBRAND VOICE CONTEXT:\n${brandVoicePrompt}\n\nWrite the summary reflecting the above brand voice and focus areas.`
+      : "";
+
     const message = await anthropic.messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 300,
       messages: [
         {
           role: "user",
-          content: `You are writing summaries for Link Consulting's internal AI newsletter.
+          content: `You are writing summaries for Link Consulting's internal AI newsletter.${brandContext}
 
 Write a concise, engaging 2-3 sentence summary of this article. Focus on:
 - The key development or finding
@@ -116,9 +126,14 @@ Write only the summary, no preamble or extra text.`,
  */
 export async function categorizeArticle(
   title: string,
-  content: string
+  content: string,
+  brandVoicePrompt?: string | null
 ): Promise<string[]> {
   try {
+    const brandContext = brandVoicePrompt
+      ? `\n\nBRAND VOICE CONTEXT:\n${brandVoicePrompt}\n\nPrioritize categories that align with the above brand focus areas.`
+      : "";
+
     const message = await anthropic.messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 200,
@@ -140,7 +155,7 @@ export async function categorizeArticle(
 - AI Tools
 - Data Science
 - Cloud AI
-- Edge AI
+- Edge AI${brandContext}
 
 Title: ${title}
 
@@ -172,13 +187,14 @@ Respond with ONLY the category names, separated by commas. Maximum 3 categories.
  * Batch score multiple articles
  */
 export async function scoreArticlesBatch(
-  articles: Array<{ title: string; content: string }>
+  articles: Array<{ title: string; content: string }>,
+  brandVoicePrompt?: string | null
 ): Promise<number[]> {
   const scores: number[] = [];
 
   for (const article of articles) {
     try {
-      const score = await scoreArticleRelevance(article.title, article.content);
+      const score = await scoreArticleRelevance(article.title, article.content, brandVoicePrompt);
       scores.push(score);
 
       // Add delay to avoid rate limiting (Anthropic rate limits)

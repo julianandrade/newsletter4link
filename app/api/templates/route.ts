@@ -9,6 +9,7 @@ export async function GET() {
         id: true,
         name: true,
         description: true,
+        designJson: true,
         isActive: true,
         isDefault: true,
         createdAt: true,

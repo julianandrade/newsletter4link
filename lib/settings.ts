@@ -7,6 +7,7 @@ export interface AppSettings {
   articleMaxAgeDays: number;
   aiModel: string;
   embeddingModel: string;
+  brandVoicePrompt: string | null;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -16,6 +17,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   articleMaxAgeDays: 7,
   aiModel: "claude-sonnet-4-20250514",
   embeddingModel: "text-embedding-ada-002",
+  brandVoicePrompt: null,
 };
 
 /**
@@ -43,6 +45,7 @@ export async function getSettings(): Promise<AppSettings> {
     articleMaxAgeDays: settings.articleMaxAgeDays,
     aiModel: settings.aiModel,
     embeddingModel: settings.embeddingModel,
+    brandVoicePrompt: settings.brandVoicePrompt,
   };
 }
 
@@ -69,6 +72,7 @@ export async function updateSettings(
     articleMaxAgeDays: settings.articleMaxAgeDays,
     aiModel: settings.aiModel,
     embeddingModel: settings.embeddingModel,
+    brandVoicePrompt: settings.brandVoicePrompt,
   };
 }
 

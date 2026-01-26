@@ -69,6 +69,17 @@ export async function PUT(request: Request) {
       updates.embeddingModel = body.embeddingModel;
     }
 
+    if (typeof body.brandVoicePrompt === "string" || body.brandVoicePrompt === null) {
+      // Validate max length (500 characters)
+      if (body.brandVoicePrompt && body.brandVoicePrompt.length > 500) {
+        return NextResponse.json(
+          { error: "brandVoicePrompt must be 500 characters or less" },
+          { status: 400 }
+        );
+      }
+      updates.brandVoicePrompt = body.brandVoicePrompt || null;
+    }
+
     const settings = await updateSettings(updates);
     return NextResponse.json(settings);
   } catch (error) {

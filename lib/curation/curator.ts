@@ -74,7 +74,8 @@ export async function runCurationPipeline(): Promise<CurationResult> {
         // Score article relevance
         const relevanceScore = await scoreArticleRelevance(
           article.title,
-          article.content
+          article.content,
+          null // brandVoicePrompt - not available in non-streaming pipeline
         );
         console.log(`  ⭐ Relevance score: ${relevanceScore}/10`);
 
@@ -103,12 +104,13 @@ export async function runCurationPipeline(): Promise<CurationResult> {
 
         // Generate summary for high-scoring articles
         console.log(`  ✍️ Generating summary...`);
-        const summary = await summarizeArticle(article.title, article.content);
+        const summary = await summarizeArticle(article.title, article.content, null);
 
         // Categorize article
         const categories = await categorizeArticle(
           article.title,
-          article.content
+          article.content,
+          null
         );
 
         // Save to database as pending review
@@ -294,7 +296,8 @@ export async function runCurationPipelineWithStreaming(
         // Score article relevance
         const relevanceScore = await scoreArticleRelevance(
           article.title,
-          article.content
+          article.content,
+          settings.brandVoicePrompt
         );
 
         onProgress({
@@ -344,12 +347,13 @@ export async function runCurationPipelineWithStreaming(
           message: "Generating summary...",
         });
 
-        const summary = await summarizeArticle(article.title, article.content);
+        const summary = await summarizeArticle(article.title, article.content, settings.brandVoicePrompt);
 
         // Categorize article
         const categories = await categorizeArticle(
           article.title,
-          article.content
+          article.content,
+          settings.brandVoicePrompt
         );
 
         // Save to database as pending review
@@ -462,6 +466,9 @@ export async function curateArticle(
   relevanceScore?: number;
 }> {
   try {
+    // Get settings for brand voice prompt
+    const settings = await getSettings();
+
     // Generate embedding
     const embedding = await generateEmbedding(`${title}\n\n${content}`);
 
@@ -476,15 +483,15 @@ export async function curateArticle(
     }
 
     // Score relevance
-    const relevanceScore = await scoreArticleRelevance(title, content);
+    const relevanceScore = await scoreArticleRelevance(title, content, settings.brandVoicePrompt);
 
     // Generate summary if score is high enough
     let summary: string | undefined;
     let categories: string[] = [];
 
     if (relevanceScore >= config.curation.relevanceThreshold) {
-      summary = await summarizeArticle(title, content);
-      categories = await categorizeArticle(title, content);
+      summary = await summarizeArticle(title, content, settings.brandVoicePrompt);
+      categories = await categorizeArticle(title, content, settings.brandVoicePrompt);
     }
 
     // Save to database

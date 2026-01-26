@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Image, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
@@ -24,6 +25,7 @@ interface Settings {
   articleMaxAgeDays: number;
   aiModel: string;
   embeddingModel: string;
+  brandVoicePrompt: string | null;
 }
 
 const AI_MODELS = [
@@ -265,6 +267,26 @@ export default function SettingsPage() {
                       Model used for generating article embeddings
                     </p>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="brandVoicePrompt">Brand Voice Prompt</Label>
+                  <Textarea
+                    id="brandVoicePrompt"
+                    rows={5}
+                    maxLength={500}
+                    value={settings?.brandVoicePrompt ?? ""}
+                    onChange={(e) =>
+                      setSettings((prev) =>
+                        prev ? { ...prev, brandVoicePrompt: e.target.value || null } : prev
+                      )
+                    }
+                    placeholder='Ex: "We focus on digital transformation for the financial sector. Professional but accessible tone. We value articles about practical AI applications, especially in compliance and automation. Avoid hype, focus on concrete results."'
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Define your brand&apos;s voice and focus areas. This influences how the AI scores,
+                    summarizes, and categorizes articles during curation. Max 500 characters.
+                  </p>
                 </div>
 
                 {saveMessage && (
