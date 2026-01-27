@@ -49,12 +49,40 @@ export function OnboardingForm({ userEmail }: OnboardingFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [joiningDefault, setJoiningDefault] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
   const [industry, setIndustry] = useState("TECHNOLOGY");
+
+  // Join the default organization (for existing users during migration)
+  const handleJoinDefault = async () => {
+    setJoiningDefault(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/organizations/join-default", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Failed to join organization");
+        setJoiningDefault(false);
+        return;
+      }
+
+      // Success! Redirect to dashboard
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
+      setJoiningDefault(false);
+    }
+  };
 
   // Generate slug from name
   const generateSlug = (name: string) => {
@@ -229,6 +257,30 @@ export function OnboardingForm({ userEmail }: OnboardingFormProps) {
           </Button>
         )}
       </CardFooter>
+
+      {/* Join existing organization option */}
+      <div className="px-6 pb-6 pt-2 border-t">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground mb-3">
+            Already have an existing account?
+          </p>
+          <Button
+            variant="outline"
+            onClick={handleJoinDefault}
+            disabled={joiningDefault}
+            className="w-full"
+          >
+            {joiningDefault ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Joining...
+              </>
+            ) : (
+              "Join Link Consulting Organization"
+            )}
+          </Button>
+        </div>
+      </div>
     </Card>
   );
 }
