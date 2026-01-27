@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plan } from "@prisma/client";
 import { AppHeader } from "@/components/app-header";
 import { FeatureGate } from "@/components/upgrade-prompt";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +48,7 @@ import {
   Plus,
   Play,
   Trash2,
-  X,
+  StopCircle,
 } from "lucide-react";
 
 interface SearchResult {
@@ -86,9 +87,23 @@ interface QueryExpansion {
   };
 }
 
+interface SearchProgress {
+  stage: string;
+  progress: number;
+  message: string;
+  analyzing?: {
+    current: number;
+    total: number;
+    title: string;
+  };
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [searchProgress, setSearchProgress] = useState<SearchProgress | null>(null);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [queryExpansion, setQueryExpansion] = useState<QueryExpansion | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +161,7 @@ export default function SearchPage() {
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || isSearching) return;
 
@@ -154,27 +169,195 @@ export default function SearchPage() {
     setError(null);
     setResults([]);
     setQueryExpansion(null);
+    setSearchProgress({
+      stage: "starting",
+      progress: 0,
+      message: "Connecting...",
+    });
 
     try {
-      const res = await fetch("/api/search/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim(), maxResults: 15 }),
+      // Build URL with query params
+      const params = new URLSearchParams({
+        query: query.trim(),
+        maxResults: "15",
       });
 
-      const data = await res.json();
+      const response = await fetch(`/api/search/stream?${params}`, {
+        method: "GET",
+        headers: { Accept: "text/event-stream" },
+      });
 
-      if (!res.ok) {
-        setError(data.error || "Search failed");
-        return;
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Search failed");
       }
 
-      setResults(data.data.results || []);
-      setQueryExpansion(data.data.queryExpansion || null);
-    } catch (e) {
-      setError("Search failed. Please try again.");
-    } finally {
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const processEvent = (eventType: string, dataStr: string) => {
+        try {
+          const data = JSON.parse(dataStr);
+          switch (eventType) {
+            case "start":
+              setCurrentJobId(data.jobId);
+              setSearchProgress({
+                stage: "starting",
+                progress: 0,
+                message: data.message || "Starting search...",
+              });
+              break;
+
+            case "progress": {
+              // Handle different progress stages
+              const stage = data.stage || "processing";
+              let progressInfo: SearchProgress = {
+                stage,
+                progress: data.progress || 0,
+                message: data.message || "Processing...",
+              };
+
+              // Check if this is query_expanded event (encoded in message)
+              if (stage === "query_expanded" && data.message) {
+                try {
+                  const expandedData = JSON.parse(data.message);
+                  setQueryExpansion({
+                    original: expandedData.original,
+                    expanded: expandedData.expanded,
+                    analysis: {
+                      intent: expandedData.intent,
+                      timeScope: expandedData.timeScope,
+                      topics: expandedData.topics || [],
+                    },
+                  });
+                  progressInfo.message = "Query analyzed";
+                } catch {
+                  // Not JSON, use as-is
+                }
+              }
+
+              // Check if this is analyzing stage with details
+              if (stage === "analyzing" && data.message) {
+                try {
+                  const analyzeData = JSON.parse(data.message);
+                  if (analyzeData.current !== undefined) {
+                    progressInfo.analyzing = {
+                      current: analyzeData.current,
+                      total: analyzeData.total,
+                      title: analyzeData.title || "Analyzing...",
+                    };
+                    progressInfo.message = `Analyzing ${analyzeData.current}/${analyzeData.total}`;
+                  }
+                } catch {
+                  // Not JSON, use as-is
+                }
+              }
+
+              setSearchProgress(progressInfo);
+              break;
+            }
+
+            case "complete":
+              setCurrentJobId(null);
+              setSearchProgress({
+                stage: "complete",
+                progress: 100,
+                message: "Search complete!",
+              });
+
+              // Extract results and query expansion
+              if (data.result) {
+                setResults(data.result.results || []);
+                if (data.result.queryExpansion) {
+                  setQueryExpansion(data.result.queryExpansion);
+                }
+              }
+
+              // Clear progress after short delay
+              setTimeout(() => {
+                setIsSearching(false);
+                setSearchProgress(null);
+              }, 1000);
+              break;
+
+            case "cancelled":
+              setCurrentJobId(null);
+              setIsSearching(false);
+              setIsCancelling(false);
+              setSearchProgress(null);
+              setError("Search was cancelled");
+              break;
+
+            case "error":
+              setCurrentJobId(null);
+              setIsSearching(false);
+              setSearchProgress(null);
+              setError(data.error || "Search failed");
+              break;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          const lines = event.split("\n");
+          let eventType = "message";
+          let dataStr = "";
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.substring(7).trim();
+            } else if (line.startsWith("data: ")) {
+              dataStr = line.substring(6);
+            }
+          }
+
+          if (dataStr) {
+            processEvent(eventType, dataStr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Search failed:", err);
+      setError(err instanceof Error ? err.message : "Search failed");
       setIsSearching(false);
+      setSearchProgress(null);
+      setCurrentJobId(null);
+    }
+  }, [query, isSearching]);
+
+  const handleCancelSearch = async () => {
+    if (!currentJobId) return;
+
+    setIsCancelling(true);
+    try {
+      const res = await fetch("/api/search/cancel", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to cancel");
+      }
+      // The SSE stream will receive the cancelled event
+      setSearchProgress((prev) =>
+        prev ? { ...prev, message: "Cancelling..." } : null
+      );
+    } catch (err) {
+      console.error("Failed to cancel search:", err);
+      setError(err instanceof Error ? err.message : "Failed to cancel");
+      setIsCancelling(false);
     }
   };
 
@@ -384,21 +567,62 @@ export default function SearchPage() {
                         disabled={isSearching}
                       />
                     </div>
-                    <Button type="submit" disabled={isSearching || !query.trim()}>
-                      {isSearching ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Searching...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Search
-                        </>
-                      )}
-                    </Button>
+                    {isSearching ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleCancelSearch}
+                        disabled={isCancelling}
+                      >
+                        {isCancelling ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Cancelling...
+                          </>
+                        ) : (
+                          <>
+                            <StopCircle className="mr-2 h-4 w-4" />
+                            Cancel
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button type="submit" disabled={!query.trim()}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Search
+                      </Button>
+                    )}
                   </div>
 
+                  {/* Search Progress */}
+                  {isSearching && searchProgress && (
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="font-medium text-sm">
+                            {searchProgress.stage === "query_expanded" && "Query analyzed"}
+                            {searchProgress.stage === "searching" && "Searching the web"}
+                            {searchProgress.stage === "analyzing" && "Analyzing results"}
+                            {searchProgress.stage === "starting" && "Starting search"}
+                            {searchProgress.stage === "query_processing" && "Processing query"}
+                            {searchProgress.stage === "complete" && "Search complete"}
+                          </span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {Math.round(searchProgress.progress)}%
+                        </span>
+                      </div>
+                      <Progress value={searchProgress.progress} className="h-2" />
+                      {searchProgress.analyzing && (
+                        <p className="text-sm text-muted-foreground">
+                          Analyzing: {searchProgress.analyzing.title}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Query Expansion Preview - shows immediately when available */}
                   {queryExpansion && (
                     <div className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">

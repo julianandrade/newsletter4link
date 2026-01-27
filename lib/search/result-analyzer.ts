@@ -120,13 +120,26 @@ Respond with ONLY the JSON object.`,
 }
 
 /**
+ * Progress callback type - supports both sync and async callbacks
+ */
+export type AnalysisProgressCallback = (
+  completed: number,
+  total: number
+) => void | Promise<void>;
+
+/**
  * Analyze multiple results with rate limiting
+ *
+ * @param results - Search results to analyze
+ * @param originalQuery - The original search query
+ * @param brandVoicePrompt - Optional brand context for scoring
+ * @param onProgress - Optional callback for progress updates (supports async for cancellation)
  */
 export async function analyzeResults(
   results: SearchProviderResult[],
   originalQuery: string,
   brandVoicePrompt?: string | null,
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: AnalysisProgressCallback
 ): Promise<AnalyzedResult[]> {
   const analyzedResults: AnalyzedResult[] = [];
 
@@ -146,7 +159,8 @@ export async function analyzeResults(
       });
 
       if (onProgress) {
-        onProgress(i + 1, results.length);
+        // Await the progress callback to support cancellation checks
+        await onProgress(i + 1, results.length);
       }
 
       // Rate limiting - wait between requests
@@ -154,6 +168,11 @@ export async function analyzeResults(
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     } catch (error) {
+      // Re-throw cancellation errors
+      if (error instanceof Error && error.name === "JobCancelledError") {
+        throw error;
+      }
+
       console.error(`Error analyzing result ${i}:`, error);
       // Add result with default scores on error
       analyzedResults.push({
