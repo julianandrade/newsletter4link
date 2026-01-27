@@ -13,14 +13,20 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-// Get branding settings
-async function getBranding() {
-  const settings = await prisma.brandingSettings.findUnique({
-    where: { id: "default" },
-  });
+// Get branding settings from org settings (or use defaults)
+async function getBranding(organizationId?: string) {
+  if (organizationId) {
+    const settings = await prisma.orgSettings.findUnique({
+      where: { organizationId },
+    });
+    return {
+      logoUrl: settings?.logoUrl || "",
+      bannerUrl: settings?.bannerUrl || "",
+    };
+  }
   return {
-    logoUrl: settings?.logoUrl || "",
-    bannerUrl: settings?.bannerUrl || "",
+    logoUrl: "",
+    bannerUrl: "",
   };
 }
 
@@ -885,6 +891,12 @@ async function main() {
       });
       console.log(`Updated: ${template.name}`);
     } else {
+      // Get first org (for scripts, use first org as default)
+      const firstOrg = await prisma.organization.findFirst();
+      if (!firstOrg) {
+        console.error("No organization found. Please create an organization first.");
+        process.exit(1);
+      }
       // Create new template
       await prisma.emailTemplate.create({
         data: {
@@ -894,6 +906,7 @@ async function main() {
           designJson: template.design,
           isActive: false,
           isDefault: false,
+          organizationId: firstOrg.id,
         },
       });
       console.log(`Created: ${template.name}`);

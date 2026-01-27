@@ -3,21 +3,27 @@ import { cosineSimilarity } from "@/lib/ai/embeddings";
 import { config } from "@/lib/config";
 
 /**
- * Check if an article is a duplicate based on URL
+ * Check if an article is a duplicate based on URL (within an organization)
  */
-export async function isDuplicateByUrl(url: string): Promise<boolean> {
+export async function isDuplicateByUrl(url: string, organizationId: string): Promise<boolean> {
   const existing = await prisma.article.findUnique({
-    where: { sourceUrl: url },
+    where: {
+      sourceUrl_organizationId: {
+        sourceUrl: url,
+        organizationId,
+      },
+    },
   });
 
   return existing !== null;
 }
 
 /**
- * Find similar articles based on embedding similarity
+ * Find similar articles based on embedding similarity (within an organization)
  */
 export async function findSimilarArticles(
   embedding: number[],
+  organizationId: string,
   threshold: number = config.curation.vectorSimilarityThreshold
 ): Promise<Array<{ id: string; title: string; similarity: number }>> {
   // Get all articles from the last 30 days (to limit comparison set)
@@ -26,6 +32,7 @@ export async function findSimilarArticles(
 
   const recentArticles = await prisma.article.findMany({
     where: {
+      organizationId,
       createdAt: {
         gte: thirtyDaysAgo,
       },
@@ -67,15 +74,16 @@ export async function findSimilarArticles(
 }
 
 /**
- * Check if an article is a duplicate based on content similarity
+ * Check if an article is a duplicate based on content similarity (within an organization)
  */
 export async function isDuplicateByContent(
-  embedding: number[]
+  embedding: number[],
+  organizationId: string
 ): Promise<{
   isDuplicate: boolean;
   similarArticles: Array<{ id: string; title: string; similarity: number }>;
 }> {
-  const similarArticles = await findSimilarArticles(embedding);
+  const similarArticles = await findSimilarArticles(embedding, organizationId);
 
   // Consider it a duplicate if there's a very similar article (0.85+ similarity)
   const isDuplicate = similarArticles.length > 0;
@@ -87,11 +95,12 @@ export async function isDuplicateByContent(
 }
 
 /**
- * Comprehensive duplicate check (URL + content)
+ * Comprehensive duplicate check (URL + content) within an organization
  */
 export async function checkForDuplicates(
   url: string,
   embedding: number[],
+  organizationId: string,
   threshold?: number
 ): Promise<{
   isDuplicate: boolean;
@@ -99,7 +108,7 @@ export async function checkForDuplicates(
   similarArticles?: Array<{ id: string; title: string; similarity: number }>;
 }> {
   // First check URL (fast)
-  const urlDuplicate = await isDuplicateByUrl(url);
+  const urlDuplicate = await isDuplicateByUrl(url, organizationId);
   if (urlDuplicate) {
     return {
       isDuplicate: true,
@@ -108,7 +117,7 @@ export async function checkForDuplicates(
   }
 
   // Then check content similarity (slower)
-  const similarArticles = await findSimilarArticles(embedding, threshold);
+  const similarArticles = await findSimilarArticles(embedding, organizationId, threshold);
   if (similarArticles.length > 0) {
     return {
       isDuplicate: true,
@@ -123,15 +132,16 @@ export async function checkForDuplicates(
 }
 
 /**
- * Remove old articles to keep database size manageable
+ * Remove old articles to keep database size manageable (within an organization)
  * Keeps articles from last 90 days only
  */
-export async function cleanupOldArticles(): Promise<number> {
+export async function cleanupOldArticles(organizationId: string): Promise<number> {
   const ninetyDaysAgo = new Date();
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
   const result = await prisma.article.deleteMany({
     where: {
+      organizationId,
       createdAt: {
         lt: ninetyDaysAgo,
       },

@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
+import { requireOrgContext } from "@/lib/auth/context";
 import { getActiveSubscribers, createSubscriber } from "@/lib/queries";
-import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/subscribers
- * Get all subscribers (active by default, or all with ?all=true)
+ * Get all subscribers (active by default, or all with ?all=true) - tenant-scoped
  */
 export async function GET(request: Request) {
   try {
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
     const { searchParams } = new URL(request.url);
     const showAll = searchParams.get("all") === "true";
 
     const subscribers = showAll
-      ? await prisma.subscriber.findMany({
+      ? await db.subscriber.findMany({
           orderBy: { createdAt: "desc" },
         })
-      : await getActiveSubscribers();
+      : await getActiveSubscribers(db);
 
     return NextResponse.json({
       success: true,
@@ -26,6 +29,13 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Error fetching subscribers:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
@@ -39,10 +49,13 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/subscribers
- * Create a new subscriber
+ * Create a new subscriber - tenant-scoped
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await requireOrgContext();
+    const { db, organization } = ctx;
+
     const body = await request.json();
     const { email, name, preferredLanguage, preferredStyle } = body;
 
@@ -69,8 +82,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if subscriber already exists
-    const existing = await prisma.subscriber.findUnique({
+    // Check if subscriber already exists in this org
+    const existing = await db.subscriber.findFirst({
       where: { email },
     });
 
@@ -84,11 +97,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const subscriber = await createSubscriber({
+    // Check subscriber limit
+    const currentCount = await db.subscriber.count({ where: { active: true } });
+    if (currentCount >= organization.subscriberLimit) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Subscriber limit reached (${organization.subscriberLimit}). Upgrade your plan for more subscribers.`,
+        },
+        { status: 403 }
+      );
+    }
+
+    const subscriber = await createSubscriber(db, {
       email,
       name,
       preferredLanguage: preferredLanguage || "en",
       preferredStyle: preferredStyle || "comprehensive",
+    });
+
+    // Update org subscriber count
+    await db.organization.update({
+      currentSubscribers: currentCount + 1,
     });
 
     return NextResponse.json(
@@ -101,6 +131,13 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Error creating subscriber:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

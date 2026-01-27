@@ -29,8 +29,9 @@ export interface CurationResult {
 /**
  * Main curation pipeline
  * Fetches RSS feeds, processes articles, and curates them
+ * @param organizationId - The organization to run curation for
  */
-export async function runCurationPipeline(): Promise<CurationResult> {
+export async function runCurationPipeline(organizationId: string): Promise<CurationResult> {
   const result: CurationResult = {
     total: 0,
     processed: 0,
@@ -45,7 +46,7 @@ export async function runCurationPipeline(): Promise<CurationResult> {
   try {
     // Step 1: Fetch all RSS feeds
     console.log("📡 Fetching RSS feeds...");
-    const articles = await fetchAllRSSFeeds();
+    const articles = await fetchAllRSSFeeds(7, organizationId);
     result.total = articles.length;
     console.log(`✓ Fetched ${articles.length} articles from RSS feeds`);
 
@@ -62,7 +63,8 @@ export async function runCurationPipeline(): Promise<CurationResult> {
         // Check for duplicates
         const duplicateCheck = await checkForDuplicates(
           article.link,
-          embedding
+          embedding,
+          organizationId
         );
 
         if (duplicateCheck.isDuplicate) {
@@ -96,6 +98,7 @@ export async function runCurationPipeline(): Promise<CurationResult> {
               relevanceScore,
               status: "REJECTED",
               category: [],
+              organizationId,
             },
           });
 
@@ -126,6 +129,7 @@ export async function runCurationPipeline(): Promise<CurationResult> {
             summary,
             category: categories,
             status: "PENDING_REVIEW",
+            organizationId,
           },
         });
 
@@ -172,11 +176,13 @@ export class CurationCancelledError extends Error {
  * Streaming version of curation pipeline with job tracking
  * Sends progress updates via callback to prevent timeouts
  * @param onProgress - Callback for progress updates
+ * @param organizationId - The organization to run curation for
  * @param jobId - Optional job ID for tracking
  * @param sourceIds - Optional array of RSS source IDs to filter (if empty/undefined, fetches all)
  */
 export async function runCurationPipelineWithStreaming(
   onProgress: (update: any) => void,
+  organizationId: string,
   jobId?: string,
   sourceIds?: string[]
 ): Promise<CurationResult> {
@@ -192,7 +198,7 @@ export async function runCurationPipelineWithStreaming(
   // Get settings from database
   let settings: AppSettings;
   try {
-    settings = await getSettings();
+    settings = await getSettings(organizationId);
   } catch {
     // Fall back to config if settings fetch fails
     settings = {
@@ -221,8 +227,8 @@ export async function runCurationPipelineWithStreaming(
 
     // Step 1: Fetch RSS feeds (filtered if sourceIds provided)
     const articles = sourceIds && sourceIds.length > 0
-      ? await fetchRSSFeedsByIds(sourceIds, settings.articleMaxAgeDays)
-      : await fetchAllRSSFeeds(settings.articleMaxAgeDays);
+      ? await fetchRSSFeedsByIds(sourceIds, settings.articleMaxAgeDays, organizationId)
+      : await fetchAllRSSFeeds(settings.articleMaxAgeDays, organizationId);
     result.total = articles.length;
 
     if (jobId) {
@@ -274,6 +280,7 @@ export async function runCurationPipelineWithStreaming(
         const duplicateCheck = await checkForDuplicates(
           article.link,
           embedding,
+          organizationId,
           settings.vectorSimilarityThreshold
         );
 
@@ -333,6 +340,7 @@ export async function runCurationPipelineWithStreaming(
               relevanceScore,
               status: "REJECTED",
               category: [],
+              organizationId,
             },
           });
 
@@ -370,6 +378,7 @@ export async function runCurationPipelineWithStreaming(
             summary,
             category: categories,
             status: "PENDING_REVIEW",
+            organizationId,
           },
         });
 
@@ -458,7 +467,8 @@ export async function runCurationPipelineWithStreaming(
 export async function curateArticle(
   url: string,
   title: string,
-  content: string
+  content: string,
+  organizationId: string
 ): Promise<{
   success: boolean;
   articleId?: string;
@@ -468,13 +478,13 @@ export async function curateArticle(
 }> {
   try {
     // Get settings for brand voice prompt
-    const settings = await getSettings();
+    const settings = await getSettings(organizationId);
 
     // Generate embedding
     const embedding = await generateEmbedding(`${title}\n\n${content}`);
 
     // Check for duplicates
-    const duplicateCheck = await checkForDuplicates(url, embedding);
+    const duplicateCheck = await checkForDuplicates(url, embedding, organizationId);
     if (duplicateCheck.isDuplicate) {
       return {
         success: false,
@@ -510,6 +520,7 @@ export async function curateArticle(
           relevanceScore >= config.curation.relevanceThreshold
             ? "PENDING_REVIEW"
             : "REJECTED",
+        organizationId,
       },
     });
 

@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export async function GET() {
   try {
-    const sources = await prisma.rSSSource.findMany({
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
+    const sources = await db.rSSSource.findMany({
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(sources);
   } catch (error) {
     console.error("Error fetching RSS sources:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to fetch RSS sources" },
       { status: 500 }
@@ -18,6 +29,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
     const body = await request.json();
 
     // Validate required fields
@@ -52,8 +66,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check for duplicate URL
-    const existing = await prisma.rSSSource.findUnique({
+    // Check for duplicate URL in this org
+    const existing = await db.rSSSource.findFirst({
       where: { url: body.url },
     });
 
@@ -64,18 +78,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const source = await prisma.rSSSource.create({
+    const source = await db.rSSSource.create({
       data: {
         name: body.name.trim(),
         url: body.url.trim(),
         category: body.category.trim(),
         active: body.active !== false,
-      },
+      } as any,
     });
 
     return NextResponse.json(source, { status: 201 });
   } catch (error) {
     console.error("Error creating RSS source:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to create RSS source" },
       { status: 500 }

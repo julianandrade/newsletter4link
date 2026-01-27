@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getJob, getCurrentJob, createJob } from "@/lib/curation/job-manager";
 import { runCurationPipelineWithStreaming, CurationCancelledError } from "@/lib/curation/curator";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -54,17 +55,25 @@ export async function POST(
       };
 
       try {
+        // Get org context
+        const { organization } = await requireOrgContext();
+        const organizationId = organization.id;
+
         // Create a new job
-        const newJob = await createJob();
+        const newJob = await createJob(organizationId);
         sendEvent("start", {
           message: "Re-running curation pipeline...",
           jobId: newJob.id,
           originalJobId: id,
         });
 
-        await runCurationPipelineWithStreaming((update) => {
-          sendEvent("progress", { ...update, jobId: newJob.id });
-        }, newJob.id);
+        await runCurationPipelineWithStreaming(
+          (update) => {
+            sendEvent("progress", { ...update, jobId: newJob.id });
+          },
+          organizationId,
+          newJob.id
+        );
 
         sendEvent("complete", {
           message: "Curation pipeline completed!",

@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/db";
-import { ArticleStatus, EditionStatus } from "@prisma/client";
+import { TenantClient } from "@/lib/db/tenant";
+import { ArticleStatus } from "@prisma/client";
 
 // ==================== Article Queries ====================
 
 /**
- * Get all pending articles for review
+ * Get all pending articles for review (tenant-scoped)
  */
-export async function getPendingArticles() {
-  return await prisma.article.findMany({
+export async function getPendingArticles(db: TenantClient) {
+  return await db.article.findMany({
     where: { status: "PENDING_REVIEW" },
     orderBy: [
       { relevanceScore: "desc" },
@@ -29,16 +30,16 @@ export async function getPendingArticles() {
 }
 
 /**
- * Get article by ID with full details
+ * Get article by ID (tenant-scoped)
  */
-export async function getArticleById(id: string) {
-  return await prisma.article.findUnique({
+export async function getArticleById(db: TenantClient, id: string) {
+  return await db.article.findUnique({
     where: { id },
   });
 }
 
 /**
- * Update article status
+ * Update article status (uses raw prisma - verify ownership before calling)
  */
 export async function updateArticleStatus(id: string, status: ArticleStatus) {
   return await prisma.article.update({
@@ -48,7 +49,7 @@ export async function updateArticleStatus(id: string, status: ArticleStatus) {
 }
 
 /**
- * Update article summary
+ * Update article summary (uses raw prisma - verify ownership before calling)
  */
 export async function updateArticleSummary(id: string, summary: string) {
   return await prisma.article.update({
@@ -60,17 +61,15 @@ export async function updateArticleSummary(id: string, summary: string) {
 // ==================== Edition Queries ====================
 
 /**
- * Get current week's edition or create if not exists
+ * Get current week's edition or create if not exists (tenant-scoped)
  */
-export async function getCurrentEdition() {
+export async function getCurrentEdition(db: TenantClient) {
   const now = new Date();
   const week = getWeekNumber(now);
   const year = now.getFullYear();
 
-  let edition = await prisma.edition.findUnique({
-    where: {
-      week_year: { week, year },
-    },
+  let edition = await db.edition.findFirst({
+    where: { week, year },
     include: {
       articles: {
         include: { article: true },
@@ -84,12 +83,12 @@ export async function getCurrentEdition() {
   });
 
   if (!edition) {
-    edition = await prisma.edition.create({
+    edition = await db.edition.create({
       data: {
         week,
         year,
         status: "DRAFT",
-      },
+      } as any,
       include: {
         articles: {
           include: { article: true },
@@ -110,16 +109,13 @@ export async function getCurrentEdition() {
  * Add article to edition
  */
 export async function addArticleToEdition(
+  db: TenantClient,
   editionId: string,
   articleId: string,
   order: number
 ) {
-  return await prisma.editionArticle.create({
-    data: {
-      editionId,
-      articleId,
-      order,
-    },
+  return await db.editionArticle.createMany({
+    data: [{ editionId, articleId, order }],
   });
 }
 
@@ -127,21 +123,18 @@ export async function addArticleToEdition(
  * Add project to edition
  */
 export async function addProjectToEdition(
+  db: TenantClient,
   editionId: string,
   projectId: string,
   order: number
 ) {
-  return await prisma.editionProject.create({
-    data: {
-      editionId,
-      projectId,
-      order,
-    },
+  return await db.editionProject.createMany({
+    data: [{ editionId, projectId, order }],
   });
 }
 
 /**
- * Finalize edition
+ * Finalize edition (uses raw prisma - verify ownership before calling)
  */
 export async function finalizeEdition(editionId: string) {
   return await prisma.edition.update({
@@ -154,7 +147,7 @@ export async function finalizeEdition(editionId: string) {
 }
 
 /**
- * Mark edition as sent
+ * Mark edition as sent (uses raw prisma - verify ownership before calling)
  */
 export async function markEditionAsSent(editionId: string) {
   return await prisma.edition.update({
@@ -169,42 +162,45 @@ export async function markEditionAsSent(editionId: string) {
 // ==================== Project Queries ====================
 
 /**
- * Get all projects
+ * Get all projects (tenant-scoped)
  */
-export async function getAllProjects() {
-  return await prisma.project.findMany({
+export async function getAllProjects(db: TenantClient) {
+  return await db.project.findMany({
     orderBy: { createdAt: "desc" },
   });
 }
 
 /**
- * Get featured projects
+ * Get featured projects (tenant-scoped)
  */
-export async function getFeaturedProjects() {
-  return await prisma.project.findMany({
+export async function getFeaturedProjects(db: TenantClient) {
+  return await db.project.findMany({
     where: { featured: true },
     orderBy: { projectDate: "desc" },
   });
 }
 
 /**
- * Create project
+ * Create project (tenant-scoped)
  */
-export async function createProject(data: {
-  name: string;
-  description: string;
-  team: string;
-  projectDate: Date;
-  impact?: string;
-  imageUrl?: string;
-}) {
-  return await prisma.project.create({
-    data,
+export async function createProject(
+  db: TenantClient,
+  data: {
+    name: string;
+    description: string;
+    team: string;
+    projectDate: Date;
+    impact?: string;
+    imageUrl?: string;
+  }
+) {
+  return await db.project.create({
+    data: data as any,
   });
 }
 
 /**
- * Update project
+ * Update project (uses raw prisma - verify ownership before calling)
  */
 export async function updateProject(
   id: string,
@@ -225,7 +221,7 @@ export async function updateProject(
 }
 
 /**
- * Delete project
+ * Delete project (uses raw prisma - verify ownership before calling)
  */
 export async function deleteProject(id: string) {
   return await prisma.project.delete({
@@ -236,26 +232,29 @@ export async function deleteProject(id: string) {
 // ==================== Subscriber Queries ====================
 
 /**
- * Get all active subscribers
+ * Get all active subscribers (tenant-scoped)
  */
-export async function getActiveSubscribers() {
-  return await prisma.subscriber.findMany({
+export async function getActiveSubscribers(db: TenantClient) {
+  return await db.subscriber.findMany({
     where: { active: true },
     orderBy: { createdAt: "desc" },
   });
 }
 
 /**
- * Create subscriber
+ * Create subscriber (tenant-scoped)
  */
-export async function createSubscriber(data: {
-  email: string;
-  name?: string;
-  preferredLanguage?: string;
-  preferredStyle?: string;
-}) {
-  return await prisma.subscriber.create({
-    data,
+export async function createSubscriber(
+  db: TenantClient,
+  data: {
+    email: string;
+    name?: string;
+    preferredLanguage?: string;
+    preferredStyle?: string;
+  }
+) {
+  return await db.subscriber.create({
+    data: data as any,
   });
 }
 
@@ -300,7 +299,7 @@ export async function unsubscribeUser(id: string) {
 /**
  * Get ISO week number
  */
-function getWeekNumber(date: Date): number {
+export function getWeekNumber(date: Date): number {
   const d = new Date(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
   );

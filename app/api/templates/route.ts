@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export async function GET() {
   try {
-    const templates = await prisma.emailTemplate.findMany({
+    const { db } = await requireOrgContext();
+    const templates = await db.emailTemplate.findMany({
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,
@@ -29,6 +30,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { db } = await requireOrgContext();
     const body = await request.json();
 
     // Validate required fields
@@ -46,14 +48,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const template = await prisma.emailTemplate.create({
+    const template = await db.emailTemplate.create({
       data: {
         name: body.name.trim(),
         description: body.description?.trim() || null,
         designJson: body.designJson || null,
         html: body.html,
         isActive: false,
-      },
+      } as any,
     });
 
     return NextResponse.json(template, { status: 201 });

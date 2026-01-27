@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { uploadFile } from "@/lib/supabase/storage";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,7 @@ const ALLOWED_TYPES = [
  */
 export async function POST(request: Request) {
   try {
+    const { db } = await requireOrgContext();
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -62,13 +63,13 @@ export async function POST(request: Request) {
     const { url } = await uploadFile(file, file.name, file.type);
 
     // Create MediaAsset record in database
-    const mediaAsset = await prisma.mediaAsset.create({
+    const mediaAsset = await db.mediaAsset.create({
       data: {
         filename: file.name,
         url,
         type: file.type,
         size: file.size,
-      },
+      } as any,
     });
 
     return NextResponse.json(

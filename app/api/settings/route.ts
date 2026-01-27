@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
-import { getSettings, updateSettings } from "@/lib/settings";
+import { requireOrgContext, hasRole } from "@/lib/auth/context";
+import { getOrgSettings, updateOrgSettings } from "@/lib/settings";
 
 export async function GET() {
   try {
-    const settings = await getSettings();
+    const ctx = await requireOrgContext();
+    const settings = await getOrgSettings(ctx.db);
     return NextResponse.json(settings);
   } catch (error) {
     console.error("Error fetching settings:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to fetch settings" },
       { status: 500 }
@@ -16,6 +26,16 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const ctx = await requireOrgContext();
+
+    // Require at least ADMIN role to update settings
+    if (!hasRole(ctx.membership.role, "ADMIN")) {
+      return NextResponse.json(
+        { error: "Forbidden: Requires ADMIN role to update settings" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
     // Validate input
@@ -80,10 +100,39 @@ export async function PUT(request: Request) {
       updates.brandVoicePrompt = body.brandVoicePrompt || null;
     }
 
-    const settings = await updateSettings(updates);
+    // Branding fields
+    if (typeof body.logoUrl === "string" || body.logoUrl === null) {
+      updates.logoUrl = body.logoUrl;
+    }
+
+    if (typeof body.bannerUrl === "string" || body.bannerUrl === null) {
+      updates.bannerUrl = body.bannerUrl;
+    }
+
+    if (typeof body.primaryColor === "string" || body.primaryColor === null) {
+      updates.primaryColor = body.primaryColor;
+    }
+
+    if (typeof body.fromName === "string" || body.fromName === null) {
+      updates.fromName = body.fromName;
+    }
+
+    if (typeof body.replyToEmail === "string" || body.replyToEmail === null) {
+      updates.replyToEmail = body.replyToEmail;
+    }
+
+    const settings = await updateOrgSettings(ctx.db, updates);
     return NextResponse.json(settings);
   } catch (error) {
     console.error("Error updating settings:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to update settings" },
       { status: 500 }

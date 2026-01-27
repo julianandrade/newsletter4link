@@ -11,11 +11,12 @@ export interface JobLogEntry {
 /**
  * Create a new curation job
  */
-export async function createJob() {
+export async function createJob(organizationId: string) {
   return await prisma.curationJob.create({
     data: {
       status: "RUNNING",
       logs: [],
+      organizationId,
     },
   });
 }

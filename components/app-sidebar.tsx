@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   BarChart3,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { createClient } from "@/lib/supabase/client";
+import { OrgSwitcher } from "@/components/org-switcher";
 import type { User } from "@supabase/supabase-js";
 
 interface AppSidebarProps {
@@ -38,6 +40,7 @@ const navItems = [
   { href: "/dashboard/projects", label: "Projects", icon: Briefcase },
   { href: "/dashboard/curation", label: "Curation", icon: History },
   { href: "/dashboard/templates", label: "Templates", icon: Layout },
+  { href: "/dashboard/subscribers", label: "Subscribers", icon: Users },
   { href: "/dashboard/send", label: "Send Newsletter", icon: Send },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
@@ -66,6 +69,11 @@ export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
           {!collapsed && (
             <span className="text-lg font-semibold">Newsletter</span>
           )}
+        </div>
+
+        {/* Organization Switcher */}
+        <div className="border-b">
+          <OrgSwitcher collapsed={collapsed} />
         </div>
 
         {/* Navigation */}

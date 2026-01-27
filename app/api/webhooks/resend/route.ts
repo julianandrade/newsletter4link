@@ -135,8 +135,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // Find the subscriber by email
-    const subscriber = await prisma.subscriber.findUnique({
+    // Find the subscriber by email (across all organizations)
+    const subscriber = await prisma.subscriber.findFirst({
       where: { email: recipientEmail },
     });
 

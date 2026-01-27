@@ -5,6 +5,7 @@ import { getCurrentEdition, markEditionAsSent } from "@/lib/queries";
 import { renderTemplateById } from "@/lib/email/template-renderer";
 import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -55,6 +56,7 @@ interface CustomData {
  */
 export async function POST(request: Request) {
   try {
+    const { db, organization } = await requireOrgContext();
     const body = await request.json();
     const { editionId, templateId, customData, subscriberIds, emails, provider } = body;
 
@@ -93,24 +95,29 @@ export async function POST(request: Request) {
     const useAdHocEmails = validEmails.length > 0;
 
     // Get edition
-    let edition;
+    let edition: any;
+    let editionArticles: any[] = [];
+    let editionProjects: any[] = [];
+
     if (editionId) {
-      edition = await prisma.edition.findUnique({
+      edition = await db.edition.findUnique({
         where: { id: editionId },
-        include: {
-          articles: {
-            include: { article: true },
-            orderBy: { order: "asc" },
-          },
-          projects: {
-            include: { project: true },
-            orderBy: { order: "asc" },
-          },
-        },
       });
+      if (edition) {
+        editionArticles = await prisma.editionArticle.findMany({
+          where: { editionId: edition.id },
+          include: { article: true },
+          orderBy: { order: "asc" },
+        });
+        editionProjects = await prisma.editionProject.findMany({
+          where: { editionId: edition.id },
+          include: { project: true },
+          orderBy: { order: "asc" },
+        });
+      }
     } else {
       // Get approved articles and featured projects
-      const articles = await prisma.article.findMany({
+      const articles = await db.article.findMany({
         where: { status: "APPROVED" },
         orderBy: [
           { relevanceScore: "desc" },
@@ -119,7 +126,7 @@ export async function POST(request: Request) {
         take: 10,
       });
 
-      const projects = await prisma.project.findMany({
+      const projects = await db.project.findMany({
         where: { featured: true },
         orderBy: { projectDate: "desc" },
         take: 3,
@@ -141,31 +148,36 @@ export async function POST(request: Request) {
       const week = getWeekNumber(now);
       const year = now.getFullYear();
 
-      edition = await prisma.edition.upsert({
-        where: {
-          week_year: { week, year },
-        },
-        create: {
-          week,
-          year,
-          status: "FINALIZED",
-          finalizedAt: new Date(),
-        },
-        update: {},
-        include: {
-          articles: {
-            include: { article: true },
-            orderBy: { order: "asc" },
-          },
-          projects: {
-            include: { project: true },
-            orderBy: { order: "asc" },
-          },
-        },
+      // Check if edition exists for this week in this org
+      edition = await db.edition.findFirst({
+        where: { week, year },
+      });
+
+      if (!edition) {
+        edition = await db.edition.create({
+          data: {
+            week,
+            year,
+            status: "FINALIZED",
+            finalizedAt: new Date(),
+          } as any,
+        });
+      }
+
+      // Get existing edition data
+      editionArticles = await prisma.editionArticle.findMany({
+        where: { editionId: edition.id },
+        include: { article: true },
+        orderBy: { order: "asc" },
+      });
+      editionProjects = await prisma.editionProject.findMany({
+        where: { editionId: edition.id },
+        include: { project: true },
+        orderBy: { order: "asc" },
       });
 
       // Add articles and projects to edition if empty
-      if (edition.articles.length === 0) {
+      if (editionArticles.length === 0) {
         for (let i = 0; i < articles.length; i++) {
           await prisma.editionArticle.create({
             data: {
@@ -175,9 +187,14 @@ export async function POST(request: Request) {
             },
           });
         }
+        editionArticles = await prisma.editionArticle.findMany({
+          where: { editionId: edition.id },
+          include: { article: true },
+          orderBy: { order: "asc" },
+        });
       }
 
-      if (edition.projects.length === 0) {
+      if (editionProjects.length === 0 && projects.length > 0) {
         for (let i = 0; i < projects.length; i++) {
           await prisma.editionProject.create({
             data: {
@@ -187,22 +204,12 @@ export async function POST(request: Request) {
             },
           });
         }
+        editionProjects = await prisma.editionProject.findMany({
+          where: { editionId: edition.id },
+          include: { project: true },
+          orderBy: { order: "asc" },
+        });
       }
-
-      // Reload edition with articles and projects
-      edition = await prisma.edition.findUnique({
-        where: { id: edition.id },
-        include: {
-          articles: {
-            include: { article: true },
-            orderBy: { order: "asc" },
-          },
-          projects: {
-            include: { project: true },
-            orderBy: { order: "asc" },
-          },
-        },
-      });
     }
 
     if (!edition) {
@@ -237,7 +244,7 @@ export async function POST(request: Request) {
     if (useAdHocEmails) {
       recipientCount = validEmails.length;
     } else {
-      recipientCount = await prisma.subscriber.count({
+      recipientCount = await db.subscriber.count({
         where: subscriberFilter,
       });
 
@@ -267,7 +274,7 @@ export async function POST(request: Request) {
       };
     } else {
       emailData = {
-        articles: edition.articles.map((ea: any) => ({
+        articles: editionArticles.map((ea: any) => ({
           id: ea.article.id,
           title: ea.article.title,
           summary: ea.article.summary || "",
@@ -275,7 +282,7 @@ export async function POST(request: Request) {
           category: ea.article.category,
           relevanceScore: ea.article.relevanceScore,
         })),
-        projects: edition.projects.map((ep: any) => ({
+        projects: editionProjects.map((ep: any) => ({
           id: ep.project.id,
           name: ep.project.name,
           description: ep.project.description,

@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/editions
- * Get all editions with article/project counts, sorted by year desc, week desc
+ * Get all editions with article/project counts, sorted by year desc, week desc (tenant-scoped)
  */
 export async function GET() {
   try {
-    const editions = await prisma.edition.findMany({
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
+    const editions = await db.edition.findMany({
       orderBy: [
         { year: "desc" },
         { week: "desc" },
@@ -25,7 +28,7 @@ export async function GET() {
     });
 
     // Transform to include count in a cleaner format
-    const editionsWithCounts = editions.map((edition) => ({
+    const editionsWithCounts = editions.map((edition: any) => ({
       id: edition.id,
       week: edition.week,
       year: edition.year,
@@ -34,8 +37,8 @@ export async function GET() {
       sentAt: edition.sentAt,
       createdAt: edition.createdAt,
       updatedAt: edition.updatedAt,
-      articleCount: edition._count.articles,
-      projectCount: edition._count.projects,
+      articleCount: edition._count?.articles ?? 0,
+      projectCount: edition._count?.projects ?? 0,
     }));
 
     return NextResponse.json({
@@ -45,6 +48,13 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Error fetching editions:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
@@ -58,10 +68,13 @@ export async function GET() {
 
 /**
  * POST /api/editions
- * Create a new edition with optional auto-population of approved articles and featured projects
+ * Create a new edition with optional auto-population of approved articles and featured projects (tenant-scoped)
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
     const body = await request.json();
     const { week, year, autoPopulate = true } = body;
 
@@ -96,11 +109,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if edition already exists
-    const existingEdition = await prisma.edition.findUnique({
-      where: {
-        week_year: { week, year },
-      },
+    // Check if edition already exists in this org
+    const existingEdition = await db.edition.findFirst({
+      where: { week, year },
     });
 
     if (existingEdition) {
@@ -114,12 +125,12 @@ export async function POST(request: Request) {
     }
 
     // Create the edition
-    const edition = await prisma.edition.create({
+    const edition = await db.edition.create({
       data: {
         week,
         year,
         status: "DRAFT",
-      },
+      } as any,
     });
 
     let articlesAdded = 0;
@@ -128,7 +139,7 @@ export async function POST(request: Request) {
     // Auto-populate with approved articles and featured projects if requested
     if (autoPopulate) {
       // Get approved articles not yet in any edition, sorted by relevance
-      const approvedArticles = await prisma.article.findMany({
+      const approvedArticles = await db.article.findMany({
         where: {
           status: "APPROVED",
           editions: {
@@ -144,7 +155,7 @@ export async function POST(request: Request) {
 
       // Add articles to edition
       if (approvedArticles.length > 0) {
-        await prisma.editionArticle.createMany({
+        await db.editionArticle.createMany({
           data: approvedArticles.map((article, index) => ({
             editionId: edition.id,
             articleId: article.id,
@@ -155,7 +166,7 @@ export async function POST(request: Request) {
       }
 
       // Get featured projects not yet in any edition
-      const featuredProjects = await prisma.project.findMany({
+      const featuredProjects = await db.project.findMany({
         where: {
           featured: true,
           editions: {
@@ -168,7 +179,7 @@ export async function POST(request: Request) {
 
       // Add projects to edition
       if (featuredProjects.length > 0) {
-        await prisma.editionProject.createMany({
+        await db.editionProject.createMany({
           data: featuredProjects.map((project, index) => ({
             editionId: edition.id,
             projectId: project.id,
@@ -180,7 +191,7 @@ export async function POST(request: Request) {
     }
 
     // Fetch the complete edition with counts
-    const completeEdition = await prisma.edition.findUnique({
+    const completeEdition = await db.edition.findUnique({
       where: { id: edition.id },
       include: {
         _count: {
@@ -197,8 +208,8 @@ export async function POST(request: Request) {
         success: true,
         data: {
           ...completeEdition,
-          articleCount: completeEdition?._count.articles ?? 0,
-          projectCount: completeEdition?._count.projects ?? 0,
+          articleCount: (completeEdition as any)?._count?.articles ?? 0,
+          projectCount: (completeEdition as any)?._count?.projects ?? 0,
         },
         message: autoPopulate
           ? `Edition created with ${articlesAdded} articles and ${projectsAdded} projects`
@@ -208,6 +219,13 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Error creating edition:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

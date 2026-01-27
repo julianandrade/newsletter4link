@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getArticleById } from "@/lib/queries";
 import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 /**
  * GET /api/articles/:id
@@ -12,8 +13,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
 
-    const article = await getArticleById(id);
+    const article = await getArticleById(db, id);
 
     if (!article) {
       return NextResponse.json(

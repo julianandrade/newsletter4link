@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { parseOPML, fetchOPML } from "@/lib/opml/parser";
+import { requireOrgContext } from "@/lib/auth/context";
 
 interface ImportRequest {
   opmlContent?: string;
@@ -25,6 +25,7 @@ interface ImportResult {
 
 export async function POST(request: Request) {
   try {
+    const { db } = await requireOrgContext();
     const body: ImportRequest = await request.json();
 
     // Validate that we have either content or URL
@@ -74,12 +75,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get existing URLs if we need to skip duplicates
+    // Get existing URLs if we need to skip duplicates (within this org)
     const skipDuplicates = body.skipDuplicates !== false; // Default to true
     let existingUrls = new Set<string>();
 
     if (skipDuplicates) {
-      const existingSources = await prisma.rSSSource.findMany({
+      const existingSources = await db.rSSSource.findMany({
         select: { url: true },
       });
       existingUrls = new Set(existingSources.map((s) => s.url.toLowerCase()));
@@ -104,13 +105,13 @@ export async function POST(request: Request) {
       }
 
       try {
-        const source = await prisma.rSSSource.create({
+        const source = await db.rSSSource.create({
           data: {
             name: feed.name,
             url: feed.url,
             category: feed.category || defaultCategory,
             active: activeByDefault,
-          },
+          } as any,
         });
 
         result.imported++;
@@ -155,6 +156,14 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
     console.error("Error importing OPML:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to import OPML" },
       { status: 500 }

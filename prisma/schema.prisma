@@ -1,4 +1,5 @@
 // Link AI Newsletter Engine - Database Schema
+// Multi-tenant Newsletter as a Service (NaaS) Platform
 
 generator client {
   provider        = "prisma-client-js"
@@ -10,24 +11,187 @@ datasource db {
   extensions = [pgvector(map: "vector")]
 }
 
+// ==================== MULTI-TENANCY ====================
+
+model Organization {
+  id       String   @id @default(cuid())
+  name     String
+  slug     String   @unique
+  plan     Plan     @default(FREE)
+  industry Industry @default(TECHNOLOGY)
+  logoUrl  String?
+
+  // Billing/limits
+  subscriberLimit    Int @default(1000)
+  currentSubscribers Int @default(0)
+
+  // Custom domain (Enterprise)
+  customDomain String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations - all tenant-scoped data
+  members      OrgUser[]
+  invites      OrgInvite[]
+  settings     OrgSettings?
+  articles     Article[]
+  projects     Project[]
+  editions     Edition[]
+  subscribers  Subscriber[]
+  rssSources   RSSSource[]
+  curationJobs CurationJob[]
+  templates    EmailTemplate[]
+  brandVoices  BrandVoice[]
+  mediaAssets  MediaAsset[]
+
+  @@index([slug])
+  @@index([plan])
+}
+
+enum Plan {
+  FREE // 1,000 subscribers, RSS curation, basic templates
+  STARTER // 5,000 subscribers, + Ghost Writer
+  PROFESSIONAL // 25,000 subscribers, + Trend Radar, personalization, API
+  ENTERPRISE // Unlimited, + custom domain, white-label
+}
+
+enum Industry {
+  TECHNOLOGY
+  FINANCE
+  INSURANCE
+  HEALTHCARE
+  RETAIL
+  UTILITIES
+  MANUFACTURING
+  PROFESSIONAL_SERVICES
+  OTHER
+}
+
+// Links Supabase auth users to organizations
+model OrgUser {
+  id             String  @id @default(cuid())
+  supabaseUserId String // Supabase auth.users.id
+  email          String
+  name           String?
+  role           OrgRole @default(VIEWER)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supabaseUserId, organizationId])
+  @@index([supabaseUserId])
+  @@index([organizationId])
+  @@index([email])
+}
+
+enum OrgRole {
+  OWNER // Full access, can delete org
+  ADMIN // Manage members, settings
+  EDITOR // Manage content, send newsletters
+  VIEWER // Read-only access
+}
+
+model OrgInvite {
+  id        String   @id @default(cuid())
+  email     String
+  role      OrgRole  @default(EDITOR)
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([email, organizationId])
+  @@index([token])
+  @@index([organizationId])
+}
+
+// Per-organization settings (replaces global Settings for org-specific config)
+model OrgSettings {
+  id String @id @default(cuid())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @unique
+
+  // Curation settings
+  relevanceThreshold        Float @default(6.0)
+  maxArticlesPerEdition     Int   @default(10)
+  vectorSimilarityThreshold Float @default(0.85)
+  articleMaxAgeDays         Int   @default(7)
+
+  // AI settings
+  aiModel        String @default("claude-sonnet-4-20250514")
+  embeddingModel String @default("text-embedding-ada-002")
+
+  // Branding
+  brandVoicePrompt String? @db.Text
+  logoUrl          String?
+  bannerUrl        String?
+  primaryColor     String? @default("#0066cc")
+
+  // Email settings
+  fromName     String?
+  replyToEmail String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// Brand voice profiles for Ghost Writer
+model BrandVoice {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+  isDefault   Boolean @default(false)
+
+  // Voice configuration
+  personality     String?  @db.Text // Personality description
+  toneAttributes  String[] // confident, curious, helpful, etc.
+  styleGuidelines String?  @db.Text
+  dos             String[] // Things to do
+  donts           String[] // Things to avoid
+  greetings       String[] // Signature opening phrases
+  closings        String[] // Signature closing phrases
+  useEmoji        Boolean  @default(false)
+  examplePhrases  Json? // { good: string[], bad: string[] }
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([isDefault])
+}
+
 // ==================== ARTICLE MODELS ====================
 
 model Article {
-  id        String   @id @default(cuid())
-  sourceUrl String   @unique
-  title     String
-  content   String   @db.Text
-  author    String?
+  id          String   @id @default(cuid())
+  sourceUrl   String
+  title       String
+  content     String   @db.Text
+  author      String?
   publishedAt DateTime
 
   // AI-generated content
-  embedding      Float[]  // pgvector embedding
+  embedding      Float[] // pgvector embedding
   relevanceScore Float?
   summary        String?  @db.Text
   category       String[]
 
   // Status tracking
-  status    ArticleStatus @default(PENDING_REVIEW)
+  status ArticleStatus @default(PENDING_REVIEW)
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -35,9 +199,11 @@ model Article {
   // Relations
   editions EditionArticle[]
 
+  @@unique([sourceUrl, organizationId]) // Same article can exist in different orgs
   @@index([status])
   @@index([relevanceScore(sort: Desc)])
   @@index([publishedAt(sort: Desc)])
+  @@index([organizationId])
 }
 
 enum ArticleStatus {
@@ -58,6 +224,10 @@ model Project {
   imageUrl    String?
   featured    Boolean  @default(false)
 
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -65,12 +235,13 @@ model Project {
   editions EditionProject[]
 
   @@index([featured])
+  @@index([organizationId])
 }
 
 // ==================== NEWSLETTER EDITIONS ====================
 
 model Edition {
-  id     String @id @default(cuid())
+  id     String        @id @default(cuid())
   week   Int
   year   Int
   status EditionStatus @default(DRAFT)
@@ -79,8 +250,12 @@ model Edition {
   sentAt      DateTime?
 
   // Unlayer editor state
-  editorDesignJson Json?    // Saved Unlayer design for this edition
-  templateId       String?  // Template used as base
+  editorDesignJson Json? // Saved Unlayer design for this edition
+  templateId       String? // Template used as base
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,8 +264,9 @@ model Edition {
   articles EditionArticle[]
   projects EditionProject[]
 
-  @@unique([week, year])
+  @@unique([week, year, organizationId]) // Same week/year can exist in different orgs
   @@index([status])
+  @@index([organizationId])
 }
 
 enum EditionStatus {
@@ -127,7 +303,7 @@ model EditionProject {
 
 model Subscriber {
   id     String  @id @default(cuid())
-  email  String  @unique
+  email  String
   name   String?
   active Boolean @default(true)
 
@@ -135,16 +311,22 @@ model Subscriber {
   preferredLanguage String @default("en") // en, pt-pt, pt-br, es, ar
   preferredStyle    String @default("comprehensive") // executive, technical, comprehensive
 
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   events EmailEvent[]
 
+  @@unique([email, organizationId]) // Same email can subscribe to different orgs
   @@index([active])
   @@index([email])
   @@index([preferredLanguage, active])
   @@index([preferredStyle, active])
+  @@index([organizationId])
 }
 
 // ==================== EMAIL TRACKING ====================
@@ -157,7 +339,7 @@ model EmailEvent {
 
   editionId String
   eventType EmailEventType
-  timestamp DateTime @default(now())
+  timestamp DateTime       @default(now())
 
   // Optional metadata (click URL, bounce reason, etc.)
   metadata Json?
@@ -183,21 +365,28 @@ enum EmailEventType {
 model RSSSource {
   id       String  @id @default(cuid())
   name     String
-  url      String  @unique
+  url      String
   category String
   active   Boolean @default(true)
 
   lastFetchedAt DateTime?
   lastError     String?
 
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([url, organizationId]) // Same RSS can be used by different orgs
   @@index([active])
+  @@index([organizationId])
 }
 
-// ==================== SETTINGS ====================
+// ==================== PLATFORM SETTINGS ====================
 
+// Global platform settings (for platform-wide defaults)
 model Settings {
   id                        String   @id @default("default")
   relevanceThreshold        Float    @default(6.0)
@@ -209,6 +398,8 @@ model Settings {
   brandVoicePrompt          String?  @db.Text
   updatedAt                 DateTime @updatedAt
 }
+
+// Note: Per-organization settings are in OrgSettings model above
 
 // ==================== CURATION JOBS ====================
 
@@ -226,8 +417,13 @@ model CurationJob {
   durationMs  Int?
   logs        Json              @default("[]")
 
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
   @@index([status])
   @@index([startedAt(sort: Desc)])
+  @@index([organizationId])
 }
 
 enum CurationJobStatus {
@@ -240,38 +436,44 @@ enum CurationJobStatus {
 // ==================== EMAIL TEMPLATES ====================
 
 model EmailTemplate {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
   description String?
   designJson  Json?
-  html        String   @db.Text
-  isActive    Boolean  @default(false)
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  html        String  @db.Text
+  isActive    Boolean @default(false)
+  isDefault   Boolean @default(false)
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
   @@index([isDefault])
+  @@index([organizationId])
 }
 
-// ==================== BRANDING & MEDIA ====================
-
-model BrandingSettings {
-  id        String   @id @default("default")
-  logoUrl   String?
-  bannerUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+// ==================== MEDIA ASSETS ====================
 
 model MediaAsset {
-  id        String   @id @default(cuid())
-  filename  String
-  url       String
-  type      String   // e.g., "image/png", "image/jpeg"
-  size      Int      // file size in bytes
+  id       String @id @default(cuid())
+  filename String
+  url      String
+  type     String // e.g., "image/png", "image/jpeg"
+  size     Int // file size in bytes
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
   createdAt DateTime @default(now())
 
   @@index([type])
   @@index([createdAt(sort: Desc)])
+  @@index([organizationId])
 }
+
+// Note: BrandingSettings has been merged into OrgSettings for multi-tenant support

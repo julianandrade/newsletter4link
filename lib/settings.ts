@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { TenantClient } from "@/lib/db/tenant";
 
 export interface AppSettings {
   relevanceThreshold: number;
@@ -8,6 +9,14 @@ export interface AppSettings {
   aiModel: string;
   embeddingModel: string;
   brandVoicePrompt: string | null;
+}
+
+export interface OrgSettingsData extends AppSettings {
+  logoUrl: string | null;
+  bannerUrl: string | null;
+  primaryColor: string | null;
+  fromName: string | null;
+  replyToEmail: string | null;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -20,11 +29,40 @@ const DEFAULT_SETTINGS: AppSettings = {
   brandVoicePrompt: null,
 };
 
+const DEFAULT_ORG_SETTINGS: OrgSettingsData = {
+  ...DEFAULT_SETTINGS,
+  logoUrl: null,
+  bannerUrl: null,
+  primaryColor: "#0066cc",
+  fromName: null,
+  replyToEmail: null,
+};
+
 /**
- * Get application settings from database (singleton pattern)
- * Creates default settings if none exist
+ * Get settings from database
+ * If organizationId is provided, uses OrgSettings; otherwise falls back to global Settings
  */
-export async function getSettings(): Promise<AppSettings> {
+export async function getSettings(organizationId?: string): Promise<AppSettings> {
+  // If organizationId provided, try to get org-specific settings
+  if (organizationId) {
+    const orgSettings = await prisma.orgSettings.findUnique({
+      where: { organizationId },
+    });
+
+    if (orgSettings) {
+      return {
+        relevanceThreshold: orgSettings.relevanceThreshold,
+        maxArticlesPerEdition: orgSettings.maxArticlesPerEdition,
+        vectorSimilarityThreshold: orgSettings.vectorSimilarityThreshold,
+        articleMaxAgeDays: orgSettings.articleMaxAgeDays,
+        aiModel: orgSettings.aiModel,
+        embeddingModel: orgSettings.embeddingModel,
+        brandVoicePrompt: orgSettings.brandVoicePrompt,
+      };
+    }
+  }
+
+  // Fall back to global settings
   let settings = await prisma.settings.findUnique({
     where: { id: "default" },
   });
@@ -50,7 +88,8 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 /**
- * Update application settings
+ * Update global platform settings
+ * @deprecated Use updateOrgSettings for multi-tenant apps
  */
 export async function updateSettings(
   updates: Partial<AppSettings>
@@ -73,6 +112,62 @@ export async function updateSettings(
     aiModel: settings.aiModel,
     embeddingModel: settings.embeddingModel,
     brandVoicePrompt: settings.brandVoicePrompt,
+  };
+}
+
+/**
+ * Get organization-specific settings (tenant-scoped)
+ * Creates default settings if none exist
+ */
+export async function getOrgSettings(db: TenantClient): Promise<OrgSettingsData> {
+  let settings = await db.orgSettings.findUnique();
+
+  if (!settings) {
+    settings = await db.orgSettings.upsert({
+      update: {},
+    });
+  }
+
+  return {
+    relevanceThreshold: settings.relevanceThreshold,
+    maxArticlesPerEdition: settings.maxArticlesPerEdition,
+    vectorSimilarityThreshold: settings.vectorSimilarityThreshold,
+    articleMaxAgeDays: settings.articleMaxAgeDays,
+    aiModel: settings.aiModel,
+    embeddingModel: settings.embeddingModel,
+    brandVoicePrompt: settings.brandVoicePrompt,
+    logoUrl: settings.logoUrl,
+    bannerUrl: settings.bannerUrl,
+    primaryColor: settings.primaryColor,
+    fromName: settings.fromName,
+    replyToEmail: settings.replyToEmail,
+  };
+}
+
+/**
+ * Update organization-specific settings (tenant-scoped)
+ */
+export async function updateOrgSettings(
+  db: TenantClient,
+  updates: Partial<OrgSettingsData>
+): Promise<OrgSettingsData> {
+  const settings = await db.orgSettings.upsert({
+    update: updates,
+  });
+
+  return {
+    relevanceThreshold: settings.relevanceThreshold,
+    maxArticlesPerEdition: settings.maxArticlesPerEdition,
+    vectorSimilarityThreshold: settings.vectorSimilarityThreshold,
+    articleMaxAgeDays: settings.articleMaxAgeDays,
+    aiModel: settings.aiModel,
+    embeddingModel: settings.embeddingModel,
+    brandVoicePrompt: settings.brandVoicePrompt,
+    logoUrl: settings.logoUrl,
+    bannerUrl: settings.bannerUrl,
+    primaryColor: settings.primaryColor,
+    fromName: settings.fromName,
+    replyToEmail: settings.replyToEmail,
   };
 }
 

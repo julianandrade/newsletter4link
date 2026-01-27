@@ -38,15 +38,15 @@ export async function sendEmail(
 }
 
 /**
- * Fetch branding settings from database
+ * Fetch branding settings from OrgSettings
  */
-async function getBrandingSettings(): Promise<{
+async function getBrandingSettings(organizationId: string): Promise<{
   logoUrl?: string;
   bannerUrl?: string;
 }> {
   try {
-    const settings = await prisma.brandingSettings.findUnique({
-      where: { id: "default" },
+    const settings = await prisma.orgSettings.findUnique({
+      where: { organizationId },
     });
 
     return {
@@ -64,10 +64,11 @@ async function getBrandingSettings(): Promise<{
  */
 export async function renderNewsletterEmail(
   data: NewsletterData,
-  subscriberId?: string
+  subscriberId?: string,
+  organizationId?: string
 ): Promise<string> {
   // Fetch branding settings from database
-  const branding = await getBrandingSettings();
+  const branding = organizationId ? await getBrandingSettings(organizationId) : {};
 
   const html = await render(
     NewsletterEmail({

@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/settings/branding
- * Returns the current branding settings (singleton record)
+ * Returns the current branding settings for the organization
  */
 export async function GET() {
   try {
-    const settings = await prisma.brandingSettings.findUnique({
-      where: { id: "default" },
-    });
+    const { db } = await requireOrgContext();
+    const settings = await db.orgSettings.findUnique();
 
     // Return empty object if no settings exist yet
     return NextResponse.json({
@@ -32,10 +31,11 @@ export async function GET() {
 
 /**
  * PUT /api/settings/branding
- * Update branding settings (upsert singleton record)
+ * Update branding settings for the organization
  */
 export async function PUT(request: Request) {
   try {
+    const { db } = await requireOrgContext();
     const body = await request.json();
     const { logoUrl, bannerUrl } = body;
 
@@ -60,15 +60,9 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Upsert the singleton branding settings record
-    const settings = await prisma.brandingSettings.upsert({
-      where: { id: "default" },
+    // Upsert the organization settings record
+    const settings = await db.orgSettings.upsert({
       update: {
-        logoUrl: logoUrl ?? null,
-        bannerUrl: bannerUrl ?? null,
-      },
-      create: {
-        id: "default",
         logoUrl: logoUrl ?? null,
         bannerUrl: bannerUrl ?? null,
       },

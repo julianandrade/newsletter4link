@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
+    const { db } = await requireOrgContext();
     const body = await request.json();
     const { subscribers } = body;
 
@@ -56,8 +57,8 @@ export async function POST(request: Request) {
       }
 
       try {
-        // Check if subscriber exists
-        const existing = await prisma.subscriber.findUnique({
+        // Check if subscriber exists in this org
+        const existing = await db.subscriber.findFirst({
           where: { email: email.toLowerCase().trim() },
         });
 
@@ -67,14 +68,14 @@ export async function POST(request: Request) {
         }
 
         // Create subscriber
-        await prisma.subscriber.create({
+        await db.subscriber.create({
           data: {
             email: email.toLowerCase().trim(),
             name: name || null,
             preferredLanguage: preferredLanguage || "en",
             preferredStyle: preferredStyle || "comprehensive",
             active: true,
-          },
+          } as any,
         });
 
         results.success++;
@@ -93,6 +94,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error importing subscribers:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

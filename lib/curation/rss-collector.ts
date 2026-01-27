@@ -106,7 +106,7 @@ export async function fetchRSSFeed(
  * Fetch all RSS feeds from database (or fallback to config)
  * Filters articles by max age in days
  */
-export async function fetchAllRSSFeeds(maxAgeDays: number = 7): Promise<RSSArticle[]> {
+export async function fetchAllRSSFeeds(maxAgeDays: number = 7, organizationId?: string): Promise<RSSArticle[]> {
   const allArticles: RSSArticle[] = [];
 
   // Calculate cutoff date
@@ -117,11 +117,15 @@ export async function fetchAllRSSFeeds(maxAgeDays: number = 7): Promise<RSSArtic
   let sources: { name: string; url: string; category: string }[] = [];
 
   try {
-    const dbSources = await getActiveRSSSources();
-    if (dbSources.length > 0) {
-      sources = dbSources;
+    if (organizationId) {
+      const dbSources = await getActiveRSSSources(organizationId);
+      if (dbSources.length > 0) {
+        sources = dbSources;
+      } else {
+        // Fall back to config if no sources in DB
+        sources = [...config.rssSources];
+      }
     } else {
-      // Fall back to config if no sources in DB
       sources = [...config.rssSources];
     }
   } catch {
@@ -145,21 +149,26 @@ export async function fetchAllRSSFeeds(maxAgeDays: number = 7): Promise<RSSArtic
       );
 
       // Update last fetched timestamp
-      try {
-        await updateRSSSourceFetchedAt(source.url);
-      } catch {
-        // Ignore if source doesn't exist in DB
+      if (organizationId) {
+        try {
+          await updateRSSSourceFetchedAt(source.url, organizationId);
+        } catch {
+          // Ignore if source doesn't exist in DB
+        }
       }
     } catch (error) {
       console.error(`✗ Failed to fetch ${source.name}`);
       // Update error in database
-      try {
-        await updateRSSSourceFetchedAt(
-          source.url,
-          error instanceof Error ? error.message : "Unknown error"
-        );
-      } catch {
-        // Ignore if source doesn't exist in DB
+      if (organizationId) {
+        try {
+          await updateRSSSourceFetchedAt(
+            source.url,
+            organizationId,
+            error instanceof Error ? error.message : "Unknown error"
+          );
+        } catch {
+          // Ignore if source doesn't exist in DB
+        }
       }
       // Continue with other sources even if one fails
     }
@@ -169,20 +178,27 @@ export async function fetchAllRSSFeeds(maxAgeDays: number = 7): Promise<RSSArtic
 }
 
 /**
- * Save RSS source to database
+ * Save RSS source to database (for a specific organization)
  */
 export async function saveRSSSource(
   name: string,
   url: string,
-  category: string
+  category: string,
+  organizationId: string
 ) {
   return await prisma.rSSSource.upsert({
-    where: { url },
+    where: {
+      url_organizationId: {
+        url,
+        organizationId,
+      },
+    },
     create: {
       name,
       url,
       category,
       active: true,
+      organizationId,
     },
     update: {
       name,
@@ -193,11 +209,16 @@ export async function saveRSSSource(
 }
 
 /**
- * Update RSS source last fetched timestamp
+ * Update RSS source last fetched timestamp (for a specific organization)
  */
-export async function updateRSSSourceFetchedAt(url: string, error?: string) {
+export async function updateRSSSourceFetchedAt(url: string, organizationId: string, error?: string) {
   return await prisma.rSSSource.update({
-    where: { url },
+    where: {
+      url_organizationId: {
+        url,
+        organizationId,
+      },
+    },
     data: {
       lastFetchedAt: new Date(),
       lastError: error || null,
@@ -206,21 +227,22 @@ export async function updateRSSSourceFetchedAt(url: string, error?: string) {
 }
 
 /**
- * Get all active RSS sources from database
+ * Get all active RSS sources from database (for a specific organization)
  */
-export async function getActiveRSSSources() {
+export async function getActiveRSSSources(organizationId: string) {
   return await prisma.rSSSource.findMany({
-    where: { active: true },
+    where: { active: true, organizationId },
   });
 }
 
 /**
- * Fetch RSS feeds by specific source IDs
+ * Fetch RSS feeds by specific source IDs (for a specific organization)
  * Only fetches from sources that exist and are active
  */
 export async function fetchRSSFeedsByIds(
   sourceIds: string[],
-  maxAgeDays: number = 7
+  maxAgeDays: number = 7,
+  organizationId?: string
 ): Promise<RSSArticle[]> {
   const allArticles: RSSArticle[] = [];
   const cutoffDate = new Date();
@@ -231,6 +253,7 @@ export async function fetchRSSFeedsByIds(
     where: {
       id: { in: sourceIds },
       active: true,
+      ...(organizationId && { organizationId }),
     },
   });
 
@@ -250,14 +273,19 @@ export async function fetchRSSFeedsByIds(
       );
 
       // Update last fetched timestamp
-      await updateRSSSourceFetchedAt(source.url);
+      if (organizationId) {
+        await updateRSSSourceFetchedAt(source.url, organizationId);
+      }
     } catch (error) {
       console.error(`✗ Failed to fetch ${source.name}`);
       // Update error in database
-      await updateRSSSourceFetchedAt(
-        source.url,
-        error instanceof Error ? error.message : "Unknown error"
-      );
+      if (organizationId) {
+        await updateRSSSourceFetchedAt(
+          source.url,
+          organizationId,
+          error instanceof Error ? error.message : "Unknown error"
+        );
+      }
       // Continue with other sources even if one fails
     }
   }
@@ -266,13 +294,13 @@ export async function fetchRSSFeedsByIds(
 }
 
 /**
- * Initialize default RSS sources in database
+ * Initialize default RSS sources in database (for a specific organization)
  */
-export async function seedRSSSources() {
+export async function seedRSSSources(organizationId: string) {
   console.log("Seeding RSS sources...");
 
   for (const source of config.rssSources) {
-    await saveRSSSource(source.name, source.url, source.category);
+    await saveRSSSource(source.name, source.url, source.category, organizationId);
   }
 
   console.log(`✓ Seeded ${config.rssSources.length} RSS sources`);

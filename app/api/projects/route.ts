@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 import { createProject } from "@/lib/queries";
 import { Prisma } from "@prisma/client";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/projects
- * Get all projects with optional filters
+ * Get all projects with optional filters (tenant-scoped)
  *
  * Query params:
  * - teams=true: Return unique teams list instead of projects
@@ -21,19 +21,23 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
     const searchParams = request.nextUrl.searchParams;
 
     // Handle teams list request
     if (searchParams.get("teams") === "true") {
-      const teams = await prisma.project.findMany({
+      const projects = await db.project.findMany({
         select: { team: true },
-        distinct: ["team"],
-        orderBy: { team: "asc" },
       });
+
+      // Get unique teams
+      const teams = [...new Set(projects.map((p) => p.team))].sort();
 
       return NextResponse.json({
         success: true,
-        data: teams.map((t) => t.team),
+        data: teams,
       });
     }
 
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest) {
       [orderByField]: orderByDirection,
     };
 
-    const projects = await prisma.project.findMany({
+    const projects = await db.project.findMany({
       where,
       orderBy,
     });
@@ -97,6 +101,13 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching projects:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
@@ -110,10 +121,13 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/projects
- * Create a new project
+ * Create a new project (tenant-scoped)
  */
 export async function POST(request: Request) {
   try {
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
     const body = await request.json();
     const { name, description, team, projectDate, impact, imageUrl } = body;
 
@@ -128,7 +142,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const project = await createProject({
+    const project = await createProject(db, {
       name,
       description,
       team,
@@ -147,6 +161,13 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Error creating project:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

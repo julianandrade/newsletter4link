@@ -1,5 +1,6 @@
 import { runCurationPipelineWithStreaming, CurationCancelledError } from "@/lib/curation/curator";
 import { createJob, getCurrentJob } from "@/lib/curation/job-manager";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes (only works on Pro plan)
@@ -28,6 +29,10 @@ export async function GET(request: Request) {
       };
 
       try {
+        // Get org context
+        const { organization } = await requireOrgContext();
+        const organizationId = organization.id;
+
         // Check if there's already a running job
         const existingJob = await getCurrentJob();
         if (existingJob) {
@@ -40,7 +45,7 @@ export async function GET(request: Request) {
         }
 
         // Create a new job
-        const job = await createJob();
+        const job = await createJob(organizationId);
         const feedsDescription = sourceIds && sourceIds.length > 0
           ? `${sourceIds.length} selected feed(s)`
           : "all feeds";
@@ -49,9 +54,14 @@ export async function GET(request: Request) {
           jobId: job.id,
         });
 
-        await runCurationPipelineWithStreaming((update) => {
-          sendEvent("progress", { ...update, jobId: job.id });
-        }, job.id, sourceIds);
+        await runCurationPipelineWithStreaming(
+          (update) => {
+            sendEvent("progress", { ...update, jobId: job.id });
+          },
+          organizationId,
+          job.id,
+          sourceIds
+        );
 
         sendEvent("complete", {
           message: "Curation pipeline completed!",

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/articles/pending
- * Get all articles pending review with optional filtering
+ * Get all articles pending review with optional filtering (tenant-scoped)
  *
  * Query params:
  * - search: Search in title/summary
@@ -20,6 +20,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+
     const { searchParams } = new URL(request.url);
 
     // Parse filter parameters
@@ -87,7 +90,7 @@ export async function GET(request: NextRequest) {
       orderBy.push({ publishedAt: "desc" });
     }
 
-    const articles = await prisma.article.findMany({
+    const articles = await db.article.findMany({
       where,
       orderBy,
       select: {
@@ -105,7 +108,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get unique categories from all pending articles for filter options
-    const allPendingArticles = await prisma.article.findMany({
+    const allPendingArticles = await db.article.findMany({
       where: { status: "PENDING_REVIEW" },
       select: { category: true },
     });
@@ -124,6 +127,14 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching pending articles:", error);
+
+    // Handle auth errors
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
