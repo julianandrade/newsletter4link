@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Plan } from "@prisma/client";
 import { AppHeader } from "@/components/app-header";
 import { FeatureGate } from "@/components/upgrade-prompt";
@@ -124,7 +124,11 @@ export default function SearchPage() {
 
   // Organization plan for feature gating
   const [orgPlan, setOrgPlan] = useState<Plan>("FREE");
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+
+  // Ref to track if we've checked for running jobs
+  const hasCheckedRunningJob = useRef(false);
 
   // Load organization and saved topics on mount
   useEffect(() => {
@@ -132,17 +136,58 @@ export default function SearchPage() {
     loadTopics();
   }, []);
 
+  // Check for running job on mount (after we have orgId)
+  useEffect(() => {
+    if (orgId && !hasCheckedRunningJob.current) {
+      hasCheckedRunningJob.current = true;
+      checkForRunningJob();
+    }
+  }, [orgId]);
+
   async function fetchOrganization() {
     try {
       const res = await fetch("/api/organizations/current");
       if (res.ok) {
         const data = await res.json();
         setOrgPlan(data.organization?.plan || "FREE");
+        setOrgId(data.organization?.id || null);
       }
     } catch (err) {
       console.error("Failed to fetch organization:", err);
     } finally {
       setIsLoadingOrg(false);
+    }
+  }
+
+  // Check for a running search job on page load
+  async function checkForRunningJob() {
+    if (!orgId) return;
+
+    try {
+      // Check if there's a running SEARCH job
+      const res = await fetch("/api/jobs?type=SEARCH&status=RUNNING");
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.jobs && data.jobs.length > 0) {
+        const runningJob = data.jobs[0];
+        setCurrentJobId(runningJob.id);
+        setIsSearching(true);
+
+        // Resume progress display
+        if (runningJob.currentStage) {
+          setSearchProgress({
+            stage: runningJob.currentStage,
+            progress: runningJob.progress || 0,
+            message: `Resuming ${runningJob.currentStage}...`,
+          });
+        }
+
+        // Note: We can't reconnect to the SSE stream, but the job is still running
+        // The user can wait for it to complete or cancel it
+      }
+    } catch (err) {
+      console.error("Failed to check for running job:", err);
     }
   }
 

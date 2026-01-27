@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { createClient } from "@/lib/supabase/client";
 import { OrgSwitcher } from "@/components/org-switcher";
+import { JobIndicator } from "@/components/job-indicator";
 import type { User } from "@supabase/supabase-js";
 
 interface AppSidebarProps {
@@ -123,8 +124,13 @@ export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
           </TooltipProvider>
         </nav>
 
-        {/* User & Toggle */}
+        {/* Jobs & User & Toggle */}
         <div className="border-t p-2 space-y-2">
+          {/* Job Indicator */}
+          <TooltipProvider delayDuration={0}>
+            <JobIndicator collapsed={collapsed} />
+          </TooltipProvider>
+
           {/* User Info */}
           {collapsed ? (
             <Tooltip>
