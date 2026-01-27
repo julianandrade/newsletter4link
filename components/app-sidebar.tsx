@@ -15,6 +15,8 @@ import {
   LogOut,
   BarChart3,
   Users,
+  Search,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,8 @@ const navItems = [
   { href: "/dashboard/review", label: "Review Articles", icon: FileText },
   { href: "/dashboard/projects", label: "Projects", icon: Briefcase },
   { href: "/dashboard/curation", label: "Curation", icon: History },
+  { href: "/dashboard/search", label: "Trend Radar", icon: Search },
+  { href: "/dashboard/generate", label: "Ghost Writer", icon: Sparkles },
   { href: "/dashboard/templates", label: "Templates", icon: Layout },
   { href: "/dashboard/subscribers", label: "Subscribers", icon: Users },
   { href: "/dashboard/send", label: "Send Newsletter", icon: Send },
