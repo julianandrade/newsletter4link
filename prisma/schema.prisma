@@ -247,8 +247,13 @@ model Edition {
   year   Int
   status EditionStatus @default(DRAFT)
 
-  finalizedAt DateTime?
-  sentAt      DateTime?
+  scheduledDate DateTime?
+  finalizedAt   DateTime?
+  sentAt        DateTime?
+
+  // Ghost Writer generated content
+  generatedContent Json? // AI-generated newsletter content
+  generatedAt      DateTime?
 
   // Unlayer editor state
   editorDesignJson Json? // Saved Unlayer design for this edition
