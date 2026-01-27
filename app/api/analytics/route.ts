@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
+
+export const dynamic = "force-dynamic";
 
 type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
 
@@ -79,14 +81,17 @@ function getEndDateFilter(
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireOrgContext();
+    const { db, organization } = ctx;
+
     const { searchParams } = new URL(request.url);
     const editionId = searchParams.get("editionId");
     const dateRange = searchParams.get("dateRange") as DateRange | null;
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    // Get all sent editions
-    const editions = await prisma.edition.findMany({
+    // Get all sent editions (tenant-scoped)
+    const editions = await db.edition.findMany({
       where: { status: "SENT" },
       orderBy: { sentAt: "desc" },
       select: {
@@ -97,11 +102,16 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Build where clause for email events
-    const whereClause = editionId ? { editionId } : {};
+    // Get all edition IDs for this organization for filtering email events
+    const orgEditionIds = editions.map((e) => e.id);
+
+    // Build where clause for email events - filter by org's editions
+    const whereClause = editionId
+      ? { editionId }
+      : { editionId: { in: orgEditionIds } };
 
     // Get aggregated event counts
-    const eventCounts = await prisma.emailEvent.groupBy({
+    const eventCounts = await db.$raw.emailEvent.groupBy({
       by: ["eventType"],
       where: whereClause,
       _count: { id: true },
@@ -135,7 +145,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Get top clicked links
-    const clickEvents = await prisma.emailEvent.findMany({
+    const clickEvents = await db.$raw.emailEvent.findMany({
       where: {
         ...whereClause,
         eventType: "CLICKED",
@@ -160,8 +170,8 @@ export async function GET(request: NextRequest) {
     // Extract URLs to query for article information
     const urls = topLinksBasic.map((link) => link.url);
 
-    // Query Article table to match URLs with article titles
-    const articles = await prisma.article.findMany({
+    // Query Article table to match URLs with article titles (tenant-scoped)
+    const articles = await db.article.findMany({
       where: { sourceUrl: { in: urls } },
       select: { sourceUrl: true, title: true, category: true },
     });
@@ -198,7 +208,7 @@ export async function GET(request: NextRequest) {
       timelineTimestampFilter.lte = timelineEndDate;
     }
 
-    const timelineEvents = await prisma.emailEvent.findMany({
+    const timelineEvents = await db.$raw.emailEvent.findMany({
       where: {
         ...whereClause,
         eventType: { in: ["OPENED", "CLICKED"] },
@@ -233,7 +243,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // Get subscriber segmentation data
-    const activeSubscribers = await prisma.subscriber.findMany({
+    const activeSubscribers = await db.subscriber.findMany({
       where: { active: true },
       select: {
         id: true,
@@ -268,7 +278,7 @@ export async function GET(request: NextRequest) {
 
     // Get DELIVERED and OPENED events per subscriber for open rate calculation
     // We need delivered count per subscriber to calculate accurate open rates
-    const deliveredEvents = await prisma.emailEvent.groupBy({
+    const deliveredEvents = await db.$raw.emailEvent.groupBy({
       by: ["subscriberId"],
       where: {
         ...whereClause,
@@ -278,7 +288,7 @@ export async function GET(request: NextRequest) {
       _count: { id: true },
     });
 
-    const openedEvents = await prisma.emailEvent.groupBy({
+    const openedEvents = await db.$raw.emailEvent.groupBy({
       by: ["subscriberId"],
       where: {
         ...whereClause,
@@ -342,7 +352,7 @@ export async function GET(request: NextRequest) {
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
     // Get SENT events count per subscriber to identify "New" subscribers
-    const sentEventsPerSubscriber = await prisma.emailEvent.groupBy({
+    const sentEventsPerSubscriber = await db.$raw.emailEvent.groupBy({
       by: ["subscriberId"],
       where: {
         subscriberId: { in: allSubscriberIds },
@@ -358,7 +368,7 @@ export async function GET(request: NextRequest) {
     // Get latest OPENED or CLICKED event timestamp per subscriber
     // Only query events from last 90 days since older events won't change classification
     // (subscribers with no activity in 90+ days automatically fall to "At Risk")
-    const activityEvents = await prisma.emailEvent.findMany({
+    const activityEvents = await db.$raw.emailEvent.findMany({
       where: {
         subscriberId: { in: allSubscriberIds },
         eventType: { in: ["OPENED", "CLICKED"] },
@@ -441,6 +451,14 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Analytics API error:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to fetch analytics" },
       { status: 500 }

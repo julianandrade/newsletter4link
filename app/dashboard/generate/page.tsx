@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Plan } from "@prisma/client";
 import { AppHeader } from "@/components/app-header";
+import { FeatureGate } from "@/components/upgrade-prompt";
 import {
   Card,
   CardContent,
@@ -31,6 +33,7 @@ import {
   Check,
   FileText,
 } from "lucide-react";
+import { hasFeature } from "@/lib/plans/features";
 
 interface Edition {
   id: string;
@@ -101,11 +104,30 @@ export default function GeneratePage() {
   const [isRegeneratingSubjects, setIsRegeneratingSubjects] = useState(false);
   const [copiedSubject, setCopiedSubject] = useState(false);
 
-  // Fetch editions and brand voices on mount
+  // Organization plan for feature gating
+  const [orgPlan, setOrgPlan] = useState<Plan>("FREE");
+  const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+
+  // Fetch organization, editions and brand voices on mount
   useEffect(() => {
+    fetchOrganization();
     fetchEditions();
     fetchBrandVoices();
   }, []);
+
+  async function fetchOrganization() {
+    try {
+      const res = await fetch("/api/organizations/current");
+      if (res.ok) {
+        const data = await res.json();
+        setOrgPlan(data.organization?.plan || "FREE");
+      }
+    } catch (err) {
+      console.error("Failed to fetch organization:", err);
+    } finally {
+      setIsLoadingOrg(false);
+    }
+  }
 
   // When edition is selected, update selectedEdition and check for existing generation
   useEffect(() => {
@@ -250,32 +272,38 @@ export default function GeneratePage() {
     setTimeout(() => setCopiedSubject(false), 2000);
   }
 
-  const isLoading = isLoadingEditions || isLoadingVoices;
+  const isLoading = isLoadingEditions || isLoadingVoices || isLoadingOrg;
+  const hasGhostWriterAccess = hasFeature(orgPlan, "ghostWriter");
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader title="Ghost Writer" />
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-            <Wand2 className="h-8 w-8" />
-            Ghost Writer
-          </h1>
-          <p className="text-muted-foreground">
-            AI-powered newsletter generation with brand voice matching
-          </p>
-        </div>
+      <FeatureGate
+        feature="ghostWriter"
+        currentPlan={orgPlan}
+        hasAccess={hasGhostWriterAccess || isLoadingOrg}
+      >
+        <main className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+              <Wand2 className="h-8 w-8" />
+              Ghost Writer
+            </h1>
+            <p className="text-muted-foreground">
+              AI-powered newsletter generation with brand voice matching
+            </p>
+          </div>
 
-        {/* Error Display */}
-        {error && (
-          <Card className="mb-6 border-destructive">
-            <CardContent className="pt-6">
-              <p className="text-destructive">{error}</p>
-            </CardContent>
-          </Card>
-        )}
+          {/* Error Display */}
+          {error && (
+            <Card className="mb-6 border-destructive">
+              <CardContent className="pt-6">
+                <p className="text-destructive">{error}</p>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Configuration */}
         <Card className="mb-6">
@@ -592,19 +620,20 @@ export default function GeneratePage() {
           </Card>
         )}
 
-        {/* No Edition Selected */}
-        {!selectedEditionId && !isLoading && (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Select an Edition</h3>
-              <p className="text-muted-foreground">
-                Choose an edition above to generate newsletter content
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </main>
+          {/* No Edition Selected */}
+          {!selectedEditionId && !isLoading && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Select an Edition</h3>
+                <p className="text-muted-foreground">
+                  Choose an edition above to generate newsletter content
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </main>
+      </FeatureGate>
     </div>
   );
 }

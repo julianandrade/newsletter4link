@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Image, ChevronRight } from "lucide-react";
+import { Loader2, Image, ChevronRight, Building2 } from "lucide-react";
+import { UsageCard } from "@/components/usage-card";
 import Link from "next/link";
 
 interface Settings {
@@ -103,6 +104,7 @@ export default function SettingsPage() {
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="ai">AI Settings</TabsTrigger>
             <TabsTrigger value="branding">Branding</TabsTrigger>
+            <TabsTrigger value="usage">Usage & Plan</TabsTrigger>
           </TabsList>
 
           {/* General Settings */}
@@ -325,6 +327,39 @@ export default function SettingsPage() {
                       <h3 className="font-medium">Logo & Banner Settings</h3>
                       <p className="text-sm text-muted-foreground">
                         Upload and manage your newsletter branding images
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </Link>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Usage & Plan */}
+          <TabsContent value="usage" className="space-y-6">
+            <UsageCard />
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Organization</CardTitle>
+                <CardDescription>
+                  Manage your organization settings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link
+                  href="/dashboard/settings/organization"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Building2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium">Organization Settings</h3>
+                      <p className="text-sm text-muted-foreground">
+                        View and update organization details, industry, and plan
                       </p>
                     </div>
                   </div>

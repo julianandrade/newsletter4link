@@ -32,6 +32,7 @@ export async function GET() {
         slug: auth.currentOrg.organization.slug,
         industry: auth.currentOrg.organization.industry,
         plan: auth.currentOrg.organization.plan,
+        customDomain: auth.currentOrg.organization.customDomain,
         createdAt: auth.currentOrg.organization.createdAt,
       },
       membership: {

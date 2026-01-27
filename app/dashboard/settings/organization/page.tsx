@@ -20,8 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, ArrowLeft } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Building2, ArrowLeft, Globe, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
+import { ApiKeysCard } from "@/components/api-keys-card";
+import { hasFeature } from "@/lib/plans/features";
+import { Plan } from "@prisma/client";
 
 interface Organization {
   id: string;
@@ -29,6 +33,7 @@ interface Organization {
   slug: string;
   industry: string;
   plan: string;
+  customDomain: string | null;
   createdAt: string;
 }
 
@@ -59,6 +64,12 @@ export default function OrganizationSettingsPage() {
     name: "",
     industry: "",
   });
+  const [customDomain, setCustomDomain] = useState("");
+  const [isSavingDomain, setIsSavingDomain] = useState(false);
+  const [domainMessage, setDomainMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [saveMessage, setSaveMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -79,6 +90,7 @@ export default function OrganizationSettingsPage() {
         name: data.organization.name,
         industry: data.organization.industry,
       });
+      setCustomDomain(data.organization.customDomain || "");
     } catch (error) {
       console.error("Failed to fetch organization:", error);
     } finally {
@@ -115,6 +127,40 @@ export default function OrganizationSettingsPage() {
     } finally {
       setIsSaving(false);
       setTimeout(() => setSaveMessage(null), 3000);
+    }
+  }
+
+  async function handleSaveDomain() {
+    if (!organization) return;
+
+    setIsSavingDomain(true);
+    setDomainMessage(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${organization.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customDomain: customDomain.trim() || null
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to save domain");
+      }
+
+      const json = await res.json();
+      setOrganization({ ...organization, customDomain: json.data.customDomain });
+      setDomainMessage({ type: "success", text: "Custom domain saved successfully" });
+    } catch (error) {
+      setDomainMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to save",
+      });
+    } finally {
+      setIsSavingDomain(false);
+      setTimeout(() => setDomainMessage(null), 3000);
     }
   }
 
@@ -289,6 +335,126 @@ export default function OrganizationSettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Custom Domain - Enterprise only */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Globe className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Custom Domain
+                  {organization?.plan !== "ENTERPRISE" && (
+                    <Badge variant="outline" className="text-xs">
+                      <Lock className="h-3 w-3 mr-1" />
+                      Enterprise
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Use your own domain for newsletter links and landing pages
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {organization?.plan === "ENTERPRISE" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="customDomain">Domain</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="customDomain"
+                      value={customDomain}
+                      onChange={(e) => setCustomDomain(e.target.value)}
+                      placeholder="newsletter.yourcompany.com"
+                    />
+                    <Button
+                      onClick={handleSaveDomain}
+                      disabled={isSavingDomain}
+                    >
+                      {isSavingDomain && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Save
+                    </Button>
+                  </div>
+                </div>
+
+                {organization.customDomain && (
+                  <Alert>
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription>
+                      Your custom domain <strong>{organization.customDomain}</strong> is configured.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="rounded-lg border p-4 space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    DNS Setup Instructions
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Add the following DNS record to your domain:
+                  </p>
+                  <div className="bg-muted rounded p-3 font-mono text-sm">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-muted-foreground">Type</span>
+                        <div>CNAME</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Name</span>
+                        <div>newsletter (or @)</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Value</span>
+                        <div>newsletter4link.vercel.app</div>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    DNS changes may take up to 48 hours to propagate.
+                  </p>
+                </div>
+
+                {domainMessage && (
+                  <p
+                    className={`text-sm ${
+                      domainMessage.type === "success"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {domainMessage.text}
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-6 space-y-3">
+                <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Enterprise Feature</p>
+                  <p className="text-sm text-muted-foreground">
+                    Upgrade to Enterprise to use your own custom domain for newsletters.
+                  </p>
+                </div>
+                <Button variant="outline" disabled>
+                  Upgrade to Enterprise
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* API Keys */}
+        <ApiKeysCard
+          plan={organization?.plan || "FREE"}
+          hasAccess={hasFeature((organization?.plan || "FREE") as Plan, "apiAccess")}
+        />
 
         {/* Organization ID */}
         <Card>

@@ -35,6 +35,7 @@ model Organization {
   members      OrgUser[]
   invites      OrgInvite[]
   settings     OrgSettings?
+  apiKeys      ApiKey[]
   articles     Article[]
   projects     Project[]
   editions     Edition[]
@@ -111,6 +112,25 @@ model OrgInvite {
   @@unique([email, organizationId])
   @@index([token])
   @@index([organizationId])
+}
+
+// API Keys for programmatic access (PROFESSIONAL+ plans)
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String   // User-friendly name for the key
+  keyHash     String   @unique // SHA-256 hash of the actual key
+  keyPrefix   String   // First 8 chars for identification (e.g., "nl4l_abc1")
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([keyHash])
 }
 
 // Per-organization settings (replaces global Settings for org-specific config)

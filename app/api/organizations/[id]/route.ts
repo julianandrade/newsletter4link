@@ -115,6 +115,41 @@ export async function PATCH(
       updates.logoUrl = body.logoUrl;
     }
 
+    // Custom domain - requires ENTERPRISE plan and ADMIN role
+    if (typeof body.customDomain === "string" || body.customDomain === null) {
+      if (membership.organization.plan !== "ENTERPRISE") {
+        return NextResponse.json(
+          { error: "Custom domains are only available on the Enterprise plan" },
+          { status: 403 }
+        );
+      }
+
+      if (body.customDomain !== null) {
+        // Validate domain format
+        const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+        if (!domainRegex.test(body.customDomain)) {
+          return NextResponse.json(
+            { error: "Invalid domain format" },
+            { status: 400 }
+          );
+        }
+
+        // Check domain is not already in use
+        const existingDomain = await prisma.organization.findUnique({
+          where: { customDomain: body.customDomain },
+        });
+
+        if (existingDomain && existingDomain.id !== id) {
+          return NextResponse.json(
+            { error: "This domain is already in use by another organization" },
+            { status: 409 }
+          );
+        }
+      }
+
+      updates.customDomain = body.customDomain;
+    }
+
     // Slug changes require OWNER role
     if (typeof body.slug === "string" && body.slug !== membership.organization.slug) {
       if (!hasRole(membership.membership.role, "OWNER")) {

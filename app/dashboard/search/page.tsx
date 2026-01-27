@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Plan } from "@prisma/client";
 import { AppHeader } from "@/components/app-header";
+import { FeatureGate } from "@/components/upgrade-prompt";
+import { hasFeature } from "@/lib/plans/features";
 import {
   Card,
   CardContent,
@@ -104,10 +107,29 @@ export default function SearchPage() {
 
   const [importingId, setImportingId] = useState<string | null>(null);
 
-  // Load saved topics on mount
-  useState(() => {
+  // Organization plan for feature gating
+  const [orgPlan, setOrgPlan] = useState<Plan>("FREE");
+  const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+
+  // Load organization and saved topics on mount
+  useEffect(() => {
+    fetchOrganization();
     loadTopics();
-  });
+  }, []);
+
+  async function fetchOrganization() {
+    try {
+      const res = await fetch("/api/organizations/current");
+      if (res.ok) {
+        const data = await res.json();
+        setOrgPlan(data.organization?.plan || "FREE");
+      }
+    } catch (err) {
+      console.error("Failed to fetch organization:", err);
+    } finally {
+      setIsLoadingOrg(false);
+    }
+  }
 
   const loadTopics = async () => {
     setIsLoadingTopics(true);
@@ -289,24 +311,31 @@ export default function SearchPage() {
     return "bg-gray-100 text-gray-700";
   };
 
+  const hasTrendRadarAccess = hasFeature(orgPlan, "trendRadar");
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader title="Trend Radar" />
 
-      <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <TrendingUp className="h-8 w-8" />
-              Trend Radar
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              AI-powered web search for content discovery
-            </p>
+      <FeatureGate
+        feature="trendRadar"
+        currentPlan={orgPlan}
+        hasAccess={hasTrendRadarAccess || isLoadingOrg}
+      >
+        <main className="container mx-auto px-4 py-8 max-w-7xl">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2">
+                <TrendingUp className="h-8 w-8" />
+                Trend Radar
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                AI-powered web search for content discovery
+              </p>
+            </div>
           </div>
-        </div>
 
-        <Tabs defaultValue="search" className="space-y-6">
+          <Tabs defaultValue="search" className="space-y-6">
           <TabsList>
             <TabsTrigger value="search" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
@@ -603,8 +632,9 @@ export default function SearchPage() {
               </div>
             </div>
           </TabsContent>
-        </Tabs>
-      </main>
+          </Tabs>
+        </main>
+      </FeatureGate>
     </div>
   );
 }

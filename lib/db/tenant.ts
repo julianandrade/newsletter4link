@@ -18,7 +18,8 @@ export type TenantScopedModels =
   | "emailTemplate"
   | "mediaAsset"
   | "brandVoice"
-  | "searchTopic";
+  | "searchTopic"
+  | "apiKey";
 
 /**
  * Create a tenant-scoped Prisma client for an organization
@@ -472,6 +473,44 @@ export function createTenantClient(organizationId: string) {
 
       count: <T extends Prisma.SearchTopicCountArgs>(args?: T) =>
         prisma.searchTopic.count({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+    },
+
+    // ==================== API KEYS ====================
+    apiKey: {
+      findMany: <T extends Prisma.ApiKeyFindManyArgs>(args?: T) =>
+        prisma.apiKey.findMany({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findFirst: <T extends Prisma.ApiKeyFindFirstArgs>(args?: T) =>
+        prisma.apiKey.findFirst({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findUnique: <T extends Prisma.ApiKeyFindUniqueArgs>(args: T) =>
+        prisma.apiKey.findUnique(args).then((result) =>
+          result?.organizationId === organizationId ? result : null
+        ),
+
+      create: <T extends Prisma.ApiKeyCreateArgs>(args: T) =>
+        prisma.apiKey.create({
+          ...args,
+          data: { ...args.data, organizationId },
+        } as T),
+
+      update: <T extends Prisma.ApiKeyUpdateArgs>(args: T) =>
+        prisma.apiKey.update(args),
+
+      delete: <T extends Prisma.ApiKeyDeleteArgs>(args: T) =>
+        prisma.apiKey.delete(args),
+
+      count: <T extends Prisma.ApiKeyCountArgs>(args?: T) =>
+        prisma.apiKey.count({
           ...args,
           where: { ...args?.where, organizationId },
         } as T),
