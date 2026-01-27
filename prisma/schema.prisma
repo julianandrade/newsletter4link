@@ -44,6 +44,7 @@ model Organization {
   templates    EmailTemplate[]
   brandVoices  BrandVoice[]
   mediaAssets  MediaAsset[]
+  searchTopics SearchTopic[]
 
   @@index([slug])
   @@index([plan])
@@ -477,3 +478,106 @@ model MediaAsset {
 }
 
 // Note: BrandingSettings has been merged into OrgSettings for multi-tenant support
+
+// ==================== TREND RADAR (WEB SEARCH) ====================
+
+// Saved search topics/watchlists for ongoing monitoring
+model SearchTopic {
+  id          String  @id @default(cuid())
+  name        String // Human-readable name: "DORA Regulation News"
+  description String? @db.Text
+
+  // Search configuration
+  query       String  @db.Text // Natural language query
+  queryExpanded String? @db.Text // AI-expanded query for better results
+  providers   String[] @default(["tavily"]) // Which search providers to use
+
+  // Scheduling
+  schedule    SearchSchedule @default(MANUAL)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+
+  // Filters
+  timeRange   SearchTimeRange @default(WEEK)
+  maxResults  Int @default(20)
+
+  // Status
+  isActive    Boolean @default(true)
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  results SearchResult[]
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@index([nextRunAt])
+  @@index([schedule, isActive])
+}
+
+enum SearchSchedule {
+  MANUAL // Only run on demand
+  DAILY // Run once per day
+  WEEKLY // Run once per week
+}
+
+enum SearchTimeRange {
+  DAY // Last 24 hours
+  WEEK // Last 7 days
+  MONTH // Last 30 days
+  YEAR // Last 365 days
+}
+
+// Individual search results from web searches
+model SearchResult {
+  id String @id @default(cuid())
+
+  // Source information
+  url         String
+  title       String
+  snippet     String  @db.Text
+  content     String? @db.Text // Full content if available
+  publishedAt DateTime?
+  source      String? // Domain or publication name
+  author      String?
+  imageUrl    String?
+
+  // Search metadata
+  provider    String // Which provider found this: tavily, brave, etc.
+  rawScore    Float? // Provider's relevance score
+
+  // AI analysis
+  aiScore         Float? // Claude relevance score (1-10)
+  aiSummary       String? @db.Text
+  aiTopics        String[] // Extracted topics
+  aiSentiment     String? // positive, negative, neutral
+  aiRelevanceNote String? @db.Text // Why it's relevant
+
+  // Status
+  status SearchResultStatus @default(NEW)
+  importedArticleId String? // If imported to articles
+
+  // Parent topic
+  searchTopic   SearchTopic @relation(fields: [searchTopicId], references: [id], onDelete: Cascade)
+  searchTopicId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([url, searchTopicId]) // No duplicate URLs per topic
+  @@index([searchTopicId])
+  @@index([status])
+  @@index([aiScore(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+enum SearchResultStatus {
+  NEW // Just discovered
+  REVIEWED // Human has seen it
+  IMPORTED // Imported to articles
+  DISMISSED // Marked as not relevant
+}

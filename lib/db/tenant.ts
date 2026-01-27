@@ -17,7 +17,8 @@ export type TenantScopedModels =
   | "curationJob"
   | "emailTemplate"
   | "mediaAsset"
-  | "brandVoice";
+  | "brandVoice"
+  | "searchTopic";
 
 /**
  * Create a tenant-scoped Prisma client for an organization
@@ -427,6 +428,50 @@ export function createTenantClient(organizationId: string) {
 
       count: <T extends Prisma.BrandVoiceCountArgs>(args?: T) =>
         prisma.brandVoice.count({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+    },
+
+    // ==================== SEARCH TOPICS ====================
+    searchTopic: {
+      findMany: <T extends Prisma.SearchTopicFindManyArgs>(args?: T) =>
+        prisma.searchTopic.findMany({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findFirst: <T extends Prisma.SearchTopicFindFirstArgs>(args?: T) =>
+        prisma.searchTopic.findFirst({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findUnique: <T extends Prisma.SearchTopicFindUniqueArgs>(args: T) =>
+        prisma.searchTopic.findUnique(args).then((result) =>
+          result?.organizationId === organizationId ? result : null
+        ),
+
+      create: <T extends Prisma.SearchTopicCreateArgs>(args: T) =>
+        prisma.searchTopic.create({
+          ...args,
+          data: { ...args.data, organizationId },
+        } as T),
+
+      update: <T extends Prisma.SearchTopicUpdateArgs>(args: T) =>
+        prisma.searchTopic.update(args),
+
+      updateMany: <T extends Prisma.SearchTopicUpdateManyArgs>(args: T) =>
+        prisma.searchTopic.updateMany({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
+      delete: <T extends Prisma.SearchTopicDeleteArgs>(args: T) =>
+        prisma.searchTopic.delete(args),
+
+      count: <T extends Prisma.SearchTopicCountArgs>(args?: T) =>
+        prisma.searchTopic.count({
           ...args,
           where: { ...args?.where, organizationId },
         } as T),
