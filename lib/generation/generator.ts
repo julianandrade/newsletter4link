@@ -20,6 +20,17 @@ import {
   ArticleForPlanning,
   NewsletterPlan,
 } from "./content-planner";
+import { isJobCancelled } from "@/lib/jobs";
+
+/**
+ * Error thrown when generation is cancelled
+ */
+export class GenerationCancelledError extends Error {
+  constructor(jobId: string) {
+    super(`Generation job ${jobId} was cancelled`);
+    this.name = "GenerationCancelledError";
+  }
+}
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -56,16 +67,36 @@ export interface GenerationProgress {
 }
 
 /**
+ * Check if job is cancelled and throw if so
+ */
+async function checkCancellation(jobId?: string): Promise<void> {
+  if (jobId) {
+    const cancelled = await isJobCancelled(jobId);
+    if (cancelled) {
+      throw new GenerationCancelledError(jobId);
+    }
+  }
+}
+
+/**
  * Generate a complete newsletter from approved articles
+ *
+ * @param articles - Articles to include in the newsletter
+ * @param edition - Edition metadata (week and year)
+ * @param brandVoice - Brand voice settings for content generation
+ * @param onProgress - Optional callback for progress updates
+ * @param jobId - Optional job ID for cancellation support
  */
 export async function generateNewsletter(
   articles: ArticleForPlanning[],
   edition: { week: number; year: number },
   brandVoice: BrandVoice | null,
-  onProgress?: (progress: GenerationProgress) => void
+  onProgress?: (progress: GenerationProgress) => void | Promise<void>,
+  jobId?: string
 ): Promise<GeneratedNewsletter> {
   // Stage 1: Plan the newsletter structure
-  onProgress?.({
+  await checkCancellation(jobId);
+  await onProgress?.({
     stage: "planning",
     current: 0,
     total: 6,
@@ -75,7 +106,8 @@ export async function generateNewsletter(
   const plan = await planNewsletter(articles);
 
   // Stage 2: Generate opening
-  onProgress?.({
+  await checkCancellation(jobId);
+  await onProgress?.({
     stage: "opening",
     current: 1,
     total: 6,
@@ -85,34 +117,38 @@ export async function generateNewsletter(
   const opening = await generateOpening(plan.heroArticle, edition, brandVoice);
 
   // Stage 3: Generate article summaries
-  onProgress?.({
+  await checkCancellation(jobId);
+  await onProgress?.({
     stage: "articles",
     current: 2,
     total: 6,
     message: "Rewriting article summaries...",
   });
 
-  const sections = await generateSections(plan, brandVoice, (current, total) => {
-    onProgress?.({
+  const sections = await generateSections(plan, brandVoice, async (current, total) => {
+    await checkCancellation(jobId);
+    await onProgress?.({
       stage: "articles",
-      current: 2,
-      total: 6,
+      current,
+      total,
       message: `Rewriting article ${current}/${total}...`,
     });
-  });
+  }, jobId);
 
   // Stage 4: Generate transitions
-  onProgress?.({
+  await checkCancellation(jobId);
+  await onProgress?.({
     stage: "transitions",
     current: 3,
     total: 6,
     message: "Adding transitions...",
   });
 
-  await addTransitions(sections, brandVoice);
+  await addTransitions(sections, brandVoice, jobId);
 
   // Stage 5: Generate closing
-  onProgress?.({
+  await checkCancellation(jobId);
+  await onProgress?.({
     stage: "closing",
     current: 4,
     total: 6,
@@ -122,7 +158,8 @@ export async function generateNewsletter(
   const closing = await generateClosing(plan.totalArticles, brandVoice);
 
   // Stage 6: Generate subject lines
-  onProgress?.({
+  await checkCancellation(jobId);
+  await onProgress?.({
     stage: "subjects",
     current: 5,
     total: 6,
@@ -131,7 +168,7 @@ export async function generateNewsletter(
 
   const subjectLines = await generateSubjectLines(plan, edition, brandVoice);
 
-  onProgress?.({
+  await onProgress?.({
     stage: "complete",
     current: 6,
     total: 6,
@@ -180,16 +217,18 @@ async function generateOpening(
 async function generateSections(
   plan: NewsletterPlan,
   brandVoice: BrandVoice | null,
-  onArticleProgress?: (current: number, total: number) => void
+  onArticleProgress?: (current: number, total: number) => void | Promise<void>,
+  jobId?: string
 ): Promise<GeneratedSection[]> {
   const sections: GeneratedSection[] = [];
   let articleCount = 0;
   const totalArticles = plan.totalArticles;
 
   // Generate hero section
+  await checkCancellation(jobId);
   const heroSummary = await generateArticleSummary(plan.heroArticle, brandVoice, true);
   articleCount++;
-  onArticleProgress?.(articleCount, totalArticles);
+  await onArticleProgress?.(articleCount, totalArticles);
 
   sections.push({
     name: "Featured",
@@ -209,9 +248,10 @@ async function generateSections(
     const generatedArticles: GeneratedArticle[] = [];
 
     for (const article of section.articles) {
+      await checkCancellation(jobId);
       const summary = await generateArticleSummary(article, brandVoice, false);
       articleCount++;
-      onArticleProgress?.(articleCount, totalArticles);
+      await onArticleProgress?.(articleCount, totalArticles);
 
       generatedArticles.push({
         id: article.id,
@@ -268,13 +308,16 @@ async function generateArticleSummary(
  */
 async function addTransitions(
   sections: GeneratedSection[],
-  brandVoice: BrandVoice | null
+  brandVoice: BrandVoice | null,
+  jobId?: string
 ): Promise<void> {
   // Skip if only one section
   if (sections.length <= 1) return;
 
   // Add transitions between sections (not before first)
   for (let i = 1; i < sections.length; i++) {
+    await checkCancellation(jobId);
+
     const fromSection = sections[i - 1].name;
     const toSection = sections[i].name;
 
