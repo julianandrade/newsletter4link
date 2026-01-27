@@ -256,33 +256,48 @@ export default function SearchPage() {
   };
 
   const handleImportResult = async (result: SearchResult, topicId?: string) => {
-    // For ad-hoc search results, we'd need to save them first
-    // For now, this only works with topic results that have IDs
-    if (!topicId) {
-      setError("Import only available for saved topic results");
-      return;
-    }
-
     setImportingId(result.url);
+    setError(null);
+
     try {
-      // Find the result ID from topic results - we need to fetch it
-      const topicRes = await fetch(`/api/search/topics/${topicId}`);
-      const topicData = await topicRes.json();
+      let res: Response;
 
-      if (!topicData.success) {
-        setError("Failed to find result");
-        return;
+      if (topicId) {
+        // For saved topic results, use the existing endpoint that looks up SearchResult by ID
+        const topicRes = await fetch(`/api/search/topics/${topicId}`);
+        const topicData = await topicRes.json();
+
+        if (!topicData.success) {
+          setError("Failed to find result");
+          return;
+        }
+
+        const searchResult = topicData.data.results?.find((r: { url: string }) => r.url === result.url);
+        if (!searchResult?.id) {
+          setError("Result not found");
+          return;
+        }
+
+        res = await fetch(`/api/search/results/${searchResult.id}/import`, {
+          method: "POST",
+        });
+      } else {
+        // For ad-hoc search results, use direct import endpoint
+        res = await fetch("/api/search/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: result.url,
+            title: result.title,
+            snippet: result.snippet,
+            content: result.content,
+            publishedAt: result.publishedAt,
+            aiScore: result.aiScore,
+            aiSummary: result.aiSummary,
+            aiTopics: result.aiTopics,
+          }),
+        });
       }
-
-      const searchResult = topicData.data.results?.find((r: { url: string }) => r.url === result.url);
-      if (!searchResult?.id) {
-        setError("Result not found");
-        return;
-      }
-
-      const res = await fetch(`/api/search/results/${searchResult.id}/import`, {
-        method: "POST",
-      });
 
       const data = await res.json();
       if (data.success) {
