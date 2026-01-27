@@ -34,15 +34,15 @@ interface OnboardingFormProps {
 }
 
 const industries = [
-  { value: "TECHNOLOGY", label: "Technology", icon: Briefcase },
-  { value: "FINANCE", label: "Finance & Banking", icon: Landmark },
-  { value: "INSURANCE", label: "Insurance", icon: Shield },
-  { value: "HEALTHCARE", label: "Healthcare", icon: Heart },
-  { value: "RETAIL", label: "Retail & E-commerce", icon: ShoppingCart },
-  { value: "UTILITIES", label: "Utilities", icon: Zap },
-  { value: "MANUFACTURING", label: "Manufacturing", icon: Factory },
-  { value: "PROFESSIONAL_SERVICES", label: "Professional Services", icon: Users },
-  { value: "OTHER", label: "Other", icon: HelpCircle },
+  { value: "TECHNOLOGY", label: "Technology", icon: Briefcase, description: "Software, AI, cloud, and digital innovation", sources: 8, topics: 4 },
+  { value: "FINANCE", label: "Finance & Banking", icon: Landmark, description: "Fintech, digital banking, and regulation", sources: 6, topics: 5 },
+  { value: "INSURANCE", label: "Insurance", icon: Shield, description: "InsurTech, claims, and risk management", sources: 5, topics: 4 },
+  { value: "HEALTHCARE", label: "Healthcare", icon: Heart, description: "Health IT, telehealth, and digital health", sources: 5, topics: 4 },
+  { value: "RETAIL", label: "Retail & E-commerce", icon: ShoppingCart, description: "E-commerce, omnichannel, and supply chain", sources: 5, topics: 4 },
+  { value: "UTILITIES", label: "Utilities", icon: Zap, description: "Smart grid, renewables, and energy tech", sources: 5, topics: 4 },
+  { value: "MANUFACTURING", label: "Manufacturing", icon: Factory, description: "Industry 4.0, automation, and IoT", sources: 5, topics: 4 },
+  { value: "PROFESSIONAL_SERVICES", label: "Professional Services", icon: Users, description: "Consulting, legal, and accounting tech", sources: 4, topics: 3 },
+  { value: "OTHER", label: "Other", icon: HelpCircle, description: "General business and technology", sources: 3, topics: 2 },
 ];
 
 export function OnboardingForm({ userEmail }: OnboardingFormProps) {
@@ -195,28 +195,47 @@ export function OnboardingForm({ userEmail }: OnboardingFormProps) {
         )}
 
         {step === 2 && (
-          <div className="grid grid-cols-3 gap-2">
-            {industries.map((ind) => {
-              const Icon = ind.icon;
-              const isSelected = industry === ind.value;
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              {industries.map((ind) => {
+                const Icon = ind.icon;
+                const isSelected = industry === ind.value;
 
-              return (
-                <button
-                  key={ind.value}
-                  type="button"
-                  onClick={() => setIndustry(ind.value)}
-                  className={cn(
-                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors",
-                    isSelected
-                      ? "border-primary bg-primary/5"
-                      : "border-transparent bg-muted/50 hover:bg-muted"
-                  )}
-                >
-                  <Icon className={cn("h-5 w-5", isSelected && "text-primary")} />
-                  <span className="text-xs text-center leading-tight">{ind.label}</span>
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={ind.value}
+                    type="button"
+                    onClick={() => setIndustry(ind.value)}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-colors",
+                      isSelected
+                        ? "border-primary bg-primary/5"
+                        : "border-transparent bg-muted/50 hover:bg-muted"
+                    )}
+                  >
+                    <Icon className={cn("h-5 w-5", isSelected && "text-primary")} />
+                    <span className="text-xs text-center leading-tight">{ind.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected industry details */}
+            {industry && (
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <div className="text-sm font-medium mb-1">
+                  {industries.find((i) => i.value === industry)?.label}
+                </div>
+                <div className="text-xs text-muted-foreground mb-3">
+                  {industries.find((i) => i.value === industry)?.description}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Includes:</span>{" "}
+                  {industries.find((i) => i.value === industry)?.sources} curated RSS sources,{" "}
+                  {industries.find((i) => i.value === industry)?.topics} search topics, and industry-specific AI prompts
+                </div>
+              </div>
+            )}
           </div>
         )}
 

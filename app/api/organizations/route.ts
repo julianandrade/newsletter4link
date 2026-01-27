@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAuthContext, createOrganization } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { bootstrapOrganization } from "@/lib/industry/bootstrap";
+import { Industry } from "@/lib/industry/prompts";
 
 export const dynamic = "force-dynamic";
 
@@ -106,11 +108,28 @@ export async function POST(request: Request) {
       industry
     );
 
+    // Bootstrap with industry templates
+    let bootstrapResult = null;
+    if (industry && industry !== "OTHER") {
+      try {
+        bootstrapResult = await bootstrapOrganization(
+          organization.id,
+          industry as Industry
+        );
+      } catch (bootstrapError) {
+        console.error("Failed to bootstrap organization:", bootstrapError);
+        // Don't fail the request, org was created successfully
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
         data: organization,
-        message: "Organization created successfully",
+        bootstrap: bootstrapResult,
+        message: bootstrapResult
+          ? `Organization created with ${bootstrapResult.rssSourcesCreated} RSS sources and ${bootstrapResult.searchTopicsCreated} search topics`
+          : "Organization created successfully",
       },
       { status: 201 }
     );
