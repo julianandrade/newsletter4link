@@ -41,11 +41,12 @@ model Organization {
   editions     Edition[]
   subscribers  Subscriber[]
   rssSources   RSSSource[]
-  curationJobs CurationJob[]
-  templates    EmailTemplate[]
-  brandVoices  BrandVoice[]
-  mediaAssets  MediaAsset[]
-  searchTopics SearchTopic[]
+  curationJobs   CurationJob[]
+  templates      EmailTemplate[]
+  brandVoices    BrandVoice[]
+  mediaAssets    MediaAsset[]
+  searchTopics   SearchTopic[]
+  backgroundJobs BackgroundJob[]
 
   @@index([slug])
   @@index([plan])
@@ -605,4 +606,42 @@ enum SearchResultStatus {
   REVIEWED // Human has seen it
   IMPORTED // Imported to articles
   DISMISSED // Marked as not relevant
+}
+
+// ==================== BACKGROUND JOBS ====================
+
+model BackgroundJob {
+  id           String    @id @default(cuid())
+  type         JobType
+  status       JobStatus @default(RUNNING)
+  progress     Int       @default(0)
+  currentStage String?
+  metadata     Json      @default("{}")
+  result       Json?
+  error        String?
+  logs         Json      @default("[]")
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  @@index([type, status])
+  @@index([organizationId])
+  @@index([startedAt(sort: Desc)])
+}
+
+enum JobType {
+  GENERATION
+  SEARCH
+  EMAIL_SEND
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
