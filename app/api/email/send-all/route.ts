@@ -6,6 +6,7 @@ import { renderTemplateById } from "@/lib/email/template-renderer";
 import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
+import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -356,6 +357,21 @@ export async function POST(request: Request) {
       await markEditionAsSent(edition.id);
     }
 
+    // Publish to SharePoint (non-blocking - don't fail email send if SharePoint fails)
+    let sharePointResult = null;
+    if (result.sent > 0 && !useAdHocEmails && isSharePointConfigured()) {
+      try {
+        sharePointResult = await publishToSharePoint(edition.id);
+        if (sharePointResult.success) {
+          console.log(`SharePoint: Published to ${sharePointResult.sharePointUrl}`);
+        } else {
+          console.warn(`SharePoint publish failed: ${sharePointResult.error}`);
+        }
+      } catch (spError) {
+        console.error("SharePoint publish error (non-fatal):", spError);
+      }
+    }
+
     return NextResponse.json({
       success: result.success,
       message: `Newsletter sent to ${result.sent}/${result.sent + result.failed} ${useAdHocEmails ? "recipients" : "subscribers"}`,
@@ -363,6 +379,11 @@ export async function POST(request: Request) {
         sent: result.sent,
         failed: result.failed,
         errors: result.errors.slice(0, 10), // Return first 10 errors
+        sharePoint: sharePointResult ? {
+          published: sharePointResult.success,
+          url: sharePointResult.sharePointUrl,
+          error: sharePointResult.error,
+        } : null,
       },
     });
   } catch (error) {
@@ -520,12 +541,12 @@ async function sendNewsletterWithTemplate(
             ? await sendEmailWithProvider(
                 providerOverride,
                 subscriber.email,
-                `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+                `AI Radar - Week ${data.week}, ${data.year}`,
                 templateHtml
               )
             : await sendEmail(
                 subscriber.email,
-                `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+                `AI Radar - Week ${data.week}, ${data.year}`,
                 templateHtml
               );
 
@@ -672,12 +693,12 @@ async function sendToAdHocEmails(
             ? await sendEmailWithProvider(
                 providerOverride,
                 email,
-                `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+                `AI Radar - Week ${data.week}, ${data.year}`,
                 html
               )
             : await sendEmail(
                 email,
-                `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+                `AI Radar - Week ${data.week}, ${data.year}`,
                 html
               );
 

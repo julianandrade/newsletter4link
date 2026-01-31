@@ -32,21 +32,23 @@ model Organization {
   updatedAt DateTime @updatedAt
 
   // Relations - all tenant-scoped data
-  members      OrgUser[]
-  invites      OrgInvite[]
-  settings     OrgSettings?
-  apiKeys      ApiKey[]
-  articles     Article[]
-  projects     Project[]
-  editions     Edition[]
-  subscribers  Subscriber[]
-  rssSources   RSSSource[]
-  curationJobs   CurationJob[]
-  templates      EmailTemplate[]
-  brandVoices    BrandVoice[]
-  mediaAssets    MediaAsset[]
-  searchTopics   SearchTopic[]
-  backgroundJobs BackgroundJob[]
+  members          OrgUser[]
+  invites          OrgInvite[]
+  settings         OrgSettings?
+  apiKeys          ApiKey[]
+  articles         Article[]
+  projects         Project[]
+  editions         Edition[]
+  subscribers      Subscriber[]
+  rssSources       RSSSource[]
+  curationJobs     CurationJob[]
+  templates        EmailTemplate[]
+  brandVoices      BrandVoice[]
+  mediaAssets      MediaAsset[]
+  searchTopics     SearchTopic[]
+  searchHistory    SearchHistory[]
+  backgroundJobs   BackgroundJob[]
+  generationDrafts GenerationDraft[]
 
   @@index([slug])
   @@index([plan])
@@ -117,12 +119,12 @@ model OrgInvite {
 
 // API Keys for programmatic access (PROFESSIONAL+ plans)
 model ApiKey {
-  id          String   @id @default(cuid())
-  name        String   // User-friendly name for the key
-  keyHash     String   @unique // SHA-256 hash of the actual key
-  keyPrefix   String   // First 8 chars for identification (e.g., "nl4l_abc1")
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
+  id         String    @id @default(cuid())
+  name       String // User-friendly name for the key
+  keyHash    String    @unique // SHA-256 hash of the actual key
+  keyPrefix  String // First 8 chars for identification (e.g., "nl4l_abc1")
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationId String
@@ -155,7 +157,7 @@ model OrgSettings {
   brandVoicePrompt String? @db.Text
   logoUrl          String?
   bannerUrl        String?
-  primaryColor     String? @default("#0066cc")
+  primaryColor     String? @default("#1e3a5f")
 
   // Email settings
   fromName     String?
@@ -280,6 +282,12 @@ model Edition {
   editorDesignJson Json? // Saved Unlayer design for this edition
   templateId       String? // Template used as base
 
+  // SharePoint publishing
+  sharePointUrl         String? // URL to published page
+  sharePointPageId      String? // Graph API page ID
+  sharePointPublishedAt DateTime? // When published
+  sharePointError       String? // Last error message
+
   // Multi-tenant
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationId String
@@ -290,6 +298,7 @@ model Edition {
   // Relations
   articles EditionArticle[]
   projects EditionProject[]
+  drafts   GenerationDraft[]
 
   @@unique([week, year, organizationId]) // Same week/year can exist in different orgs
   @@index([status])
@@ -300,6 +309,13 @@ enum EditionStatus {
   DRAFT
   FINALIZED
   SENT
+}
+
+enum DraftStatus {
+  DRAFT // Just generated
+  APPROVED // Ready for send
+  USED // Was sent
+  DISCARDED // Rejected
 }
 
 // Join table: Edition <-> Articles (with ordering)
@@ -324,6 +340,29 @@ model EditionProject {
 
   @@id([editionId, projectId])
   @@index([editionId, order])
+}
+
+// Ghost Writer generation drafts for version history
+model GenerationDraft {
+  id String @id @default(cuid())
+
+  content      Json // The full GeneratedNewsletter object
+  brandVoiceId String? // Which voice was used
+
+  status      DraftStatus @default(DRAFT)
+  generatedAt DateTime    @default(now())
+  approvedAt  DateTime?
+
+  edition   Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  editionId String
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  @@index([editionId])
+  @@index([organizationId])
+  @@index([status])
 }
 
 // ==================== SUBSCRIBERS ====================
@@ -514,21 +553,21 @@ model SearchTopic {
   description String? @db.Text
 
   // Search configuration
-  query       String  @db.Text // Natural language query
-  queryExpanded String? @db.Text // AI-expanded query for better results
-  providers   String[] @default(["tavily"]) // Which search providers to use
+  query         String   @db.Text // Natural language query
+  queryExpanded String?  @db.Text // AI-expanded query for better results
+  providers     String[] @default(["tavily"]) // Which search providers to use
 
   // Scheduling
-  schedule    SearchSchedule @default(MANUAL)
-  lastRunAt   DateTime?
-  nextRunAt   DateTime?
+  schedule  SearchSchedule @default(MANUAL)
+  lastRunAt DateTime?
+  nextRunAt DateTime?
 
   // Filters
-  timeRange   SearchTimeRange @default(WEEK)
-  maxResults  Int @default(20)
+  timeRange  SearchTimeRange @default(WEEK)
+  maxResults Int             @default(20)
 
   // Status
-  isActive    Boolean @default(true)
+  isActive Boolean @default(true)
 
   // Multi-tenant
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -538,7 +577,8 @@ model SearchTopic {
   updatedAt DateTime @updatedAt
 
   // Relations
-  results SearchResult[]
+  results              SearchResult[]
+  convertedFromHistory SearchHistory[]
 
   @@index([organizationId])
   @@index([isActive])
@@ -566,26 +606,26 @@ model SearchResult {
   // Source information
   url         String
   title       String
-  snippet     String  @db.Text
-  content     String? @db.Text // Full content if available
+  snippet     String    @db.Text
+  content     String?   @db.Text // Full content if available
   publishedAt DateTime?
   source      String? // Domain or publication name
   author      String?
   imageUrl    String?
 
   // Search metadata
-  provider    String // Which provider found this: tavily, brave, etc.
-  rawScore    Float? // Provider's relevance score
+  provider String // Which provider found this: tavily, brave, etc.
+  rawScore Float? // Provider's relevance score
 
   // AI analysis
   aiScore         Float? // Claude relevance score (1-10)
-  aiSummary       String? @db.Text
+  aiSummary       String?  @db.Text
   aiTopics        String[] // Extracted topics
   aiSentiment     String? // positive, negative, neutral
-  aiRelevanceNote String? @db.Text // Why it's relevant
+  aiRelevanceNote String?  @db.Text // Why it's relevant
 
   // Status
-  status SearchResultStatus @default(NEW)
+  status            SearchResultStatus @default(NEW)
   importedArticleId String? // If imported to articles
 
   // Parent topic
@@ -606,6 +646,32 @@ enum SearchResultStatus {
   REVIEWED // Human has seen it
   IMPORTED // Imported to articles
   DISMISSED // Marked as not relevant
+}
+
+// ==================== SEARCH HISTORY ====================
+
+// Tracks ad-hoc searches for recall and potential conversion to topics
+model SearchHistory {
+  id            String  @id @default(cuid())
+  query         String  @db.Text
+  queryExpanded String? @db.Text
+  queryAnalysis Json? // { intent, timeScope, topics }
+
+  resultCount Int
+  results     Json // Snapshot of AnalyzedResult[]
+
+  searchedAt DateTime @default(now())
+
+  // If converted to a topic
+  convertedToTopicId String?
+  convertedTopic     SearchTopic? @relation(fields: [convertedToTopicId], references: [id])
+
+  // Multi-tenant
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  @@index([organizationId])
+  @@index([searchedAt(sort: Desc)])
 }
 
 // ==================== BACKGROUND JOBS ====================

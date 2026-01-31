@@ -73,15 +73,16 @@ export const NewsletterEmail = ({
             {logoUrl ? (
               <Img
                 src={logoUrl}
-                alt="Link AI Newsletter"
+                alt="AI Radar"
                 width="48"
                 height="48"
                 style={logoImage}
               />
             ) : null}
             <Heading style={h1}>
-              {!logoUrl && "🤖 "}Link AI Newsletter
+              {!logoUrl && "📡 "}AI Radar
             </Heading>
+            <Text style={tagline}>Link's AI Intelligence Hub</Text>
             <Text style={subtitle}>
               Week {week}, {year}
             </Text>
@@ -90,8 +91,8 @@ export const NewsletterEmail = ({
           {/* Introduction */}
           <Section style={section}>
             <Text style={text}>
-              Your weekly digest of the latest AI and technology developments,
-              curated by AI and reviewed by experts.
+              Your AI intelligence, delivered. This week's curated insights on
+              artificial intelligence and emerging technology.
             </Text>
           </Section>
 
@@ -100,7 +101,7 @@ export const NewsletterEmail = ({
           {/* Main Articles Section */}
           <Section style={section}>
             <Heading as="h2" style={h2}>
-              📰 This Week in AI
+              📡 On the Radar
             </Heading>
 
             {articles.map((article, index) => (
@@ -134,10 +135,10 @@ export const NewsletterEmail = ({
               <Hr style={hr} />
               <Section style={projectsSection}>
                 <Heading as="h2" style={h2}>
-                  🚀 Link's AI Innovations
+                  🎯 Radar Picks
                 </Heading>
                 <Text style={text}>
-                  Showcasing our team's latest AI achievements and projects.
+                  Spotlighting Link's latest AI achievements and innovations.
                 </Text>
 
                 {projects.map((project, index) => (
@@ -180,8 +181,7 @@ export const NewsletterEmail = ({
           <Hr style={hr} />
           <Section style={footer}>
             <Text style={footerText}>
-              This newsletter was curated using AI technology and reviewed by
-              the Link Consulting team.
+              AI Radar is curated using AI and reviewed by the Link Consulting team.
             </Text>
             <Text style={footerText}>
               <Link
@@ -241,14 +241,14 @@ const bannerImage = {
 const header = {
   padding: "32px 40px",
   textAlign: "center" as const,
-  backgroundColor: "#1e293b",
+  backgroundColor: "#1e3a5f",
   borderRadius: "8px 8px 0 0",
 };
 
 const headerWithBanner = {
   padding: "32px 40px",
   textAlign: "center" as const,
-  backgroundColor: "#1e293b",
+  backgroundColor: "#1e3a5f",
   borderRadius: "0",
 };
 
@@ -267,10 +267,20 @@ const h1 = {
   lineHeight: "1.25",
 };
 
+const tagline = {
+  color: "#00b4d8",
+  fontSize: "14px",
+  fontWeight: "500",
+  margin: "4px 0 0",
+  padding: "0",
+  letterSpacing: "0.5px",
+  textTransform: "uppercase" as const,
+};
+
 const subtitle = {
   color: "#cbd5e1",
   fontSize: "16px",
-  margin: "0",
+  margin: "8px 0 0",
   padding: "0",
 };
 
@@ -284,7 +294,7 @@ const projectsSection = {
 };
 
 const h2 = {
-  color: "#1e293b",
+  color: "#1e3a5f",
   fontSize: "24px",
   fontWeight: "600",
   margin: "0 0 16px",
@@ -317,8 +327,8 @@ const categoryContainer = {
 
 const categoryBadge = {
   display: "inline-block",
-  backgroundColor: "#e0e7ff",
-  color: "#4338ca",
+  backgroundColor: "#e0f7fa",
+  color: "#0891b2",
   padding: "4px 12px",
   borderRadius: "12px",
   fontSize: "12px",
@@ -335,7 +345,7 @@ const articleSummary = {
 };
 
 const readMoreLink = {
-  color: "#3b82f6",
+  color: "#00b4d8",
   fontSize: "14px",
   fontWeight: "500",
   textDecoration: "none",
