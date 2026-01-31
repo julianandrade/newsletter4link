@@ -265,3 +265,158 @@ npm test -- path/to/test
 - The UI needs design improvements - use shadcn/ui patterns and modern layouts
 - Curation timeout is a known issue - consider SSE or background jobs for fixes
 - Update this file when architectural changes are made
+
+---
+
+## Agent Behavior Guidelines
+
+### Multi-Agent Safety
+When multiple Claude sessions or agents may be working:
+- Do NOT create/apply/drop `git stash` unless explicitly requested
+- Do NOT switch branches unless explicitly requested
+- Do NOT create/remove/modify `git worktree` unless explicitly requested
+- When unrecognized files appear, focus on your changes only; commit only scoped changes
+- Keep reports focused on your edits; end with brief "other files present" note only if relevant
+
+### Verification Standards
+- When answering questions, verify in code first; do not guess
+- Bug investigations: read source code of related dependencies before concluding root cause
+- Run tests before marking any task complete
+- Aim for high-confidence answers backed by code evidence
+
+### Code Quality
+- Keep files under ~500 LOC when feasible; split/refactor when it improves clarity
+- Add brief comments for tricky or non-obvious logic only
+- Extract helpers instead of creating duplicate "V2" copies of files
+- Use existing patterns; follow established conventions in the codebase
+
+### Lint/Format Handling
+- If diffs are formatting-only, auto-resolve without asking
+- If commit already requested, include formatting fixes in same commit
+- Only ask confirmation for semantic changes (logic/data/behavior)
+
+---
+
+## Commit & PR Guidelines
+
+### Commit Messages
+- Use concise, action-oriented format: `Area: action description`
+- Examples: `API: add rate limiting to curation`, `UI: fix article card overflow`
+- Group related changes; avoid bundling unrelated refactors
+
+### Pull Requests
+- Summarize: scope, testing performed, user-facing changes
+- Reference related issues or specs when applicable
+
+### PR Review Mode
+- Use `gh pr view` and `gh pr diff` for review
+- Do NOT switch branches during review
+- Goal: merge PRs; prefer rebase when clean, squash when history is messy
+
+### Security
+- Never commit API keys, real phone numbers, or live config values
+- Use obviously fake placeholders in docs, tests, and examples
+
+---
+
+## Security Guidelines
+
+This project follows OWASP Top 10 2025 guidelines for both web and LLM applications.
+
+### Web Application Security (OWASP Top 10 2025)
+
+#### Access Control (A01)
+- Deny access by default; require explicit grants
+- Validate authorization on every server-side request
+- Use role-based access control (RBAC) via middleware
+- Log and alert on access control failures
+
+#### Security Configuration (A02)
+- Never use default credentials or configurations
+- Remove unused features, endpoints, and dependencies
+- Minimize error message verbosity in production
+- Review cloud storage permissions (Supabase)
+
+#### Supply Chain Security (A03)
+- Verify package integrity before installation
+- Use `package-lock.json` and commit it
+- Audit new dependencies with `npm audit`
+- Prefer well-maintained packages with security policies
+
+#### Cryptographic Security (A04)
+- Use strong algorithms: AES-256 for encryption, bcrypt/Argon2 for passwords
+- Enforce TLS for all data in transit
+- Never hardcode API keys or secrets
+- Use environment variables for all sensitive configuration
+
+#### Injection Prevention (A05)
+- Use Prisma's parameterized queries (never raw SQL with user input)
+- Sanitize HTML content before rendering
+- Implement Content Security Policy (CSP) headers
+- Validate and sanitize all user inputs
+
+#### Secure Design (A06)
+- Apply defense in depth (multiple security layers)
+- Use established secure patterns from Next.js/Prisma
+- Consider threat modeling for new features
+- Separate concerns: UI, business logic, data access
+
+#### Authentication Security (A07)
+- Implement rate limiting on auth endpoints
+- Use secure session management
+- Store passwords with bcrypt (min 10 rounds)
+- Implement account lockout after failed attempts
+
+#### Integrity Verification (A08)
+- Verify webhook signatures (e.g., Resend webhooks)
+- Secure CI/CD pipelines
+- Avoid deserializing untrusted data
+
+#### Logging & Monitoring (A09)
+- Log authentication events and access control failures
+- Never log sensitive data (passwords, API keys, PII)
+- Set up alerts for anomalous patterns
+- Retain logs for incident investigation
+
+#### Exception Handling (A10)
+- Fail secure: on error, deny access rather than grant
+- Sanitize error messages for users (no stack traces)
+- Handle edge cases and boundary conditions
+- Test error paths explicitly
+
+### LLM Application Security (OWASP Top 10 LLM 2025)
+
+#### Prompt Injection Prevention (LLM01)
+- Clearly separate system prompts from user content
+- Validate and filter user inputs before sending to Claude
+- Use semantic filters for sensitive content categories
+- Never trust LLM output without validation
+
+#### Sensitive Information Protection (LLM02)
+- Never include secrets or credentials in prompts
+- Filter LLM outputs before displaying to users
+- Don't expose internal system prompts in responses
+- Sanitize any user data included in prompts
+
+#### AI Supply Chain Security (LLM03)
+- Use only trusted AI providers (Anthropic, OpenAI)
+- Verify model versions and capabilities
+- Monitor for API changes that could affect security
+
+#### Output Validation (LLM05)
+- Treat LLM outputs as untrusted input
+- Validate and sanitize before using in downstream systems
+- Never execute LLM-generated code without review
+- Use sandboxing for untrusted model responses
+
+#### Agency Limits (LLM06)
+- Apply least-privilege to any LLM-triggered actions
+- Limit LLM's ability to modify data or call external APIs
+- Require human approval for sensitive operations
+- Scope LLM functionality to what's strictly needed
+
+#### Resource Management (LLM10)
+- Implement rate limiting on AI endpoints
+- Set appropriate timeouts for AI API calls
+- Monitor token usage and costs
+- Implement circuit breakers for AI failures
