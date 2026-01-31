@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" fill="none">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="50%" stop-color="#1a3252"/>
+      <stop offset="100%" stop-color="#152a45"/>
+    </linearGradient>
+
+    <!-- Radar sweep gradient -->
+    <linearGradient id="sweepGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00b4d8" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#00b4d8" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- Glow effect -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="200" fill="url(#bgGradient)"/>
+
+  <!-- Grid lines (subtle) -->
+  <g stroke="#00b4d8" stroke-opacity="0.1" stroke-width="1">
+    <line x1="0" y1="50" x2="600" y2="50"/>
+    <line x1="0" y1="100" x2="600" y2="100"/>
+    <line x1="0" y1="150" x2="600" y2="150"/>
+    <line x1="100" y1="0" x2="100" y2="200"/>
+    <line x1="200" y1="0" x2="200" y2="200"/>
+    <line x1="300" y1="0" x2="300" y2="200"/>
+    <line x1="400" y1="0" x2="400" y2="200"/>
+    <line x1="500" y1="0" x2="500" y2="200"/>
+  </g>
+
+  <!-- Radar circles (left side) -->
+  <g transform="translate(80, 100)">
+    <circle r="120" stroke="#00b4d8" stroke-width="1" fill="none" opacity="0.15"/>
+    <circle r="90" stroke="#00b4d8" stroke-width="1" fill="none" opacity="0.2"/>
+    <circle r="60" stroke="#00b4d8" stroke-width="1" fill="none" opacity="0.25"/>
+    <circle r="30" stroke="#00b4d8" stroke-width="1" fill="none" opacity="0.3"/>
+    <circle r="6" fill="#00b4d8" opacity="0.8"/>
+
+    <!-- Sweep -->
+    <path d="M0 0 L0 -90 A90 90 0 0 1 78 45 Z" fill="url(#sweepGrad)" opacity="0.6"/>
+    <line x1="0" y1="0" x2="78" y2="45" stroke="#00b4d8" stroke-width="2" opacity="0.8"/>
+  </g>
+
+  <!-- Signal waves (right side decorative) -->
+  <g transform="translate(520, 100)" opacity="0.3">
+    <path d="M0 -40 Q20 -40 20 0 Q20 40 0 40" stroke="#00b4d8" stroke-width="2" fill="none"/>
+    <path d="M15 -55 Q45 -55 45 0 Q45 55 15 55" stroke="#00b4d8" stroke-width="2" fill="none"/>
+    <path d="M30 -70 Q70 -70 70 0 Q70 70 30 70" stroke="#00b4d8" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- Signal blips -->
+  <g filter="url(#glow)">
+    <circle cx="140" cy="60" r="4" fill="#00b4d8" opacity="0.9"/>
+    <circle cx="120" cy="130" r="3" fill="#00b4d8" opacity="0.7"/>
+    <circle cx="180" cy="90" r="3" fill="#00b4d8" opacity="0.6"/>
+  </g>
+
+  <!-- Pulse rings -->
+  <circle cx="140" cy="60" r="10" stroke="#00b4d8" stroke-width="1" fill="none" opacity="0.4"/>
+  <circle cx="140" cy="60" r="18" stroke="#00b4d8" stroke-width="1" fill="none" opacity="0.2"/>
+
+  <!-- Horizontal scan lines (subtle texture) -->
+  <g stroke="#00b4d8" stroke-opacity="0.05" stroke-width="1">
+    <line x1="0" y1="10" x2="600" y2="10"/>
+    <line x1="0" y1="30" x2="600" y2="30"/>
+    <line x1="0" y1="70" x2="600" y2="70"/>
+    <line x1="0" y1="90" x2="600" y2="90"/>
+    <line x1="0" y1="110" x2="600" y2="110"/>
+    <line x1="0" y1="130" x2="600" y2="130"/>
+    <line x1="0" y1="170" x2="600" y2="170"/>
+    <line x1="0" y1="190" x2="600" y2="190"/>
+  </g>
+</svg>
