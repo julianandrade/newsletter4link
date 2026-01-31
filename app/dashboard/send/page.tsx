@@ -28,6 +28,7 @@ import {
   AlertCircle,
   Inbox,
   ChevronRight,
+  Globe,
 } from "lucide-react";
 
 interface Edition {
@@ -41,6 +42,10 @@ interface Edition {
   updatedAt: string;
   articleCount: number;
   projectCount: number;
+  // SharePoint fields
+  sharePointUrl: string | null;
+  sharePointPublishedAt: string | null;
+  sharePointError: string | null;
 }
 
 function getStatusBadge(status: Edition["status"]) {
@@ -294,9 +299,21 @@ export default function EditionsPage() {
                   {/* Right: Sent Date or Status Indicator */}
                   <div className="flex items-center gap-4">
                     {edition.status === "SENT" && edition.sentAt ? (
-                      <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-                        <Send className="w-4 h-4" />
-                        <span>{formatDate(edition.sentAt)}</span>
+                      <div className="hidden sm:flex items-center gap-3">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Send className="w-4 h-4" />
+                          <span>{formatDate(edition.sentAt)}</span>
+                        </div>
+                        {/* SharePoint status indicator */}
+                        {edition.sharePointUrl ? (
+                          <div className="flex items-center gap-1 text-teal-600 dark:text-teal-400" title="Published to SharePoint">
+                            <Globe className="w-4 h-4" />
+                          </div>
+                        ) : edition.sharePointError ? (
+                          <div className="flex items-center gap-1 text-red-500" title={`SharePoint error: ${edition.sharePointError}`}>
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                        ) : null}
                       </div>
                     ) : edition.status === "FINALIZED" ? (
                       <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">

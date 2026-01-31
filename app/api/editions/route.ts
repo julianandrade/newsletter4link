@@ -42,6 +42,10 @@ export async function GET() {
       updatedAt: edition.updatedAt,
       articleCount: edition._count?.articles ?? 0,
       projectCount: edition._count?.projects ?? 0,
+      // SharePoint fields
+      sharePointUrl: edition.sharePointUrl,
+      sharePointPublishedAt: edition.sharePointPublishedAt,
+      sharePointError: edition.sharePointError,
     }));
 
     return NextResponse.json({

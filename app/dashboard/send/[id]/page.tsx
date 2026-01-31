@@ -59,6 +59,9 @@ import {
   ChevronUp,
   Pencil,
   List,
+  ExternalLink,
+  RefreshCw,
+  Globe,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -109,6 +112,11 @@ interface EditionDetail {
   projectCount: number;
   editorDesignJson: object | null;
   templateId: string | null;
+  // SharePoint fields
+  sharePointUrl: string | null;
+  sharePointPageId: string | null;
+  sharePointPublishedAt: string | null;
+  sharePointError: string | null;
 }
 
 // Status badge component
@@ -187,6 +195,7 @@ export default function EditionDetailPage() {
   const [previewing, setPreviewing] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [retryingSharePoint, setRetryingSharePoint] = useState(false);
 
   // Dialog states
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
@@ -659,6 +668,34 @@ export default function EditionDetailPage() {
     }
   };
 
+  // Retry SharePoint publish
+  const handleRetrySharePoint = async () => {
+    if (!edition) return;
+
+    setRetryingSharePoint(true);
+    try {
+      const res = await fetch("/api/sharepoint/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ editionId: edition.id }),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        toast.success("Published to SharePoint");
+        await loadEdition();
+      } else {
+        toast.error(result.error || "Failed to publish to SharePoint");
+      }
+    } catch (err) {
+      console.error("Error retrying SharePoint publish:", err);
+      toast.error("Failed to publish to SharePoint");
+    } finally {
+      setRetryingSharePoint(false);
+    }
+  };
+
   // Check if edition is editable
   const isEditable = edition?.status === "DRAFT";
   const isFinalized = edition?.status === "FINALIZED";
@@ -885,6 +922,80 @@ export default function EditionDetailPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* SharePoint Archive Status - for sent editions */}
+        {isSent && (
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    edition.sharePointUrl
+                      ? "bg-teal-100 dark:bg-teal-900/30"
+                      : edition.sharePointError
+                      ? "bg-red-100 dark:bg-red-900/30"
+                      : "bg-gray-100 dark:bg-gray-800"
+                  }`}>
+                    <Globe className={`w-5 h-5 ${
+                      edition.sharePointUrl
+                        ? "text-teal-600 dark:text-teal-400"
+                        : edition.sharePointError
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-gray-600 dark:text-gray-400"
+                    }`} />
+                  </div>
+                  <div>
+                    <p className="font-medium">SharePoint Archive</p>
+                    {edition.sharePointUrl ? (
+                      <p className="text-sm text-muted-foreground">
+                        Published {formatDate(edition.sharePointPublishedAt)}
+                      </p>
+                    ) : edition.sharePointError ? (
+                      <p className="text-sm text-red-600 dark:text-red-400">
+                        Failed: {edition.sharePointError}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Not published to SharePoint
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {edition.sharePointUrl ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(edition.sharePointUrl!, "_blank")}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View on SharePoint
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRetrySharePoint}
+                      disabled={retryingSharePoint}
+                    >
+                      {retryingSharePoint ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Publishing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          {edition.sharePointError ? "Retry Publish" : "Publish Now"}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Summary Stats */}

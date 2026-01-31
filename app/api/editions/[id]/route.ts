@@ -76,6 +76,11 @@ export async function GET(
       updatedAt: edition.updatedAt,
       editorDesignJson: edition.editorDesignJson,
       templateId: edition.templateId,
+      // SharePoint fields
+      sharePointUrl: edition.sharePointUrl,
+      sharePointPageId: edition.sharePointPageId,
+      sharePointPublishedAt: edition.sharePointPublishedAt,
+      sharePointError: edition.sharePointError,
       articles: edition.articles.map((ea) => ({
         ...ea.article,
         order: ea.order,
@@ -339,6 +344,11 @@ export async function PATCH(
       updatedAt: updatedEdition.updatedAt,
       editorDesignJson: updatedEdition.editorDesignJson,
       templateId: updatedEdition.templateId,
+      // SharePoint fields
+      sharePointUrl: updatedEdition.sharePointUrl,
+      sharePointPageId: updatedEdition.sharePointPageId,
+      sharePointPublishedAt: updatedEdition.sharePointPublishedAt,
+      sharePointError: updatedEdition.sharePointError,
       articles: updatedEdition.articles.map((ea) => ({
         ...ea.article,
         order: ea.order,
