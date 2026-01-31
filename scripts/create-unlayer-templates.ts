@@ -69,7 +69,7 @@ function createCorporateTemplate(branding: { logoUrl: string; bannerUrl: string 
                     linkStyle: { inherit: true, linkColor: "#0000ee", linkHoverColor: "#0000ee", linkUnderline: true, linkHoverUnderline: true },
                     hideDesktop: false,
                     displayCondition: null,
-                    text: "<p style=\"line-height: 140%;\"><strong>Link AI Newsletter</strong></p>",
+                    text: "<p style=\"line-height: 140%;\"><strong>📡 AI Radar</strong></p>",
                   },
                 },
                 {
@@ -87,7 +87,7 @@ function createCorporateTemplate(branding: { logoUrl: string; bannerUrl: string 
                 },
               ],
               values: {
-                backgroundColor: "#1a202c",
+                backgroundColor: "#1e3a5f",
                 padding: "20px",
                 border: {},
                 borderRadius: "8px 8px 0 0",
@@ -249,7 +249,7 @@ function createCorporateTemplate(branding: { logoUrl: string; bannerUrl: string 
         backgroundColor: "#f8f9fa",
         backgroundImage: { url: "", fullWidth: true, repeat: "no-repeat", size: "custom", position: "center" },
         preheaderText: "This week's AI and technology insights from Link Consulting",
-        linkStyle: { body: true, linkColor: "#1a202c", linkHoverColor: "#0000ee", linkUnderline: true, linkHoverUnderline: true },
+        linkStyle: { body: true, linkColor: "#00b4d8", linkHoverColor: "#0891b2", linkUnderline: true, linkHoverUnderline: true },
         _meta: { htmlID: "u_body", htmlClassNames: "u_body" },
       },
     },
@@ -261,7 +261,7 @@ function createCorporateTemplate(branding: { logoUrl: string; bannerUrl: string 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Link AI Newsletter - Week {{week}}, {{year}}</title>
+  <title>AI Radar - Week {{week}}, {{year}}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: Georgia, 'Times New Roman', serif; background-color: #f8f9fa; color: #2d3748;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8f9fa;">
@@ -270,9 +270,10 @@ function createCorporateTemplate(branding: { logoUrl: string; bannerUrl: string 
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <!-- Header -->
           <tr>
-            <td style="background-color: #1a202c; padding: 32px 40px; border-radius: 8px 8px 0 0; text-align: center;">
-              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Link Consulting" width="80" height="80" style="display: block; margin: 0 auto 16px; border-radius: 8px;">` : ''}
-              <h1 style="margin: 0; font-size: 28px; font-weight: 400; color: #ffffff;">Link AI Newsletter</h1>
+            <td style="background-color: #1e3a5f; padding: 32px 40px; border-radius: 8px 8px 0 0; text-align: center;">
+              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="AI Radar" width="80" height="80" style="display: block; margin: 0 auto 16px; border-radius: 8px;">` : ''}
+              <h1 style="margin: 0; font-size: 28px; font-weight: 400; color: #ffffff;">📡 AI Radar</h1>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #00b4d8;">Link's AI Intelligence Hub</p>
               <p style="margin: 8px 0 0; font-size: 14px; color: #a0aec0;">Week {{week}} &middot; {{year}}</p>
             </td>
           </tr>
@@ -355,7 +356,19 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     fontWeight: 800,
                     textAlign: "center",
                     color: "#ffffff",
-                    text: "<p><strong>AI PULSE</strong></p>",
+                    text: "<p><strong>📡 AI Radar</strong></p>",
+                  },
+                },
+                {
+                  id: "tagline",
+                  type: "text",
+                  values: {
+                    containerPadding: "0px 20px 10px",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    textAlign: "center",
+                    color: "#00b4d8",
+                    text: "<p>Link's AI Intelligence Hub</p>",
                   },
                 },
                 {
@@ -381,7 +394,7 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
             },
           ],
           values: {
-            backgroundColor: "#6366f1",
+            backgroundColor: "#00b4d8",
             backgroundImage: { url: "", fullWidth: true, repeat: "no-repeat", size: "custom", position: "center" },
             padding: "0px",
           },
@@ -406,10 +419,10 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   },
                 },
               ],
-              values: { backgroundColor: "#1e293b", padding: "0px" },
+              values: { backgroundColor: "#1e3a5f", padding: "0px" },
             },
           ],
-          values: { padding: "0px", backgroundColor: "#1e293b" },
+          values: { padding: "0px", backgroundColor: "#1e3a5f" },
         },
         // Articles
         {
@@ -426,9 +439,9 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     containerPadding: "30px 40px 15px",
                     fontSize: "14px",
                     fontWeight: 700,
-                    color: "#6366f1",
+                    color: "#00b4d8",
                     letterSpacing: "2px",
-                    text: "<p>THIS WEEK'S HIGHLIGHTS</p>",
+                    text: "<p>ON THE RADAR</p>",
                   },
                 },
                 {
@@ -440,10 +453,10 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   },
                 },
               ],
-              values: { backgroundColor: "#1e293b", padding: "0px" },
+              values: { backgroundColor: "#1e3a5f", padding: "0px" },
             },
           ],
-          values: { padding: "0px", backgroundColor: "#1e293b" },
+          values: { padding: "0px", backgroundColor: "#1e3a5f" },
         },
         // Projects
         {
@@ -460,9 +473,9 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     containerPadding: "30px 40px 15px",
                     fontSize: "14px",
                     fontWeight: 700,
-                    color: "#ec4899",
+                    color: "#00b4d8",
                     letterSpacing: "2px",
-                    text: "<p>BUILT AT LINK</p>",
+                    text: "<p>RADAR PICKS</p>",
                   },
                 },
                 {
@@ -496,11 +509,11 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     color: "#64748b",
                     textAlign: "center",
                     lineHeight: "150%",
-                    text: '<p>Powered by AI &bull; Curated by Humans</p><p><a href="{{unsubscribe_url}}" style="color: #6366f1; text-decoration: none;">Unsubscribe</a> | <a href="https://linkconsulting.com" style="color: #6366f1; text-decoration: none;">Link Consulting</a></p>',
+                    text: '<p>Powered by AI &bull; Curated by Humans</p><p><a href="{{unsubscribe_url}}" style="color: #00b4d8; text-decoration: none;">Unsubscribe</a> | <a href="https://linkconsulting.com" style="color: #00b4d8; text-decoration: none;">Link Consulting</a></p>',
                   },
                 },
               ],
-              values: { backgroundColor: "#1e293b", padding: "0px", borderRadius: "0 0 16px 16px", border: { borderTopWidth: "1px", borderTopStyle: "solid", borderTopColor: "#334155" } },
+              values: { backgroundColor: "#1e3a5f", padding: "0px", borderRadius: "0 0 16px 16px", border: { borderTopWidth: "1px", borderTopStyle: "solid", borderTopColor: "#334155" } },
             },
           ],
           values: { padding: "0px", backgroundColor: "" },
@@ -515,7 +528,7 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
         textColor: "#ffffff",
         backgroundColor: "#0f172a",
         preheaderText: "Your weekly AI developments digest from Link Consulting",
-        linkStyle: { body: true, linkColor: "#6366f1", linkHoverColor: "#818cf8", linkUnderline: false, linkHoverUnderline: true },
+        linkStyle: { body: true, linkColor: "#00b4d8", linkHoverColor: "#818cf8", linkUnderline: false, linkHoverUnderline: true },
       },
     },
     schemaVersion: 16,
@@ -526,7 +539,7 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Pulse - Week {{week}}, {{year}}</title>
+  <title>AI Radar - Week {{week}}, {{year}}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; background-color: #0f172a;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0f172a;">
@@ -535,22 +548,23 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
         <table role="presentation" width="600" cellspacing="0" cellpadding="0">
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%); padding: 40px; border-radius: 16px 16px 0 0; text-align: center;">
-              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Link" width="56" height="56" style="display: block; margin: 0 auto 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
-              <h1 style="margin: 0; font-size: 36px; font-weight: 800; color: #ffffff; letter-spacing: -1px;">AI PULSE</h1>
+            <td style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); padding: 40px; border-radius: 16px 16px 0 0; text-align: center;">
+              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="AI Radar" width="56" height="56" style="display: block; margin: 0 auto 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
+              <h1 style="margin: 0; font-size: 36px; font-weight: 800; color: #ffffff; letter-spacing: -1px;">📡 AI Radar</h1>
+              <p style="margin: 8px 0 0; font-size: 14px; color: #00b4d8; font-weight: 500;">Link's AI Intelligence Hub</p>
               <p style="margin: 12px 0 0; font-size: 16px; color: rgba(255,255,255,0.9); font-weight: 500;">Week {{week}} &bull; {{year}}</p>
             </td>
           </tr>
           <!-- Content -->
           <tr>
-            <td style="background-color: #1e293b;">
+            <td style="background-color: #1e3a5f;">
               <!-- Intro -->
               <div style="padding: 32px 40px;">
                 <p style="margin: 0; font-size: 18px; line-height: 1.6; color: #cbd5e1;">Your weekly dose of cutting-edge AI developments, breakthrough research, and industry shifts.</p>
               </div>
               <!-- Articles -->
               <div style="padding: 0 40px 32px;">
-                <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 2px;">This Week's Highlights</h2>
+                <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #00b4d8; text-transform: uppercase; letter-spacing: 2px;">On the Radar</h2>
                 {{articles}}
               </div>
             </td>
@@ -558,18 +572,18 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
           <!-- Projects -->
           <tr>
             <td style="background-color: #0f172a; padding: 32px 40px;">
-              <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #ec4899; text-transform: uppercase; letter-spacing: 2px;">Built at Link</h2>
+              <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #00b4d8; text-transform: uppercase; letter-spacing: 2px;">Radar Picks</h2>
               {{projects}}
             </td>
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="background-color: #1e293b; padding: 32px 40px; border-radius: 0 0 16px 16px; border-top: 1px solid #334155; text-align: center;">
+            <td style="background-color: #1e3a5f; padding: 32px 40px; border-radius: 0 0 16px 16px; border-top: 1px solid #334155; text-align: center;">
               <p style="margin: 0 0 12px; font-size: 14px; color: #64748b;">Powered by AI &bull; Curated by Humans</p>
               <p style="margin: 0; font-size: 13px; color: #475569;">
-                <a href="{{unsubscribe_url}}" style="color: #6366f1; text-decoration: none;">Unsubscribe</a>
+                <a href="{{unsubscribe_url}}" style="color: #00b4d8; text-decoration: none;">Unsubscribe</a>
                 <span style="color: #334155;">&nbsp;|&nbsp;</span>
-                <a href="https://linkconsulting.com" style="color: #6366f1; text-decoration: none;">Link Consulting</a>
+                <a href="https://linkconsulting.com" style="color: #00b4d8; text-decoration: none;">Link Consulting</a>
               </p>
             </td>
           </tr>
@@ -605,8 +619,8 @@ function createExecutiveTemplate(branding: { logoUrl: string; bannerUrl: string 
                     containerPadding: "20px 0 10px",
                     fontSize: "20px",
                     fontWeight: 700,
-                    color: "#111827",
-                    text: `<p>${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Link" width="32" height="32" style="display: inline-block; vertical-align: middle; border-radius: 6px; margin-right: 12px;">` : ''}<span style="vertical-align: middle;">Link AI Brief</span></p>`,
+                    color: "#1e3a5f",
+                    text: `<p>${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="AI Radar" width="32" height="32" style="display: inline-block; vertical-align: middle; border-radius: 6px; margin-right: 12px;">` : ''}<span style="vertical-align: middle;">📡 AI Radar Brief</span></p>`,
                   },
                 },
                 {
@@ -614,7 +628,7 @@ function createExecutiveTemplate(branding: { logoUrl: string; bannerUrl: string 
                   type: "divider",
                   values: {
                     containerPadding: "10px 0 20px",
-                    border: { borderTopWidth: "2px", borderTopStyle: "solid", borderTopColor: "#111827" },
+                    border: { borderTopWidth: "2px", borderTopStyle: "solid", borderTopColor: "#1e3a5f" },
                   },
                 },
               ],
@@ -781,7 +795,7 @@ function createExecutiveTemplate(branding: { logoUrl: string; bannerUrl: string 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Link AI Brief - Week {{week}}, {{year}}</title>
+  <title>AI Radar Brief - Week {{week}}, {{year}}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #ffffff; color: #111827;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #ffffff;">
@@ -790,12 +804,12 @@ function createExecutiveTemplate(branding: { logoUrl: string; bannerUrl: string 
         <table role="presentation" width="560" cellspacing="0" cellpadding="0">
           <!-- Header -->
           <tr>
-            <td style="padding-bottom: 24px; border-bottom: 2px solid #111827;">
+            <td style="padding-bottom: 24px; border-bottom: 2px solid #1e3a5f;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td>
-                    ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Link" width="32" height="32" style="display: inline-block; vertical-align: middle; border-radius: 6px; margin-right: 12px;">` : '<span style="display: inline-block; width: 32px; height: 32px; background: #111827; border-radius: 6px; vertical-align: middle; margin-right: 12px;"></span>'}
-                    <span style="font-size: 20px; font-weight: 700; color: #111827; vertical-align: middle;">Link AI Brief</span>
+                    ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="AI Radar" width="32" height="32" style="display: inline-block; vertical-align: middle; border-radius: 6px; margin-right: 12px;">` : '<span style="display: inline-block; width: 32px; height: 32px; background: #1e3a5f; border-radius: 6px; vertical-align: middle; margin-right: 12px;"></span>'}
+                    <span style="font-size: 20px; font-weight: 700; color: #1e3a5f; vertical-align: middle;">📡 AI Radar Brief</span>
                   </td>
                   <td style="text-align: right;">
                     <span style="font-size: 14px; color: #6b7280;">Week {{week}}, {{year}}</span>
