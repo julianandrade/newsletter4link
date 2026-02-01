@@ -7,6 +7,7 @@ import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
+import type { GeneratedNewsletter } from "@/lib/generation/generator";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   try {
     const { db, organization } = await requireOrgContext();
     const body = await request.json();
-    const { editionId, templateId, customData, subscriberIds, emails, provider } = body;
+    const { editionId, templateId, customData, subscriberIds, emails, provider, draftId } = body;
 
     // Validate provider if specified
     if (provider && !["resend", "graph"].includes(provider)) {
@@ -223,6 +224,37 @@ export async function POST(request: Request) {
       );
     }
 
+    // Resolve approved draft if any exist
+    let approvedDraft: { id: string; content: GeneratedNewsletter } | null = null;
+    const draftCount = await db.generationDraft.count({
+      where: { editionId: edition.id },
+    });
+
+    if (draftId) {
+      const draft = await db.generationDraft.findUnique({ where: { id: draftId } });
+      if (!draft || draft.status !== "APPROVED") {
+        return NextResponse.json(
+          { success: false, error: "Approved draft not found" },
+          { status: 400 }
+        );
+      }
+      approvedDraft = { id: draft.id, content: draft.content as GeneratedNewsletter };
+    } else if (draftCount > 0) {
+      const draft = await db.generationDraft.findFirst({
+        where: { editionId: edition.id, status: "APPROVED" },
+        orderBy: { approvedAt: "desc" },
+      });
+
+      if (!draft) {
+        return NextResponse.json(
+          { success: false, error: "No approved draft found. Approve a draft first." },
+          { status: 400 }
+        );
+      }
+
+      approvedDraft = { id: draft.id, content: draft.content as GeneratedNewsletter };
+    }
+
     // Check if already sent
     if (edition.status === "SENT") {
       return NextResponse.json(
@@ -272,6 +304,37 @@ export async function POST(request: Request) {
         week: customData.week,
         year: customData.year,
         customBlocks: customData.customBlocks,
+      };
+    } else if (approvedDraft?.content?.sections?.length) {
+      const articleById = new Map(
+        editionArticles.map((ea) => [ea.article.id, ea.article])
+      );
+
+      const draftArticles = approvedDraft.content.sections.flatMap((section) =>
+        section.articles.map((article) => {
+          const source = articleById.get(article.id);
+          return {
+            id: article.id,
+            title: article.title,
+            summary: article.summary,
+            sourceUrl: article.sourceUrl,
+            category: source?.category || [],
+          };
+        })
+      );
+
+      emailData = {
+        articles: draftArticles,
+        projects: editionProjects.map((ep: any) => ({
+          id: ep.project.id,
+          name: ep.project.name,
+          description: ep.project.description,
+          team: ep.project.team,
+          impact: ep.project.impact || null,
+          projectDate: ep.project.projectDate.toISOString(),
+        })),
+        week: edition.week,
+        year: edition.year,
       };
     } else {
       emailData = {
@@ -352,9 +415,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // Mark edition as sent
+    // Mark edition and draft as sent/used
     if (result.sent > 0) {
       await markEditionAsSent(edition.id);
+      if (approvedDraft) {
+        await db.generationDraft.update({
+          where: { id: approvedDraft.id },
+          data: { status: "USED" },
+        });
+      }
     }
 
     // Publish to SharePoint (non-blocking - don't fail email send if SharePoint fails)

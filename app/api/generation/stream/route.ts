@@ -50,7 +50,13 @@ export async function GET(request: NextRequest) {
   // Get org context
   let organizationId: string;
   try {
-    const { organization } = await requireOrgContext();
+    const { organization, features } = await requireOrgContext();
+    if (!features.ghostWriter) {
+      return new Response(
+        JSON.stringify({ error: "Ghost Writer requires Starter plan or higher" }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
     organizationId = organization.id;
   } catch (error) {
     return new Response(
@@ -162,13 +168,15 @@ export async function GET(request: NextRequest) {
         throw error;
       }
 
-      // Store the generated content in the edition
+      // Create a generation draft instead of storing directly on edition
       const jsonContent = JSON.parse(JSON.stringify(newsletter));
-      await prisma.edition.update({
-        where: { id: editionId },
+      const draft = await prisma.generationDraft.create({
         data: {
-          generatedContent: jsonContent,
-          generatedAt: new Date(),
+          content: jsonContent,
+          brandVoiceId: brandVoice?.id || null,
+          editionId,
+          organizationId,
+          status: "DRAFT",
         },
       });
 
@@ -176,6 +184,7 @@ export async function GET(request: NextRequest) {
         newsletter: jsonContent,
         subjectLines: newsletter.subjectLines,
         articleCount: articles.length,
+        draftId: draft.id,
       };
     },
   });

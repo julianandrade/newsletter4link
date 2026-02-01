@@ -19,6 +19,8 @@ export type TenantScopedModels =
   | "mediaAsset"
   | "brandVoice"
   | "searchTopic"
+  | "searchHistory"
+  | "generationDraft"
   | "apiKey";
 
 /**
@@ -473,6 +475,94 @@ export function createTenantClient(organizationId: string) {
 
       count: <T extends Prisma.SearchTopicCountArgs>(args?: T) =>
         prisma.searchTopic.count({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+    },
+
+    // ==================== SEARCH HISTORY ====================
+    searchHistory: {
+      findMany: <T extends Prisma.SearchHistoryFindManyArgs>(args?: T) =>
+        prisma.searchHistory.findMany({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findFirst: <T extends Prisma.SearchHistoryFindFirstArgs>(args?: T) =>
+        prisma.searchHistory.findFirst({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findUnique: <T extends Prisma.SearchHistoryFindUniqueArgs>(args: T) =>
+        prisma.searchHistory.findUnique(args).then((result) =>
+          result?.organizationId === organizationId ? result : null
+        ),
+
+      create: <T extends Prisma.SearchHistoryCreateArgs>(args: T) =>
+        prisma.searchHistory.create({
+          ...args,
+          data: { ...args.data, organizationId },
+        } as T),
+
+      update: <T extends Prisma.SearchHistoryUpdateArgs>(args: T) =>
+        prisma.searchHistory.update(args),
+
+      updateMany: <T extends Prisma.SearchHistoryUpdateManyArgs>(args: T) =>
+        prisma.searchHistory.updateMany({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
+      delete: <T extends Prisma.SearchHistoryDeleteArgs>(args: T) =>
+        prisma.searchHistory.delete(args),
+
+      count: <T extends Prisma.SearchHistoryCountArgs>(args?: T) =>
+        prisma.searchHistory.count({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+    },
+
+    // ==================== GENERATION DRAFTS ====================
+    generationDraft: {
+      findMany: <T extends Prisma.GenerationDraftFindManyArgs>(args?: T) =>
+        prisma.generationDraft.findMany({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findFirst: <T extends Prisma.GenerationDraftFindFirstArgs>(args?: T) =>
+        prisma.generationDraft.findFirst({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findUnique: <T extends Prisma.GenerationDraftFindUniqueArgs>(args: T) =>
+        prisma.generationDraft.findUnique(args).then((result) =>
+          result?.organizationId === organizationId ? result : null
+        ),
+
+      create: <T extends Prisma.GenerationDraftCreateArgs>(args: T) =>
+        prisma.generationDraft.create({
+          ...args,
+          data: { ...args.data, organizationId },
+        } as T),
+
+      update: <T extends Prisma.GenerationDraftUpdateArgs>(args: T) =>
+        prisma.generationDraft.update(args),
+
+      updateMany: <T extends Prisma.GenerationDraftUpdateManyArgs>(args: T) =>
+        prisma.generationDraft.updateMany({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
+      delete: <T extends Prisma.GenerationDraftDeleteArgs>(args: T) =>
+        prisma.generationDraft.delete(args),
+
+      count: <T extends Prisma.GenerationDraftCountArgs>(args?: T) =>
+        prisma.generationDraft.count({
           ...args,
           where: { ...args?.where, organizationId },
         } as T),

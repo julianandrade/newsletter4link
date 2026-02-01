@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Wand2,
   CheckCircle2,
+  Clock,
   ExternalLink,
   Copy,
   Check,
@@ -84,6 +85,15 @@ interface GeneratedNewsletter {
   generatedAt: string;
 }
 
+interface GenerationDraft {
+  id: string;
+  status: "DRAFT" | "APPROVED" | "USED" | "DISCARDED";
+  generatedAt: string;
+  approvedAt?: string | null;
+  brandVoiceId?: string | null;
+  content?: GeneratedNewsletter;
+}
+
 interface GenerationProgress {
   stage: string;
   progress: number;
@@ -116,6 +126,12 @@ export default function GeneratePage() {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedNewsletter | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<GenerationDraft[]>([]);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
+  const [isLoadingDraftContentId, setIsLoadingDraftContentId] = useState<string | null>(null);
+  const [isApprovingDraftId, setIsApprovingDraftId] = useState<string | null>(null);
+  const [isDiscardingDraftId, setIsDiscardingDraftId] = useState<string | null>(null);
 
   const [editedContent, setEditedContent] = useState<{
     opening: string;
@@ -210,23 +226,46 @@ export default function GeneratePage() {
     if (selectedEditionId) {
       const edition = editions.find((e) => e.id === selectedEditionId);
       setSelectedEdition(edition || null);
-      if (edition?.generatedContent) {
-        setGenerated(edition.generatedContent as GeneratedNewsletter);
-        setEditedContent({
-          opening: edition.generatedContent.opening,
-          closing: edition.generatedContent.closing,
-          sections: edition.generatedContent.sections,
-        });
-      } else {
-        setGenerated(null);
-        setEditedContent(null);
-      }
+      setDrafts([]);
+      setSelectedDraftId(null);
+      loadDrafts(selectedEditionId);
     } else {
       setSelectedEdition(null);
       setGenerated(null);
       setEditedContent(null);
+      setDrafts([]);
+      setSelectedDraftId(null);
     }
   }, [selectedEditionId, editions]);
+
+  useEffect(() => {
+    if (!selectedDraftId) {
+      setGenerated(null);
+      setEditedContent(null);
+      return;
+    }
+
+    const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId);
+    if (!selectedDraft) {
+      if (isLoadingDrafts) return;
+      setGenerated(null);
+      setEditedContent(null);
+      return;
+    }
+
+    if (!selectedDraft.content) {
+      loadDraftContent(selectedDraft.id);
+      return;
+    }
+
+    setGenerated(selectedDraft.content);
+    setEditedContent({
+      opening: selectedDraft.content.opening,
+      closing: selectedDraft.content.closing,
+      sections: selectedDraft.content.sections,
+    });
+    setSelectedSubjectLine(0);
+  }, [selectedDraftId, drafts, isLoadingDrafts]);
 
   async function fetchEditions() {
     setIsLoadingEditions(true);
@@ -265,6 +304,51 @@ export default function GeneratePage() {
       setIsLoadingVoices(false);
     }
   }
+
+  const loadDrafts = async (editionId: string) => {
+    setIsLoadingDrafts(true);
+    try {
+      const res = await fetch(`/api/drafts?editionId=${editionId}`);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.drafts)) {
+        setDrafts(data.drafts);
+        setSelectedDraftId((prev) => {
+          if (prev && data.drafts.some((draft: GenerationDraft) => draft.id === prev)) {
+            return prev;
+          }
+          return data.drafts[0]?.id || null;
+        });
+      } else {
+        setDrafts([]);
+        setSelectedDraftId(null);
+      }
+    } catch (err) {
+      console.error("Failed to load drafts:", err);
+      setDrafts([]);
+      setSelectedDraftId(null);
+    } finally {
+      setIsLoadingDrafts(false);
+    }
+  };
+
+  const loadDraftContent = async (draftId: string) => {
+    setIsLoadingDraftContentId(draftId);
+    try {
+      const res = await fetch(`/api/drafts/${draftId}`);
+      const data = await res.json();
+      if (res.ok && data.draft?.content) {
+        setDrafts((prev) =>
+          prev.map((draft) =>
+            draft.id === draftId ? { ...draft, content: data.draft.content } : draft
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load draft content:", err);
+    } finally {
+      setIsLoadingDraftContentId(null);
+    }
+  };
 
   const handleGenerate = useCallback(async () => {
     if (!selectedEditionId) return;
@@ -349,8 +433,15 @@ export default function GeneratePage() {
                 });
               }
 
+              if (data.result?.draftId) {
+                setSelectedDraftId(data.result.draftId);
+              }
+
               // Refresh editions
               fetchEditions();
+              if (selectedEditionId) {
+                loadDrafts(selectedEditionId);
+              }
 
               // Clear progress after short delay
               setTimeout(() => {
@@ -447,8 +538,55 @@ export default function GeneratePage() {
     }
   }
 
+  async function handleApproveDraft(draftId: string) {
+    setIsApprovingDraftId(draftId);
+    try {
+      const res = await fetch(`/api/drafts/${draftId}/approve`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to approve draft");
+      }
+      setDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === draftId
+            ? { ...draft, status: "APPROVED", approvedAt: data.draft?.approvedAt }
+            : draft
+        )
+      );
+    } catch (err) {
+      console.error("Failed to approve draft:", err);
+      setError(err instanceof Error ? err.message : "Failed to approve draft");
+    } finally {
+      setIsApprovingDraftId(null);
+    }
+  }
+
+  async function handleDiscardDraft(draftId: string) {
+    setIsDiscardingDraftId(draftId);
+    try {
+      const res = await fetch(`/api/drafts/${draftId}/discard`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to discard draft");
+      }
+      setDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === draftId ? { ...draft, status: "DISCARDED" } : draft
+        )
+      );
+      if (selectedDraftId === draftId) {
+        setSelectedDraftId(null);
+      }
+    } catch (err) {
+      console.error("Failed to discard draft:", err);
+      setError(err instanceof Error ? err.message : "Failed to discard draft");
+    } finally {
+      setIsDiscardingDraftId(null);
+    }
+  }
+
   async function handleRegenerateSubjectLines() {
-    if (!selectedEditionId || !generated) return;
+    if (!selectedDraftId || !generated) return;
 
     setIsRegeneratingSubjects(true);
     try {
@@ -456,7 +594,7 @@ export default function GeneratePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          editionId: selectedEditionId,
+          draftId: selectedDraftId,
           brandVoiceId: selectedBrandVoiceId || undefined,
         }),
       });
@@ -471,6 +609,19 @@ export default function GeneratePage() {
         ...generated,
         subjectLines: data.subjectLines,
       });
+      setDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === selectedDraftId && draft.content
+            ? {
+                ...draft,
+                content: {
+                  ...draft.content,
+                  subjectLines: data.subjectLines,
+                },
+              }
+            : draft
+        )
+      );
       setSelectedSubjectLine(0);
     } catch (err) {
       console.error("Failed to regenerate subject lines:", err);
@@ -489,6 +640,10 @@ export default function GeneratePage() {
 
   const isLoading = isLoadingEditions || isLoadingVoices || isLoadingOrg;
   const hasGhostWriterAccess = hasFeature(orgPlan, "ghostWriter");
+  const getBrandVoiceName = (brandVoiceId?: string | null) => {
+    if (!brandVoiceId) return "Default";
+    return brandVoices.find((voice) => voice.id === brandVoiceId)?.name || "Custom";
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -557,7 +712,6 @@ export default function GeneratePage() {
                       {editions.map((edition) => (
                         <SelectItem key={edition.id} value={edition.id}>
                           Week {edition.week}, {edition.year} ({edition.articleCount} articles)
-                          {edition.generatedContent && " - Generated"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -661,15 +815,121 @@ export default function GeneratePage() {
                   <Badge variant={selectedEdition.status === "DRAFT" ? "secondary" : "default"}>
                     {selectedEdition.status}
                   </Badge>
-                  {selectedEdition.generatedAt && (
-                    <span>
-                      Generated: {new Date(selectedEdition.generatedAt).toLocaleDateString()}
-                    </span>
+                  {drafts.length > 0 && (
+                    <span>{drafts.length} draft{drafts.length !== 1 ? "s" : ""}</span>
                   )}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Drafts */}
+          {selectedEditionId && !isGenerating && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Generation Drafts</CardTitle>
+                <CardDescription>
+                  Review and approve generated drafts before sending
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingDrafts ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
+                ) : drafts.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No drafts yet. Generate a draft to see it here.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {drafts.map((draft) => {
+                      const isSelected = draft.id === selectedDraftId;
+                      return (
+                        <div
+                          key={draft.id}
+                          className={`flex items-center justify-between gap-4 rounded-lg border p-3 ${
+                            isSelected ? "border-primary bg-primary/5" : ""
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {getBrandVoiceName(draft.brandVoiceId)}
+                              </span>
+                              <Badge
+                                variant={
+                                  draft.status === "APPROVED"
+                                    ? "default"
+                                    : draft.status === "DISCARDED"
+                                      ? "secondary"
+                                      : "outline"
+                                }
+                              >
+                                {draft.status}
+                              </Badge>
+                              {draft.status === "APPROVED" && draft.approvedAt && (
+                                <span className="text-xs text-muted-foreground">
+                                  Approved {new Date(draft.approvedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                              <Clock className="h-3 w-3" />
+                              Generated {new Date(draft.generatedAt).toLocaleString()}
+                              {isLoadingDraftContentId === draft.id && (
+                                <span className="ml-2 flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Loading content...
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant={isSelected ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setSelectedDraftId(draft.id)}
+                            >
+                              {isSelected ? "Selected" : "View"}
+                            </Button>
+                            {draft.status === "DRAFT" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleApproveDraft(draft.id)}
+                                disabled={isApprovingDraftId === draft.id}
+                              >
+                                {isApprovingDraftId === draft.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                            {(draft.status === "DRAFT" || draft.status === "APPROVED") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDiscardDraft(draft.id)}
+                                disabled={isDiscardingDraftId === draft.id}
+                              >
+                                {isDiscardingDraftId === draft.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <XCircle className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Generated Content */}
           {generated && editedContent && !isGenerating && (
@@ -691,7 +951,7 @@ export default function GeneratePage() {
                       variant="outline"
                       size="sm"
                       onClick={handleRegenerateSubjectLines}
-                      disabled={isRegeneratingSubjects}
+                      disabled={isRegeneratingSubjects || !selectedDraftId}
                     >
                       {isRegeneratingSubjects ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -7,42 +7,55 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 import { regenerateSubjectLines } from "@/lib/generation/generator";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { editionId, heroTitle, heroSummary, brandVoiceId } = body;
+    const { editionId, draftId, heroTitle, heroSummary, brandVoiceId } = body;
 
-    if (!editionId) {
+    if (!editionId && !draftId) {
       return NextResponse.json(
-        { error: "Edition ID is required" },
+        { error: "Edition ID or Draft ID is required" },
         { status: 400 }
       );
     }
 
-    // Get the edition
-    const edition = await prisma.edition.findUnique({
-      where: { id: editionId },
-      include: {
-        organization: true,
-      },
-    });
+    const ctx = await requireOrgContext();
 
-    if (!edition) {
+    if (!ctx.features.ghostWriter) {
       return NextResponse.json(
-        { error: "Edition not found" },
-        { status: 404 }
+        { error: "Ghost Writer requires Starter plan or higher" },
+        { status: 403 }
       );
+    }
+
+    // Get the edition (if provided)
+    const edition = editionId
+      ? await prisma.edition.findFirst({
+          where: {
+            id: editionId,
+            organizationId: ctx.organization.id,
+          },
+          include: { organization: true },
+        })
+      : null;
+
+    if (editionId && !edition) {
+      return NextResponse.json({ error: "Edition not found" }, { status: 404 });
     }
 
     // Get brand voice
     let brandVoice = null;
     if (brandVoiceId) {
       brandVoice = await prisma.brandVoice.findUnique({
-        where: { id: brandVoiceId },
+        where: {
+          id: brandVoiceId,
+          organizationId: ctx.organization.id,
+        },
       });
-    } else {
+    } else if (edition) {
       brandVoice = await prisma.brandVoice.findFirst({
         where: {
           organizationId: edition.organizationId,
@@ -51,13 +64,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get hero article info - either from params or from generated content
+    // Get draft content (preferred) or fall back to edition content
+    const draft = draftId
+      ? await ctx.db.generationDraft.findUnique({ where: { id: draftId } })
+      : edition
+        ? await ctx.db.generationDraft.findFirst({
+            where: { editionId: edition.id },
+            orderBy: { generatedAt: "desc" },
+          })
+        : null;
+
+    if (!draft) {
+      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+    }
+
+    // Get hero article info - either from params or from draft content
     let title = heroTitle;
     let summary = heroSummary;
 
     if (!title) {
-      // Try to get from generated content
-      const generatedContent = edition.generatedContent as { plan?: { heroArticle?: { title: string; summary?: string } } } | null;
+      const generatedContent = (draft?.content || {}) as {
+        plan?: { heroArticle?: { title: string; summary?: string } };
+      };
       if (generatedContent?.plan?.heroArticle) {
         title = generatedContent.plan.heroArticle.title;
         summary = summary || generatedContent.plan.heroArticle.summary;
@@ -66,21 +94,26 @@ export async function POST(request: NextRequest) {
 
     if (!title) {
       // Fall back to first approved article from edition
-      const firstEditionArticle = await prisma.editionArticle.findFirst({
-        where: {
-          editionId: editionId,
-        },
-        include: {
-          article: true,
-        },
-        orderBy: {
-          order: "asc",
-        },
-      });
+      const editionForFallback = edition || (draft ? await prisma.edition.findFirst({
+        where: { id: draft.editionId, organizationId: ctx.organization.id },
+      }) : null);
+      if (editionForFallback) {
+        const firstEditionArticle = await prisma.editionArticle.findFirst({
+          where: {
+            editionId: editionForFallback.id,
+          },
+          include: {
+            article: true,
+          },
+          orderBy: {
+            order: "asc",
+          },
+        });
 
-      if (firstEditionArticle?.article && firstEditionArticle.article.status === "APPROVED") {
-        title = firstEditionArticle.article.title;
-        summary = firstEditionArticle.article.summary;
+        if (firstEditionArticle?.article && firstEditionArticle.article.status === "APPROVED") {
+          title = firstEditionArticle.article.title;
+          summary = firstEditionArticle.article.summary;
+        }
       }
     }
 
@@ -92,7 +125,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get week number
-    const editionDate = edition.scheduledDate || new Date();
+    const editionForDate = edition
+      ? edition
+      : await prisma.edition.findFirst({
+          where: { id: draft.editionId, organizationId: ctx.organization.id },
+        });
+    const editionDate = editionForDate?.scheduledDate || new Date();
     const weekNumber = getWeekNumber(editionDate);
     const year = editionDate.getFullYear();
 
@@ -104,17 +142,18 @@ export async function POST(request: NextRequest) {
       brandVoice
     );
 
-    // Update edition with new subject lines
-    const generatedContent = (edition.generatedContent || {}) as Record<string, unknown>;
-    await prisma.edition.update({
-      where: { id: editionId },
-      data: {
-        generatedContent: {
-          ...generatedContent,
-          subjectLines,
+    if (draft) {
+      const generatedContent = (draft.content || {}) as Record<string, unknown>;
+      await ctx.db.generationDraft.update({
+        where: { id: draft.id },
+        data: {
+          content: {
+            ...generatedContent,
+            subjectLines,
+          },
         },
-      },
-    });
+      });
+    }
 
     return NextResponse.json({
       success: true,

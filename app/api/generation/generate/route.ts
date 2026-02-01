@@ -7,11 +7,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 import { generateNewsletter, GeneratedNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireOrgContext();
+    if (!ctx.features.ghostWriter) {
+      return NextResponse.json(
+        { error: "Ghost Writer requires Starter plan or higher" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { editionId, articleIds, brandVoiceId } = body;
 
@@ -23,11 +32,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the edition
-    const edition = await prisma.edition.findUnique({
-      where: { id: editionId },
-      include: {
-        organization: true,
+    const edition = await prisma.edition.findFirst({
+      where: {
+        id: editionId,
+        organizationId: ctx.organization.id,
       },
+      include: { organization: true },
     });
 
     if (!edition) {
@@ -76,7 +86,7 @@ export async function POST(request: NextRequest) {
     let brandVoice = null;
     if (brandVoiceId) {
       brandVoice = await prisma.brandVoice.findUnique({
-        where: { id: brandVoiceId },
+        where: { id: brandVoiceId, organizationId: edition.organizationId },
       });
     } else {
       // Try to get the default brand voice for the organization
@@ -111,14 +121,15 @@ export async function POST(request: NextRequest) {
       brandVoice
     );
 
-    // Store the generated content in the edition
-    // Convert to JSON-serializable format (removes Date objects, etc.)
+    // Store as a generation draft instead of writing directly to edition
     const jsonContent = JSON.parse(JSON.stringify(generated));
-    await prisma.edition.update({
-      where: { id: editionId },
+    const draft = await prisma.generationDraft.create({
       data: {
-        generatedContent: jsonContent,
-        generatedAt: new Date(),
+        content: jsonContent,
+        brandVoiceId: brandVoice?.id || null,
+        editionId,
+        organizationId: edition.organizationId,
+        status: "DRAFT",
       },
     });
 
@@ -126,6 +137,7 @@ export async function POST(request: NextRequest) {
       success: true,
       newsletter: generated,
       articleCount: articles.length,
+      draftId: draft.id,
     });
   } catch (error) {
     console.error("Newsletter generation failed:", error);

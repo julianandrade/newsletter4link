@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { renderNewsletterEmail } from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
+import type { GeneratedNewsletter } from "@/lib/generation/generator";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,8 @@ interface CustomData {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { editionId, templateId, customData } = body;
+    const { editionId, templateId, customData, draftId } = body;
+    const ctx = await requireOrgContext();
 
     let emailData: EmailDataForTemplate;
 
@@ -63,8 +66,8 @@ export async function POST(request: Request) {
       // Get edition (use provided ID or get current)
       let edition;
       if (editionId) {
-        edition = await prisma.edition.findUnique({
-          where: { id: editionId },
+        edition = await prisma.edition.findFirst({
+          where: { id: editionId, organizationId: ctx.organization.id },
           include: {
             articles: {
               include: { article: true },
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
         });
       } else {
         // Get approved articles
-        const articles = await prisma.article.findMany({
+        const articles = await ctx.db.article.findMany({
           where: { status: "APPROVED" },
           orderBy: [
             { relevanceScore: "desc" },
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
         });
 
         // Get featured projects
-        const projects = await prisma.project.findMany({
+        const projects = await ctx.db.project.findMany({
           where: { featured: true },
           orderBy: { projectDate: "desc" },
           take: 3,
@@ -123,26 +126,79 @@ export async function POST(request: Request) {
         );
       }
 
-      // Prepare data for email
-      emailData = {
-        articles: edition.articles.map((ea: any) => ({
-          title: ea.article.title,
-          summary: ea.article.summary || "",
-          sourceUrl: ea.article.sourceUrl,
-          category: ea.article.category,
-        })),
-        projects: edition.projects.map((ep: any) => ({
-          name: ep.project.name,
-          description: ep.project.description,
-          team: ep.project.team,
-          impact: ep.project.impact,
-          projectDate: ep.project.projectDate instanceof Date
-            ? ep.project.projectDate.toISOString()
-            : String(ep.project.projectDate),
-        })),
-        week: edition.week,
-        year: edition.year,
-      };
+      // Draft-aware preview (optional)
+      let approvedDraft: { content: GeneratedNewsletter } | null = null;
+      if (draftId) {
+        const draft = await ctx.db.generationDraft.findUnique({ where: { id: draftId } });
+        if (!draft) {
+          return NextResponse.json(
+            { success: false, error: "Draft not found" },
+            { status: 404 }
+          );
+        }
+        approvedDraft = { content: draft.content as GeneratedNewsletter };
+      } else {
+        const draft = await ctx.db.generationDraft.findFirst({
+          where: { editionId: edition.id, status: "APPROVED" },
+          orderBy: { approvedAt: "desc" },
+        });
+        if (draft) {
+          approvedDraft = { content: draft.content as GeneratedNewsletter };
+        }
+      }
+
+      if (approvedDraft?.content?.sections?.length) {
+        const articleById = new Map(
+          edition.articles.map((ea: any) => [ea.article.id, ea.article])
+        );
+        const draftArticles = approvedDraft.content.sections.flatMap((section) =>
+          section.articles.map((article) => {
+            const source = articleById.get(article.id);
+            return {
+              title: article.title,
+              summary: article.summary,
+              sourceUrl: article.sourceUrl,
+              category: source?.category || [],
+            };
+          })
+        );
+
+        emailData = {
+          articles: draftArticles,
+          projects: edition.projects.map((ep: any) => ({
+            name: ep.project.name,
+            description: ep.project.description,
+            team: ep.project.team,
+            impact: ep.project.impact,
+            projectDate: ep.project.projectDate instanceof Date
+              ? ep.project.projectDate.toISOString()
+              : String(ep.project.projectDate),
+          })),
+          week: edition.week,
+          year: edition.year,
+        };
+      } else {
+        // Prepare data for email
+        emailData = {
+          articles: edition.articles.map((ea: any) => ({
+            title: ea.article.title,
+            summary: ea.article.summary || "",
+            sourceUrl: ea.article.sourceUrl,
+            category: ea.article.category,
+          })),
+          projects: edition.projects.map((ep: any) => ({
+            name: ep.project.name,
+            description: ep.project.description,
+            team: ep.project.team,
+            impact: ep.project.impact,
+            projectDate: ep.project.projectDate instanceof Date
+              ? ep.project.projectDate.toISOString()
+              : String(ep.project.projectDate),
+          })),
+          week: edition.week,
+          year: edition.year,
+        };
+      }
     }
 
     // Render HTML - use custom template if specified, otherwise use React Email component
@@ -179,6 +235,10 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error generating preview:", error);
+
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 401 });
+    }
 
     return NextResponse.json(
       {

@@ -190,6 +190,13 @@ export default function EditionDetailPage() {
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState(false);
 
+  // Drafts state (Ghost Writer)
+  const [drafts, setDrafts] = useState<Array<{ id: string; status: string; approvedAt?: string | null; generatedAt?: string | null }>>([]);
+  const [selectedApprovedDraftId, setSelectedApprovedDraftId] = useState<string | null>(null);
+  const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
+  const [approvedDraftSubjectLines, setApprovedDraftSubjectLines] = useState<string[]>([]);
+  const [isLoadingApprovedDraft, setIsLoadingApprovedDraft] = useState(false);
+
   // Action states
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -249,9 +256,69 @@ export default function EditionDetailPage() {
     }
   }, [editionId]);
 
+  const loadDrafts = useCallback(async () => {
+    setIsLoadingDrafts(true);
+    try {
+      const res = await fetch(`/api/drafts?editionId=${editionId}`);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.drafts)) {
+        setDrafts(data.drafts);
+        const approvedDrafts = data.drafts
+          .filter((draft: any) => draft.status === "APPROVED")
+          .sort((a: any, b: any) =>
+            new Date(b.approvedAt || b.generatedAt || 0).getTime() -
+            new Date(a.approvedAt || a.generatedAt || 0).getTime()
+          );
+        setSelectedApprovedDraftId((prev) => {
+          if (prev && approvedDrafts.some((draft: any) => draft.id === prev)) {
+            return prev;
+          }
+          return approvedDrafts[0]?.id || null;
+        });
+      } else {
+        setDrafts([]);
+        setSelectedApprovedDraftId(null);
+      }
+    } catch (err) {
+      console.error("Failed to load drafts:", err);
+      setDrafts([]);
+      setSelectedApprovedDraftId(null);
+    } finally {
+      setIsLoadingDrafts(false);
+    }
+  }, [editionId]);
+
+  const loadApprovedDraftSubjectLines = useCallback(async () => {
+    if (!selectedApprovedDraftId) {
+      setApprovedDraftSubjectLines([]);
+      return;
+    }
+
+    setIsLoadingApprovedDraft(true);
+    try {
+      const res = await fetch(`/api/drafts/${selectedApprovedDraftId}`);
+      const data = await res.json();
+      if (res.ok && data.draft?.content?.subjectLines) {
+        setApprovedDraftSubjectLines(data.draft.content.subjectLines);
+      } else {
+        setApprovedDraftSubjectLines([]);
+      }
+    } catch (err) {
+      console.error("Failed to load draft subject lines:", err);
+      setApprovedDraftSubjectLines([]);
+    } finally {
+      setIsLoadingApprovedDraft(false);
+    }
+  }, [selectedApprovedDraftId]);
+
   useEffect(() => {
     loadEdition();
-  }, [loadEdition]);
+    loadDrafts();
+  }, [loadEdition, loadDrafts]);
+
+  useEffect(() => {
+    loadApprovedDraftSubjectLines();
+  }, [loadApprovedDraftSubjectLines]);
 
   // Load templates
   useEffect(() => {
@@ -478,6 +545,7 @@ export default function EditionDetailPage() {
           body: JSON.stringify({
             editionId,
             templateId: selectedTemplateId || undefined,
+            draftId: selectedApprovedDraftId || undefined,
           }),
         });
 
@@ -559,6 +627,14 @@ export default function EditionDetailPage() {
   const handleSend = async () => {
     if (!edition) return;
 
+    if (drafts.length > 0 && !selectedApprovedDraftId) {
+      setSendResult({
+        success: false,
+        message: "No approved draft found. Approve a draft before sending.",
+      });
+      return;
+    }
+
     // Validate recipients based on mode
     if (recipientMode === "all" && subscribers.length === 0) {
       setSendResult({
@@ -590,6 +666,7 @@ export default function EditionDetailPage() {
       const requestBody: Record<string, unknown> = {
         editionId,
         templateId: selectedTemplateId || undefined,
+        draftId: selectedApprovedDraftId || undefined,
         // Only pass provider if different from default
         provider: selectedProvider !== defaultProvider ? selectedProvider : undefined,
       };
@@ -656,6 +733,7 @@ export default function EditionDetailPage() {
         toast.success(`Newsletter sent to ${result.data?.sent || 0} subscribers`);
         // Reload edition to get updated status
         await loadEdition();
+        await loadDrafts();
       }
     } catch (err) {
       console.error("Error sending newsletter:", err);
@@ -731,7 +809,8 @@ export default function EditionDetailPage() {
 
   // Check if send is allowed
   const canSend = recipientCount > 0 &&
-    (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true);
+    (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true) &&
+    (drafts.length === 0 || !!selectedApprovedDraftId);
 
   // Configured providers count
   const configuredProviders = providers.filter((p) => p.configured);
@@ -1048,6 +1127,95 @@ export default function EditionDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Draft Status */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-medium">Generation Drafts</p>
+                {isLoadingDrafts ? (
+                  <p className="text-sm text-muted-foreground">Loading drafts...</p>
+                ) : drafts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No drafts found for this edition.
+                  </p>
+                ) : (
+                  <>
+                    {drafts.some((draft) => draft.status === "APPROVED") ? (
+                      <p className="text-sm text-muted-foreground">
+                        Select an approved draft to send.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-red-600 dark:text-red-400">
+                        Drafts exist but none are approved. Approve one before sending.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+              {selectedApprovedDraftId && (
+                <Badge variant="success">Approved</Badge>
+              )}
+              {!selectedApprovedDraftId && drafts.length > 0 && (
+                <Badge variant="warning">Approval Required</Badge>
+              )}
+            </div>
+            {drafts.filter((draft) => draft.status === "APPROVED").length > 1 && (
+              <div className="mt-4">
+                <Label className="text-sm">Approved Draft</Label>
+                <Select
+                  value={selectedApprovedDraftId || ""}
+                  onValueChange={(value) => setSelectedApprovedDraftId(value)}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select approved draft" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {drafts
+                      .filter((draft) => draft.status === "APPROVED")
+                      .map((draft) => (
+                        <SelectItem key={draft.id} value={draft.id}>
+                          Draft {draft.id.slice(0, 6)} •{" "}
+                          {draft.approvedAt
+                            ? `Approved ${formatDate(draft.approvedAt)}`
+                            : `Generated ${formatDate(draft.generatedAt || null)}`}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {selectedApprovedDraftId && (
+              <div className="mt-4 rounded-md border border-dashed border-muted-foreground/30 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Subject Lines</p>
+                  {isLoadingApprovedDraft && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {approvedDraftSubjectLines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    No subject lines available for this draft.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {approvedDraftSubjectLines.slice(0, 3).map((line, index) => (
+                      <li key={`${index}-${line}`} className="truncate">
+                        {index + 1}. {line}
+                      </li>
+                    ))}
+                    {approvedDraftSubjectLines.length > 3 && (
+                      <li className="text-xs text-muted-foreground">
+                        + {approvedDraftSubjectLines.length - 3} more
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Template Selection */}
         <Card className="mb-6">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { Plan } from "@prisma/client";
 import { AppHeader } from "@/components/app-header";
 import { FeatureGate } from "@/components/upgrade-prompt";
@@ -26,6 +27,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -49,6 +65,11 @@ import {
   Play,
   Trash2,
   StopCircle,
+  History,
+  ChevronDown,
+  ChevronRight,
+  Save,
+  ArrowRight,
 } from "lucide-react";
 
 interface SearchResult {
@@ -98,6 +119,21 @@ interface SearchProgress {
   };
 }
 
+interface SearchHistoryItem {
+  id: string;
+  query: string;
+  queryExpanded?: string;
+  queryAnalysis?: {
+    intent: string;
+    timeScope: string;
+    topics: string[];
+  };
+  resultCount: number;
+  searchedAt: string;
+  convertedToTopicId?: string | null;
+  results?: SearchResult[];
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -122,6 +158,19 @@ export default function SearchPage() {
 
   const [importingId, setImportingId] = useState<string | null>(null);
 
+  // Search history state
+  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [isLoadingHistoryResults, setIsLoadingHistoryResults] = useState<string | null>(null);
+  const [isSavingSearch, setIsSavingSearch] = useState(false);
+  const [lastSavedSearchId, setLastSavedSearchId] = useState<string | null>(null);
+  const [convertingHistoryId, setConvertingHistoryId] = useState<string | null>(null);
+  const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   // Organization plan for feature gating
   const [orgPlan, setOrgPlan] = useState<Plan>("FREE");
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -130,10 +179,11 @@ export default function SearchPage() {
   // Ref to track if we've checked for running jobs
   const hasCheckedRunningJob = useRef(false);
 
-  // Load organization and saved topics on mount
+  // Load organization, saved topics, and history on mount
   useEffect(() => {
     fetchOrganization();
     loadTopics();
+    loadHistory(1);
   }, []);
 
   // Check for running job on mount (after we have orgId)
@@ -206,6 +256,147 @@ export default function SearchPage() {
     }
   };
 
+  const loadHistory = async (page: number) => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/search/history?page=${page}&limit=10`);
+      const data = await res.json();
+      if (data.history) {
+        setHistory(data.history);
+        setHistoryPage(data.page);
+        setHistoryTotalPages(data.totalPages);
+      }
+    } catch (e) {
+      console.error("Failed to load history:", e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleSaveSearch = async () => {
+    if (isSavingSearch || results.length === 0 || !queryExpansion) return;
+
+    setIsSavingSearch(true);
+    try {
+      const res = await fetch("/api/search/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: query.trim(),
+          queryExpanded: queryExpansion.expanded,
+          queryAnalysis: queryExpansion.analysis,
+          results: results,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setLastSavedSearchId(data.id);
+        toast.success("Search saved");
+        // Reload history to show the new entry
+        loadHistory(1);
+      } else {
+        toast.error(data.error || "Failed to save search");
+      }
+    } catch (e) {
+      toast.error("Failed to save search");
+    } finally {
+      setIsSavingSearch(false);
+    }
+  };
+
+  const handleExpandHistory = async (historyId: string) => {
+    // Toggle off if already expanded
+    if (expandedHistoryId === historyId) {
+      setExpandedHistoryId(null);
+      return;
+    }
+
+    // Check if we already have results loaded
+    const item = history.find((h) => h.id === historyId);
+    if (item?.results) {
+      setExpandedHistoryId(historyId);
+      return;
+    }
+
+    // Load full results
+    setIsLoadingHistoryResults(historyId);
+    try {
+      const res = await fetch(`/api/search/history/${historyId}`);
+      const data = await res.json();
+      if (res.ok) {
+        // Update history item with full results
+        setHistory((prev) =>
+          prev.map((h) =>
+            h.id === historyId ? { ...h, results: data.results || [] } : h
+          )
+        );
+        setExpandedHistoryId(historyId);
+      } else {
+        toast.error(data.error || "Failed to load results");
+      }
+    } catch (e) {
+      toast.error("Failed to load results");
+    } finally {
+      setIsLoadingHistoryResults(null);
+    }
+  };
+
+  const handleConvertToTopic = async (historyId: string) => {
+    setConvertingHistoryId(historyId);
+    try {
+      const res = await fetch(`/api/search/history/${historyId}/convert`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Converted to topic");
+        // Update history item to show it's converted
+        setHistory((prev) =>
+          prev.map((h) =>
+            h.id === historyId ? { ...h, convertedToTopicId: data.topicId } : h
+          )
+        );
+        // Reload topics list
+        loadTopics();
+      } else {
+        toast.error(data.error || "Failed to convert to topic");
+      }
+    } catch (e) {
+      toast.error("Failed to convert to topic");
+    } finally {
+      setConvertingHistoryId(null);
+    }
+  };
+
+  const handleDeleteHistory = async (historyId: string) => {
+    setDeletingHistoryId(historyId);
+    try {
+      const res = await fetch(`/api/search/history/${historyId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast.success("Search deleted");
+        // Remove from list
+        setHistory((prev) => prev.filter((h) => h.id !== historyId));
+        // Close expanded if it was this one
+        if (expandedHistoryId === historyId) {
+          setExpandedHistoryId(null);
+        }
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete");
+      }
+    } catch (e) {
+      toast.error("Failed to delete");
+    } finally {
+      setDeletingHistoryId(null);
+      setDeleteConfirmId(null);
+    }
+  };
+
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || isSearching) return;
@@ -214,6 +405,7 @@ export default function SearchPage() {
     setError(null);
     setResults([]);
     setQueryExpansion(null);
+    setLastSavedSearchId(null);
     setSearchProgress({
       stage: "starting",
       progress: 0,
@@ -588,6 +780,10 @@ export default function SearchPage() {
               <Bookmark className="h-4 w-4" />
               Saved Topics
             </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
           </TabsList>
 
           {/* Quick Search Tab */}
@@ -697,9 +893,36 @@ export default function SearchPage() {
 
             {results.length > 0 && (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold">
-                  Found {results.length} results
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">
+                    Found {results.length} results
+                  </h2>
+                  {!isSearching && !lastSavedSearchId && (
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveSearch}
+                      disabled={isSavingSearch}
+                    >
+                      {isSavingSearch ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save Search
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {lastSavedSearchId && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <History className="h-3 w-3" />
+                      Saved
+                    </Badge>
+                  )}
+                </div>
                 {results.map((result, index) => (
                   <SearchResultCard
                     key={`${result.url}-${index}`}
@@ -916,7 +1139,212 @@ export default function SearchPage() {
               </div>
             </div>
           </TabsContent>
+
+          {/* History Tab */}
+          <TabsContent value="history" className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">Search History</h2>
+              <p className="text-sm text-muted-foreground">
+                View and manage your past searches
+              </p>
+            </div>
+
+            {isLoadingHistory ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : history.length === 0 ? (
+              <Card className="p-8 text-center text-muted-foreground">
+                <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No search history yet.</p>
+                <p className="text-sm mt-1">
+                  Perform a search and save it to see it here.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {history.map((item) => (
+                  <Collapsible
+                    key={item.id}
+                    open={expandedHistoryId === item.id}
+                    onOpenChange={() => handleExpandHistory(item.id)}
+                  >
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-4">
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="p-0 h-auto">
+                              {isLoadingHistoryResults === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : expandedHistoryId === item.id ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </CollapsibleTrigger>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium line-clamp-1">
+                                  {item.query}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <Search className="h-3 w-3" />
+                                    {item.resultCount} results
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {new Date(item.searchedAt).toLocaleDateString()}
+                                  </span>
+                                  {item.convertedToTopicId && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      <Bookmark className="h-3 w-3 mr-1" />
+                                      Topic
+                                    </Badge>
+                                  )}
+                                </div>
+                                {item.queryAnalysis && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.queryAnalysis.intent}
+                                    </Badge>
+                                    {item.queryAnalysis.topics?.slice(0, 3).map((topic) => (
+                                      <Badge key={topic} variant="secondary" className="text-xs">
+                                        {topic}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex gap-1 shrink-0">
+                                {!item.convertedToTopicId && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleConvertToTopic(item.id);
+                                    }}
+                                    disabled={convertingHistoryId === item.id}
+                                    title="Convert to Topic"
+                                  >
+                                    {convertingHistoryId === item.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <ArrowRight className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirmId(item.id);
+                                  }}
+                                  disabled={deletingHistoryId === item.id}
+                                  title="Delete"
+                                >
+                                  {deletingHistoryId === item.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <CollapsibleContent>
+                          <div className="mt-4 pt-4 border-t space-y-3">
+                            {item.results && item.results.length > 0 ? (
+                              <>
+                                <p className="text-sm text-muted-foreground">
+                                  Showing {item.results.length} saved results
+                                </p>
+                                {item.results.slice(0, 5).map((result, idx) => (
+                                  <SearchResultCard
+                                    key={`${result.url}-${idx}`}
+                                    result={result}
+                                    onImport={() => handleImportResult(result)}
+                                    isImporting={importingId === result.url}
+                                    getScoreColor={getScoreColor}
+                                    getSentimentColor={getSentimentColor}
+                                    compact
+                                  />
+                                ))}
+                                {item.results.length > 5 && (
+                                  <p className="text-sm text-muted-foreground text-center py-2">
+                                    + {item.results.length - 5} more results
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No results stored
+                              </p>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </CardContent>
+                    </Card>
+                  </Collapsible>
+                ))}
+
+                {/* Pagination */}
+                {historyTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadHistory(historyPage - 1)}
+                      disabled={historyPage <= 1 || isLoadingHistory}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {historyPage} of {historyTotalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadHistory(historyPage + 1)}
+                      disabled={historyPage >= historyTotalPages || isLoadingHistory}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
           </Tabs>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Search History</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this saved search? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteConfirmId && handleDeleteHistory(deleteConfirmId)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </main>
       </FeatureGate>
     </div>
