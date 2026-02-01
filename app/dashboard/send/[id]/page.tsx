@@ -346,11 +346,19 @@ export default function EditionDetailPage() {
     fetch("/api/subscribers")
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.subscribers)) {
-          const activeSubscribers = data.subscribers.filter((s: Subscriber) => s.active);
+        const subscribers = Array.isArray(data.subscribers)
+          ? data.subscribers
+          : Array.isArray(data.data)
+            ? data.data
+            : [];
+        if (data.success && subscribers.length > 0) {
+          const activeSubscribers = subscribers.filter((s: Subscriber) => s.active);
           setSubscribers(activeSubscribers);
           // Select all by default
           setSelectedSubscriberIds(activeSubscribers.map((s: Subscriber) => s.id));
+        } else if (data.success) {
+          setSubscribers([]);
+          setSelectedSubscriberIds([]);
         }
       })
       .catch(console.error);
