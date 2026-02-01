@@ -12,6 +12,9 @@ const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
 });
 
+const useMockSearch =
+  process.env.MOCK_SEARCH === "true" || process.env.MOCK_GENERATION === "true";
+
 export interface AnalyzedResult extends SearchProviderResult {
   aiScore: number;
   aiSummary: string;
@@ -36,6 +39,16 @@ export async function analyzeResult(
   originalQuery: string,
   brandVoicePrompt?: string | null
 ): Promise<ResultAnalysis> {
+  if (useMockSearch) {
+    return {
+      score: 6,
+      summary: result.snippet,
+      topics: [],
+      sentiment: "neutral",
+      relevanceNote: "Mock analysis",
+    };
+  }
+
   try {
     const brandContext = brandVoicePrompt
       ? `\n\nBRAND/INDUSTRY CONTEXT:\n${brandVoicePrompt}\n\nConsider this context when scoring relevance.`
@@ -141,6 +154,17 @@ export async function analyzeResults(
   brandVoicePrompt?: string | null,
   onProgress?: AnalysisProgressCallback
 ): Promise<AnalyzedResult[]> {
+  if (useMockSearch) {
+    return results.map((result) => ({
+      ...result,
+      aiScore: 6,
+      aiSummary: result.snippet,
+      aiTopics: [],
+      aiSentiment: "neutral",
+      aiRelevanceNote: "Mock analysis",
+    }));
+  }
+
   const analyzedResults: AnalyzedResult[] = [];
 
   for (let i = 0; i < results.length; i++) {
@@ -198,6 +222,17 @@ export async function batchAnalyzeResults(
   brandVoicePrompt?: string | null
 ): Promise<AnalyzedResult[]> {
   if (results.length === 0) return [];
+
+  if (useMockSearch) {
+    return results.map((result) => ({
+      ...result,
+      aiScore: 6,
+      aiSummary: result.snippet,
+      aiTopics: [],
+      aiSentiment: "neutral" as const,
+      aiRelevanceNote: "Mock analysis",
+    }));
+  }
 
   // For small batches, use individual analysis
   if (results.length <= 3) {

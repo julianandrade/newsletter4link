@@ -11,6 +11,9 @@ const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
 });
 
+const useMockSearch =
+  process.env.MOCK_SEARCH === "true" || process.env.MOCK_GENERATION === "true";
+
 export interface QueryAnalysis {
   intent: "news" | "trends" | "research" | "competitive" | "general";
   timeScope: "recent" | "this_week" | "this_month" | "any";
@@ -29,6 +32,20 @@ export interface QueryExpansion {
  * Analyze and expand a natural language search query
  */
 export async function processQuery(query: string): Promise<QueryExpansion> {
+  if (useMockSearch) {
+    return {
+      original: query,
+      expanded: query,
+      analysis: {
+        intent: "general",
+        timeScope: "this_week",
+        expandedQueries: [query],
+        topics: [],
+        suggestedProviders: ["tavily"],
+      },
+    };
+  }
+
   try {
     const message = await anthropic.messages.create({
       model: config.ai.anthropic.model,
