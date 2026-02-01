@@ -41,7 +41,7 @@ export const config = {
     },
     from: {
       email: process.env.FROM_EMAIL || "newsletter@linkconsulting.com",
-      name: process.env.FROM_NAME || "Link Consulting AI Newsletter",
+      name: process.env.FROM_NAME || "AI Radar",
     },
     batchSize: 50, // Send emails in batches of 50
     rateLimitDelay: 1000, // Wait 1 second between batches
