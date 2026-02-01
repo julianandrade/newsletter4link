@@ -43,3 +43,5 @@ prisma/migrations/**/migration_lock.toml
 
 # Playwright test screenshots
 .playwright-mcp/
+test-results/
+playwright-report/
