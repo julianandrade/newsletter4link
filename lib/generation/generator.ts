@@ -36,6 +36,8 @@ const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
 });
 
+const useMockGeneration = process.env.MOCK_GENERATION === "true";
+
 export interface GeneratedArticle {
   id: string;
   title: string;
@@ -94,6 +96,51 @@ export async function generateNewsletter(
   onProgress?: (progress: GenerationProgress) => void | Promise<void>,
   jobId?: string
 ): Promise<GeneratedNewsletter> {
+  if (useMockGeneration) {
+    await onProgress?.({
+      stage: "planning",
+      current: 0,
+      total: 1,
+      message: "Mock generation enabled...",
+    });
+    const plan = await planNewsletter(articles);
+    const mockSections: GeneratedSection[] = plan.sections.map((section) => ({
+      name: section.name,
+      articles: section.articles.map((article, index) => ({
+        id: article.id,
+        title: article.title,
+        summary: article.summary || article.content?.slice(0, 160) || "Summary not available.",
+        sourceUrl: article.sourceUrl,
+        isHero: section.name === plan.heroSection?.name && index === 0,
+      })),
+      transition: `Next up: ${section.name.toLowerCase()} highlights.`,
+    }));
+
+    const subjectLines = [
+      `AI Radar • Week ${edition.week}`,
+      `This Week in AI: ${plan.totalArticles} highlights`,
+      `AI Radar Briefing W${edition.week}`,
+      `Top AI updates — Week ${edition.week}`,
+      `Your AI Radar Digest (${edition.year})`,
+    ];
+
+    await onProgress?.({
+      stage: "complete",
+      current: 1,
+      total: 1,
+      message: "Mock newsletter generated.",
+    });
+
+    return {
+      opening: `Welcome to AI Radar Week ${edition.week}. Here's the latest in AI, curated for you.`,
+      sections: mockSections,
+      closing: "Thanks for reading AI Radar. See you next week!",
+      subjectLines,
+      plan,
+      generatedAt: new Date(),
+    };
+  }
+
   // Stage 1: Plan the newsletter structure
   await checkCancellation(jobId);
   await onProgress?.({
@@ -420,6 +467,16 @@ export async function regenerateSubjectLines(
   edition: { week: number; year: number },
   brandVoice: BrandVoice | null
 ): Promise<string[]> {
+  if (useMockGeneration) {
+    return [
+      `AI Radar • Week ${edition.week}`,
+      `AI Radar Briefing: ${heroTitle.slice(0, 40)}`,
+      `Week ${edition.week} AI Highlights`,
+      `Your AI Radar Digest`,
+      `Top AI news — Week ${edition.week}`,
+    ];
+  }
+
   const prompt = getSubjectLinesPrompt(
     brandVoice,
     { title: heroTitle, summary: heroSummary },
@@ -457,6 +514,35 @@ export async function quickGenerateNewsletter(
   edition: { week: number; year: number },
   brandVoice: BrandVoice | null
 ): Promise<GeneratedNewsletter> {
+  if (useMockGeneration) {
+    const plan = await planNewsletter(articles);
+    const subjectLines = [
+      `AI Radar • Week ${edition.week}`,
+      `This Week in AI: ${plan.totalArticles} highlights`,
+      `AI Radar Briefing W${edition.week}`,
+      `Top AI updates — Week ${edition.week}`,
+      `Your AI Radar Digest (${edition.year})`,
+    ];
+
+    return {
+      opening: `Welcome to AI Radar Week ${edition.week}. Here's the latest in AI, curated for you.`,
+      sections: plan.sections.map((section) => ({
+        name: section.name,
+        articles: section.articles.map((article, index) => ({
+          id: article.id,
+          title: article.title,
+          summary: article.summary || article.content?.slice(0, 160) || "Summary not available.",
+          sourceUrl: article.sourceUrl,
+          isHero: section.name === plan.heroSection?.name && index === 0,
+        })),
+      })),
+      closing: "Thanks for reading AI Radar. See you next week!",
+      subjectLines,
+      plan,
+      generatedAt: new Date(),
+    };
+  }
+
   const prompt = getFullNewsletterPrompt(brandVoice, articles, edition);
 
   const message = await anthropic.messages.create({

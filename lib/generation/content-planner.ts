@@ -12,6 +12,8 @@ const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
 });
 
+const useMockGeneration = process.env.MOCK_GENERATION === "true";
+
 export interface ArticleForPlanning {
   id: string;
   title: string;
@@ -42,6 +44,10 @@ export async function planNewsletter(
 ): Promise<NewsletterPlan> {
   if (articles.length === 0) {
     throw new Error("No articles to plan newsletter from");
+  }
+
+  if (useMockGeneration) {
+    return simpleNewsletter(articles);
   }
 
   // For very small newsletters, use simple planning
