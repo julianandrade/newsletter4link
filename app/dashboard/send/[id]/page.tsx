@@ -808,10 +808,16 @@ export default function EditionDetailPage() {
   });
 
   // Parse ad-hoc emails (comma or newline separated)
-  const parsedAdHocEmails = adHocEmails
+  const adHocEntries = adHocEmails
     .split(/[,\n]/)
     .map((e) => e.trim().toLowerCase())
-    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    .filter(Boolean);
+  const parsedAdHocEmails = adHocEntries.filter((e) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+  );
+  const invalidAdHocEmails = adHocEntries.filter(
+    (e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+  );
 
   // Calculate recipient count based on mode
   const getRecipientCount = () => {
@@ -841,6 +847,12 @@ export default function EditionDetailPage() {
   // Subscriber selection handlers
   const handleSelectAllSubscribers = () => {
     setSelectedSubscriberIds(subscribers.map((s) => s.id));
+  };
+
+  const handleSelectFilteredSubscribers = (limit?: number) => {
+    const filteredIds = filteredSubscribers.map((s) => s.id);
+    const ids = typeof limit === "number" ? filteredIds.slice(0, limit) : filteredIds;
+    setSelectedSubscriberIds(ids);
   };
 
   const handleDeselectAllSubscribers = () => {
@@ -1549,6 +1561,16 @@ export default function EditionDetailPage() {
                         ) : (
                           <span className="text-yellow-600">Enter at least one valid email address</span>
                         )}
+                        {invalidAdHocEmails.length > 0 && (
+                          <>
+                            {" "}
+                            •{" "}
+                            <span className="text-red-600 font-medium">
+                              {invalidAdHocEmails.length}
+                            </span>{" "}
+                            invalid
+                          </>
+                        )}
                       </p>
                     </div>
                   )}
@@ -1575,6 +1597,30 @@ export default function EditionDetailPage() {
                             disabled={selectedSubscriberIds.length === subscribers.length}
                           >
                             Select All
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSelectFilteredSubscribers()}
+                            disabled={filteredSubscribers.length === 0}
+                          >
+                            Select Filtered
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSelectFilteredSubscribers(50)}
+                            disabled={filteredSubscribers.length === 0}
+                          >
+                            Top 50
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSelectFilteredSubscribers(100)}
+                            disabled={filteredSubscribers.length === 0}
+                          >
+                            Top 100
                           </Button>
                           <Button
                             variant="outline"
@@ -1893,6 +1939,33 @@ export default function EditionDetailPage() {
               Preview of how the newsletter will appear to subscribers
             </DialogDescription>
           </DialogHeader>
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedApprovedDraftId && (
+                <Badge variant="secondary">Draft {selectedApprovedDraftId.slice(0, 6)}</Badge>
+              )}
+              {lastPreviewedAt && (
+                <span className="text-xs text-muted-foreground">
+                  Last previewed {formatDate(lastPreviewedAt)}
+                </span>
+              )}
+              {!selectedApprovedDraftId && drafts.length > 0 && (
+                <Badge variant="warning">No approved draft selected</Badge>
+              )}
+            </div>
+            {approvedDraftSubjectLines.length > 0 && (
+              <div className="mt-2">
+                <p className="text-xs font-medium text-muted-foreground">Subject lines</p>
+                <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                  {approvedDraftSubjectLines.slice(0, 3).map((line, index) => (
+                    <li key={`${index}-${line}`} className="truncate">
+                      {index + 1}. {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
           <div className="flex-1 overflow-auto border rounded-lg bg-white">
             {previewHtml ? (
               <iframe
@@ -1980,6 +2053,19 @@ export default function EditionDetailPage() {
                   {recipientCount !== 1 ? "es" : ""}. This action cannot be undone.
                   <br />
                   <br />
+                  {selectedApprovedDraftId && (
+                    <>
+                      <strong>Draft:</strong> {selectedApprovedDraftId.slice(0, 6)}
+                      <br />
+                    </>
+                  )}
+                  {approvedDraftSubjectLines.length > 0 && (
+                    <>
+                      <strong>Subject lines:</strong> {approvedDraftSubjectLines.slice(0, 2).join(" • ")}
+                      {approvedDraftSubjectLines.length > 2 && " • ..."}
+                      <br />
+                    </>
+                  )}
                   <strong>Edition:</strong> Week {edition.week}, {edition.year}
                   <br />
                   <strong>Content:</strong> {selectedArticleIds.length} article
