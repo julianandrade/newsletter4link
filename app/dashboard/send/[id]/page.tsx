@@ -55,8 +55,6 @@ import {
   Users,
   Mail,
   Search,
-  ChevronDown,
-  ChevronUp,
   Pencil,
   List,
   ExternalLink,
@@ -67,11 +65,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
 // Types
 interface Template {
@@ -163,7 +156,7 @@ export default function EditionDetailPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [selectedSubscriberIds, setSelectedSubscriberIds] = useState<string[]>([]);
   const [subscriberSearch, setSubscriberSearch] = useState("");
-  const [recipientsExpanded, setRecipientsExpanded] = useState(true);
+  const [lastPreviewedAt, setLastPreviewedAt] = useState<string | null>(null);
 
   // Recipient mode: "all" (all subscribers), "selected" (pick subscribers), "adhoc" (type emails)
   const [recipientMode, setRecipientMode] = useState<"all" | "selected" | "adhoc">("adhoc");
@@ -196,6 +189,8 @@ export default function EditionDetailPage() {
   const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
   const [approvedDraftSubjectLines, setApprovedDraftSubjectLines] = useState<string[]>([]);
   const [isLoadingApprovedDraft, setIsLoadingApprovedDraft] = useState(false);
+  const [approvedDraftHeroTitle, setApprovedDraftHeroTitle] = useState<string | null>(null);
+  const [approvedDraftHeroSummary, setApprovedDraftHeroSummary] = useState<string | null>(null);
 
   // Action states
   const [saving, setSaving] = useState(false);
@@ -291,6 +286,8 @@ export default function EditionDetailPage() {
   const loadApprovedDraftSubjectLines = useCallback(async () => {
     if (!selectedApprovedDraftId) {
       setApprovedDraftSubjectLines([]);
+      setApprovedDraftHeroTitle(null);
+      setApprovedDraftHeroSummary(null);
       return;
     }
 
@@ -299,13 +296,25 @@ export default function EditionDetailPage() {
       const res = await fetch(`/api/drafts/${selectedApprovedDraftId}`);
       const data = await res.json();
       if (res.ok && data.draft?.content?.subjectLines) {
-        setApprovedDraftSubjectLines(data.draft.content.subjectLines);
+        const content = data.draft.content as {
+          subjectLines?: string[];
+          sections?: Array<{ articles?: Array<{ title?: string; summary?: string; isHero?: boolean }> }>;
+        };
+        setApprovedDraftSubjectLines(content.subjectLines || []);
+        const allArticles = content.sections?.flatMap((section) => section.articles || []) || [];
+        const heroArticle = allArticles.find((article) => article.isHero) || allArticles[0];
+        setApprovedDraftHeroTitle(heroArticle?.title || null);
+        setApprovedDraftHeroSummary(heroArticle?.summary || null);
       } else {
         setApprovedDraftSubjectLines([]);
+        setApprovedDraftHeroTitle(null);
+        setApprovedDraftHeroSummary(null);
       }
     } catch (err) {
       console.error("Failed to load draft subject lines:", err);
       setApprovedDraftSubjectLines([]);
+      setApprovedDraftHeroTitle(null);
+      setApprovedDraftHeroSummary(null);
     } finally {
       setIsLoadingApprovedDraft(false);
     }
@@ -545,6 +554,7 @@ export default function EditionDetailPage() {
 
         setPreviewHtml(html);
         setShowPreviewDialog(true);
+        setLastPreviewedAt(new Date().toISOString());
       } else {
         // Use server-side preview for select mode
         const res = await fetch("/api/email/preview", {
@@ -562,6 +572,7 @@ export default function EditionDetailPage() {
         if (result.success) {
           setPreviewHtml(result.html);
           setShowPreviewDialog(true);
+          setLastPreviewedAt(new Date().toISOString());
         } else {
           toast.error(result.error || "Failed to generate preview");
         }
@@ -928,6 +939,7 @@ export default function EditionDetailPage() {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
+            <span id="preview-panel" className="sr-only" />
             {/* Save Draft - only for DRAFT status */}
             {isEditable && (
               <Button
@@ -993,6 +1005,88 @@ export default function EditionDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Send Readiness */}
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">Send Readiness</CardTitle>
+            <CardDescription>
+              Quick checklist before sending this edition
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Approved Draft</p>
+                  <p className="text-xs text-muted-foreground">
+                    {drafts.length === 0
+                      ? "No drafts required"
+                      : selectedApprovedDraftId
+                        ? `Draft ${selectedApprovedDraftId.slice(0, 6)} selected`
+                        : "Select an approved draft"}
+                  </p>
+                </div>
+                {drafts.length === 0 || selectedApprovedDraftId ? (
+                  <Badge variant="success">Ready</Badge>
+                ) : (
+                  <Badge variant="warning">Blocked</Badge>
+                )}
+                <Button variant="ghost" size="sm" asChild>
+                  <a href="#drafts-panel">Open</a>
+                </Button>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Template</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTemplateId ? "Custom template selected" : "Default template"}
+                  </p>
+                </div>
+                <Badge variant="success">Ready</Badge>
+                <Button variant="ghost" size="sm" asChild>
+                  <a href="#template-panel">Open</a>
+                </Button>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Recipients</p>
+                  <p className="text-xs text-muted-foreground">
+                    {recipientCount > 0
+                      ? `${recipientCount} ${recipientMode === "adhoc" ? "email" : "subscriber"}${recipientCount !== 1 ? "s" : ""}`
+                      : "No recipients selected"}
+                  </p>
+                </div>
+                {recipientCount > 0 ? (
+                  <Badge variant="success">Ready</Badge>
+                ) : (
+                  <Badge variant="warning">Blocked</Badge>
+                )}
+                <Button variant="ghost" size="sm" asChild>
+                  <a href="#recipients-panel">Open</a>
+                </Button>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Preview</p>
+                  <p className="text-xs text-muted-foreground">
+                    {lastPreviewedAt
+                      ? `Last previewed ${formatDate(lastPreviewedAt)}`
+                      : "Run a preview before sending"}
+                  </p>
+                </div>
+                {lastPreviewedAt ? (
+                  <Badge variant="success">Ready</Badge>
+                ) : (
+                  <Badge variant="secondary">Optional</Badge>
+                )}
+                <Button variant="ghost" size="sm" asChild>
+                  <a href="#preview-panel">Open</a>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Sent Edition Read-Only Banner */}
         {isSent && (
@@ -1137,7 +1231,7 @@ export default function EditionDetailPage() {
         </div>
 
         {/* Draft Status */}
-        <Card className="mb-6">
+        <Card id="drafts-panel" className="mb-6">
           <CardContent className="p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -1220,13 +1314,26 @@ export default function EditionDetailPage() {
                     )}
                   </ul>
                 )}
+                {(approvedDraftHeroTitle || approvedDraftHeroSummary) && (
+                  <div className="mt-3 border-t border-dashed border-muted-foreground/30 pt-3">
+                    <p className="text-sm font-medium">Hero Preview</p>
+                    <p className="mt-1 text-sm text-muted-foreground truncate">
+                      {approvedDraftHeroTitle || "Untitled hero"}
+                    </p>
+                    {approvedDraftHeroSummary && (
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                        {approvedDraftHeroSummary}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Template Selection */}
-        <Card className="mb-6">
+        <Card id="template-panel" className="mb-6">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Palette className="w-5 h-5 text-muted-foreground" />
@@ -1371,32 +1478,19 @@ export default function EditionDetailPage() {
 
         {/* Recipients Selection - only show when finalized */}
         {isFinalized && (
-          <Card className="mb-6">
-            <Collapsible open={recipientsExpanded} onOpenChange={setRecipientsExpanded}>
-              <CardHeader className="pb-3">
-                <CollapsibleTrigger asChild>
-                  <div className="flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <CardTitle className="text-base font-medium">Recipients</CardTitle>
-                        <CardDescription>
-                          {recipientCount} {recipientMode === "adhoc" ? "email" : "subscriber"}{recipientCount !== 1 ? "s" : ""} selected
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      {recipientsExpanded ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </Button>
-                  </div>
-                </CollapsibleTrigger>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent className="pt-0">
+          <Card id="recipients-panel" className="mb-6">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <CardTitle className="text-base font-medium">Recipients</CardTitle>
+                  <CardDescription>
+                    {recipientCount} {recipientMode === "adhoc" ? "email" : "subscriber"}{recipientCount !== 1 ? "s" : ""} selected
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
                   {/* Recipient mode selector */}
                   <RadioGroup
                     value={recipientMode}
@@ -1548,9 +1642,7 @@ export default function EditionDetailPage() {
                       Newsletter will be sent to all <strong>{subscribers.length}</strong> active subscriber{subscribers.length !== 1 ? "s" : ""}.
                     </div>
                   )}
-                </CardContent>
-              </CollapsibleContent>
-            </Collapsible>
+            </CardContent>
           </Card>
         )}
 
