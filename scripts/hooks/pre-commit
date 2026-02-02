@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+blocked_paths_regex='(^|/)\.env(\.|$)|credentials|secrets'
+if git diff --cached --name-only | rg -i "${blocked_paths_regex}" >/dev/null 2>&1; then
+  echo "ERROR: Refusing to commit .env/credentials/secrets files."
+  echo "Remove these from staging or disable the hook if intentional."
+  exit 1
+fi
+
+if git diff --cached | rg -n "DROP\s+TABLE|TRUNCATE\s+TABLE" >/dev/null 2>&1; then
+  echo "ERROR: Refusing to commit destructive SQL."
+  exit 1
+fi
+
+exit 0

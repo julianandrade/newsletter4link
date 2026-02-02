@@ -2,6 +2,31 @@
 
 > Last updated: January 2026
 
+## Shared Agent Policy (Claude + Codex)
+
+This repo is used by multiple agents. Keep behavior aligned:
+
+- Do not edit `.env`, `.env.*`, or any file containing credentials/secrets.
+- Avoid destructive commands (`rm -rf /`, force push, data drops).
+- Prefer safe diffs, explicit commits, and small scoped changes.
+- Run tests relevant to your changes before reporting completion.
+- Use existing conventions; avoid reformatting unrelated files.
+
+See `docs/AGENT_POLICY.md` for the full policy and the optional local hook.
+
+## GitHub Usage (Repo Configuration)
+
+Current remote:
+
+- `origin`: `git@github.com:julianandrade/newsletter4link.git` (SSH)
+
+Recommended setup:
+
+1. Ensure SSH keys are loaded (`ssh -T git@github.com`).
+2. If using GitHub CLI, run `gh auth login -h github.com`.
+
+If `gh auth status` fails, re-authenticate with `gh auth login -h github.com`.
+
 ## Project Overview
 
 AI-powered internal newsletter engine for Link company. Automatically curates articles from RSS feeds using Claude AI scoring, allows human editorial review, and sends personalized newsletters to subscribers featuring approved articles and internal project showcases.
