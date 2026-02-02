@@ -182,6 +182,7 @@ export default function EditionDetailPage() {
 
   // Dirty state tracking
   const [isDirty, setIsDirty] = useState(false);
+  const hasUnsavedChanges = isDirty || isEditorDirty;
 
   // Drafts state (Ghost Writer)
   const [drafts, setDrafts] = useState<Array<{ id: string; status: string; approvedAt?: string | null; generatedAt?: string | null }>>([]);
@@ -268,7 +269,10 @@ export default function EditionDetailPage() {
           if (prev && approvedDrafts.some((draft: any) => draft.id === prev)) {
             return prev;
           }
-          return approvedDrafts[0]?.id || null;
+          if (approvedDrafts.length === 1) {
+            return approvedDrafts[0]?.id || null;
+          }
+          return null;
         });
       } else {
         setDrafts([]);
@@ -837,6 +841,14 @@ export default function EditionDetailPage() {
     (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true) &&
     (drafts.length === 0 || !!selectedApprovedDraftId);
 
+  const sendBlockReason = !recipientCount
+    ? "No recipients selected."
+    : drafts.length > 0 && !selectedApprovedDraftId
+      ? "Select an approved draft before sending."
+      : selectedProvider && !providers.find(p => p.id === selectedProvider)?.configured
+        ? "Selected email provider is not configured."
+        : null;
+
   // Configured providers count
   const configuredProviders = providers.filter((p) => p.configured);
   const showProviderToggle = configuredProviders.length > 1;
@@ -863,6 +875,10 @@ export default function EditionDetailPage() {
     setSelectedSubscriberIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+  };
+
+  const handleRemoveInvalidAdHocEmails = () => {
+    setAdHocEmails(parsedAdHocEmails.join("\n"));
   };
 
   // Loading state
@@ -1006,15 +1022,31 @@ export default function EditionDetailPage() {
 
             {/* Send - only for FINALIZED status */}
             {isFinalized && (
-              <Button
-                onClick={() => setShowSendDialog(true)}
-                disabled={sending || !canSend}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Send to {recipientCount} Recipient{recipientCount !== 1 ? "s" : ""}
-              </Button>
+              <div className="flex flex-col items-start">
+                <Button
+                  onClick={() => setShowSendDialog(true)}
+                  disabled={sending || !canSend}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Send to {recipientCount} Recipient{recipientCount !== 1 ? "s" : ""}
+                </Button>
+                {!canSend && sendBlockReason && (
+                  <span className="mt-1 text-xs text-red-600">
+                    {sendBlockReason}
+                  </span>
+                )}
+              </div>
             )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {selectedApprovedDraftId
+              ? `Draft ${selectedApprovedDraftId.slice(0, 6)} selected`
+              : drafts.length > 0
+                ? "No approved draft selected"
+                : "No drafts required"}
+            {lastPreviewedAt && ` • Previewed ${formatDate(lastPreviewedAt)}`}
+            {hasUnsavedChanges && " • Unsaved changes"}
           </div>
         </div>
 
@@ -1096,6 +1128,22 @@ export default function EditionDetailPage() {
                   <a href="#preview-panel">Open</a>
                 </Button>
               </div>
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Unsaved Changes</p>
+                  <p className="text-xs text-muted-foreground">
+                    {hasUnsavedChanges ? "Save before final send" : "All changes saved"}
+                  </p>
+                </div>
+                {hasUnsavedChanges ? (
+                  <Badge variant="warning">Attention</Badge>
+                ) : (
+                  <Badge variant="success">Ready</Badge>
+                )}
+                <Button variant="ghost" size="sm" asChild>
+                  <a href="#preview-panel">Review</a>
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1115,6 +1163,57 @@ export default function EditionDetailPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Post-Send Summary */}
+        {(sendResult?.success || isSent) && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Send Summary</CardTitle>
+              <CardDescription>Quick recap and links for this edition</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-sm font-medium">Recipients</p>
+                  <p className="text-sm text-muted-foreground">
+                    {sendResult?.data ? (
+                      <>
+                        {sendResult.data.sent} sent
+                        {sendResult.data.failed > 0 && ` • ${sendResult.data.failed} failed`}
+                      </>
+                    ) : (
+                      `${recipientCount} ${recipientMode === "adhoc" ? "ad-hoc" : "subscriber"}${recipientCount !== 1 ? "s" : ""}`
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm font-medium">Draft</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedApprovedDraftId ? `Draft ${selectedApprovedDraftId.slice(0, 6)}` : "No draft selected"}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-sm font-medium">SharePoint</p>
+                  <p className="text-sm text-muted-foreground">
+                    {edition.sharePointUrl ? "Published" : edition.sharePointError ? "Error" : "Not published"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {edition.sharePointUrl && (
+                  <Button variant="outline" size="sm" onClick={() => window.open(edition.sharePointUrl || "", "_blank")}>
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    View SharePoint
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={handlePreview}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  Open Preview
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* SharePoint Archive Status - for sent editions */}
@@ -1192,7 +1291,7 @@ export default function EditionDetailPage() {
         )}
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -1240,6 +1339,31 @@ export default function EditionDetailPage() {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium">Activity</div>
+                  <div className="text-xs text-muted-foreground">
+                    Updated {formatDate(edition.updatedAt)}
+                  </div>
+                  {edition.finalizedAt && (
+                    <div className="text-xs text-muted-foreground">
+                      Finalized {formatDate(edition.finalizedAt)}
+                    </div>
+                  )}
+                  {edition.sentAt && (
+                    <div className="text-xs text-muted-foreground">
+                      Sent {formatDate(edition.sentAt)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Draft Status */}
@@ -1256,9 +1380,11 @@ export default function EditionDetailPage() {
                   </p>
                 ) : (
                   <>
-                    {drafts.some((draft) => draft.status === "APPROVED") ? (
+                    {drafts.filter((draft) => draft.status === "APPROVED").length > 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        Select an approved draft to send.
+                        {drafts.filter((draft) => draft.status === "APPROVED").length > 1 && !selectedApprovedDraftId
+                          ? "Multiple approved drafts available. Select one to send."
+                          : "Select an approved draft to send."}
                       </p>
                     ) : (
                       <p className="text-sm text-red-600 dark:text-red-400">
@@ -1572,6 +1698,31 @@ export default function EditionDetailPage() {
                           </>
                         )}
                       </p>
+                      {invalidAdHocEmails.length > 0 && (
+                        <div className="mt-2 flex flex-col gap-2 text-xs text-muted-foreground">
+                          <div className="flex flex-wrap gap-1">
+                            {invalidAdHocEmails.slice(0, 3).map((email) => (
+                              <Badge key={email} variant="destructive" className="text-xs">
+                                {email}
+                              </Badge>
+                            ))}
+                            {invalidAdHocEmails.length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{invalidAdHocEmails.length - 3} more
+                              </Badge>
+                            )}
+                          </div>
+                          <div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleRemoveInvalidAdHocEmails}
+                            >
+                              Remove invalid emails
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
