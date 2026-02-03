@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeSync } from "@/components/theme-sync";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -21,10 +22,42 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="linkroad-dark"
           enableSystem
           disableTransitionOnChange
+          themes={[
+            "light",
+            "dark",
+            "system",
+            "linkroad-dark",
+            "linkroad-slate",
+            "linkroad-ocean",
+            "linkroad-ember",
+            "linkroad-print",
+            "linkroad-print-graphite",
+            "linkroad-print-carbon",
+            "linkroad-light",
+            "linkroad-light-sand",
+            "linkroad-light-mist",
+            "linkroad-light-azure",
+            "linkroad-light-citrus",
+          ]}
+          value={{
+            "linkroad-dark": "theme-linkroad-dark",
+            "linkroad-slate": "theme-linkroad-slate",
+            "linkroad-ocean": "theme-linkroad-ocean",
+            "linkroad-ember": "theme-linkroad-ember",
+            "linkroad-print": "theme-linkroad-print",
+            "linkroad-print-graphite": "theme-linkroad-print-graphite",
+            "linkroad-print-carbon": "theme-linkroad-print-carbon",
+            "linkroad-light": "theme-linkroad-light",
+            "linkroad-light-sand": "theme-linkroad-light-sand",
+            "linkroad-light-mist": "theme-linkroad-light-mist",
+            "linkroad-light-azure": "theme-linkroad-light-azure",
+            "linkroad-light-citrus": "theme-linkroad-light-citrus",
+          }}
         >
+          <ThemeSync />
           {children}
           <Toaster richColors position="top-right" />
         </ThemeProvider>

@@ -80,6 +80,7 @@ model OrgUser {
   email          String
   name           String?
   role           OrgRole @default(VIEWER)
+  theme          String?
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationId String
@@ -87,7 +88,7 @@ model OrgUser {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([supabaseUserId, organizationId])
+  @@unique([supabaseUserId, organizationId], name: "supabaseUserId_organizationId")
   @@index([supabaseUserId])
   @@index([organizationId])
   @@index([email])
@@ -158,6 +159,7 @@ model OrgSettings {
   logoUrl          String?
   bannerUrl        String?
   primaryColor     String? @default("#1e3a5f")
+  theme            String? @default("linkroad-dark")
 
   // Email settings
   fromName     String?

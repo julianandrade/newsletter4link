@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .theme-linkroad-dark *, .theme-linkroad-slate *, .theme-linkroad-ocean *, .theme-linkroad-ember *, .theme-linkroad-print *, .theme-linkroad-print-graphite *, .theme-linkroad-print-carbon *));
 
 @theme inline {
   /* Breakpoints */
@@ -60,6 +60,21 @@
 }
 
 :root {
+  --lr-almost-black: #0e1517;
+  --lr-deep-blue: #2d4449;
+  --lr-dark-blue: #406369;
+  --lr-simple-blue: #397b94;
+  --lr-light-blue: #ff7901;
+  --lr-text-black: #0e1517;
+  --lr-text-black-gray: #575757;
+  --lr-text-white: #fcfcfc;
+  --lr-text-white-gray: hsla(0, 0%, 99%, .9);
+  --lr-bg-black: #0e1517;
+  --lr-bg-gray: #2c3335;
+  --lr-bg-blue: #2d4449;
+  --lr-bg-disabled: silver;
+  --lr-bg-white: #fcfcfc;
+  --lr-black-400: #5c6366;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -128,6 +143,450 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+}
+
+.theme-linkroad-dark {
+  --background: var(--lr-almost-black);
+  --foreground: var(--lr-text-white);
+  --card: var(--lr-deep-blue);
+  --card-foreground: var(--lr-text-white);
+  --popover: var(--lr-deep-blue);
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-dark-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: var(--lr-bg-gray);
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: var(--lr-black-400);
+  --input: var(--lr-bg-gray);
+  --ring: var(--lr-light-blue);
+  --sidebar: var(--lr-almost-black);
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: var(--lr-deep-blue);
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-slate {
+  --background: var(--lr-bg-gray);
+  --foreground: var(--lr-text-white);
+  --card: var(--lr-deep-blue);
+  --card-foreground: var(--lr-text-white);
+  --popover: var(--lr-deep-blue);
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-dark-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: var(--lr-almost-black);
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: var(--lr-black-400);
+  --input: var(--lr-bg-gray);
+  --ring: var(--lr-light-blue);
+  --sidebar: var(--lr-bg-gray);
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: var(--lr-deep-blue);
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-ocean {
+  --background: var(--lr-deep-blue);
+  --foreground: var(--lr-text-white);
+  --card: var(--lr-dark-blue);
+  --card-foreground: var(--lr-text-white);
+  --popover: var(--lr-dark-blue);
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: var(--lr-bg-gray);
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: var(--lr-black-400);
+  --input: var(--lr-deep-blue);
+  --ring: var(--lr-light-blue);
+  --sidebar: var(--lr-deep-blue);
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: var(--lr-dark-blue);
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-ember {
+  --background: var(--lr-almost-black);
+  --foreground: var(--lr-text-white);
+  --card: var(--lr-bg-gray);
+  --card-foreground: var(--lr-text-white);
+  --popover: var(--lr-bg-gray);
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-deep-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: var(--lr-bg-gray);
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: var(--lr-black-400);
+  --input: var(--lr-bg-gray);
+  --ring: var(--lr-light-blue);
+  --sidebar: var(--lr-almost-black);
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: var(--lr-bg-gray);
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-print {
+  --background: #0b1214;
+  --foreground: var(--lr-text-white);
+  --card: #1f2a2d;
+  --card-foreground: var(--lr-text-white);
+  --popover: #1f2a2d;
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: #141c1e;
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: #2a373a;
+  --input: #1a2326;
+  --ring: var(--lr-light-blue);
+  --sidebar: #0b1214;
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: #1f2a2d;
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-print body,
+.theme-linkroad-print-graphite body,
+.theme-linkroad-print-carbon body {
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(57, 123, 148, 0.12) 0 12%, transparent 12%),
+    radial-gradient(circle at 80% 30%, rgba(45, 68, 73, 0.18) 0 10%, transparent 10%),
+    radial-gradient(circle at 30% 80%, rgba(57, 123, 148, 0.1) 0 8%, transparent 8%);
+  background-size: 240px 240px, 280px 280px, 220px 220px;
+  background-attachment: fixed;
+}
+
+.theme-linkroad-light {
+  --background: #fcfcfc;
+  --foreground: var(--lr-text-black);
+  --card: #f2f5f6;
+  --card-foreground: var(--lr-text-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--lr-text-black);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: #ffffff;
+  --muted: #e7ecee;
+  --muted-foreground: var(--lr-text-black-gray);
+  --accent: #2d4449;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #d7dde0;
+  --input: #e7ecee;
+  --ring: var(--lr-simple-blue);
+  --sidebar: #f6f8f9;
+  --sidebar-foreground: var(--lr-text-black);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #e1e6e8;
+  --sidebar-ring: var(--lr-simple-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-light-sand {
+  --background: #f8f6f2;
+  --foreground: var(--lr-text-black);
+  --card: #efeae2;
+  --card-foreground: var(--lr-text-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--lr-text-black);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: #ffffff;
+  --muted: #e6dfd6;
+  --muted-foreground: var(--lr-text-black-gray);
+  --accent: #2d4449;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #d9d2c9;
+  --input: #e6dfd6;
+  --ring: var(--lr-simple-blue);
+  --sidebar: #f3efe8;
+  --sidebar-foreground: var(--lr-text-black);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #e0d9cf;
+  --sidebar-ring: var(--lr-simple-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-light-mist {
+  --background: #f4f7f8;
+  --foreground: var(--lr-text-black);
+  --card: #e7eef0;
+  --card-foreground: var(--lr-text-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--lr-text-black);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: #ffffff;
+  --muted: #dde6e9;
+  --muted-foreground: var(--lr-text-black-gray);
+  --accent: #2d4449;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #cfd8dc;
+  --input: #dde6e9;
+  --ring: var(--lr-simple-blue);
+  --sidebar: #eef3f4;
+  --sidebar-foreground: var(--lr-text-black);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #d7e0e3;
+  --sidebar-ring: var(--lr-simple-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-light-azure {
+  --background: #f2f8fb;
+  --foreground: var(--lr-text-black);
+  --card: #e3f0f6;
+  --card-foreground: var(--lr-text-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--lr-text-black);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: #ffffff;
+  --muted: #d9eaf2;
+  --muted-foreground: var(--lr-text-black-gray);
+  --accent: #2d4449;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #c6dde7;
+  --input: #d9eaf2;
+  --ring: var(--lr-simple-blue);
+  --sidebar: #ebf4f8;
+  --sidebar-foreground: var(--lr-text-black);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #d3e6ef;
+  --sidebar-ring: var(--lr-simple-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-light-citrus {
+  --background: #fff8f1;
+  --foreground: var(--lr-text-black);
+  --card: #f7ede2;
+  --card-foreground: var(--lr-text-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--lr-text-black);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: #ffffff;
+  --muted: #f2e4d7;
+  --muted-foreground: var(--lr-text-black-gray);
+  --accent: #2d4449;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e7d5c5;
+  --input: #f2e4d7;
+  --ring: var(--lr-light-blue);
+  --sidebar: #fdf3e8;
+  --sidebar-foreground: var(--lr-text-black);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #f0dece;
+  --sidebar-ring: var(--lr-simple-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-light body,
+.theme-linkroad-light-sand body,
+.theme-linkroad-light-mist body,
+.theme-linkroad-light-azure body,
+.theme-linkroad-light-citrus body {
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(57, 123, 148, 0.06) 0 10%, transparent 10%),
+    radial-gradient(circle at 82% 24%, rgba(45, 68, 73, 0.08) 0 8%, transparent 8%),
+    radial-gradient(circle at 32% 82%, rgba(255, 121, 1, 0.08) 0 7%, transparent 7%);
+  background-size: 260px 260px, 300px 300px, 240px 240px;
+  background-attachment: fixed;
+}
+
+.theme-linkroad-print-graphite {
+  --background: #10181a;
+  --foreground: var(--lr-text-white);
+  --card: #2a3537;
+  --card-foreground: var(--lr-text-white);
+  --popover: #2a3537;
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: #4a6b73;
+  --secondary-foreground: var(--lr-text-white);
+  --muted: #1b2426;
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: #3a494c;
+  --input: #243033;
+  --ring: var(--lr-light-blue);
+  --sidebar: #10181a;
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: #2a3537;
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-print-carbon {
+  --background: #0d1416;
+  --foreground: var(--lr-text-white);
+  --card: #1a2426;
+  --card-foreground: var(--lr-text-white);
+  --popover: #1a2426;
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: #355258;
+  --secondary-foreground: var(--lr-text-white);
+  --muted: #121a1c;
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: #283437;
+  --input: #172023;
+  --ring: var(--lr-light-blue);
+  --sidebar: #0d1416;
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: #1a2426;
+  --sidebar-ring: var(--lr-light-blue);
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
 }
 
 * {

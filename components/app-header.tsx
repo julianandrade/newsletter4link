@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Link from "next/link";
 
 interface AppHeaderProps {
   title: string;
@@ -16,6 +17,19 @@ interface AppHeaderProps {
 
 export function AppHeader({ title }: AppHeaderProps) {
   const { setTheme } = useTheme();
+
+  const setThemePreference = async (value: string) => {
+    setTheme(value);
+    try {
+      await fetch("/api/settings/theme", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "user", theme: value }),
+      });
+    } catch {
+      // Ignore persistence errors for now
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
@@ -43,14 +57,53 @@ export function AppHeader({ title }: AppHeaderProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setTheme("light")}>
+            <DropdownMenuItem onClick={() => setThemePreference("light")}>
               Light
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("dark")}>
+            <DropdownMenuItem onClick={() => setThemePreference("dark")}>
               Dark
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("system")}>
+            <DropdownMenuItem onClick={() => setThemePreference("system")}>
               System
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-dark")}>
+              Linkroad Dark
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-slate")}>
+              Linkroad Slate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-ocean")}>
+              Linkroad Ocean
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-ember")}>
+              Linkroad Ember
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-print")}>
+              Linkroad Print
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-print-graphite")}>
+              Linkroad Print Graphite
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-print-carbon")}>
+              Linkroad Print Carbon
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-light")}>
+              Linkroad Light
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-light-sand")}>
+              Linkroad Light Sand
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-light-mist")}>
+              Linkroad Light Mist
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-light-azure")}>
+              Linkroad Light Azure
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-light-citrus")}>
+              Linkroad Light Citrus
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/settings/theme">Theme Gallery</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

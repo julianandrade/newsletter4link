@@ -17,6 +17,7 @@ export interface OrgSettingsData extends AppSettings {
   primaryColor: string | null;
   fromName: string | null;
   replyToEmail: string | null;
+  theme: string | null;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -36,6 +37,7 @@ const DEFAULT_ORG_SETTINGS: OrgSettingsData = {
   primaryColor: "#0066cc",
   fromName: null,
   replyToEmail: null,
+  theme: "linkroad-dark",
 };
 
 /**
@@ -141,6 +143,7 @@ export async function getOrgSettings(db: TenantClient): Promise<OrgSettingsData>
     primaryColor: settings.primaryColor,
     fromName: settings.fromName,
     replyToEmail: settings.replyToEmail,
+    theme: settings.theme ?? DEFAULT_ORG_SETTINGS.theme,
   };
 }
 
@@ -168,6 +171,7 @@ export async function updateOrgSettings(
     primaryColor: settings.primaryColor,
     fromName: settings.fromName,
     replyToEmail: settings.replyToEmail,
+    theme: settings.theme ?? DEFAULT_ORG_SETTINGS.theme,
   };
 }
 

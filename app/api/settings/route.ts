@@ -121,6 +121,10 @@ export async function PUT(request: Request) {
       updates.replyToEmail = body.replyToEmail;
     }
 
+    if (typeof body.theme === "string" || body.theme === null) {
+      updates.theme = body.theme;
+    }
+
     const settings = await updateOrgSettings(ctx.db, updates);
     return NextResponse.json(settings);
   } catch (error) {
