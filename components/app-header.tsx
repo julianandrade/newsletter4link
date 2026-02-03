@@ -32,7 +32,7 @@ export function AppHeader({ title }: AppHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
+    <header className="app-navbar sticky top-0 z-30 flex h-16 items-center justify-between border-b px-6">
       {/* Page Title */}
       <h1 className="text-xl font-semibold">{title}</h1>
 
@@ -101,6 +101,18 @@ export function AppHeader({ title }: AppHeaderProps) {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setThemePreference("linkroad-light-citrus")}>
               Linkroad Light Citrus
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-mix-slate")}>
+              Linkroad Mix Slate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-mix-ocean")}>
+              Linkroad Mix Ocean
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-mix-ember")}>
+              Linkroad Mix Ember
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setThemePreference("linkroad-mix-sand")}>
+              Linkroad Mix Sand
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/dashboard/settings/theme">Theme Gallery</Link>

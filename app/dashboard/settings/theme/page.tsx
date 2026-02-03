@@ -21,6 +21,10 @@ const THEMES = [
   { id: "linkroad-light-mist", name: "Light Mist", swatches: ["#f4f7f8", "#e7eef0", "#397b94", "#ff7901"] },
   { id: "linkroad-light-azure", name: "Light Azure", swatches: ["#f2f8fb", "#e3f0f6", "#397b94", "#ff7901"] },
   { id: "linkroad-light-citrus", name: "Light Citrus", swatches: ["#fff8f1", "#f7ede2", "#397b94", "#ff7901"] },
+  { id: "linkroad-mix-slate", name: "Mix Slate", swatches: ["#0e1517", "#2d4449", "#397b94", "#ff7901"] },
+  { id: "linkroad-mix-ocean", name: "Mix Ocean", swatches: ["#0e1517", "#397b94", "#2d4449", "#ff7901"] },
+  { id: "linkroad-mix-ember", name: "Mix Ember", swatches: ["#0e1517", "#ff7901", "#2c3335", "#397b94"] },
+  { id: "linkroad-mix-sand", name: "Mix Sand", swatches: ["#f4f7f8", "#2d4449", "#397b94", "#ff7901"] },
 ];
 
 export default function ThemeSettingsPage() {

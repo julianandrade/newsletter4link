@@ -41,6 +41,10 @@ export default function RootLayout({
             "linkroad-light-mist",
             "linkroad-light-azure",
             "linkroad-light-citrus",
+            "linkroad-mix-slate",
+            "linkroad-mix-ocean",
+            "linkroad-mix-ember",
+            "linkroad-mix-sand",
           ]}
           value={{
             "linkroad-dark": "theme-linkroad-dark",
@@ -55,6 +59,10 @@ export default function RootLayout({
             "linkroad-light-mist": "theme-linkroad-light-mist",
             "linkroad-light-azure": "theme-linkroad-light-azure",
             "linkroad-light-citrus": "theme-linkroad-light-citrus",
+            "linkroad-mix-slate": "theme-linkroad-mix-slate",
+            "linkroad-mix-ocean": "theme-linkroad-mix-ocean",
+            "linkroad-mix-ember": "theme-linkroad-mix-ember",
+            "linkroad-mix-sand": "theme-linkroad-mix-sand",
           }}
         >
           <ThemeSync />

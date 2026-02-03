@@ -75,6 +75,9 @@
   --lr-bg-disabled: silver;
   --lr-bg-white: #fcfcfc;
   --lr-black-400: #5c6366;
+  --navbar: var(--background);
+  --navbar-foreground: var(--foreground);
+  --navbar-border: var(--border);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -519,6 +522,158 @@
   background-attachment: fixed;
 }
 
+.theme-linkroad-mix-slate {
+  --background: #0e1517;
+  --foreground: var(--lr-text-white);
+  --card: #233236;
+  --card-foreground: var(--lr-text-white);
+  --popover: #25363a;
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: #172124;
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: #314347;
+  --input: #1c282b;
+  --ring: var(--lr-light-blue);
+  --sidebar: #162125;
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: #223135;
+  --sidebar-ring: var(--lr-light-blue);
+  --navbar: #2d4449;
+  --navbar-foreground: var(--lr-text-white);
+  --navbar-border: #243438;
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-mix-ocean {
+  --background: #0e1517;
+  --foreground: var(--lr-text-white);
+  --card: #21343a;
+  --card-foreground: var(--lr-text-white);
+  --popover: #223840;
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: var(--lr-text-white);
+  --muted: #162127;
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: #2f3f44;
+  --input: #1b2a30;
+  --ring: var(--lr-light-blue);
+  --sidebar: #0f181c;
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: #1f2f35;
+  --sidebar-ring: var(--lr-light-blue);
+  --navbar: #397b94;
+  --navbar-foreground: var(--lr-text-white);
+  --navbar-border: #2d5b6b;
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-mix-ember {
+  --background: #0e1517;
+  --foreground: var(--lr-text-white);
+  --card: #263439;
+  --card-foreground: var(--lr-text-white);
+  --popover: #293a40;
+  --popover-foreground: var(--lr-text-white);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: var(--lr-text-white);
+  --secondary: #3a5d64;
+  --secondary-foreground: var(--lr-text-white);
+  --muted: #1b262a;
+  --muted-foreground: var(--lr-text-white-gray);
+  --accent: var(--lr-simple-blue);
+  --accent-foreground: var(--lr-text-white);
+  --destructive: #ff4d4f;
+  --destructive-foreground: var(--lr-text-white);
+  --border: #324247;
+  --input: #1f2b30;
+  --ring: var(--lr-light-blue);
+  --sidebar: #121a1d;
+  --sidebar-foreground: var(--lr-text-white);
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: var(--lr-text-white);
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: var(--lr-text-white);
+  --sidebar-border: #1f2b30;
+  --sidebar-ring: var(--lr-light-blue);
+  --navbar: #ff7901;
+  --navbar-foreground: #0e1517;
+  --navbar-border: #d96a00;
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
+.theme-linkroad-mix-sand {
+  --background: #f1f5f6;
+  --foreground: var(--lr-text-black);
+  --card: #ffffff;
+  --card-foreground: var(--lr-text-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--lr-text-black);
+  --primary: var(--lr-light-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--lr-simple-blue);
+  --secondary-foreground: #ffffff;
+  --muted: #e5edf0;
+  --muted-foreground: var(--lr-text-black-gray);
+  --accent: #2d4449;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #d5dee1;
+  --input: #e6eef1;
+  --ring: var(--lr-simple-blue);
+  --sidebar: #2d4449;
+  --sidebar-foreground: #fcfcfc;
+  --sidebar-primary: var(--lr-light-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--lr-simple-blue);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #223135;
+  --sidebar-ring: var(--lr-simple-blue);
+  --navbar: #2d4449;
+  --navbar-foreground: #fcfcfc;
+  --navbar-border: #223135;
+  --chart-1: var(--lr-light-blue);
+  --chart-2: var(--lr-simple-blue);
+  --chart-3: var(--lr-dark-blue);
+  --chart-4: var(--lr-deep-blue);
+  --chart-5: var(--lr-black-400);
+}
+
 .theme-linkroad-print-graphite {
   --background: #10181a;
   --foreground: var(--lr-text-white);
@@ -595,6 +750,12 @@
 
 body {
   background-color: var(--background);
+}
+
+.app-navbar {
+  background-color: var(--navbar);
+  color: var(--navbar-foreground);
+  border-color: var(--navbar-border);
 }
 
 @layer base {
