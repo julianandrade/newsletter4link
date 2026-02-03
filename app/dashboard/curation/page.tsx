@@ -715,6 +715,22 @@ export default function CurationHistoryPage() {
                             </div>
 
                             <div className="flex items-center gap-1">
+                              {job.status === "RUNNING" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={handleCancelCuration}
+                                  disabled={isCancelling}
+                                  title="Cancel this job"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  {isCancelling ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <StopCircle className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
                               {canRerun && (
                                 <Button
                                   variant="ghost"
