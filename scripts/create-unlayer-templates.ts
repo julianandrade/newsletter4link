@@ -14,19 +14,13 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // Get branding settings from org settings (or use defaults)
-async function getBranding(organizationId?: string) {
-  if (organizationId) {
-    const settings = await prisma.orgSettings.findUnique({
-      where: { organizationId },
-    });
-    return {
-      logoUrl: settings?.logoUrl || "",
-      bannerUrl: settings?.bannerUrl || "",
-    };
-  }
+async function getBranding(organizationId: string) {
+  const settings = await prisma.orgSettings.findUnique({
+    where: { organizationId },
+  });
   return {
-    logoUrl: "",
-    bannerUrl: "",
+    logoUrl: settings?.logoUrl || "",
+    bannerUrl: settings?.bannerUrl || "",
   };
 }
 
@@ -862,68 +856,835 @@ function createExecutiveTemplate(branding: { logoUrl: string; bannerUrl: string 
   return { design, html };
 }
 
+// Linkroad Signal Template - Dark, modular blocks with orange accents
+function createSignalTemplate(branding: { logoUrl: string; bannerUrl: string }) {
+  const design = {
+    counters: { u_column: 4, u_row: 6, u_content_text: 8, u_content_image: 2, u_content_divider: 2, u_content_html: 2 },
+    body: {
+      id: "body",
+      rows: [
+        {
+          id: "signal-header",
+          cells: [1],
+          columns: [
+            {
+              id: "signal-header-col",
+              contents: [
+                ...(branding.logoUrl ? [{
+                  id: "signal-logo",
+                  type: "image",
+                  values: {
+                    containerPadding: "22px 20px 10px",
+                    src: { url: branding.logoUrl, width: 64, height: 64 },
+                    textAlign: "center",
+                    altText: "Linkroad",
+                  },
+                }] : []),
+                {
+                  id: "signal-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "6px 20px 0px",
+                    fontSize: "30px",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    color: "#fcfcfc",
+                    text: "<p style=\"letter-spacing: 2px;\"><strong>AI RADAR</strong></p>",
+                  },
+                },
+                {
+                  id: "signal-subtitle",
+                  type: "text",
+                  values: {
+                    containerPadding: "6px 20px 20px",
+                    fontSize: "13px",
+                    textAlign: "center",
+                    color: "rgba(252,252,252,0.8)",
+                    text: "<p>Signals for Week {{week}} &middot; {{year}}</p>",
+                  },
+                },
+              ],
+              values: {
+                backgroundColor: "#0e1517",
+                padding: "16px",
+                border: {},
+                borderRadius: "16px 16px 0 0",
+              },
+            },
+          ],
+          values: {
+            backgroundColor: "#0e1517",
+            padding: "0px",
+          },
+        },
+        ...(branding.bannerUrl ? [{
+          id: "signal-banner",
+          cells: [1],
+          columns: [
+            {
+              id: "signal-banner-col",
+              contents: [
+                {
+                  id: "signal-banner-image",
+                  type: "image",
+                  values: {
+                    containerPadding: "0px",
+                    src: { url: branding.bannerUrl, width: 600, height: 200 },
+                    textAlign: "center",
+                    altText: "AI Radar",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#0e1517", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#0e1517", padding: "0px" },
+        }] : []),
+        {
+          id: "signal-intro",
+          cells: [1],
+          columns: [
+            {
+              id: "signal-intro-col",
+              contents: [
+                {
+                  id: "signal-intro-text",
+                  type: "text",
+                  values: {
+                    containerPadding: "24px 32px",
+                    fontSize: "16px",
+                    lineHeight: "170%",
+                    color: "#fcfcfc",
+                    text: "<p>Handpicked internal and external signals designed to keep our teams aligned on what matters in AI, tech, and delivery.</p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#162125", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#162125", padding: "0px" },
+        },
+        {
+          id: "signal-articles",
+          cells: [1],
+          columns: [
+            {
+              id: "signal-articles-col",
+              contents: [
+                {
+                  id: "signal-articles-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "24px 32px 8px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "#ff7901",
+                    text: "<p>KEY SIGNALS</p>",
+                  },
+                },
+                {
+                  id: "signal-articles-body",
+                  type: "html",
+                  values: {
+                    containerPadding: "0px 32px 24px",
+                    html: "{{articles}}",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#1f2a2d", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#1f2a2d", padding: "0px" },
+        },
+        {
+          id: "signal-projects",
+          cells: [1],
+          columns: [
+            {
+              id: "signal-projects-col",
+              contents: [
+                {
+                  id: "signal-projects-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "24px 32px 8px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "#397b94",
+                    text: "<p>INTERNAL HIGHLIGHTS</p>",
+                  },
+                },
+                {
+                  id: "signal-projects-body",
+                  type: "html",
+                  values: {
+                    containerPadding: "0px 32px 24px",
+                    html: "{{projects}}",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#162125", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#162125", padding: "0px" },
+        },
+        {
+          id: "signal-footer",
+          cells: [1],
+          columns: [
+            {
+              id: "signal-footer-col",
+              contents: [
+                {
+                  id: "signal-footer-text",
+                  type: "text",
+                  values: {
+                    containerPadding: "18px 24px 24px",
+                    fontSize: "12px",
+                    textAlign: "center",
+                    color: "rgba(252,252,252,0.7)",
+                    text: "<p>Curated for Linkroad teams &middot; <a href=\"{{unsubscribe_url}}\" style=\"color: #ff7901;\">Unsubscribe</a></p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#0e1517", padding: "0px", borderRadius: "0 0 16px 16px" },
+            },
+          ],
+          values: { backgroundColor: "#0e1517", padding: "0px" },
+        },
+      ],
+    },
+  };
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Radar - Signal</title>
+</head>
+<body style="margin:0; padding:0; background:#0e1517;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e1517; padding:32px 16px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#162125; border-radius:16px; overflow:hidden;">
+          <tr>
+            <td style="background:#0e1517; text-align:center; padding:24px;">
+              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Linkroad" width="64" height="64" style="display:block; margin:0 auto 12px;" />` : ""}
+              <h1 style="margin:0; color:#fcfcfc; letter-spacing:2px;">AI RADAR</h1>
+              <p style="margin:8px 0 0; color:rgba(252,252,252,0.8); font-size:13px;">Signals for Week {{week}} &middot; {{year}}</p>
+            </td>
+          </tr>
+          ${branding.bannerUrl ? `<tr><td><img src="${branding.bannerUrl}" alt="AI Radar" width="600" style="display:block; width:100%; height:auto;" /></td></tr>` : ""}
+          <tr>
+            <td style="padding:24px 32px; color:#fcfcfc; font-size:16px; line-height:1.7;">
+              Handpicked internal and external signals designed to keep our teams aligned on what matters in AI, tech, and delivery.
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#1f2a2d; padding:24px 32px;">
+              <h2 style="margin:0 0 16px; color:#ff7901; font-size:13px; letter-spacing:1px;">KEY SIGNALS</h2>
+              {{articles}}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;">
+              <h2 style="margin:0 0 16px; color:#397b94; font-size:13px; letter-spacing:1px;">INTERNAL HIGHLIGHTS</h2>
+              {{projects}}
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#0e1517; text-align:center; padding:18px 24px 24px; font-size:12px; color:rgba(252,252,252,0.7);">
+              Curated for Linkroad teams &middot; <a href="{{unsubscribe_url}}" style="color:#ff7901;">Unsubscribe</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { design, html };
+}
+
+// Linkroad Focus Template - Light, editorial layout with strong blue/orange accents
+function createFocusTemplate(branding: { logoUrl: string; bannerUrl: string }) {
+  const design = {
+    counters: { u_column: 5, u_row: 6, u_content_text: 8, u_content_image: 2, u_content_html: 2, u_content_divider: 1 },
+    body: {
+      id: "body",
+      rows: [
+        {
+          id: "focus-header",
+          cells: [1],
+          columns: [
+            {
+              id: "focus-header-col",
+              contents: [
+                ...(branding.logoUrl ? [{
+                  id: "focus-logo",
+                  type: "image",
+                  values: {
+                    containerPadding: "18px 20px 8px",
+                    src: { url: branding.logoUrl, width: 56, height: 56 },
+                    textAlign: "left",
+                    altText: "Linkroad",
+                  },
+                }] : []),
+                {
+                  id: "focus-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "0px 20px 6px",
+                    fontSize: "26px",
+                    fontWeight: 700,
+                    color: "#0e1517",
+                    text: "<p>AI Radar Weekly Focus</p>",
+                  },
+                },
+                {
+                  id: "focus-meta",
+                  type: "text",
+                  values: {
+                    containerPadding: "0px 20px 18px",
+                    fontSize: "13px",
+                    color: "#575757",
+                    text: "<p>Week {{week}} &middot; {{year}}</p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#fcfcfc", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#fcfcfc", padding: "0px" },
+        },
+        ...(branding.bannerUrl ? [{
+          id: "focus-banner",
+          cells: [1],
+          columns: [
+            {
+              id: "focus-banner-col",
+              contents: [
+                {
+                  id: "focus-banner-image",
+                  type: "image",
+                  values: {
+                    containerPadding: "0px",
+                    src: { url: branding.bannerUrl, width: 600, height: 200 },
+                    textAlign: "center",
+                    altText: "AI Radar",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#fcfcfc", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#fcfcfc", padding: "0px" },
+        }] : []),
+        {
+          id: "focus-intro",
+          cells: [1],
+          columns: [
+            {
+              id: "focus-intro-col",
+              contents: [
+                {
+                  id: "focus-intro-text",
+                  type: "text",
+                  values: {
+                    containerPadding: "20px 24px",
+                    fontSize: "15px",
+                    lineHeight: "170%",
+                    color: "#0e1517",
+                    text: "<p>A crisp editorial view of what moved the needle this week, plus the internal work worth spotlighting.</p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#f4f7f8", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#f4f7f8", padding: "0px" },
+        },
+        {
+          id: "focus-articles",
+          cells: [1],
+          columns: [
+            {
+              id: "focus-articles-col",
+              contents: [
+                {
+                  id: "focus-articles-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "22px 24px 8px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "#397b94",
+                    text: "<p>TOP STORIES</p>",
+                  },
+                },
+                {
+                  id: "focus-articles-body",
+                  type: "html",
+                  values: {
+                    containerPadding: "0px 24px 22px",
+                    html: "{{articles}}",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#ffffff", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#ffffff", padding: "0px" },
+        },
+        {
+          id: "focus-projects",
+          cells: [1],
+          columns: [
+            {
+              id: "focus-projects-col",
+              contents: [
+                {
+                  id: "focus-projects-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "22px 24px 8px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "#ff7901",
+                    text: "<p>FROM OUR TEAMS</p>",
+                  },
+                },
+                {
+                  id: "focus-projects-body",
+                  type: "html",
+                  values: {
+                    containerPadding: "0px 24px 22px",
+                    html: "{{projects}}",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#f4f7f8", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#f4f7f8", padding: "0px" },
+        },
+        {
+          id: "focus-footer",
+          cells: [1],
+          columns: [
+            {
+              id: "focus-footer-col",
+              contents: [
+                {
+                  id: "focus-footer-text",
+                  type: "text",
+                  values: {
+                    containerPadding: "18px 24px 24px",
+                    fontSize: "12px",
+                    textAlign: "center",
+                    color: "#575757",
+                    text: "<p>AI Radar by Linkroad &middot; <a href=\"{{unsubscribe_url}}\" style=\"color:#397b94;\">Unsubscribe</a></p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#ffffff", padding: "0px", borderRadius: "0 0 12px 12px" },
+            },
+          ],
+          values: { backgroundColor: "#ffffff", padding: "0px" },
+        },
+      ],
+    },
+  };
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Radar - Focus</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f7f8;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7f8; padding:32px 16px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden;">
+          <tr>
+            <td style="padding:20px 24px;">
+              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Linkroad" width="56" height="56" style="display:block; margin-bottom:12px;" />` : ""}
+              <h1 style="margin:0; font-size:26px; color:#0e1517;">AI Radar Weekly Focus</h1>
+              <p style="margin:6px 0 0; color:#575757; font-size:13px;">Week {{week}} &middot; {{year}}</p>
+            </td>
+          </tr>
+          ${branding.bannerUrl ? `<tr><td><img src="${branding.bannerUrl}" alt="AI Radar" width="600" style="display:block; width:100%; height:auto;" /></td></tr>` : ""}
+          <tr>
+            <td style="background:#f4f7f8; padding:20px 24px; color:#0e1517; font-size:15px; line-height:1.7;">
+              A crisp editorial view of what moved the needle this week, plus the internal work worth spotlighting.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 24px;">
+              <h2 style="margin:0 0 14px; font-size:14px; color:#397b94;">TOP STORIES</h2>
+              {{articles}}
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f4f7f8; padding:22px 24px;">
+              <h2 style="margin:0 0 14px; font-size:14px; color:#ff7901;">FROM OUR TEAMS</h2>
+              {{projects}}
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align:center; padding:18px 24px 24px; color:#575757; font-size:12px;">
+              AI Radar by Linkroad &middot; <a href="{{unsubscribe_url}}" style="color:#397b94;">Unsubscribe</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { design, html };
+}
+
+// Linkroad Grid Template - Layered cards with navy + teal accents
+function createGridTemplate(branding: { logoUrl: string; bannerUrl: string }) {
+  const design = {
+    counters: { u_column: 6, u_row: 7, u_content_text: 9, u_content_image: 2, u_content_divider: 2, u_content_html: 2 },
+    body: {
+      id: "body",
+      rows: [
+        {
+          id: "grid-header",
+          cells: [1],
+          columns: [
+            {
+              id: "grid-header-col",
+              contents: [
+                ...(branding.logoUrl ? [{
+                  id: "grid-logo",
+                  type: "image",
+                  values: {
+                    containerPadding: "20px 20px 10px",
+                    src: { url: branding.logoUrl, width: 56, height: 56 },
+                    textAlign: "center",
+                    altText: "Linkroad",
+                  },
+                }] : []),
+                {
+                  id: "grid-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "6px 20px",
+                    fontSize: "28px",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    color: "#fcfcfc",
+                    text: "<p>AI Radar Grid</p>",
+                  },
+                },
+                {
+                  id: "grid-subtitle",
+                  type: "text",
+                  values: {
+                    containerPadding: "0px 20px 20px",
+                    fontSize: "13px",
+                    textAlign: "center",
+                    color: "rgba(252,252,252,0.75)",
+                    text: "<p>Week {{week}} &middot; {{year}}</p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#2d4449", padding: "0px", borderRadius: "14px 14px 0 0" },
+            },
+          ],
+          values: { backgroundColor: "#0e1517", padding: "0px" },
+        },
+        ...(branding.bannerUrl ? [{
+          id: "grid-banner",
+          cells: [1],
+          columns: [
+            {
+              id: "grid-banner-col",
+              contents: [
+                {
+                  id: "grid-banner-image",
+                  type: "image",
+                  values: {
+                    containerPadding: "0px",
+                    src: { url: branding.bannerUrl, width: 600, height: 200 },
+                    textAlign: "center",
+                    altText: "AI Radar",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#0e1517", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#0e1517", padding: "0px" },
+        }] : []),
+        {
+          id: "grid-intro",
+          cells: [1],
+          columns: [
+            {
+              id: "grid-intro-col",
+              contents: [
+                {
+                  id: "grid-intro-text",
+                  type: "text",
+                  values: {
+                    containerPadding: "20px 28px",
+                    fontSize: "15px",
+                    lineHeight: "170%",
+                    color: "#fcfcfc",
+                    text: "<p>Quick scan format for teams that want the highlights, the why, and the action in one view.</p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#1f2a2d", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#1f2a2d", padding: "0px" },
+        },
+        {
+          id: "grid-articles",
+          cells: [1],
+          columns: [
+            {
+              id: "grid-articles-col",
+              contents: [
+                {
+                  id: "grid-articles-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "22px 28px 8px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "#ff7901",
+                    text: "<p>TOP PICKS</p>",
+                  },
+                },
+                {
+                  id: "grid-articles-body",
+                  type: "html",
+                  values: {
+                    containerPadding: "0px 28px 22px",
+                    html: "{{articles}}",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#233236", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#233236", padding: "0px" },
+        },
+        {
+          id: "grid-projects",
+          cells: [1],
+          columns: [
+            {
+              id: "grid-projects-col",
+              contents: [
+                {
+                  id: "grid-projects-title",
+                  type: "text",
+                  values: {
+                    containerPadding: "22px 28px 8px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "#397b94",
+                    text: "<p>INTERNAL BUILDS</p>",
+                  },
+                },
+                {
+                  id: "grid-projects-body",
+                  type: "html",
+                  values: {
+                    containerPadding: "0px 28px 22px",
+                    html: "{{projects}}",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#1a2426", padding: "0px" },
+            },
+          ],
+          values: { backgroundColor: "#1a2426", padding: "0px" },
+        },
+        {
+          id: "grid-footer",
+          cells: [1],
+          columns: [
+            {
+              id: "grid-footer-col",
+              contents: [
+                {
+                  id: "grid-footer-text",
+                  type: "text",
+                  values: {
+                    containerPadding: "18px 24px 24px",
+                    fontSize: "12px",
+                    textAlign: "center",
+                    color: "rgba(252,252,252,0.7)",
+                    text: "<p>AI Radar &middot; <a href=\"{{unsubscribe_url}}\" style=\"color:#ff7901;\">Unsubscribe</a></p>",
+                  },
+                },
+              ],
+              values: { backgroundColor: "#0e1517", padding: "0px", borderRadius: "0 0 14px 14px" },
+            },
+          ],
+          values: { backgroundColor: "#0e1517", padding: "0px" },
+        },
+      ],
+    },
+  };
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Radar - Grid</title>
+</head>
+<body style="margin:0; padding:0; background:#0e1517;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e1517; padding:32px 16px; font-family:'Helvetica Neue', Arial, sans-serif;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#1f2a2d; border-radius:14px; overflow:hidden;">
+          <tr>
+            <td style="background:#2d4449; text-align:center; padding:20px;">
+              ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Linkroad" width="56" height="56" style="display:block; margin:0 auto 10px;" />` : ""}
+              <h1 style="margin:0; color:#fcfcfc;">AI Radar Grid</h1>
+              <p style="margin:6px 0 0; color:rgba(252,252,252,0.75); font-size:13px;">Week {{week}} &middot; {{year}}</p>
+            </td>
+          </tr>
+          ${branding.bannerUrl ? `<tr><td><img src="${branding.bannerUrl}" alt="AI Radar" width="600" style="display:block; width:100%; height:auto;" /></td></tr>` : ""}
+          <tr>
+            <td style="padding:20px 28px; color:#fcfcfc; font-size:15px; line-height:1.7;">
+              Quick scan format for teams that want the highlights, the why, and the action in one view.
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#233236; padding:22px 28px;">
+              <h2 style="margin:0 0 14px; font-size:13px; color:#ff7901;">TOP PICKS</h2>
+              {{articles}}
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#1a2426; padding:22px 28px;">
+              <h2 style="margin:0 0 14px; font-size:13px; color:#397b94;">INTERNAL BUILDS</h2>
+              {{projects}}
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align:center; padding:18px 24px 24px; color:rgba(252,252,252,0.7); font-size:12px; background:#0e1517;">
+              AI Radar &middot; <a href="{{unsubscribe_url}}" style="color:#ff7901;">Unsubscribe</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { design, html };
+}
+
 async function main() {
   console.log("Creating Unlayer-compatible email templates...\n");
 
-  const branding = await getBranding();
-  console.log("Branding settings:", branding.logoUrl ? "Logo found" : "No logo", branding.bannerUrl ? "Banner found" : "No banner");
-  console.log("");
+  const orgFilter = process.env.ORG_ID;
+  const organizations = await prisma.organization.findMany({
+    where: orgFilter ? { id: orgFilter } : undefined,
+    orderBy: { createdAt: "asc" },
+  });
 
-  const templates = [
-    {
-      name: "Corporate Professional",
-      description: "Clean, minimal design with business-appropriate styling. Uses serif typography for elegance.",
-      ...createCorporateTemplate(branding),
-    },
-    {
-      name: "Modern Tech",
-      description: "Bold gradients, contemporary design with a dark theme. Perfect for tech-forward audiences.",
-      ...createModernTemplate(branding),
-    },
-    {
-      name: "Executive Summary",
-      description: "Condensed, text-focused format designed for busy executives who want quick insights.",
-      ...createExecutiveTemplate(branding),
-    },
-  ];
+  if (!organizations.length) {
+    console.error("No organizations found. Please create an organization first.");
+    process.exit(1);
+  }
 
-  for (const template of templates) {
-    // Check if template already exists
-    const existing = await prisma.emailTemplate.findFirst({
-      where: { name: template.name },
-    });
+  if (orgFilter) {
+    console.log(`Targeting organization ${orgFilter}`);
+  } else {
+    console.log(`Found ${organizations.length} organizations. Seeding templates for each.`);
+  }
 
-    if (existing) {
-      // Update existing template
-      await prisma.emailTemplate.update({
-        where: { id: existing.id },
-        data: {
-          html: template.html,
-          designJson: template.design,
-          description: template.description,
-        },
+  for (const org of organizations) {
+    const branding = await getBranding(org.id);
+    console.log(`\nOrganization: ${org.name} (${org.id})`);
+    console.log(
+      "Branding settings:",
+      branding.logoUrl ? "Logo found" : "No logo",
+      branding.bannerUrl ? "Banner found" : "No banner"
+    );
+
+    const templates = [
+      {
+        name: "Corporate Professional",
+        description: "Clean, minimal design with business-appropriate styling. Uses serif typography for elegance.",
+        ...createCorporateTemplate(branding),
+      },
+      {
+        name: "Modern Tech",
+        description: "Bold gradients, contemporary design with a dark theme. Perfect for tech-forward audiences.",
+        ...createModernTemplate(branding),
+      },
+      {
+        name: "Executive Summary",
+        description: "Condensed, text-focused format designed for busy executives who want quick insights.",
+        ...createExecutiveTemplate(branding),
+      },
+      {
+        name: "Linkroad Signal",
+        description: "Dark, modular blocks with orange accents for internal signal scanning.",
+        ...createSignalTemplate(branding),
+      },
+      {
+        name: "Linkroad Focus",
+        description: "Light editorial layout with strong blue/orange accents and clean spacing.",
+        ...createFocusTemplate(branding),
+      },
+      {
+        name: "Linkroad Grid",
+        description: "Layered cards and navy header for fast internal scanning.",
+        ...createGridTemplate(branding),
+      },
+    ];
+
+    for (const template of templates) {
+      const existing = await prisma.emailTemplate.findFirst({
+        where: { name: template.name, organizationId: org.id },
       });
-      console.log(`Updated: ${template.name}`);
-    } else {
-      // Get first org (for scripts, use first org as default)
-      const firstOrg = await prisma.organization.findFirst();
-      if (!firstOrg) {
-        console.error("No organization found. Please create an organization first.");
-        process.exit(1);
+
+      if (existing) {
+        await prisma.emailTemplate.update({
+          where: { id: existing.id },
+          data: {
+            html: template.html,
+            designJson: template.design,
+            description: template.description,
+          },
+        });
+        console.log(`Updated: ${template.name}`);
+      } else {
+        await prisma.emailTemplate.create({
+          data: {
+            name: template.name,
+            description: template.description,
+            html: template.html,
+            designJson: template.design,
+            isActive: false,
+            isDefault: false,
+            organizationId: org.id,
+          },
+        });
+        console.log(`Created: ${template.name}`);
       }
-      // Create new template
-      await prisma.emailTemplate.create({
-        data: {
-          name: template.name,
-          description: template.description,
-          html: template.html,
-          designJson: template.design,
-          isActive: false,
-          isDefault: false,
-          organizationId: firstOrg.id,
-        },
-      });
-      console.log(`Created: ${template.name}`);
     }
   }
 
