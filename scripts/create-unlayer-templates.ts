@@ -407,16 +407,16 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   values: {
                     containerPadding: "30px 40px",
                     fontSize: "18px",
-                    color: "#cbd5e1",
+                    color: "#0e1517",
                     lineHeight: "160%",
                     text: "<p>Your weekly dose of cutting-edge AI developments, breakthrough research, and industry shifts.</p>",
                   },
                 },
               ],
-              values: { backgroundColor: "#1e3a5f", padding: "0px" },
+              values: { backgroundColor: "#ffffff", padding: "0px" },
             },
           ],
-          values: { padding: "0px", backgroundColor: "#1e3a5f" },
+          values: { padding: "0px", backgroundColor: "#ffffff" },
         },
         // Articles
         {
@@ -433,7 +433,7 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     containerPadding: "30px 40px 15px",
                     fontSize: "14px",
                     fontWeight: 700,
-                    color: "#00b4d8",
+                    color: "#397b94",
                     letterSpacing: "2px",
                     text: "<p>ON THE RADAR</p>",
                   },
@@ -447,10 +447,10 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   },
                 },
               ],
-              values: { backgroundColor: "#1e3a5f", padding: "0px" },
+              values: { backgroundColor: "#ffffff", padding: "0px" },
             },
           ],
-          values: { padding: "0px", backgroundColor: "#1e3a5f" },
+          values: { padding: "0px", backgroundColor: "#ffffff" },
         },
         // Projects
         {
@@ -467,7 +467,7 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     containerPadding: "30px 40px 15px",
                     fontSize: "14px",
                     fontWeight: 700,
-                    color: "#00b4d8",
+                    color: "#ff7901",
                     letterSpacing: "2px",
                     text: "<p>RADAR PICKS</p>",
                   },
@@ -481,10 +481,10 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   },
                 },
               ],
-              values: { backgroundColor: "#0f172a", padding: "0px" },
+              values: { backgroundColor: "#f4f7f8", padding: "0px" },
             },
           ],
-          values: { padding: "0px", backgroundColor: "#0f172a" },
+          values: { padding: "0px", backgroundColor: "#f4f7f8" },
         },
         // Footer
         {
@@ -519,7 +519,7 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
         contentWidth: "600px",
         contentAlign: "center",
         fontFamily: { label: "Helvetica Neue", value: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif" },
-        textColor: "#ffffff",
+        textColor: "#0e1517",
         backgroundColor: "#0f172a",
         preheaderText: "Your weekly AI developments digest from Link Consulting",
         linkStyle: { body: true, linkColor: "#00b4d8", linkHoverColor: "#818cf8", linkUnderline: false, linkHoverUnderline: true },
@@ -551,22 +551,22 @@ function createModernTemplate(branding: { logoUrl: string; bannerUrl: string }) 
           </tr>
           <!-- Content -->
           <tr>
-            <td style="background-color: #1e3a5f;">
+            <td style="background-color: #ffffff;">
               <!-- Intro -->
               <div style="padding: 32px 40px;">
-                <p style="margin: 0; font-size: 18px; line-height: 1.6; color: #cbd5e1;">Your weekly dose of cutting-edge AI developments, breakthrough research, and industry shifts.</p>
+                <p style="margin: 0; font-size: 18px; line-height: 1.6; color: #0e1517;">Your weekly dose of cutting-edge AI developments, breakthrough research, and industry shifts.</p>
               </div>
               <!-- Articles -->
               <div style="padding: 0 40px 32px;">
-                <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #00b4d8; text-transform: uppercase; letter-spacing: 2px;">On the Radar</h2>
+                <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #397b94; text-transform: uppercase; letter-spacing: 2px;">On the Radar</h2>
                 {{articles}}
               </div>
             </td>
           </tr>
           <!-- Projects -->
           <tr>
-            <td style="background-color: #0f172a; padding: 32px 40px;">
-              <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #00b4d8; text-transform: uppercase; letter-spacing: 2px;">Radar Picks</h2>
+            <td style="background-color: #f4f7f8; padding: 32px 40px;">
+              <h2 style="margin: 0 0 20px; font-size: 14px; font-weight: 700; color: #ff7901; text-transform: uppercase; letter-spacing: 2px;">Radar Picks</h2>
               {{projects}}
             </td>
           </tr>
@@ -954,15 +954,15 @@ function createSignalTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                     containerPadding: "24px 32px",
                     fontSize: "16px",
                     lineHeight: "170%",
-                    color: "#fcfcfc",
+                    color: "#0e1517",
                     text: "<p>Handpicked internal and external signals designed to keep our teams aligned on what matters in AI, tech, and delivery.</p>",
                   },
                 },
               ],
-              values: { backgroundColor: "#162125", padding: "0px" },
+              values: { backgroundColor: "#ffffff", padding: "0px" },
             },
           ],
-          values: { backgroundColor: "#162125", padding: "0px" },
+          values: { backgroundColor: "#ffffff", padding: "0px" },
         },
         {
           id: "signal-articles",
@@ -991,10 +991,10 @@ function createSignalTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   },
                 },
               ],
-              values: { backgroundColor: "#1f2a2d", padding: "0px" },
+              values: { backgroundColor: "#f4f7f8", padding: "0px" },
             },
           ],
-          values: { backgroundColor: "#1f2a2d", padding: "0px" },
+          values: { backgroundColor: "#f4f7f8", padding: "0px" },
         },
         {
           id: "signal-projects",
@@ -1023,10 +1023,10 @@ function createSignalTemplate(branding: { logoUrl: string; bannerUrl: string }) 
                   },
                 },
               ],
-              values: { backgroundColor: "#162125", padding: "0px" },
+              values: { backgroundColor: "#ffffff", padding: "0px" },
             },
           ],
-          values: { backgroundColor: "#162125", padding: "0px" },
+          values: { backgroundColor: "#ffffff", padding: "0px" },
         },
         {
           id: "signal-footer",
@@ -1067,7 +1067,7 @@ function createSignalTemplate(branding: { logoUrl: string; bannerUrl: string }) 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e1517; padding:32px 16px; font-family: 'Helvetica Neue', Arial, sans-serif;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#162125; border-radius:16px; overflow:hidden;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:16px; overflow:hidden;">
           <tr>
             <td style="background:#0e1517; text-align:center; padding:24px;">
               ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Linkroad" width="64" height="64" style="display:block; margin:0 auto 12px;" />` : ""}
@@ -1077,18 +1077,18 @@ function createSignalTemplate(branding: { logoUrl: string; bannerUrl: string }) 
           </tr>
           ${branding.bannerUrl ? `<tr><td><img src="${branding.bannerUrl}" alt="AI Radar" width="600" style="display:block; width:100%; height:auto;" /></td></tr>` : ""}
           <tr>
-            <td style="padding:24px 32px; color:#fcfcfc; font-size:16px; line-height:1.7;">
+            <td style="padding:24px 32px; color:#0e1517; font-size:16px; line-height:1.7;">
               Handpicked internal and external signals designed to keep our teams aligned on what matters in AI, tech, and delivery.
             </td>
           </tr>
           <tr>
-            <td style="background:#1f2a2d; padding:24px 32px;">
+            <td style="background:#f4f7f8; padding:24px 32px;">
               <h2 style="margin:0 0 16px; color:#ff7901; font-size:13px; letter-spacing:1px;">KEY SIGNALS</h2>
               {{articles}}
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 32px;">
+            <td style="padding:24px 32px; background:#ffffff;">
               <h2 style="margin:0 0 16px; color:#397b94; font-size:13px; letter-spacing:1px;">INTERNAL HIGHLIGHTS</h2>
               {{projects}}
             </td>
@@ -1440,15 +1440,15 @@ function createGridTemplate(branding: { logoUrl: string; bannerUrl: string }) {
                     containerPadding: "20px 28px",
                     fontSize: "15px",
                     lineHeight: "170%",
-                    color: "#fcfcfc",
+                    color: "#0e1517",
                     text: "<p>Quick scan format for teams that want the highlights, the why, and the action in one view.</p>",
                   },
                 },
               ],
-              values: { backgroundColor: "#1f2a2d", padding: "0px" },
+              values: { backgroundColor: "#ffffff", padding: "0px" },
             },
           ],
-          values: { backgroundColor: "#1f2a2d", padding: "0px" },
+          values: { backgroundColor: "#ffffff", padding: "0px" },
         },
         {
           id: "grid-articles",
@@ -1477,10 +1477,10 @@ function createGridTemplate(branding: { logoUrl: string; bannerUrl: string }) {
                   },
                 },
               ],
-              values: { backgroundColor: "#233236", padding: "0px" },
+              values: { backgroundColor: "#f4f7f8", padding: "0px" },
             },
           ],
-          values: { backgroundColor: "#233236", padding: "0px" },
+          values: { backgroundColor: "#f4f7f8", padding: "0px" },
         },
         {
           id: "grid-projects",
@@ -1509,10 +1509,10 @@ function createGridTemplate(branding: { logoUrl: string; bannerUrl: string }) {
                   },
                 },
               ],
-              values: { backgroundColor: "#1a2426", padding: "0px" },
+              values: { backgroundColor: "#ffffff", padding: "0px" },
             },
           ],
-          values: { backgroundColor: "#1a2426", padding: "0px" },
+          values: { backgroundColor: "#ffffff", padding: "0px" },
         },
         {
           id: "grid-footer",
@@ -1553,7 +1553,7 @@ function createGridTemplate(branding: { logoUrl: string; bannerUrl: string }) {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0e1517; padding:32px 16px; font-family:'Helvetica Neue', Arial, sans-serif;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#1f2a2d; border-radius:14px; overflow:hidden;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:14px; overflow:hidden;">
           <tr>
             <td style="background:#2d4449; text-align:center; padding:20px;">
               ${branding.logoUrl ? `<img src="${branding.logoUrl}" alt="Linkroad" width="56" height="56" style="display:block; margin:0 auto 10px;" />` : ""}
@@ -1563,18 +1563,18 @@ function createGridTemplate(branding: { logoUrl: string; bannerUrl: string }) {
           </tr>
           ${branding.bannerUrl ? `<tr><td><img src="${branding.bannerUrl}" alt="AI Radar" width="600" style="display:block; width:100%; height:auto;" /></td></tr>` : ""}
           <tr>
-            <td style="padding:20px 28px; color:#fcfcfc; font-size:15px; line-height:1.7;">
+            <td style="padding:20px 28px; color:#0e1517; font-size:15px; line-height:1.7;">
               Quick scan format for teams that want the highlights, the why, and the action in one view.
             </td>
           </tr>
           <tr>
-            <td style="background:#233236; padding:22px 28px;">
+            <td style="background:#f4f7f8; padding:22px 28px;">
               <h2 style="margin:0 0 14px; font-size:13px; color:#ff7901;">TOP PICKS</h2>
               {{articles}}
             </td>
           </tr>
           <tr>
-            <td style="background:#1a2426; padding:22px 28px;">
+            <td style="background:#ffffff; padding:22px 28px;">
               <h2 style="margin:0 0 14px; font-size:13px; color:#397b94;">INTERNAL BUILDS</h2>
               {{projects}}
             </td>
