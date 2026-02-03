@@ -32,8 +32,23 @@ export async function getJob(jobId: string) {
 
 /**
  * Get the currently running job (if any)
+ * Also marks stale jobs (running > 10 minutes) as failed
  */
 export async function getCurrentJob() {
+  // First, clean up stale jobs (running for more than 10 minutes)
+  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
+
+  await prisma.curationJob.updateMany({
+    where: {
+      status: "RUNNING",
+      startedAt: { lt: staleThreshold },
+    },
+    data: {
+      status: "FAILED",
+      completedAt: new Date(),
+    },
+  });
+
   return await prisma.curationJob.findFirst({
     where: { status: "RUNNING" },
     orderBy: { startedAt: "desc" },
@@ -254,6 +269,29 @@ export async function deleteJobsOlderThan(days: number) {
       status: {
         not: "RUNNING",
       },
+    },
+  });
+
+  return result.count;
+}
+
+/**
+ * Mark stale running jobs as failed
+ * Jobs running longer than the threshold are considered stuck
+ * @param minutes - Number of minutes after which a job is considered stale (default: 10)
+ * @returns Count of jobs marked as failed
+ */
+export async function cleanupStaleJobs(minutes: number = 10) {
+  const staleThreshold = new Date(Date.now() - minutes * 60 * 1000);
+
+  const result = await prisma.curationJob.updateMany({
+    where: {
+      status: "RUNNING",
+      startedAt: { lt: staleThreshold },
+    },
+    data: {
+      status: "FAILED",
+      completedAt: new Date(),
     },
   });
 
