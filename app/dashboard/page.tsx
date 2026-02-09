@@ -31,6 +31,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import BlurText from "@/components/reactbits/BlurText";
+import CountUp from "@/components/reactbits/CountUp";
+import AnimatedContent from "@/components/reactbits/AnimatedContent";
+import SpotlightCard from "@/components/reactbits/SpotlightCard";
 
 interface Stats {
   pendingArticles: number;
@@ -301,7 +305,17 @@ export default function DashboardHome() {
 
   return (
     <div className="flex flex-col flex-1">
-      <AppHeader title="Dashboard" />
+      <AppHeader
+        title={
+          <BlurText
+            text="Dashboard"
+            delay={150}
+            animateBy="words"
+            direction="top"
+            className="text-xl font-semibold"
+          />
+        }
+      />
 
       <div className="flex-1 p-6 space-y-8">
         {/* Curation Status */}
@@ -340,11 +354,12 @@ export default function DashboardHome() {
         )}
 
         {/* Quick Actions */}
+        <AnimatedContent direction="vertical" distance={20} delay={0}>
         <section>
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
           <div className="grid gap-4 md:grid-cols-3">
             {/* Run Curation */}
-            <Card>
+            <SpotlightCard className="rounded-lg border bg-card text-card-foreground shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center space-y-4">
                   <div className="p-3 rounded-full bg-primary/10">
@@ -425,10 +440,10 @@ export default function DashboardHome() {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </SpotlightCard>
 
             {/* Review Articles */}
-            <Card>
+            <SpotlightCard className="rounded-lg border bg-card text-card-foreground shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center space-y-4">
                   <div className="p-3 rounded-full bg-orange-500/10 relative">
@@ -455,10 +470,10 @@ export default function DashboardHome() {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </SpotlightCard>
 
             {/* Send Newsletter */}
-            <Card>
+            <SpotlightCard className="rounded-lg border bg-card text-card-foreground shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center space-y-4">
                   <div className="p-3 rounded-full bg-green-500/10">
@@ -480,11 +495,13 @@ export default function DashboardHome() {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </SpotlightCard>
           </div>
         </section>
+        </AnimatedContent>
 
         {/* Metrics */}
+        <AnimatedContent direction="vertical" distance={20} delay={0.15}>
         <section>
           <h2 className="text-lg font-semibold mb-4">Metrics</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -494,7 +511,9 @@ export default function DashboardHome() {
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.pendingArticles}</div>
+                <div className="text-2xl font-bold">
+                  <CountUp from={0} to={stats.pendingArticles} duration={1.5} separator="," />
+                </div>
                 <p className="text-xs text-muted-foreground">Awaiting review</p>
               </CardContent>
             </Card>
@@ -505,7 +524,9 @@ export default function DashboardHome() {
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.approvedArticles}</div>
+                <div className="text-2xl font-bold">
+                  <CountUp from={0} to={stats.approvedArticles} duration={1.5} separator="," />
+                </div>
                 <p className="text-xs text-muted-foreground">Ready for newsletter</p>
               </CardContent>
             </Card>
@@ -516,7 +537,9 @@ export default function DashboardHome() {
                 <Mail className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalProjects}</div>
+                <div className="text-2xl font-bold">
+                  <CountUp from={0} to={stats.totalProjects} duration={1.5} separator="," />
+                </div>
                 <p className="text-xs text-muted-foreground">Total projects</p>
               </CardContent>
             </Card>
@@ -533,8 +556,10 @@ export default function DashboardHome() {
             </Card>
           </div>
         </section>
+        </AnimatedContent>
 
         {/* Activity */}
+        <AnimatedContent direction="vertical" distance={20} delay={0.3}>
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Recent Activity</h2>
@@ -612,6 +637,7 @@ export default function DashboardHome() {
             </CardContent>
           </Card>
         </section>
+        </AnimatedContent>
       </div>
     </div>
   );

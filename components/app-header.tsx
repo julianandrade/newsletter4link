@@ -12,7 +12,7 @@ import {
 import Link from "next/link";
 
 interface AppHeaderProps {
-  title: string;
+  title: React.ReactNode;
 }
 
 export function AppHeader({ title }: AppHeaderProps) {

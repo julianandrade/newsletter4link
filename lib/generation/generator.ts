@@ -111,7 +111,7 @@ export async function generateNewsletter(
         title: article.title,
         summary: article.summary || article.content?.slice(0, 160) || "Summary not available.",
         sourceUrl: article.sourceUrl,
-        isHero: section.name === plan.heroSection?.name && index === 0,
+        isHero: article.id === plan.heroArticle?.id && index === 0,
       })),
       transition: `Next up: ${section.name.toLowerCase()} highlights.`,
     }));
@@ -533,7 +533,7 @@ export async function quickGenerateNewsletter(
           title: article.title,
           summary: article.summary || article.content?.slice(0, 160) || "Summary not available.",
           sourceUrl: article.sourceUrl,
-          isHero: section.name === plan.heroSection?.name && index === 0,
+          isHero: article.id === plan.heroArticle?.id && index === 0,
         })),
       })),
       closing: "Thanks for reading AI Radar. See you next week!",

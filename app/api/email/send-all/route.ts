@@ -238,7 +238,7 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      approvedDraft = { id: draft.id, content: draft.content as GeneratedNewsletter };
+      approvedDraft = { id: draft.id, content: draft.content as unknown as GeneratedNewsletter };
     } else if (draftCount > 0) {
       const draft = await db.generationDraft.findFirst({
         where: { editionId: edition.id, status: "APPROVED" },
@@ -252,7 +252,7 @@ export async function POST(request: Request) {
         );
       }
 
-      approvedDraft = { id: draft.id, content: draft.content as GeneratedNewsletter };
+      approvedDraft = { id: draft.id, content: draft.content as unknown as GeneratedNewsletter };
     }
 
     // Check if already sent

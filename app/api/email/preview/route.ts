@@ -136,14 +136,14 @@ export async function POST(request: Request) {
             { status: 404 }
           );
         }
-        approvedDraft = { content: draft.content as GeneratedNewsletter };
+        approvedDraft = { content: draft.content as unknown as GeneratedNewsletter };
       } else {
         const draft = await ctx.db.generationDraft.findFirst({
           where: { editionId: edition.id, status: "APPROVED" },
           orderBy: { approvedAt: "desc" },
         });
         if (draft) {
-          approvedDraft = { content: draft.content as GeneratedNewsletter };
+          approvedDraft = { content: draft.content as unknown as GeneratedNewsletter };
         }
       }
 
