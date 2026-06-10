@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { config } from "@/lib/config";
+import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 interface Article {
   id: string;
@@ -91,17 +91,6 @@ function renderProjects(projects: Project[]): string {
 }
 
 /**
- * Generate unsubscribe URL
- */
-function getUnsubscribeUrl(subscriberId?: string): string {
-  const baseUrl = config.app.url;
-  if (subscriberId) {
-    return `${baseUrl}/unsubscribe?id=${subscriberId}`;
-  }
-  return `${baseUrl}/unsubscribe`;
-}
-
-/**
  * Render template with variable substitution
  */
 export function renderTemplate(html: string, context: RenderContext): string {
@@ -123,7 +112,7 @@ export function renderTemplate(html: string, context: RenderContext): string {
   // Unsubscribe URL
   rendered = rendered.replace(
     /\{\{unsubscribe_url\}\}/g,
-    getUnsubscribeUrl(subscriberId)
+    buildUnsubscribeUrl(subscriberId)
   );
 
   return rendered;
