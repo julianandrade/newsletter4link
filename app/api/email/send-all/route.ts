@@ -6,6 +6,7 @@ import { renderTemplateById } from "@/lib/email/template-renderer";
 import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
+import { reportError } from "@/lib/observability/report";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 
@@ -456,7 +457,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Error sending newsletter:", error);
+    reportError(error, { route: "email/send-all" });
 
     return NextResponse.json(
       {

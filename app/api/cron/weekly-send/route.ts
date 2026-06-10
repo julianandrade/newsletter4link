@@ -5,6 +5,7 @@ import { config } from "@/lib/config";
 import { markEditionAsSent } from "@/lib/queries";
 import { createTenantClient } from "@/lib/db/tenant";
 import { isAuthorizedCronRequest } from "@/lib/auth/cron";
+import { reportError } from "@/lib/observability/report";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -251,7 +252,11 @@ export async function GET(request: Request) {
           `[CRON] ${org.name}: ${result.sent} sent, ${result.failed} failed`
         );
       } catch (error) {
-        console.error(`[CRON] Error for ${org.name}:`, error);
+        reportError(error, {
+          cron: "weekly-send",
+          organizationId: org.id,
+          organizationName: org.name,
+        });
         results.push({
           organizationId: org.id,
           organizationName: org.name,
@@ -281,7 +286,7 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[CRON] Weekly send failed:", error);
+    reportError(error, { cron: "weekly-send", scope: "top-level" });
 
     return NextResponse.json(
       {

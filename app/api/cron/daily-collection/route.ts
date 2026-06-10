@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runCurationPipeline } from "@/lib/curation/curator";
 import { prisma } from "@/lib/db";
 import { isAuthorizedCronRequest } from "@/lib/auth/cron";
+import { reportError } from "@/lib/observability/report";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -47,7 +48,11 @@ export async function GET(request: Request) {
         });
         console.log(`[CRON] ${org.name}: ${result.curated} curated, ${result.duplicates} duplicates`);
       } catch (error) {
-        console.error(`[CRON] Error processing ${org.name}:`, error);
+        reportError(error, {
+          cron: "daily-collection",
+          organizationId: org.id,
+          organizationName: org.name,
+        });
         results.push({
           organizationId: org.id,
           organizationName: org.name,
@@ -68,7 +73,7 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[CRON] Daily collection failed:", error);
+    reportError(error, { cron: "daily-collection", scope: "top-level" });
 
     return NextResponse.json(
       {
