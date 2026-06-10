@@ -17,6 +17,17 @@ export function getEmailProvider(): "resend" | "graph" {
 }
 
 /**
+ * Build a deterministic idempotency key for an edition -> recipient send.
+ * Stable across retries so a double-click or re-run won't double-deliver.
+ */
+export function buildIdempotencyKey(
+  editionId: string,
+  recipient: string
+): string {
+  return `nl_${editionId}_${recipient}`;
+}
+
+/**
  * Check if the current provider is properly configured
  */
 export function isProviderConfigured(): boolean {
@@ -61,7 +72,8 @@ export function getProviderSettings(): {
 export async function sendEmailViaProvider(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   const provider = getEmailProvider();
 
@@ -70,7 +82,7 @@ export async function sendEmailViaProvider(
   }
 
   // Default to Resend
-  return sendEmailViaResend(to, subject, html);
+  return sendEmailViaResend(to, subject, html, idempotencyKey);
 }
 
 /**
@@ -81,13 +93,14 @@ export async function sendEmailWithProvider(
   provider: "resend" | "graph",
   to: string,
   subject: string,
-  html: string
+  html: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   if (provider === "graph") {
     return sendEmailViaGraph(to, subject, html);
   }
 
-  return sendEmailViaResend(to, subject, html);
+  return sendEmailViaResend(to, subject, html, idempotencyKey);
 }
 
 /**
@@ -106,17 +119,23 @@ export function isSpecificProviderConfigured(provider: "resend" | "graph"): bool
 async function sendEmailViaResend(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   try {
     const resend = new Resend(config.email.resend.apiKey);
 
-    const { data, error } = await resend.emails.send({
-      from: `${config.email.from.name} <${config.email.from.email}>`,
-      to,
-      subject,
-      html,
-    });
+    // Idempotency key makes retries / double-clicks safe: Resend dedupes
+    // identical keys for 24h, so the same edition->recipient send is sent once
+    const { data, error } = await resend.emails.send(
+      {
+        from: `${config.email.from.name} <${config.email.from.email}>`,
+        to,
+        subject,
+        html,
+      },
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
 
     if (error) {
       console.error("Resend error:", error);

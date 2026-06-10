@@ -1,7 +1,11 @@
 import { render } from "@react-email/components";
 import NewsletterEmail from "@/emails/newsletter";
 import { prisma } from "@/lib/db";
-import { sendEmailViaProvider, getProviderSettings } from "./provider";
+import {
+  sendEmailViaProvider,
+  getProviderSettings,
+  buildIdempotencyKey,
+} from "./provider";
 import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 interface Article {
@@ -33,9 +37,10 @@ interface NewsletterData {
 export async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  idempotencyKey?: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  return sendEmailViaProvider(to, subject, html);
+  return sendEmailViaProvider(to, subject, html, idempotencyKey);
 }
 
 /**
@@ -105,11 +110,12 @@ export async function sendNewsletterToSubscriber(
     // Render email HTML
     const html = await renderNewsletterEmail(data, subscriberId);
 
-    // Send email
+    // Send email (idempotent per edition -> subscriber)
     const result = await sendEmail(
       subscriber.email,
       `Link AI Newsletter - Week ${data.week}, ${data.year}`,
-      html
+      html,
+      buildIdempotencyKey(editionId, subscriberId)
     );
 
     if (result.success) {

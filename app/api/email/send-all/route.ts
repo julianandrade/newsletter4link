@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentEdition, markEditionAsSent } from "@/lib/queries";
 import { renderTemplateById } from "@/lib/email/template-renderer";
 import { config } from "@/lib/config";
-import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
+import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings, buildIdempotencyKey } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
 import { reportError } from "@/lib/observability/report";
 import {
@@ -623,18 +623,22 @@ async function sendNewsletterWithTemplate(
       // Send all emails in batch concurrently
       const promises = batch.map(async (subscriber) => {
         try {
+          // Idempotent per edition -> subscriber (safe for retries/double-clicks)
+          const idempotencyKey = buildIdempotencyKey(editionId, subscriber.id);
           // Use provider override if specified, otherwise use default sendEmail
           const emailResult = providerOverride
             ? await sendEmailWithProvider(
                 providerOverride,
                 subscriber.email,
                 `AI Radar - Week ${data.week}, ${data.year}`,
-                templateHtml
+                templateHtml,
+                idempotencyKey
               )
             : await sendEmail(
                 subscriber.email,
                 `AI Radar - Week ${data.week}, ${data.year}`,
-                templateHtml
+                templateHtml,
+                idempotencyKey
               );
 
           if (emailResult.success) {
@@ -776,17 +780,21 @@ async function sendToAdHocEmails(
 
       const promises = batch.map(async (email) => {
         try {
+          // Idempotent per edition -> email address
+          const idempotencyKey = buildIdempotencyKey(editionId, email);
           const emailResult = providerOverride
             ? await sendEmailWithProvider(
                 providerOverride,
                 email,
                 `AI Radar - Week ${data.week}, ${data.year}`,
-                html
+                html,
+                idempotencyKey
               )
             : await sendEmail(
                 email,
                 `AI Radar - Week ${data.week}, ${data.year}`,
-                html
+                html,
+                idempotencyKey
               );
 
           // Note: We don't log email events for ad-hoc sends since the schema requires a subscriber reference
