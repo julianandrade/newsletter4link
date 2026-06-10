@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
 import { unsubscribeUser } from "@/lib/queries";
 import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
+
+function authErrorResponse(error: unknown) {
+  if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 401 }
+    );
+  }
+  return null;
+}
 
 /**
  * GET /api/subscribers/:id
- * Get single subscriber by ID
+ * Get single subscriber by ID (tenant-scoped)
  */
 export async function GET(
   request: Request,
@@ -12,6 +23,19 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
+
+    // findUnique on the tenant client returns null if the row isn't in this org.
+    const owned = await db.subscriber.findUnique({ where: { id } });
+    if (!owned) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Subscriber not found",
+        },
+        { status: 404 }
+      );
+    }
 
     const subscriber = await prisma.subscriber.findUnique({
       where: { id },
@@ -23,16 +47,6 @@ export async function GET(
       },
     });
 
-    if (!subscriber) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Subscriber not found",
-        },
-        { status: 404 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
       data: subscriber,
@@ -40,19 +54,22 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching subscriber:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 }
+      )
     );
   }
 }
 
 /**
  * PATCH /api/subscribers/:id
- * Update subscriber preferences
+ * Update subscriber preferences (tenant-scoped)
  */
 export async function PATCH(
   request: Request,
@@ -60,6 +77,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
     const body = await request.json();
     const { name, preferredLanguage, preferredStyle, active } = body;
 
@@ -71,10 +89,20 @@ export async function PATCH(
       updateData.preferredStyle = preferredStyle;
     if (active !== undefined) updateData.active = active;
 
-    const subscriber = await prisma.subscriber.update({
+    // updateMany scopes to the caller's org; count === 0 means not found here.
+    const updated = await db.subscriber.updateMany({
       where: { id },
       data: updateData,
     });
+
+    if (updated.count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Subscriber not found" },
+        { status: 404 }
+      );
+    }
+
+    const subscriber = await db.subscriber.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -84,19 +112,22 @@ export async function PATCH(
   } catch (error) {
     console.error("Error updating subscriber:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 }
+      )
     );
   }
 }
 
 /**
  * DELETE /api/subscribers/:id
- * Unsubscribe user (soft delete - sets active to false)
+ * Unsubscribe user (soft delete - sets active to false) (tenant-scoped)
  */
 export async function DELETE(
   request: Request,
@@ -104,6 +135,15 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
+
+    const owned = await db.subscriber.findUnique({ where: { id } });
+    if (!owned) {
+      return NextResponse.json(
+        { success: false, error: "Subscriber not found" },
+        { status: 404 }
+      );
+    }
 
     await unsubscribeUser(id);
 
@@ -114,12 +154,15 @@ export async function DELETE(
   } catch (error) {
     console.error("Error unsubscribing user:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 }
+      )
     );
   }
 }

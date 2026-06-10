@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getArticleById } from "@/lib/queries";
-import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 
 /**
@@ -54,6 +53,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
     const body = await request.json();
 
     const { summary, category } = body;
@@ -79,10 +79,20 @@ export async function PATCH(
       );
     }
 
-    const article = await prisma.article.update({
+    // Scope to the caller's org: updateMany only matches rows in this org.
+    const updated = await db.article.updateMany({
       where: { id },
       data: updateData,
     });
+
+    if (updated.count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Article not found" },
+        { status: 404 }
+      );
+    }
+
+    const article = await db.article.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -91,6 +101,13 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating article:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

@@ -1,9 +1,16 @@
 import OpenAI from "openai";
 import { config } from "@/lib/config";
 
-const openai = new OpenAI({
-  apiKey: config.ai.openai.apiKey,
-});
+let _openai: OpenAI | null = null;
+
+// Lazily construct the client so importing this module (e.g. during the
+// Next.js build) doesn't throw when OPENAI_API_KEY is unset.
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: config.ai.openai.apiKey });
+  }
+  return _openai;
+}
 
 /**
  * Generate embedding vector for text using OpenAI
@@ -21,7 +28,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
     console.log(`Generating embedding for text (${truncatedText.length} chars)...`);
 
-    const response = await openai.embeddings.create({
+    const response = await getOpenAI().embeddings.create({
       model: config.ai.openai.embeddingModel,
       input: truncatedText,
     });

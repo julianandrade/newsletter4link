@@ -8,9 +8,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { getCategoryGroupingPrompt } from "./prompts";
 
-const anthropic = new Anthropic({
-  apiKey: config.ai.anthropic.apiKey,
-});
+let _anthropic: Anthropic | null = null;
+
+// Lazily construct the client so importing this module doesn't require the
+// API key to be present at build/import time.
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: config.ai.anthropic.apiKey });
+  }
+  return _anthropic;
+}
 
 const useMockGeneration = process.env.MOCK_GENERATION === "true";
 
@@ -128,7 +135,7 @@ async function aiPlanNewsletter(
     }))
   );
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 1000,
     messages: [{ role: "user", content: prompt }],

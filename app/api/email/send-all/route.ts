@@ -7,6 +7,7 @@ import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
+import { sanitizeBlockHtml, sanitizeImageUrl } from "@/lib/email/sanitize";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 
 export const dynamic = "force-dynamic";
@@ -255,8 +256,16 @@ export async function POST(request: Request) {
       approvedDraft = { id: draft.id, content: draft.content as unknown as GeneratedNewsletter };
     }
 
-    // Check if already sent
-    if (edition.status === "SENT") {
+    // A "full send" delivers the canonical edition to the whole subscriber
+    // list. Targeted (subscriberIds) and ad-hoc (emails) sends are previews/
+    // resends and are not subject to the edition idempotency lock.
+    const isFullSend =
+      !useAdHocEmails &&
+      !(subscriberIds && Array.isArray(subscriberIds) && subscriberIds.length > 0);
+
+    // Targeted/ad-hoc sends: block once the edition has gone out.
+    // Full sends use an atomic claim just before dispatch (below).
+    if (!isFullSend && edition.status === "SENT") {
       return NextResponse.json(
         {
           success: false,
@@ -376,6 +385,26 @@ export async function POST(request: Request) {
       templateHtml = templateResult.html;
     }
 
+    // Idempotency guard: atomically claim the edition so a double-clicked
+    // full send can't deliver the newsletter twice. The loser of the race
+    // (or a retry of an already-sent edition) gets a 409. The claim is
+    // released back to FINALIZED below if nothing actually went out.
+    if (isFullSend) {
+      const claimed = await db.edition.updateMany({
+        where: { id: edition.id, status: { not: "SENT" } },
+        data: { status: "SENT", sentAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "This edition has already been sent or is currently sending",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     // Send to recipients (subscribers or ad-hoc emails)
     let result;
 
@@ -424,6 +453,13 @@ export async function POST(request: Request) {
           data: { status: "USED" },
         });
       }
+    } else if (isFullSend) {
+      // Nothing was delivered: release the idempotency claim so the
+      // edition can be retried instead of being stuck as SENT.
+      await db.edition.updateMany({
+        where: { id: edition.id },
+        data: { status: "FINALIZED", sentAt: null },
+      });
     }
 
     // Publish to SharePoint (non-blocking - don't fail email send if SharePoint fails)
@@ -507,13 +543,13 @@ async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string>
       if (block.type === 'text') {
         return `
           <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6;">
-            ${block.content}
+            ${sanitizeBlockHtml(block.content)}
           </div>
         `;
       } else if (block.type === 'image') {
         return `
           <div style="margin: 24px 0; text-align: center;">
-            <img src="${escapeHtml(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
+            <img src="${sanitizeImageUrl(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
           </div>
         `;
       }
@@ -531,17 +567,6 @@ async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string>
   }
 
   return html;
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
 interface EmailData {

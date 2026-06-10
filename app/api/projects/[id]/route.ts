@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { updateProject, deleteProject } from "@/lib/queries";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
+
+function authErrorResponse(error: unknown) {
+  if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 401 }
+    );
+  }
+  return null;
+}
 
 /**
  * GET /api/projects/:id
- * Get single project by ID
+ * Get single project by ID (tenant-scoped)
  */
 export async function GET(
   request: Request,
@@ -12,8 +22,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
 
-    const project = await prisma.project.findUnique({
+    const project = await db.project.findUnique({
       where: { id },
     });
 
@@ -34,19 +45,22 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching project:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 }
+      )
     );
   }
 }
 
 /**
  * PATCH /api/projects/:id
- * Update a project
+ * Update a project (tenant-scoped)
  */
 export async function PATCH(
   request: Request,
@@ -54,9 +68,19 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
     const body = await request.json();
     const { name, description, team, projectDate, impact, imageUrl, featured } =
       body;
+
+    // Ownership check: findUnique returns null if the project isn't in this org.
+    const existing = await db.project.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Project not found" },
+        { status: 404 }
+      );
+    }
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -78,19 +102,22 @@ export async function PATCH(
   } catch (error) {
     console.error("Error updating project:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 }
+      )
     );
   }
 }
 
 /**
  * DELETE /api/projects/:id
- * Delete a project
+ * Delete a project (tenant-scoped)
  */
 export async function DELETE(
   request: Request,
@@ -98,6 +125,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
+
+    // Ownership check before deleting cross-org rows.
+    const existing = await db.project.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Project not found" },
+        { status: 404 }
+      );
+    }
 
     await deleteProject(id);
 
@@ -108,12 +145,15 @@ export async function DELETE(
   } catch (error) {
     console.error("Error deleting project:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 }
+      )
     );
   }
 }

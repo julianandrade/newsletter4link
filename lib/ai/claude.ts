@@ -1,9 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 
-const anthropic = new Anthropic({
-  apiKey: config.ai.anthropic.apiKey,
-});
+let _anthropic: Anthropic | null = null;
+
+// Lazily construct the client so importing this module doesn't require the
+// API key to be present at build/import time.
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: config.ai.anthropic.apiKey });
+  }
+  return _anthropic;
+}
 
 /**
  * Score article relevance for Link Consulting's AI newsletter
@@ -19,7 +26,7 @@ export async function scoreArticleRelevance(
       ? `\n\nBRAND VOICE CONTEXT:\n${brandVoicePrompt}\n\nConsider the above brand context when scoring relevance.`
       : "";
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropic().messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 500,
       messages: [
@@ -84,7 +91,7 @@ export async function summarizeArticle(
       ? `\n\nBRAND VOICE CONTEXT:\n${brandVoicePrompt}\n\nWrite the summary reflecting the above brand voice and focus areas.`
       : "";
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropic().messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 300,
       messages: [
@@ -134,7 +141,7 @@ export async function categorizeArticle(
       ? `\n\nBRAND VOICE CONTEXT:\n${brandVoicePrompt}\n\nPrioritize categories that align with the above brand focus areas.`
       : "";
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropic().messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 200,
       messages: [

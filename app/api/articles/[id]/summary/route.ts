@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { updateArticleSummary } from "@/lib/queries";
+import { requireOrgContext } from "@/lib/auth/context";
 
 /**
  * PATCH /api/articles/:id/summary
- * Update article summary
+ * Update article summary (tenant-scoped)
  */
 export async function PATCH(
   request: Request,
@@ -11,6 +12,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
     const body = await request.json();
     const { summary } = body;
 
@@ -24,6 +26,15 @@ export async function PATCH(
       );
     }
 
+    // Ownership check: findUnique returns null if the article isn't in this org.
+    const owned = await db.article.findUnique({ where: { id } });
+    if (!owned) {
+      return NextResponse.json(
+        { success: false, error: "Article not found" },
+        { status: 404 }
+      );
+    }
+
     const article = await updateArticleSummary(id, summary);
 
     return NextResponse.json({
@@ -33,6 +44,13 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating summary:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

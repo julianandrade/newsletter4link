@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { sendTestNewsletter, sendEmail, renderNewsletterEmail } from "@/lib/email/sender";
-import { prisma } from "@/lib/db";
 import { renderTemplateById } from "@/lib/email/template-renderer";
+import { requireOrgContext } from "@/lib/auth/context";
+import { sanitizeBlockHtml, sanitizeImageUrl } from "@/lib/email/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ interface CustomData {
  */
 export async function POST(request: Request) {
   try {
+    const { db } = await requireOrgContext();
     const body = await request.json();
     const { email, editionId, templateId, customData } = body;
 
@@ -86,8 +88,8 @@ export async function POST(request: Request) {
       week = customData.week;
       year = customData.year;
     } else {
-      // Get approved articles
-      const articles = await prisma.article.findMany({
+      // Get approved articles (tenant-scoped)
+      const articles = await db.article.findMany({
         where: { status: "APPROVED" },
         orderBy: [
           { relevanceScore: "desc" },
@@ -96,8 +98,8 @@ export async function POST(request: Request) {
         take: 10,
       });
 
-      // Get featured projects
-      const projects = await prisma.project.findMany({
+      // Get featured projects (tenant-scoped)
+      const projects = await db.project.findMany({
         where: { featured: true },
         orderBy: { projectDate: "desc" },
         take: 3,
@@ -190,6 +192,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error sending test email:", error);
 
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -240,13 +249,13 @@ async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string>
       if (block.type === 'text') {
         return `
           <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6;">
-            ${block.content}
+            ${sanitizeBlockHtml(block.content)}
           </div>
         `;
       } else if (block.type === 'image') {
         return `
           <div style="margin: 24px 0; text-align: center;">
-            <img src="${escapeHtml(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
+            <img src="${sanitizeImageUrl(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
           </div>
         `;
       }
@@ -268,15 +277,4 @@ async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string>
   }
 
   return html;
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
 }

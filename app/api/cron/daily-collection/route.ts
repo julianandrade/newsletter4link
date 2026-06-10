@@ -13,15 +13,10 @@ export const maxDuration = 300; // 5 minutes
  */
 export async function GET(request: Request) {
   try {
-    // Verify cron secret (optional but recommended)
+    // Verify cron secret (fail closed: reject if unset or mismatched)
     const authHeader = request.headers.get("authorization");
-    if (config.cron.secret) {
-      if (authHeader !== `Bearer ${config.cron.secret}`) {
-        return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401 }
-        );
-      }
+    if (!config.cron.secret || authHeader !== `Bearer ${config.cron.secret}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     console.log("[CRON] Starting daily content collection for all organizations...");

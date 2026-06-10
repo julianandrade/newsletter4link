@@ -52,68 +52,78 @@ function mapEventType(
   }
 }
 
-// Verify webhook signature
-function verifySignature(
+// Verify a Svix webhook signature (Resend uses Svix).
+// The svix-signature header is a space-delimited list of "v1,<base64 hmac>"
+// entries; the HMAC key is the base64-decoded secret after the "whsec_" prefix.
+function verifySvixSignature(
   payload: string,
-  signature: string,
+  headers: { id: string; timestamp: string; signature: string },
   secret: string
 ): boolean {
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(payload)
-    .digest("hex");
+  const secretKey = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  const signedPayload = `${headers.id}.${headers.timestamp}.${payload}`;
+  const expected = crypto
+    .createHmac("sha256", secretKey)
+    .update(signedPayload)
+    .digest();
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
+  return headers.signature.split(" ").some((entry) => {
+    const [version, signature] = entry.split(",");
+    if (version !== "v1" || !signature) return false;
+    const provided = Buffer.from(signature, "base64");
+    return (
+      provided.length === expected.length &&
+      crypto.timingSafeEqual(provided, expected)
+    );
+  });
 }
+
+// Reject events older than 5 minutes to limit replay attacks
+const TIMESTAMP_TOLERANCE_SECONDS = 5 * 60;
 
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = config.email.resend.webhookSecret;
 
+    // Fail closed: this route is public, so an unset secret must not
+    // mean unverified events get processed
+    if (!webhookSecret) {
+      console.error("RESEND_WEBHOOK_SECRET is not configured; rejecting webhook");
+      return NextResponse.json(
+        { error: "Webhook not configured" },
+        { status: 503 }
+      );
+    }
+
     // Get raw body for signature verification
     const payload = await request.text();
 
-    // Verify signature if webhook secret is configured
-    if (webhookSecret) {
-      const signature = request.headers.get("svix-signature");
+    const svixId = request.headers.get("svix-id");
+    const svixTimestamp = request.headers.get("svix-timestamp");
+    const svixSignature = request.headers.get("svix-signature");
 
-      if (!signature) {
-        console.warn("Missing webhook signature");
-        return NextResponse.json(
-          { error: "Missing signature" },
-          { status: 401 }
-        );
-      }
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      console.warn("Missing webhook signature headers");
+      return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+    }
 
-      // Resend uses Svix for webhooks - extract the signature from the header
-      // Format: v1,<signature>
-      const signatureParts = signature.split(",");
-      const v1Signature = signatureParts
-        .find((part) => part.startsWith("v1,"))
-        ?.replace("v1,", "");
+    const timestampAge = Math.abs(
+      Date.now() / 1000 - Number(svixTimestamp)
+    );
+    if (!Number.isFinite(timestampAge) || timestampAge > TIMESTAMP_TOLERANCE_SECONDS) {
+      console.warn("Webhook timestamp outside tolerance");
+      return NextResponse.json({ error: "Invalid timestamp" }, { status: 401 });
+    }
 
-      if (v1Signature) {
-        const svixId = request.headers.get("svix-id") || "";
-        const svixTimestamp = request.headers.get("svix-timestamp") || "";
-        const signedPayload = `${svixId}.${svixTimestamp}.${payload}`;
+    const isValid = verifySvixSignature(
+      payload,
+      { id: svixId, timestamp: svixTimestamp, signature: svixSignature },
+      webhookSecret
+    );
 
-        const isValid = verifySignature(
-          signedPayload,
-          v1Signature,
-          webhookSecret
-        );
-
-        if (!isValid) {
-          console.warn("Invalid webhook signature");
-          return NextResponse.json(
-            { error: "Invalid signature" },
-            { status: 401 }
-          );
-        }
-      }
+    if (!isValid) {
+      console.warn("Invalid webhook signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     const event: ResendWebhookEvent = JSON.parse(payload);

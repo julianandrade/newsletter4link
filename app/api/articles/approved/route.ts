@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +13,16 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
+    const { db, organization } = await requireOrgContext();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const excludeInEdition = searchParams.get("excludeInEdition") === "true";
 
-    const articles = await prisma.article.findMany({
+    // Use raw client with an explicit org filter so the `_count` select keeps
+    // its narrowed return type (the tenant wrapper loses select inference).
+    const articles = await db.$raw.article.findMany({
       where: {
+        organizationId: organization.id,
         status: "APPROVED",
         ...(search && {
           title: {
@@ -69,6 +73,13 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching approved articles:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {

@@ -32,9 +32,16 @@ export class GenerationCancelledError extends Error {
   }
 }
 
-const anthropic = new Anthropic({
-  apiKey: config.ai.anthropic.apiKey,
-});
+let _anthropic: Anthropic | null = null;
+
+// Lazily construct the client so importing this module doesn't require the
+// API key to be present at build/import time.
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: config.ai.anthropic.apiKey });
+  }
+  return _anthropic;
+}
 
 const useMockGeneration = process.env.MOCK_GENERATION === "true";
 
@@ -247,7 +254,7 @@ async function generateOpening(
     brandVoice?.greetings?.[0]
   );
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
@@ -339,7 +346,7 @@ async function generateArticleSummary(
     isHero
   );
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 250,
     messages: [{ role: "user", content: prompt }],
@@ -370,7 +377,7 @@ async function addTransitions(
 
     const prompt = getTransitionPrompt(brandVoice, fromSection, toSection);
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropic().messages.create({
       model: config.ai.anthropic.model,
       max_tokens: 100,
       messages: [{ role: "user", content: prompt }],
@@ -398,7 +405,7 @@ async function generateClosing(
     brandVoice?.closings?.[0]
   );
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 200,
     messages: [{ role: "user", content: prompt }],
@@ -429,7 +436,7 @@ async function generateSubjectLines(
     otherTopics
   );
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
@@ -484,7 +491,7 @@ export async function regenerateSubjectLines(
     []
   );
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
@@ -545,7 +552,7 @@ export async function quickGenerateNewsletter(
 
   const prompt = getFullNewsletterPrompt(brandVoice, articles, edition);
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: config.ai.anthropic.model,
     max_tokens: 2000,
     messages: [{ role: "user", content: prompt }],
