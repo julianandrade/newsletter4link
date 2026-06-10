@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { AppHeader } from "@/components/app-header";
 import {
   Card,
@@ -48,11 +48,7 @@ export default function BrandingSettingsPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadBrandingSettings();
-  }, []);
-
-  const loadBrandingSettings = async () => {
+  const loadBrandingSettings = useCallback(async () => {
     try {
       const response = await fetch("/api/settings/branding");
       const result = await response.json();
@@ -66,7 +62,11 @@ export default function BrandingSettingsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => loadBrandingSettings());
+  }, [loadBrandingSettings]);
 
   const handleFileUpload = async (
     file: File,

@@ -164,7 +164,9 @@ export default function DashboardHome() {
   };
 
   useEffect(() => {
-    fetchActivities();
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => fetchActivities());
   }, []);
 
   const handleRunCuration = async (e: React.MouseEvent) => {

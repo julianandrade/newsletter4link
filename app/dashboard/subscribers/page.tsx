@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import {
   Card,
@@ -86,11 +86,7 @@ export default function SubscribersPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
 
-  useEffect(() => {
-    loadSubscribers();
-  }, [showInactive]);
-
-  const loadSubscribers = async () => {
+  const loadSubscribers = useCallback(async () => {
     setIsLoading(true);
     try {
       const url = showInactive ? "/api/subscribers?all=true" : "/api/subscribers";
@@ -106,7 +102,13 @@ export default function SubscribersPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showInactive]);
+
+  useEffect(() => {
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => loadSubscribers());
+  }, [loadSubscribers]);
 
   const handleAddSubscriber = async () => {
     if (!newEmail.trim() || isAdding) return;

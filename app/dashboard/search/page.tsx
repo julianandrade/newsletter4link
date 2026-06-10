@@ -179,22 +179,7 @@ export default function SearchPage() {
   // Ref to track if we've checked for running jobs
   const hasCheckedRunningJob = useRef(false);
 
-  // Load organization, saved topics, and history on mount
-  useEffect(() => {
-    fetchOrganization();
-    loadTopics();
-    loadHistory(1);
-  }, []);
-
-  // Check for running job on mount (after we have orgId)
-  useEffect(() => {
-    if (orgId && !hasCheckedRunningJob.current) {
-      hasCheckedRunningJob.current = true;
-      checkForRunningJob();
-    }
-  }, [orgId]);
-
-  async function fetchOrganization() {
+  const fetchOrganization = useCallback(async () => {
     try {
       const res = await fetch("/api/organizations/current");
       if (res.ok) {
@@ -207,10 +192,10 @@ export default function SearchPage() {
     } finally {
       setIsLoadingOrg(false);
     }
-  }
+  }, []);
 
   // Check for a running search job on page load
-  async function checkForRunningJob() {
+  const checkForRunningJob = useCallback(async () => {
     if (!orgId) return;
 
     try {
@@ -239,9 +224,9 @@ export default function SearchPage() {
     } catch (err) {
       console.error("Failed to check for running job:", err);
     }
-  }
+  }, [orgId]);
 
-  const loadTopics = async () => {
+  const loadTopics = useCallback(async () => {
     setIsLoadingTopics(true);
     try {
       const res = await fetch("/api/search/topics");
@@ -254,9 +239,9 @@ export default function SearchPage() {
     } finally {
       setIsLoadingTopics(false);
     }
-  };
+  }, []);
 
-  const loadHistory = async (page: number) => {
+  const loadHistory = useCallback(async (page: number) => {
     setIsLoadingHistory(true);
     try {
       const res = await fetch(`/api/search/history?page=${page}&limit=10`);
@@ -271,7 +256,26 @@ export default function SearchPage() {
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, []);
+
+  // Load organization, saved topics, and history on mount
+  useEffect(() => {
+    // Defer to a microtask so loading flags are not set synchronously within
+    // the effect (prevents cascading renders).
+    void Promise.resolve().then(() => {
+      fetchOrganization();
+      loadTopics();
+      loadHistory(1);
+    });
+  }, [fetchOrganization, loadTopics, loadHistory]);
+
+  // Check for running job on mount (after we have orgId)
+  useEffect(() => {
+    if (orgId && !hasCheckedRunningJob.current) {
+      hasCheckedRunningJob.current = true;
+      checkForRunningJob();
+    }
+  }, [orgId, checkForRunningJob]);
 
   const handleSaveSearch = async () => {
     if (isSavingSearch || results.length === 0 || !queryExpansion) return;

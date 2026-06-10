@@ -158,31 +158,8 @@ export default function GeneratePage() {
     fetchBrandVoices();
   }, []);
 
-  // Check for running job on mount (after we have orgId)
-  useEffect(() => {
-    if (orgId && !hasCheckedRunningJob.current) {
-      hasCheckedRunningJob.current = true;
-      checkForRunningJob();
-    }
-  }, [orgId]);
-
-  async function fetchOrganization() {
-    try {
-      const res = await fetch("/api/organizations/current");
-      if (res.ok) {
-        const data = await res.json();
-        setOrgPlan(data.organization?.plan || "FREE");
-        setOrgId(data.organization?.id || null);
-      }
-    } catch (err) {
-      console.error("Failed to fetch organization:", err);
-    } finally {
-      setIsLoadingOrg(false);
-    }
-  }
-
   // Check for a running generation job on page load
-  async function checkForRunningJob() {
+  const checkForRunningJob = useCallback(async () => {
     if (!orgId) return;
 
     try {
@@ -219,52 +196,83 @@ export default function GeneratePage() {
     } catch (err) {
       console.error("Failed to check for running job:", err);
     }
+  }, [orgId]);
+
+  // Check for running job on mount (after we have orgId)
+  useEffect(() => {
+    if (orgId && !hasCheckedRunningJob.current) {
+      hasCheckedRunningJob.current = true;
+      checkForRunningJob();
+    }
+  }, [orgId, checkForRunningJob]);
+
+  async function fetchOrganization() {
+    try {
+      const res = await fetch("/api/organizations/current");
+      if (res.ok) {
+        const data = await res.json();
+        setOrgPlan(data.organization?.plan || "FREE");
+        setOrgId(data.organization?.id || null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch organization:", err);
+    } finally {
+      setIsLoadingOrg(false);
+    }
   }
 
   // When edition is selected, update selectedEdition and check for existing generation
   useEffect(() => {
-    if (selectedEditionId) {
-      const edition = editions.find((e) => e.id === selectedEditionId);
-      setSelectedEdition(edition || null);
-      setDrafts([]);
-      setSelectedDraftId(null);
-      loadDrafts(selectedEditionId);
-    } else {
-      setSelectedEdition(null);
-      setGenerated(null);
-      setEditedContent(null);
-      setDrafts([]);
-      setSelectedDraftId(null);
-    }
+    // Defer to a microtask so these setState calls are not synchronous within
+    // the effect (prevents cascading renders).
+    void Promise.resolve().then(() => {
+      if (selectedEditionId) {
+        const edition = editions.find((e) => e.id === selectedEditionId);
+        setSelectedEdition(edition || null);
+        setDrafts([]);
+        setSelectedDraftId(null);
+        loadDrafts(selectedEditionId);
+      } else {
+        setSelectedEdition(null);
+        setGenerated(null);
+        setEditedContent(null);
+        setDrafts([]);
+        setSelectedDraftId(null);
+      }
+    });
   }, [selectedEditionId, editions]);
 
   useEffect(() => {
-    if (!selectedDraftId) {
-      setGenerated(null);
-      setEditedContent(null);
-      return;
-    }
+    // Defer to a microtask so these setState calls are not synchronous within
+    // the effect (prevents cascading renders).
+    void Promise.resolve().then(() => {
+      if (!selectedDraftId) {
+        setGenerated(null);
+        setEditedContent(null);
+        return;
+      }
 
-    const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId);
-    if (!selectedDraft) {
-      if (isLoadingDrafts) return;
-      setGenerated(null);
-      setEditedContent(null);
-      return;
-    }
+      const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId);
+      if (!selectedDraft) {
+        if (isLoadingDrafts) return;
+        setGenerated(null);
+        setEditedContent(null);
+        return;
+      }
 
-    if (!selectedDraft.content) {
-      loadDraftContent(selectedDraft.id);
-      return;
-    }
+      if (!selectedDraft.content) {
+        loadDraftContent(selectedDraft.id);
+        return;
+      }
 
-    setGenerated(selectedDraft.content);
-    setEditedContent({
-      opening: selectedDraft.content.opening,
-      closing: selectedDraft.content.closing,
-      sections: selectedDraft.content.sections,
+      setGenerated(selectedDraft.content);
+      setEditedContent({
+        opening: selectedDraft.content.opening,
+        closing: selectedDraft.content.closing,
+        sections: selectedDraft.content.sections,
+      });
+      setSelectedSubjectLine(0);
     });
-    setSelectedSubjectLine(0);
   }, [selectedDraftId, drafts, isLoadingDrafts]);
 
   async function fetchEditions() {

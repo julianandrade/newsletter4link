@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,14 +132,14 @@ export default function CurationHistoryPage() {
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
 
-  const fetchJobs = () => {
+  const fetchJobs = useCallback(async () => {
     setIsLoading(true);
     const params = new URLSearchParams({ page: page.toString(), limit: "10" });
     if (statusFilter !== "all") {
       params.set("status", statusFilter);
     }
 
-    fetch(`/api/curation/jobs?${params}`)
+    await fetch(`/api/curation/jobs?${params}`)
       .then((r) => r.json())
       .then((data) => {
         let fetchedJobs = data.jobs || [];
@@ -183,11 +183,13 @@ export default function CurationHistoryPage() {
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
-  };
+  }, [page, statusFilter, sortField, sortOrder, dateFrom, dateTo]);
 
   useEffect(() => {
-    fetchJobs();
-  }, [page, statusFilter, sortField, sortOrder, dateFrom, dateTo]);
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => fetchJobs());
+  }, [fetchJobs]);
 
   // Fetch RSS sources on mount
   useEffect(() => {

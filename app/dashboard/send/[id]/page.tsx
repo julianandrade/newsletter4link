@@ -325,12 +325,18 @@ export default function EditionDetailPage() {
   }, [selectedApprovedDraftId]);
 
   useEffect(() => {
-    loadEdition();
-    loadDrafts();
+    // Defer to a microtask so loading flags are not set synchronously within
+    // the effect (prevents cascading renders).
+    void Promise.resolve().then(() => {
+      loadEdition();
+      loadDrafts();
+    });
   }, [loadEdition, loadDrafts]);
 
   useEffect(() => {
-    loadApprovedDraftSubjectLines();
+    // Defer to a microtask so loading flags are not set synchronously within
+    // the effect (prevents cascading renders).
+    void Promise.resolve().then(() => loadApprovedDraftSubjectLines());
   }, [loadApprovedDraftSubjectLines]);
 
   // Load templates

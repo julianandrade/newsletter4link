@@ -118,7 +118,9 @@ export default function ReviewPage() {
   }, [filters]);
 
   useEffect(() => {
-    fetchArticles();
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => fetchArticles());
   }, [fetchArticles]);
 
   const handleApprove = async (id: string) => {

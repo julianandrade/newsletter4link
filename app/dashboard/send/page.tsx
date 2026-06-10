@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -98,16 +98,7 @@ export default function EditionsPage() {
   const [newEditionWeek, setNewEditionWeek] = useState<number>(1);
   const [newEditionYear, setNewEditionYear] = useState<number>(2026);
 
-  useEffect(() => {
-    loadEditions();
-
-    // Set default week/year for new edition
-    const { week, year } = getCurrentWeekAndYear();
-    setNewEditionWeek(week);
-    setNewEditionYear(year);
-  }, []);
-
-  const loadEditions = async () => {
+  const loadEditions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -126,7 +117,20 @@ export default function EditionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Defer to a microtask so the loading flag and default week/year are not
+    // set synchronously within the effect (prevents cascading renders).
+    void Promise.resolve().then(() => {
+      loadEditions();
+
+      // Set default week/year for new edition
+      const { week, year } = getCurrentWeekAndYear();
+      setNewEditionWeek(week);
+      setNewEditionYear(year);
+    });
+  }, [loadEditions]);
 
   const handleCreateEdition = async () => {
     setCreating(true);

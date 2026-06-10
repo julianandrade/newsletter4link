@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import {
   Card,
@@ -75,11 +75,7 @@ export default function OrganizationSettingsPage() {
     text: string;
   } | null>(null);
 
-  useEffect(() => {
-    fetchOrganization();
-  }, []);
-
-  async function fetchOrganization() {
+  const fetchOrganization = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch("/api/organizations/current");
@@ -96,7 +92,13 @@ export default function OrganizationSettingsPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => fetchOrganization());
+  }, [fetchOrganization]);
 
   async function handleSave() {
     if (!organization) return;

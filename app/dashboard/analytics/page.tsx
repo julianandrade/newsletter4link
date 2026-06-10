@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -114,14 +114,7 @@ export default function AnalyticsPage() {
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
 
-  useEffect(() => {
-    // Only fetch when not in custom mode, or when both custom dates are filled
-    if (dateRange !== "custom" || (customStartDate && customEndDate)) {
-      fetchAnalytics();
-    }
-  }, [selectedEdition, dateRange, customStartDate, customEndDate]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -153,7 +146,16 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedEdition, dateRange, customStartDate, customEndDate]);
+
+  useEffect(() => {
+    // Only fetch when not in custom mode, or when both custom dates are filled
+    if (dateRange !== "custom" || (customStartDate && customEndDate)) {
+      // Defer to a microtask so loading flags are not set synchronously within
+      // the effect (prevents cascading renders).
+      void Promise.resolve().then(() => fetchAnalytics());
+    }
+  }, [fetchAnalytics, dateRange, customStartDate, customEndDate]);
 
   if (isLoading && !data) {
     return (

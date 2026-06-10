@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
@@ -65,7 +65,7 @@ export default function TemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  const fetchTemplates = () => {
+  const fetchTemplates = useCallback(() => {
     setIsLoading(true);
     fetch("/api/templates")
       .then((r) => r.json())
@@ -74,11 +74,13 @@ export default function TemplatesPage() {
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
-    fetchTemplates();
-  }, []);
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => fetchTemplates());
+  }, [fetchTemplates]);
 
   const handleToggleActive = async (template: Template) => {
     setUpdating(template.id);

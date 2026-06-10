@@ -59,18 +59,7 @@ export default function ProjectsPage() {
   const [layout, setLayout] = useLayoutPreference("projects-layout", "cards");
   const [filters, setFilters] = useState<ProjectFilters>(defaultProjectFilters);
 
-  // Fetch teams list once on mount
-  useEffect(() => {
-    fetchTeams();
-  }, []);
-
-  // Fetch projects whenever filters change
-  useEffect(() => {
-    fetchProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
-
-  const fetchTeams = async () => {
+  const fetchTeams = useCallback(async () => {
     try {
       const res = await fetch("/api/projects?teams=true");
       const data = await res.json();
@@ -80,7 +69,7 @@ export default function ProjectsPage() {
     } catch (error) {
       console.error("Error fetching teams:", error);
     }
-  };
+  }, []);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -97,6 +86,18 @@ export default function ProjectsPage() {
       setLoading(false);
     }
   }, [filters]);
+
+  // Fetch teams list once on mount
+  useEffect(() => {
+    void Promise.resolve().then(() => fetchTeams());
+  }, [fetchTeams]);
+
+  // Fetch projects whenever filters change
+  useEffect(() => {
+    // Defer to a microtask so the loading flag is not set synchronously
+    // during the effect (prevents cascading renders).
+    void Promise.resolve().then(() => fetchProjects());
+  }, [fetchProjects]);
 
   const resetForm = () => {
     setFormData({

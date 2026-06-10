@@ -14,13 +14,17 @@ export default function UnsubscribeContent() {
     const token = searchParams.get("token");
 
     if (!token) {
-      setStatus("error");
-      // Old emails linked with ?id=; those links are no longer honored
-      setMessage(
-        searchParams.get("id")
-          ? "This unsubscribe link is from an older newsletter and is no longer valid. Please use the link in a recent email or contact your administrator."
-          : "Invalid unsubscribe link"
-      );
+      // Defer to a microtask so these setState calls are not synchronous
+      // within the effect (prevents cascading renders).
+      void Promise.resolve().then(() => {
+        setStatus("error");
+        // Old emails linked with ?id=; those links are no longer honored
+        setMessage(
+          searchParams.get("id")
+            ? "This unsubscribe link is from an older newsletter and is no longer valid. Please use the link in a recent email or contact your administrator."
+            : "Invalid unsubscribe link"
+        );
+      });
       return;
     }
 

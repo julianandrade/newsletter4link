@@ -29,18 +29,12 @@ export default [
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/no-require-imports": "warn",
-      "react-hooks/exhaustive-deps": "warn",
       "react/no-unescaped-entities": "warn",
       "prefer-const": "warn",
-      // React Compiler rules (eslint-plugin-react-hooks v6, enabled as errors
-      // by eslint-config-next@16). They flag very common patterns across the
-      // dashboard (setState in effects, fetch helpers declared after the
-      // effect that uses them, etc.). Kept as warnings for now; clearing them
-      // is a dedicated UI refactor tracked as a follow-up.
-      "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/immutability": "warn",
-      "react-hooks/preserve-manual-memoization": "warn",
-      "react-hooks/purity": "warn",
+      // react-hooks rules (incl. the React Compiler rules from
+      // eslint-plugin-react-hooks v6) intentionally stay at their default
+      // ERROR severity: the codebase was refactored to satisfy them and CI
+      // blocks regressions.
     },
   },
 ];
