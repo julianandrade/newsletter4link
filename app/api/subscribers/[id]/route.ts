@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { unsubscribeUser } from "@/lib/queries";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 /**
  * GET /api/subscribers/:id
- * Get single subscriber by ID
+ * Get single subscriber by ID - tenant-scoped
  */
 export async function GET(
   request: Request,
@@ -12,8 +12,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
 
-    const subscriber = await prisma.subscriber.findUnique({
+    // Tenant findUnique returns null for subscribers of other orgs
+    const subscriber = await db.subscriber.findUnique({
       where: { id },
       include: {
         events: {
@@ -40,6 +42,13 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching subscriber:", error);
 
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -52,7 +61,7 @@ export async function GET(
 
 /**
  * PATCH /api/subscribers/:id
- * Update subscriber preferences
+ * Update subscriber preferences - tenant-scoped
  */
 export async function PATCH(
   request: Request,
@@ -60,10 +69,17 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
+
     const body = await request.json();
     const { name, preferredLanguage, preferredStyle, active } = body;
 
-    const updateData: any = {};
+    const updateData: {
+      name?: string;
+      preferredLanguage?: string;
+      preferredStyle?: string;
+      active?: boolean;
+    } = {};
     if (name !== undefined) updateData.name = name;
     if (preferredLanguage !== undefined)
       updateData.preferredLanguage = preferredLanguage;
@@ -71,10 +87,20 @@ export async function PATCH(
       updateData.preferredStyle = preferredStyle;
     if (active !== undefined) updateData.active = active;
 
-    const subscriber = await prisma.subscriber.update({
+    // updateMany is org-scoped, so subscribers from other orgs are not matched
+    const { count } = await db.subscriber.updateMany({
       where: { id },
       data: updateData,
     });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Subscriber not found" },
+        { status: 404 }
+      );
+    }
+
+    const subscriber = await db.subscriber.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -83,6 +109,13 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating subscriber:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
@@ -96,7 +129,8 @@ export async function PATCH(
 
 /**
  * DELETE /api/subscribers/:id
- * Unsubscribe user (soft delete - sets active to false)
+ * Unsubscribe user (soft delete - sets active to false) - tenant-scoped
+ * Email recipients unsubscribe via POST /api/unsubscribe with a signed token
  */
 export async function DELETE(
   request: Request,
@@ -104,6 +138,17 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
+
+    // Verify the subscriber belongs to this org before deactivating
+    const subscriber = await db.subscriber.findUnique({ where: { id } });
+
+    if (!subscriber) {
+      return NextResponse.json(
+        { success: false, error: "Subscriber not found" },
+        { status: 404 }
+      );
+    }
 
     await unsubscribeUser(id);
 
@@ -113,6 +158,13 @@ export async function DELETE(
     });
   } catch (error) {
     console.error("Error unsubscribing user:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
