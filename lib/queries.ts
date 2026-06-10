@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { TenantClient } from "@/lib/db/tenant";
-import { ArticleStatus } from "@prisma/client";
 
 // ==================== Article Queries ====================
 
@@ -35,26 +34,6 @@ export async function getPendingArticles(db: TenantClient) {
 export async function getArticleById(db: TenantClient, id: string) {
   return await db.article.findUnique({
     where: { id },
-  });
-}
-
-/**
- * Update article status (uses raw prisma - verify ownership before calling)
- */
-export async function updateArticleStatus(id: string, status: ArticleStatus) {
-  return await prisma.article.update({
-    where: { id },
-    data: { status },
-  });
-}
-
-/**
- * Update article summary (uses raw prisma - verify ownership before calling)
- */
-export async function updateArticleSummary(id: string, summary: string) {
-  return await prisma.article.update({
-    where: { id },
-    data: { summary },
   });
 }
 

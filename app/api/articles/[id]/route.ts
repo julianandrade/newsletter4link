@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getArticleById } from "@/lib/queries";
-import { prisma } from "@/lib/db";
-import { requireOrgContext } from "@/lib/auth/context";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
 
 /**
  * GET /api/articles/:id
@@ -54,6 +53,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
+
     const body = await request.json();
 
     const { summary, category } = body;
@@ -79,10 +81,20 @@ export async function PATCH(
       );
     }
 
-    const article = await prisma.article.update({
+    // updateMany is org-scoped, so articles from other orgs are not matched
+    const { count } = await ctx.db.article.updateMany({
       where: { id },
       data: updateData,
     });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Article not found" },
+        { status: 404 }
+      );
+    }
+
+    const article = await ctx.db.article.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -91,6 +103,20 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating article:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof Error && error.message.startsWith("Forbidden")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json(
       {

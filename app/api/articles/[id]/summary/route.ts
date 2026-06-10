@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { updateArticleSummary } from "@/lib/queries";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
 
 /**
  * PATCH /api/articles/:id/summary
  * Update article summary
+ * Requires EDITOR role; article must belong to the current organization
  */
 export async function PATCH(
   request: Request,
@@ -11,6 +12,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
+
     const body = await request.json();
     const { summary } = body;
 
@@ -24,7 +28,20 @@ export async function PATCH(
       );
     }
 
-    const article = await updateArticleSummary(id, summary);
+    // updateMany is org-scoped, so articles from other orgs are not matched
+    const { count } = await ctx.db.article.updateMany({
+      where: { id },
+      data: { summary },
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Article not found" },
+        { status: 404 }
+      );
+    }
+
+    const article = await ctx.db.article.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -33,6 +50,20 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating summary:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof Error && error.message.startsWith("Forbidden")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json(
       {

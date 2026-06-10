@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { updateArticleStatus } from "@/lib/queries";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
 
 /**
  * POST /api/articles/:id/reject
  * Reject an article from newsletter inclusion
+ * Requires EDITOR role; article must belong to the current organization
  */
 export async function POST(
   request: Request,
@@ -11,8 +12,23 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
 
-    const article = await updateArticleStatus(id, "REJECTED");
+    // updateMany is org-scoped, so articles from other orgs are not matched
+    const { count } = await ctx.db.article.updateMany({
+      where: { id },
+      data: { status: "REJECTED" },
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Article not found" },
+        { status: 404 }
+      );
+    }
+
+    const article = await ctx.db.article.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -21,6 +37,20 @@ export async function POST(
     });
   } catch (error) {
     console.error("Error rejecting article:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof Error && error.message.startsWith("Forbidden")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json(
       {
