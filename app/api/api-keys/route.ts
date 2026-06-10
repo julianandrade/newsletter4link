@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { hasFeature } from "@/lib/plans/features";
 import { randomBytes, createHash } from "crypto";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export async function GET() {
       data: apiKeys,
     });
   } catch (error) {
-    console.error("Error listing API keys:", error);
+    logger.error("Error listing API keys", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
       message: "Save this API key now. It won't be shown again.",
     });
   } catch (error) {
-    console.error("Error creating API key:", error);
+    logger.error("Error creating API key", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

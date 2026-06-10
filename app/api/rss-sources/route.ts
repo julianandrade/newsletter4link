@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
     });
     return NextResponse.json(sources);
   } catch (error) {
-    console.error("Error fetching RSS sources:", error);
+    logger.error("Error fetching RSS sources", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(source, { status: 201 });
   } catch (error) {
-    console.error("Error creating RSS source:", error);
+    logger.error("Error creating RSS source", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

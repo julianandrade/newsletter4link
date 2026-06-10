@@ -18,9 +18,13 @@ import {
   GenerationCancelledError,
 } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
+
+// Newsletter generation is an expensive multi-call LLM operation.
+const RATE_LIMIT = { limit: 10, windowMs: 5 * 60 * 1000 };
 
 /**
  * Get ISO week number for a date
@@ -50,7 +54,32 @@ export async function GET(request: NextRequest) {
   // Get org context
   let organizationId: string;
   try {
-    const { organization, features } = await requireOrgContext();
+    const { organization, membership, features } = await requireOrgContext();
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        organization.id,
+        membership.supabaseUserId,
+        "generation:stream",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Rate limit exceeded. Please retry shortly.",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(rl.retryAfterSec),
+          },
+        }
+      );
+    }
+
     if (!features.ghostWriter) {
       return new Response(
         JSON.stringify({ error: "Ghost Writer requires Starter plan or higher" }),

@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -41,7 +42,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Failed to get current organization:", error);
+    logger.error("Failed to get current organization", error);
     return NextResponse.json(
       { error: "Failed to get organization" },
       { status: 500 }

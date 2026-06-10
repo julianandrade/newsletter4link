@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { config } from "@/lib/config";
 import { markEditionAsSent } from "@/lib/queries";
 import { createTenantClient } from "@/lib/db/tenant";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("[CRON] Starting weekly newsletter send for all organizations...");
+    logger.info("[CRON] Starting weekly newsletter send for all organizations...");
 
     const now = new Date();
     const week = getWeekNumber(now);
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
     for (const org of organizations) {
       try {
-        console.log(`[CRON] Processing organization: ${org.name}`);
+        logger.info(`[CRON] Processing organization: ${org.name}`);
         const db = createTenantClient(org.id);
 
         // Get or create edition for this week
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
 
         // If edition doesn't exist or not finalized, auto-finalize
         if (!edition || edition.status === "DRAFT") {
-          console.log(`[CRON] ${org.name}: Edition not finalized, auto-finalizing...`);
+          logger.info(`[CRON] ${org.name}: Edition not finalized, auto-finalizing...`);
 
           // Get top approved articles for this org
           const topArticles = await db.article.findMany({
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
           });
 
           if (topArticles.length === 0) {
-            console.log(`[CRON] ${org.name}: No approved articles, skipping`);
+            logger.info(`[CRON] ${org.name}: No approved articles, skipping`);
             results.push({
               organizationId: org.id,
               organizationName: org.name,
@@ -174,14 +175,12 @@ export async function GET(request: Request) {
             orderBy: { order: "asc" },
           });
 
-          console.log(
-            `[CRON] ${org.name}: Auto-finalized with ${topArticles.length} articles and ${featuredProjects.length} projects`
-          );
+          logger.info(`[CRON] ${org.name}: Auto-finalized with ${topArticles.length} articles and ${featuredProjects.length} projects`);
         }
 
         // Check if already sent
         if (edition!.status === "SENT") {
-          console.log(`[CRON] ${org.name}: Edition already sent, skipping`);
+          logger.info(`[CRON] ${org.name}: Edition already sent, skipping`);
           results.push({
             organizationId: org.id,
             organizationName: org.name,
@@ -218,7 +217,7 @@ export async function GET(request: Request) {
         });
 
         if (subscriberCount === 0) {
-          console.log(`[CRON] ${org.name}: No active subscribers, skipping`);
+          logger.info(`[CRON] ${org.name}: No active subscribers, skipping`);
           results.push({
             organizationId: org.id,
             organizationName: org.name,
@@ -230,7 +229,7 @@ export async function GET(request: Request) {
           continue;
         }
 
-        console.log(`[CRON] ${org.name}: Sending to ${subscriberCount} subscribers...`);
+        logger.info(`[CRON] ${org.name}: Sending to ${subscriberCount} subscribers...`);
 
         // Send to all subscribers in this org
         const result = await sendNewsletterToAll(emailData, edition!.id);
@@ -248,11 +247,9 @@ export async function GET(request: Request) {
           skipped: false,
         });
 
-        console.log(
-          `[CRON] ${org.name}: ${result.sent} sent, ${result.failed} failed`
-        );
+        logger.info(`[CRON] ${org.name}: ${result.sent} sent, ${result.failed} failed`);
       } catch (error) {
-        console.error(`[CRON] Error for ${org.name}:`, error);
+        logger.error(`[CRON] Error for ${org.name}:`, error);
         results.push({
           organizationId: org.id,
           organizationName: org.name,
@@ -264,7 +261,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log("[CRON] Weekly newsletter send complete for all organizations");
+    logger.info("[CRON] Weekly newsletter send complete for all organizations");
 
     const totalSent = results.reduce((sum, r) => sum + r.sent, 0);
     const totalFailed = results.reduce((sum, r) => sum + r.failed, 0);
@@ -282,12 +279,12 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[CRON] Weekly send failed:", error);
+    logger.error("[CRON] Weekly send failed", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { publishToSharePoint, getSharePointStatus, isSharePointConfigured } from "@/lib/sharepoint";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -66,11 +67,11 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
-    console.error("SharePoint publish API error:", error);
+    logger.error("SharePoint publish API error", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -116,11 +117,11 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error("SharePoint status API error:", error);
+    logger.error("SharePoint status API error", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

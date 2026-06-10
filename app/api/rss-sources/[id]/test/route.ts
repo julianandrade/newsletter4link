@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import Parser from "rss-parser";
+import { logger } from "@/lib/logger";
 
 // Create parser instance for RSS/Atom feed validation
 const parser = new Parser({
@@ -93,7 +94,7 @@ export async function POST(
       );
     }
   } catch (error) {
-    console.error("Error testing RSS source:", error);
+    logger.error("Error testing RSS source", error);
     return NextResponse.json(
       {
         success: false,

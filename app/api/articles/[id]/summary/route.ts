@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateArticleSummary } from "@/lib/queries";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 /**
  * PATCH /api/articles/:id/summary
@@ -43,7 +44,7 @@ export async function PATCH(
       message: "Summary updated successfully",
     });
   } catch (error) {
-    console.error("Error updating summary:", error);
+    logger.error("Error updating summary", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -55,7 +56,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

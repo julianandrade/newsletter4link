@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { hasFeature } from "@/lib/plans/features";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export async function DELETE(
       message: "API key deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting API key:", error);
+    logger.error("Error deleting API key", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

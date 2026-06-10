@@ -10,10 +10,30 @@ import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import { generateNewsletter, GeneratedNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+
+// Newsletter generation is an expensive multi-call LLM operation.
+const RATE_LIMIT = { limit: 10, windowMs: 5 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
   try {
     const ctx = await requireOrgContext();
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        ctx.organization.id,
+        ctx.membership.supabaseUserId,
+        "generation:generate",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please retry shortly." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      );
+    }
+
     if (!ctx.features.ghostWriter) {
       return NextResponse.json(
         { error: "Ghost Writer requires Starter plan or higher" },

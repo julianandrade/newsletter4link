@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthContext, acceptInvite, setSelectedOrgId } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       message: `Successfully joined ${organization.name}`,
     });
   } catch (error) {
-    console.error("Error accepting invite:", error);
+    logger.error("Error accepting invite", error);
 
     if (error instanceof Error) {
       return NextResponse.json(

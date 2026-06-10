@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { deleteFile } from "@/lib/supabase/storage";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,12 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Error fetching media assets:", error);
+    logger.error("Error fetching media assets", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -97,14 +98,14 @@ export async function DELETE(request: Request) {
       try {
         await deleteFile(storagePath);
       } catch (storageError) {
-        console.error("Error deleting from storage:", storageError);
+        logger.error("Error deleting from storage", storageError);
         // Continue with database deletion even if storage deletion fails
         // The file might have been manually deleted
       }
     } else {
-      console.warn(
-        `Media asset ${id} has no extractable storage path from URL: ${mediaAsset.url}. ` +
-          "This may indicate an orphaned storage file that requires manual cleanup."
+      logger.warn(
+        "Media asset has no extractable storage path; possible orphaned storage file requiring manual cleanup",
+        { mediaAssetId: id, url: mediaAsset.url }
       );
     }
 
@@ -118,12 +119,12 @@ export async function DELETE(request: Request) {
       message: "Media asset deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting media asset:", error);
+    logger.error("Error deleting media asset", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

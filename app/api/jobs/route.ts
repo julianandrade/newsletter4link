@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { getJobs, getRunningJob, JobType, JobStatus } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error fetching jobs:", error);
+    logger.error("Error fetching jobs", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json(

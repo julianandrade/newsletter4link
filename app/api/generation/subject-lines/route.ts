@@ -9,6 +9,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import { regenerateSubjectLines } from "@/lib/generation/generator";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+
+// Subject line regeneration is a lighter single LLM call.
+const RATE_LIMIT = { limit: 20, windowMs: 5 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +27,21 @@ export async function POST(request: NextRequest) {
     }
 
     const ctx = await requireOrgContext();
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        ctx.organization.id,
+        ctx.membership.supabaseUserId,
+        "generation:subject-lines",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please retry shortly." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      );
+    }
 
     if (!ctx.features.ghostWriter) {
       return NextResponse.json(

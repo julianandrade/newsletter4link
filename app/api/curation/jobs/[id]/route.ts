@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getJob, deleteJob } from "@/lib/curation/job-manager";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   request: Request,
@@ -19,7 +20,7 @@ export async function GET(
 
     return NextResponse.json(job);
   } catch (error) {
-    console.error("Error fetching curation job:", error);
+    logger.error("Error fetching curation job", error);
     return NextResponse.json(
       { error: "Failed to fetch curation job" },
       { status: 500 }
@@ -70,7 +71,7 @@ export async function DELETE(
       deletedJob,
     });
   } catch (error) {
-    console.error("Error deleting curation job:", error);
+    logger.error("Error deleting curation job", error);
     return NextResponse.json(
       { error: "Failed to delete curation job" },
       { status: 500 }

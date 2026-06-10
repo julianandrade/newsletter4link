@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runCurationPipeline } from "@/lib/curation/curator";
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("[CRON] Starting daily content collection for all organizations...");
+    logger.info("[CRON] Starting daily content collection for all organizations...");
 
     // Get all organizations
     const organizations = await prisma.organization.findMany({
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
 
     for (const org of organizations) {
       try {
-        console.log(`[CRON] Processing organization: ${org.name}`);
+        logger.info(`[CRON] Processing organization: ${org.name}`);
         const result = await runCurationPipeline(org.id);
         results.push({
           organizationId: org.id,
@@ -47,9 +48,9 @@ export async function GET(request: Request) {
           lowScore: result.lowScore,
           errors: result.errors.length,
         });
-        console.log(`[CRON] ${org.name}: ${result.curated} curated, ${result.duplicates} duplicates`);
+        logger.info(`[CRON] ${org.name}: ${result.curated} curated, ${result.duplicates} duplicates`);
       } catch (error) {
-        console.error(`[CRON] Error processing ${org.name}:`, error);
+        logger.error(`[CRON] Error processing ${org.name}:`, error);
         results.push({
           organizationId: org.id,
           organizationName: org.name,
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log("[CRON] Daily content collection complete for all organizations");
+    logger.info("[CRON] Daily content collection complete for all organizations");
 
     return NextResponse.json({
       success: true,
@@ -70,12 +71,12 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[CRON] Daily collection failed:", error);
+    logger.error("[CRON] Daily collection failed", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

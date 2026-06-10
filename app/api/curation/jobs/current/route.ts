@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentJob } from "@/lib/curation/job-manager";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
 
     return NextResponse.json({ running: true, job });
   } catch (error) {
-    console.error("Error fetching current curation job:", error);
+    logger.error("Error fetching current curation job", error);
     return NextResponse.json(
       { error: "Failed to fetch current curation job" },
       { status: 500 }

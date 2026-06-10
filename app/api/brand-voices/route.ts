@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -33,7 +34,7 @@ export async function GET() {
 
     return NextResponse.json({ brandVoices });
   } catch (error) {
-    console.error("Failed to fetch brand voices:", error);
+    logger.error("Failed to fetch brand voices", error);
     return NextResponse.json(
       { error: "Failed to fetch brand voices" },
       { status: 500 }
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ brandVoice }, { status: 201 });
   } catch (error) {
-    console.error("Failed to create brand voice:", error);
+    logger.error("Failed to create brand voice", error);
     return NextResponse.json(
       { error: "Failed to create brand voice" },
       { status: 500 }

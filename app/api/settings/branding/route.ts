@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET() {
       data: settings || { logoUrl: null, bannerUrl: null },
     });
   } catch (error) {
-    console.error("Error fetching branding settings:", error);
+    logger.error("Error fetching branding settings", error);
     return NextResponse.json(
       {
         success: false,
@@ -74,7 +75,7 @@ export async function PUT(request: Request) {
       message: "Branding settings saved successfully",
     });
   } catch (error) {
-    console.error("Error saving branding settings:", error);
+    logger.error("Error saving branding settings", error);
     return NextResponse.json(
       {
         success: false,

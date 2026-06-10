@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export async function POST(
 
     return NextResponse.json({ draft: updated });
   } catch (error) {
-    console.error("Error discarding draft:", error);
+    logger.error("Error discarding draft", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });

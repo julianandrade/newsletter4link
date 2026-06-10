@@ -4,6 +4,7 @@ import { searchMultiProvider } from "@/lib/search/providers";
 import { batchAnalyzeResults } from "@/lib/search/result-analyzer";
 import { SearchTimeRange } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -54,7 +55,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Error fetching search topic:", error);
+    logger.error("Error fetching search topic", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -162,7 +163,7 @@ export async function POST(
         });
         newResultsCount++;
       } catch (e) {
-        console.error("Error saving search result:", e);
+        logger.error("Error saving search result", e);
       }
     }
 
@@ -201,7 +202,7 @@ export async function POST(
       message: `Search completed. Found ${newResultsCount} results.`,
     });
   } catch (error) {
-    console.error("Error running search:", error);
+    logger.error("Error running search", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -265,7 +266,7 @@ export async function PATCH(
       data: updated,
     });
   } catch (error) {
-    console.error("Error updating search topic:", error);
+    logger.error("Error updating search topic", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -318,7 +319,7 @@ export async function DELETE(
       message: "Search topic deleted",
     });
   } catch (error) {
-    console.error("Error deleting search topic:", error);
+    logger.error("Error deleting search topic", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });

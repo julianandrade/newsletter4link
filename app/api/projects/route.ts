@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { createProject } from "@/lib/queries";
 import { Prisma } from "@prisma/client";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
       count: projects.length,
     });
   } catch (error) {
-    console.error("Error fetching projects:", error);
+    logger.error("Error fetching projects", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating project:", error);
+    logger.error("Error creating project", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -172,7 +173,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

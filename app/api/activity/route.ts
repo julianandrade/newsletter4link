@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 interface ActivityItem {
   id: string;
@@ -149,7 +150,7 @@ export async function GET() {
       activities: activities.slice(0, 15),
     });
   } catch (error) {
-    console.error("Error fetching activity:", error);
+    logger.error("Error fetching activity", error);
     return NextResponse.json(
       { error: "Failed to fetch activity" },
       { status: 500 }

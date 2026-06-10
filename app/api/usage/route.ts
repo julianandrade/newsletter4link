@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { getPlanFeatures, PLAN_INFO } from "@/lib/plans/features";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +98,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Error fetching usage:", error);
+    logger.error("Error fetching usage", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

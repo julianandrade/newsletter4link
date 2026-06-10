@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, hasRole } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Error fetching organization:", error);
+    logger.error("Error fetching organization", error);
     return NextResponse.json(
       { error: "Failed to fetch organization" },
       { status: 500 }
@@ -199,7 +200,7 @@ export async function PATCH(
       data: organization,
     });
   } catch (error) {
-    console.error("Error updating organization:", error);
+    logger.error("Error updating organization", error);
     return NextResponse.json(
       { error: "Failed to update organization" },
       { status: 500 }
@@ -256,7 +257,7 @@ export async function DELETE(
       message: "Organization deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting organization:", error);
+    logger.error("Error deleting organization", error);
     return NextResponse.json(
       { error: "Failed to delete organization" },
       { status: 500 }

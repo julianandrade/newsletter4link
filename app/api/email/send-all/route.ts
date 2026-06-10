@@ -9,6 +9,7 @@ import { requireOrgContext } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import { sanitizeBlockHtml, sanitizeImageUrl } from "@/lib/email/sanitize";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -368,9 +369,7 @@ export async function POST(request: Request) {
       };
     }
 
-    console.log(
-      `Starting batch send to ${recipientCount} ${useAdHocEmails ? "ad-hoc emails" : "subscribers"} for Week ${emailData.week}, ${emailData.year}...`
-    );
+    logger.info(`Starting batch send to ${recipientCount} ${useAdHocEmails ? "ad-hoc emails" : "subscribers"} for Week ${emailData.week}, ${emailData.year}...`);
 
     // Check if using a custom template
     let templateHtml: string | null = null;
@@ -468,12 +467,12 @@ export async function POST(request: Request) {
       try {
         sharePointResult = await publishToSharePoint(edition.id);
         if (sharePointResult.success) {
-          console.log(`SharePoint: Published to ${sharePointResult.sharePointUrl}`);
+          logger.info(`SharePoint: Published to ${sharePointResult.sharePointUrl}`);
         } else {
-          console.warn(`SharePoint publish failed: ${sharePointResult.error}`);
+          logger.warn(`SharePoint publish failed: ${sharePointResult.error}`);
         }
       } catch (spError) {
-        console.error("SharePoint publish error (non-fatal):", spError);
+        logger.error("SharePoint publish error (non-fatal)", spError);
       }
     }
 
@@ -492,12 +491,12 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Error sending newsletter:", error);
+    logger.error("Error sending newsletter", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -611,7 +610,10 @@ async function sendNewsletterWithTemplate(
     });
 
     const total = subscribers.length;
-    console.log(`Sending newsletter with template to ${total} subscribers${providerOverride ? ` via ${providerOverride}` : ""}...`);
+    logger.info("Sending newsletter with template", {
+      total,
+      provider: providerOverride ?? "default",
+    });
 
     // Get batch settings (use provider-specific settings if provider is overridden)
     const { batchSize, rateLimitDelay } = providerOverride
@@ -687,9 +689,7 @@ async function sendNewsletterWithTemplate(
 
       // Update progress
       const current = Math.min((batchIndex + 1) * batchSize, total);
-      console.log(
-        `Batch ${batchIndex + 1}/${batches.length} complete: ${current}/${total} sent`
-      );
+      logger.info(`Batch ${batchIndex + 1}/${batches.length} complete: ${current}/${total} sent`);
 
       // Wait between batches to respect rate limits
       if (batchIndex < batches.length - 1) {
@@ -699,13 +699,11 @@ async function sendNewsletterWithTemplate(
       }
     }
 
-    console.log(
-      `Newsletter sending complete: ${result.sent} sent, ${result.failed} failed`
-    );
+    logger.info(`Newsletter sending complete: ${result.sent} sent, ${result.failed} failed`);
 
     return result;
   } catch (error) {
-    console.error("Error in batch send with template:", error);
+    logger.error("Error in batch send with template", error);
     return {
       ...result,
       success: false,
@@ -766,7 +764,10 @@ async function sendToAdHocEmails(
 
   try {
     const total = emails.length;
-    console.log(`Sending newsletter to ${total} ad-hoc emails${providerOverride ? ` via ${providerOverride}` : ""}...`);
+    logger.info("Sending newsletter to ad-hoc emails", {
+      total,
+      provider: providerOverride ?? "default",
+    });
 
     // Get batch settings
     const { batchSize, rateLimitDelay } = providerOverride
@@ -825,22 +826,18 @@ async function sendToAdHocEmails(
       });
 
       const current = Math.min((batchIndex + 1) * batchSize, total);
-      console.log(
-        `Batch ${batchIndex + 1}/${batches.length} complete: ${current}/${total} sent`
-      );
+      logger.info(`Batch ${batchIndex + 1}/${batches.length} complete: ${current}/${total} sent`);
 
       if (batchIndex < batches.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, rateLimitDelay));
       }
     }
 
-    console.log(
-      `Ad-hoc email sending complete: ${result.sent} sent, ${result.failed} failed`
-    );
+    logger.info(`Ad-hoc email sending complete: ${result.sent} sent, ${result.failed} failed`);
 
     return result;
   } catch (error) {
-    console.error("Error in ad-hoc email send:", error);
+    logger.error("Error in ad-hoc email send", error);
     return {
       ...result,
       success: false,

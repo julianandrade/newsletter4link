@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { processQuery } from "@/lib/search/query-processor";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export async function GET() {
       data: topicsWithCounts,
     });
   } catch (error) {
-    console.error("Error fetching search topics:", error);
+    logger.error("Error fetching search topics", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating search topic:", error);
+    logger.error("Error creating search topic", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });

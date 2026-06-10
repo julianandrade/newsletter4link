@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,7 @@ export async function POST(
           });
         } catch (e) {
           // Skip duplicate URLs silently
-          console.error("Error importing result to topic:", e);
+          logger.error("Error importing result to topic", e);
         }
       }
     }
@@ -155,7 +156,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error("Error converting search to topic:", error);
+    logger.error("Error converting search to topic", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getArticleById } from "@/lib/queries";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 /**
  * GET /api/articles/:id
@@ -31,12 +32,12 @@ export async function GET(
       data: article,
     });
   } catch (error) {
-    console.error("Error fetching article:", error);
+    logger.error("Error fetching article", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -100,7 +101,7 @@ export async function PATCH(
       message: "Article updated successfully",
     });
   } catch (error) {
-    console.error("Error updating article:", error);
+    logger.error("Error updating article", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -112,7 +113,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

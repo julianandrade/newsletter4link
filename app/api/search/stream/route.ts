@@ -28,9 +28,13 @@ import {
   analyzeResults,
   filterAndSortResults,
 } from "@/lib/search/result-analyzer";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120; // 2 minutes for search + analysis
+
+// Ad-hoc search runs LLM query expansion + per-result LLM analysis + paid provider calls.
+const RATE_LIMIT = { limit: 20, windowMs: 5 * 60 * 1000 };
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -52,6 +56,30 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await requireOrgContext();
     organizationId = ctx.organization.id;
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        ctx.organization.id,
+        ctx.membership.supabaseUserId,
+        "search:stream",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Rate limit exceeded. Please retry shortly.",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(rl.retryAfterSec),
+          },
+        }
+      );
+    }
 
     // Check if search feature is available (PROFESSIONAL plan or higher)
     if (!ctx.features.trendRadar) {

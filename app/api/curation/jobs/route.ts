@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getJobs, deleteJobsOlderThan } from "@/lib/curation/job-manager";
 import { CurationJobStatus } from "@prisma/client";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: Request) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error fetching curation jobs:", error);
+    logger.error("Error fetching curation jobs", error);
     return NextResponse.json(
       { error: "Failed to fetch curation jobs" },
       { status: 500 }
@@ -59,7 +60,7 @@ export async function DELETE(request: Request) {
       message: `Deleted ${deletedCount} job(s) older than ${olderThanDays} day(s)`,
     });
   } catch (error) {
-    console.error("Error deleting curation jobs:", error);
+    logger.error("Error deleting curation jobs", error);
     return NextResponse.json(
       { error: "Failed to delete curation jobs" },
       { status: 500 }

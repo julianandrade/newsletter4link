@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 /**
  * POST /api/templates/[id]/set-default
@@ -58,7 +59,7 @@ export async function POST(
         : `Template "${template.name}" is no longer the default`,
     });
   } catch (error) {
-    console.error("Error toggling default template:", error);
+    logger.error("Error toggling default template", error);
     return NextResponse.json(
       { error: "Failed to update template" },
       { status: 500 }

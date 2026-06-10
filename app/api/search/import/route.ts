@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
       alreadyExisted: false,
     });
   } catch (error) {
-    console.error("Error importing search result directly:", error);
+    logger.error("Error importing search result directly", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json(

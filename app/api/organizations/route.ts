@@ -3,6 +3,7 @@ import { getAuthContext, createOrganization } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { bootstrapOrganization } from "@/lib/industry/bootstrap";
 import { Industry } from "@/lib/industry/prompts";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function GET() {
       currentOrgId: auth.currentOrg?.organization.id ?? null,
     });
   } catch (error) {
-    console.error("Error fetching organizations:", error);
+    logger.error("Error fetching organizations", error);
     return NextResponse.json(
       { error: "Failed to fetch organizations" },
       { status: 500 }
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
           industry as Industry
         );
       } catch (bootstrapError) {
-        console.error("Failed to bootstrap organization:", bootstrapError);
+        logger.error("Failed to bootstrap organization", bootstrapError);
         // Don't fail the request, org was created successfully
       }
     }
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating organization:", error);
+    logger.error("Error creating organization", error);
 
     if (error instanceof Error && error.message === "Organization slug already exists") {
       return NextResponse.json(

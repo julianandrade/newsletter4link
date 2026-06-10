@@ -1,9 +1,14 @@
+import { NextResponse } from "next/server";
 import { runCurationPipelineWithStreaming, CurationCancelledError } from "@/lib/curation/curator";
 import { createJob, getCurrentJob } from "@/lib/curation/job-manager";
 import { requireOrgContext } from "@/lib/auth/context";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes (only works on Pro plan)
+
+// Full curation pipeline (RSS fetch + embeddings + LLM scoring) is the most expensive op.
+const RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 /**
  * GET /api/curation/collect
@@ -19,6 +24,31 @@ export async function GET(request: Request) {
   const sourceIdsParam = searchParams.get("sourceIds");
   const sourceIds = sourceIdsParam ? sourceIdsParam.split(",").filter(Boolean) : undefined;
 
+  // Resolve auth/org context and enforce rate limit BEFORE opening the SSE
+  // stream, so an over-limit caller gets a plain 429 JSON response.
+  let organizationId: string;
+  try {
+    const { organization, membership } = await requireOrgContext();
+    organizationId = organization.id;
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        organization.id,
+        membership.supabaseUserId,
+        "curation:collect",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please retry shortly." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      );
+    }
+  } catch (error) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -29,9 +59,7 @@ export async function GET(request: Request) {
       };
 
       try {
-        // Get org context
-        const { organization } = await requireOrgContext();
-        const organizationId = organization.id;
+        // org context + rate limit already validated above
 
         // Check if there's already a running job
         const existingJob = await getCurrentJob();

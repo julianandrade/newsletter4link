@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { unsubscribeUser } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { verifyUnsubscribeToken } from "@/lib/email/unsubscribe-token";
+import { logger } from "@/lib/logger";
 
 /**
  * POST /api/unsubscribe
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       message: "You have been unsubscribed successfully",
     });
   } catch (error) {
-    console.error("Error processing unsubscribe:", error);
+    logger.error("Error processing unsubscribe", error);
 
     return NextResponse.json(
       { success: false, error: "Unable to process unsubscribe request" },

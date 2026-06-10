@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import type { AnalyzedResult } from "@/lib/search/result-analyzer";
 import { Prisma } from "@prisma/client";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error saving search history:", error);
+    logger.error("Error saving search history", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -144,7 +145,7 @@ export async function GET(request: NextRequest) {
       totalPages,
     });
   } catch (error) {
-    console.error("Error fetching search history:", error);
+    logger.error("Error fetching search history", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });

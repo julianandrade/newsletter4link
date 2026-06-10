@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { getJob, getCurrentJob, createJob } from "@/lib/curation/job-manager";
 import { runCurationPipelineWithStreaming, CurationCancelledError } from "@/lib/curation/curator";
 import { requireOrgContext } from "@/lib/auth/context";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
+
+// Full curation pipeline (RSS fetch + embeddings + LLM scoring) is the most expensive op.
+const RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 /**
  * POST /api/curation/jobs/[id]/rerun
@@ -44,6 +48,31 @@ export async function POST(
     );
   }
 
+  // Resolve auth/org context and enforce rate limit BEFORE opening the SSE
+  // stream, so an over-limit caller gets a plain 429 JSON response.
+  let organizationId: string;
+  try {
+    const { organization, membership } = await requireOrgContext();
+    organizationId = organization.id;
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        organization.id,
+        membership.supabaseUserId,
+        "curation:rerun",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please retry shortly." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      );
+    }
+  } catch (error) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Stream the new job progress
   const encoder = new TextEncoder();
 
@@ -55,9 +84,7 @@ export async function POST(
       };
 
       try {
-        // Get org context
-        const { organization } = await requireOrgContext();
-        const organizationId = organization.id;
+        // org context + rate limit already validated above
 
         // Create a new job
         const newJob = await createJob(organizationId);

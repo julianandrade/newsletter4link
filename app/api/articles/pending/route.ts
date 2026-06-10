@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { Prisma } from "@prisma/client";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error fetching pending articles:", error);
+    logger.error("Error fetching pending articles", error);
 
     // Handle auth errors
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
@@ -139,7 +140,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

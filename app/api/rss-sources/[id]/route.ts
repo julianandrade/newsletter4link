@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   request: Request,
@@ -21,7 +22,7 @@ export async function GET(
 
     return NextResponse.json(source);
   } catch (error) {
-    console.error("Error fetching RSS source:", error);
+    logger.error("Error fetching RSS source", error);
     return NextResponse.json(
       { error: "Failed to fetch RSS source" },
       { status: 500 }
@@ -100,7 +101,7 @@ export async function PUT(
 
     return NextResponse.json(source);
   } catch (error) {
-    console.error("Error updating RSS source:", error);
+    logger.error("Error updating RSS source", error);
     return NextResponse.json(
       { error: "Failed to update RSS source" },
       { status: 500 }
@@ -133,7 +134,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting RSS source:", error);
+    logger.error("Error deleting RSS source", error);
     return NextResponse.json(
       { error: "Failed to delete RSS source" },
       { status: 500 }

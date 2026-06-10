@@ -51,15 +51,27 @@ All features from the plan have been successfully implemented. This guide will h
    npx prisma generate
    ```
 
-3. **Run database migrations:**
-   ```bash
-   npx prisma migrate dev --name init
-   ```
+3. **Apply database migrations:**
 
-4. **Enable pgvector extension** (for Supabase/PostgreSQL):
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS vector;
+   A baseline migration already exists at `prisma/migrations/0_init`. Apply all
+   migrations to your database with:
+   ```bash
+   npm run db:migrate:deploy   # prisma migrate deploy (CI/prod/fresh DBs)
    ```
+   For local schema iteration during development, use:
+   ```bash
+   npm run db:migrate          # prisma migrate dev (creates new migrations)
+   # or, for throwaway prototyping only (no migration history):
+   npm run db:push             # prisma db push
+   ```
+   > The baseline `0_init` migration includes `CREATE EXTENSION IF NOT EXISTS "vector"`,
+   > so the pgvector extension is enabled automatically when migrations run. If your
+   > Postgres role lacks permission to create extensions, enable it once manually:
+   > ```sql
+   > CREATE EXTENSION IF NOT EXISTS vector;
+   > ```
+   > Migrations connect via `DIRECT_URL` (not the pooled `DATABASE_URL`) per
+   > `prisma.config.ts`, so `DIRECT_URL` must be set before running them.
 
 ## Step 3: Start Development Server
 
@@ -291,8 +303,17 @@ GET    /api/status                    # Health check & stats
    - Add environment variables from `.env`
 
 3. **Configure Database:**
-   - Add `DATABASE_URL` and `DIRECT_URL`
-   - Run migrations: `npx prisma migrate deploy`
+   - Add `DATABASE_URL` (pooled, runtime) and `DIRECT_URL` (direct, migrations)
+   - Apply migrations as a **separate deploy step**, not during the Vercel build:
+     ```bash
+     npm run db:migrate:deploy   # prisma migrate deploy
+     ```
+   - The build command is intentionally kept as `prisma generate && next build`
+     (no `migrate deploy`). Running migrations inside the build is risky because
+     every Vercel build — including preview/branch builds — would mutate the
+     production database. Instead, gate `migrate deploy` behind an explicit,
+     auditable deploy step (CI job, release script, or one-off command) that runs
+     once per release against `DIRECT_URL`.
 
 4. **Cron Jobs:**
    - Automatically configured via `vercel.json`

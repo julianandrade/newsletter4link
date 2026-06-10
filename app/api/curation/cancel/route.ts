@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentJob, cancelJob } from "@/lib/curation/job-manager";
+import { logger } from "@/lib/logger";
 
 export async function POST() {
   try {
@@ -20,7 +21,7 @@ export async function POST() {
       message: "Curation job cancellation requested",
     });
   } catch (error) {
-    console.error("Error cancelling curation job:", error);
+    logger.error("Error cancelling curation job", error);
     return NextResponse.json(
       { error: "Failed to cancel curation job" },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { isGraphConfigured } from "@/lib/email/graph-client";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +47,11 @@ export async function GET() {
       default: defaultProvider,
     });
   } catch (error) {
-    console.error("Error getting email providers:", error);
+    logger.error("Error getting email providers", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { uploadFile } from "@/lib/supabase/storage";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -81,12 +82,12 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error uploading file:", error);
+    logger.error("Error uploading file", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

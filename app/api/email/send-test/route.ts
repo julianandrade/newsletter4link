@@ -3,6 +3,7 @@ import { sendTestNewsletter, sendEmail, renderNewsletterEmail } from "@/lib/emai
 import { renderTemplateById } from "@/lib/email/template-renderer";
 import { requireOrgContext } from "@/lib/auth/context";
 import { sanitizeBlockHtml, sanitizeImageUrl } from "@/lib/email/sanitize";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -190,7 +191,7 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
-    console.error("Error sending test email:", error);
+    logger.error("Error sending test email", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -202,7 +203,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

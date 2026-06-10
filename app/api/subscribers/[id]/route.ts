@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { unsubscribeUser } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 function authErrorResponse(error: unknown) {
   if (error instanceof Error && error.message.startsWith("Unauthorized")) {
@@ -52,14 +53,14 @@ export async function GET(
       data: subscriber,
     });
   } catch (error) {
-    console.error("Error fetching subscriber:", error);
+    logger.error("Error fetching subscriber", error);
 
     return (
       authErrorResponse(error) ??
       NextResponse.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: "Internal server error",
         },
         { status: 500 }
       )
@@ -110,14 +111,14 @@ export async function PATCH(
       message: "Subscriber updated successfully",
     });
   } catch (error) {
-    console.error("Error updating subscriber:", error);
+    logger.error("Error updating subscriber", error);
 
     return (
       authErrorResponse(error) ??
       NextResponse.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: "Internal server error",
         },
         { status: 500 }
       )
@@ -152,14 +153,14 @@ export async function DELETE(
       message: "Subscriber unsubscribed successfully",
     });
   } catch (error) {
-    console.error("Error unsubscribing user:", error);
+    logger.error("Error unsubscribing user", error);
 
     return (
       authErrorResponse(error) ??
       NextResponse.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: "Internal server error",
         },
         { status: 500 }
       )

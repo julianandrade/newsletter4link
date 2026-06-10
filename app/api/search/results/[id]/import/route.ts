@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +109,7 @@ export async function POST(
       alreadyExisted: false,
     });
   } catch (error) {
-    console.error("Error importing search result:", error);
+    logger.error("Error importing search result", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ error: error.message }, { status: 401 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseUser } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_ORG_ID = "default-org-001";
 
@@ -70,7 +71,7 @@ export async function POST() {
       },
     });
   } catch (error) {
-    console.error("Error joining default organization:", error);
+    logger.error("Error joining default organization", error);
     return NextResponse.json(
       { error: "Failed to join default organization" },
       { status: 500 }

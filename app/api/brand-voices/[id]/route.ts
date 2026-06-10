@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ brandVoice });
   } catch (error) {
-    console.error("Failed to fetch brand voice:", error);
+    logger.error("Failed to fetch brand voice", error);
     return NextResponse.json(
       { error: "Failed to fetch brand voice" },
       { status: 500 }
@@ -127,7 +128,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ brandVoice });
   } catch (error) {
-    console.error("Failed to update brand voice:", error);
+    logger.error("Failed to update brand voice", error);
     return NextResponse.json(
       { error: "Failed to update brand voice" },
       { status: 500 }
@@ -169,7 +170,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to delete brand voice:", error);
+    logger.error("Failed to delete brand voice", error);
     return NextResponse.json(
       { error: "Failed to delete brand voice" },
       { status: 500 }

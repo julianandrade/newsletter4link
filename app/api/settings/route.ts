@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext, hasRole } from "@/lib/auth/context";
 import { getOrgSettings, updateOrgSettings } from "@/lib/settings";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
     const settings = await getOrgSettings(ctx.db);
     return NextResponse.json(settings);
   } catch (error) {
-    console.error("Error fetching settings:", error);
+    logger.error("Error fetching settings", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(
@@ -128,7 +129,7 @@ export async function PUT(request: Request) {
     const settings = await updateOrgSettings(ctx.db, updates);
     return NextResponse.json(settings);
   } catch (error) {
-    console.error("Error updating settings:", error);
+    logger.error("Error updating settings", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

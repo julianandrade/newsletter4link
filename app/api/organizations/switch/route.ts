@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthContext, setSelectedOrgId } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
       message: `Switched to ${membership.organization.name}`,
     });
   } catch (error) {
-    console.error("Error switching organization:", error);
+    logger.error("Error switching organization", error);
     return NextResponse.json(
       { error: "Failed to switch organization" },
       { status: 500 }

@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { getRunningJob, cancelJob, JobType } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
 
 export async function POST() {
   try {
@@ -34,7 +35,7 @@ export async function POST() {
       message: "Generation job cancellation requested",
     });
   } catch (error) {
-    console.error("Error cancelling generation job:", error);
+    logger.error("Error cancelling generation job", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -21,7 +22,7 @@ export async function GET() {
       role: ctx.membership.role,
     });
   } catch (error) {
-    console.error("Error fetching theme settings:", error);
+    logger.error("Error fetching theme settings", error);
     return NextResponse.json(
       { error: "Failed to fetch theme settings" },
       { status: 500 }
@@ -59,7 +60,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ userTheme: membership.theme ?? null });
   } catch (error) {
-    console.error("Error updating theme settings:", error);
+    logger.error("Error updating theme settings", error);
     return NextResponse.json(
       { error: "Failed to update theme settings" },
       { status: 500 }

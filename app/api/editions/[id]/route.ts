@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { EditionStatus, Prisma } from "@prisma/client";
+import { logger } from "@/lib/logger";
 
 /**
  * GET /api/editions/:id
@@ -98,12 +99,12 @@ export async function GET(
       data: transformedEdition,
     });
   } catch (error) {
-    console.error("Error fetching edition:", error);
+    logger.error("Error fetching edition", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -367,12 +368,12 @@ export async function PATCH(
       message: "Edition updated successfully",
     });
   } catch (error) {
-    console.error("Error updating edition:", error);
+    logger.error("Error updating edition", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -426,12 +427,12 @@ export async function DELETE(
       message: "Edition deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting edition:", error);
+    logger.error("Error deleting edition", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

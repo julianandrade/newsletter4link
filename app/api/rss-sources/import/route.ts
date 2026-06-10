@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseOPML, fetchOPML } from "@/lib/opml/parser";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 interface ImportRequest {
   opmlContent?: string;
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    console.error("Error importing OPML:", error);
+    logger.error("Error importing OPML", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

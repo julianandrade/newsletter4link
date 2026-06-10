@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -20,7 +21,7 @@ export async function GET() {
 
     return NextResponse.json(templates);
   } catch (error) {
-    console.error("Error fetching templates:", error);
+    logger.error("Error fetching templates", error);
     return NextResponse.json(
       { error: "Failed to fetch templates" },
       { status: 500 }
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(template, { status: 201 });
   } catch (error) {
-    console.error("Error creating template:", error);
+    logger.error("Error creating template", error);
     return NextResponse.json(
       { error: "Failed to create template" },
       { status: 500 }

@@ -6,9 +6,13 @@ import {
   getAvailableProviderNames,
 } from "@/lib/search/providers";
 import { batchAnalyzeResults, filterAndSortResults } from "@/lib/search/result-analyzer";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Allow up to 60 seconds for search + analysis
+
+// Ad-hoc search runs LLM query expansion + per-result LLM analysis + paid provider calls.
+const RATE_LIMIT = { limit: 20, windowMs: 5 * 60 * 1000 };
 
 /**
  * POST /api/search/query
@@ -17,6 +21,21 @@ export const maxDuration = 60; // Allow up to 60 seconds for search + analysis
 export async function POST(request: Request) {
   try {
     const ctx = await requireOrgContext();
+
+    const rl = checkRateLimit(
+      rateLimitKey([
+        ctx.organization.id,
+        ctx.membership.supabaseUserId,
+        "search:query",
+      ]),
+      RATE_LIMIT
+    );
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please retry shortly." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      );
+    }
 
     const body = await request.json();
     const { query, maxResults = 10, providers } = body;

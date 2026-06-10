@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, hasRole, inviteToOrganization } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +74,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Error fetching members:", error);
+    logger.error("Error fetching members", error);
     return NextResponse.json(
       { error: "Failed to fetch members" },
       { status: 500 }
@@ -165,7 +166,7 @@ export async function POST(
       message: `Invitation sent to ${email}`,
     });
   } catch (error) {
-    console.error("Error inviting member:", error);
+    logger.error("Error inviting member", error);
     return NextResponse.json(
       { error: "Failed to send invitation" },
       { status: 500 }

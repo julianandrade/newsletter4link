@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/db";
 import { config } from "@/lib/config";
+import { logger } from "@/lib/logger";
 
 // Resend webhook event types
 type ResendEventType =
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
     // Fail closed: this route is public, so an unset secret must not
     // mean unverified events get processed
     if (!webhookSecret) {
-      console.error("RESEND_WEBHOOK_SECRET is not configured; rejecting webhook");
+      logger.error("RESEND_WEBHOOK_SECRET is not configured; rejecting webhook");
       return NextResponse.json(
         { error: "Webhook not configured" },
         { status: 503 }
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     const svixSignature = request.headers.get("svix-signature");
 
     if (!svixId || !svixTimestamp || !svixSignature) {
-      console.warn("Missing webhook signature headers");
+      logger.warn("Missing webhook signature headers");
       return NextResponse.json({ error: "Missing signature" }, { status: 401 });
     }
 
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       Date.now() / 1000 - Number(svixTimestamp)
     );
     if (!Number.isFinite(timestampAge) || timestampAge > TIMESTAMP_TOLERANCE_SECONDS) {
-      console.warn("Webhook timestamp outside tolerance");
+      logger.warn("Webhook timestamp outside tolerance");
       return NextResponse.json({ error: "Invalid timestamp" }, { status: 401 });
     }
 
@@ -122,18 +123,18 @@ export async function POST(request: NextRequest) {
     );
 
     if (!isValid) {
-      console.warn("Invalid webhook signature");
+      logger.warn("Invalid webhook signature");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     const event: ResendWebhookEvent = JSON.parse(payload);
-    console.log(`Received Resend webhook: ${event.type}`);
+    logger.info(`Received Resend webhook: ${event.type}`);
 
     // Map to our event type
     const eventType = mapEventType(event.type);
     if (!eventType) {
       // Event type we don't track (e.g., email.sent, email.delivery_delayed)
-      console.log(`Ignoring event type: ${event.type}`);
+      logger.info(`Ignoring event type: ${event.type}`);
       return NextResponse.json({ received: true });
     }
 
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
     const recipientEmail = to[0]; // Newsletter emails are sent individually
 
     if (!recipientEmail) {
-      console.warn("No recipient email in webhook event");
+      logger.warn("No recipient email in webhook event");
       return NextResponse.json({ received: true });
     }
 
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!subscriber) {
-      console.warn(`Subscriber not found for email: ${recipientEmail}`);
+      logger.warn(`Subscriber not found for email: ${recipientEmail}`);
       return NextResponse.json({ received: true });
     }
 
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!sentEvent) {
-      console.warn(`No SENT event found for messageId: ${messageId}`);
+      logger.warn(`No SENT event found for messageId: ${messageId}`);
       return NextResponse.json({ received: true });
     }
 
@@ -199,13 +200,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(
-      `Created ${eventType} event for subscriber ${subscriber.email}`
-    );
+    logger.info(`Created ${eventType} event for subscriber ${subscriber.email}`);
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Webhook processing error:", error);
+    logger.error("Webhook processing error", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

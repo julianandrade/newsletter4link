@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateProject, deleteProject } from "@/lib/queries";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 function authErrorResponse(error: unknown) {
   if (error instanceof Error && error.message.startsWith("Unauthorized")) {
@@ -43,14 +44,14 @@ export async function GET(
       data: project,
     });
   } catch (error) {
-    console.error("Error fetching project:", error);
+    logger.error("Error fetching project", error);
 
     return (
       authErrorResponse(error) ??
       NextResponse.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: "Internal server error",
         },
         { status: 500 }
       )
@@ -100,14 +101,14 @@ export async function PATCH(
       message: "Project updated successfully",
     });
   } catch (error) {
-    console.error("Error updating project:", error);
+    logger.error("Error updating project", error);
 
     return (
       authErrorResponse(error) ??
       NextResponse.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: "Internal server error",
         },
         { status: 500 }
       )
@@ -143,14 +144,14 @@ export async function DELETE(
       message: "Project deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting project:", error);
+    logger.error("Error deleting project", error);
 
     return (
       authErrorResponse(error) ??
       NextResponse.json(
         {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: "Internal server error",
         },
         { status: 500 }
       )

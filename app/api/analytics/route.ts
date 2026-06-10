@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -450,7 +451,7 @@ export async function GET(request: NextRequest) {
       engagementHealth,
     });
   } catch (error) {
-    console.error("Analytics API error:", error);
+    logger.error("Analytics API error", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
       return NextResponse.json(

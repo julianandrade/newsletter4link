@@ -165,17 +165,36 @@ NEXT_PUBLIC_APP_URL=https://newsletter4link.vercel.app  # Production
 
 **Schema Location:** `prisma/schema.prisma`
 
-**Migration Commands:**
+**Migrations:** This project uses **Prisma migrations** (not ad-hoc `db push`). A baseline
+migration exists at `prisma/migrations/0_init/migration.sql` (full schema + enums + indexes
++ FKs + `CREATE EXTENSION IF NOT EXISTS "vector"`). The old root SQL scripts
+(`init-database.sql`, `add-missing-column.sql`) are archived under `prisma/legacy/` and are
+superseded by this baseline — do not run them.
+
 ```bash
-# Run migrations
-npx prisma db push
+# Apply migrations to a DB (CI / prod / fresh local) — run as a SEPARATE deploy step
+npm run db:migrate:deploy   # prisma migrate deploy
 
-# Generate client
+# Create + apply a new migration during local development
+npm run db:migrate          # prisma migrate dev
+
+# Throwaway prototyping only (no migration history) — avoid on shared/prod DBs
+npm run db:push             # prisma db push
+
+# Generate client / open Studio
 npx prisma generate
-
-# Open Prisma Studio
 npx prisma studio
 ```
+
+> Migrations connect via `DIRECT_URL` (per `prisma.config.ts`), bypassing the pooler.
+> `migrate deploy` is intentionally NOT part of the `build` script (`prisma generate &&
+> next build`) — running it during a Vercel build would mutate prod on every (incl.
+> preview) build. Run it as an explicit, auditable release step.
+>
+> Tooling note (Prisma 7.3+): regenerating the baseline offline requires a (dummy is fine)
+> `DIRECT_URL` to be set, and uses `--to-schema` (the old `--to-schema-datamodel` flag was
+> removed):
+> `DIRECT_URL=postgresql://u:p@localhost:5432/db npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`
 
 ---
 

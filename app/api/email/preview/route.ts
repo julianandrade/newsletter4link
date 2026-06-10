@@ -3,6 +3,7 @@ import { renderNewsletterEmail } from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -234,7 +235,7 @@ export async function POST(request: Request) {
       template: usedTemplate,
     });
   } catch (error) {
-    console.error("Error generating preview:", error);
+    logger.error("Error generating preview", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {
       return NextResponse.json({ success: false, error: error.message }, { status: 401 });
@@ -243,7 +244,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateArticleStatus } from "@/lib/queries";
+import { logger } from "@/lib/logger";
 
 /**
  * POST /api/articles/:id/approve
@@ -20,12 +21,12 @@ export async function POST(
       message: "Article approved successfully",
     });
   } catch (error) {
-    console.error("Error approving article:", error);
+    logger.error("Error approving article", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       },
       { status: 500 }
     );
