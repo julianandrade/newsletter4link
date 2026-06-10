@@ -2,6 +2,7 @@ import { render } from "@react-email/components";
 import NewsletterEmail from "@/emails/newsletter";
 import { prisma } from "@/lib/db";
 import { sendEmailViaProvider, getProviderSettings } from "./provider";
+import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 interface Article {
   title: string;
@@ -73,7 +74,7 @@ export async function renderNewsletterEmail(
   const html = await render(
     NewsletterEmail({
       ...data,
-      subscriberId,
+      unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
       previewText: `Week ${data.week}, ${data.year}: ${data.articles[0]?.title || "AI & Tech Updates"}`,
       logoUrl: branding.logoUrl,
       bannerUrl: branding.bannerUrl,

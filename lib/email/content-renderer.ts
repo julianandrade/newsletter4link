@@ -27,7 +27,9 @@ export interface ContentRenderContext {
   projects: Project[];
   week: number;
   year: number;
-  subscriberId?: string;
+  // Pre-built signed URL; must be generated server-side (this module is
+  // imported by client components, so it cannot sign tokens itself)
+  unsubscribeUrl?: string;
 }
 
 /**
@@ -100,17 +102,6 @@ export function renderProjectsHtml(projects: Project[]): string {
 }
 
 /**
- * Generate unsubscribe URL
- */
-function getUnsubscribeUrl(subscriberId?: string): string {
-  const baseUrl = config.app.url;
-  if (subscriberId) {
-    return `${baseUrl}/unsubscribe?id=${subscriberId}`;
-  }
-  return `${baseUrl}/unsubscribe`;
-}
-
-/**
  * Replace content merge tags in HTML with rendered content
  * This is used after exporting HTML from Unlayer to replace
  * {{articles}}, {{projects}}, etc. with actual content
@@ -119,7 +110,7 @@ export function replaceContentMergeTags(
   html: string,
   context: ContentRenderContext
 ): string {
-  const { articles, projects, week, year, subscriberId } = context;
+  const { articles, projects, week, year, unsubscribeUrl } = context;
 
   let rendered = html;
 
@@ -136,7 +127,7 @@ export function replaceContentMergeTags(
   // Replace unsubscribe URL
   rendered = rendered.replace(
     /\{\{unsubscribe_url\}\}/g,
-    getUnsubscribeUrl(subscriberId)
+    unsubscribeUrl || `${config.app.url}/unsubscribe`
   );
 
   return rendered;

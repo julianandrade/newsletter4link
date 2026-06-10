@@ -34,7 +34,7 @@ interface NewsletterEmailProps {
   projects: Project[];
   week: number;
   year: number;
-  subscriberId?: string;
+  unsubscribeUrl?: string;
   previewText?: string;
   logoUrl?: string;
   bannerUrl?: string;
@@ -45,7 +45,7 @@ export const NewsletterEmail = ({
   projects = [],
   week = 1,
   year = 2026,
-  subscriberId = "",
+  unsubscribeUrl = "",
   previewText = "This week's top AI and tech stories",
   logoUrl,
   bannerUrl,
@@ -185,7 +185,7 @@ export const NewsletterEmail = ({
             </Text>
             <Text style={footerText}>
               <Link
-                href={`${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?id=${subscriberId}`}
+                href={unsubscribeUrl || `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe`}
                 style={footerLink}
               >
                 Unsubscribe
