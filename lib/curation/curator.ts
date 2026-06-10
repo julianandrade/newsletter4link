@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { fetchAllRSSFeeds, fetchRSSFeedsByIds } from "./rss-collector";
 import { generateEmbedding } from "@/lib/ai/embeddings";
+import { setArticleEmbedding } from "@/lib/db/embedding";
 import { checkForDuplicates } from "./deduplicator";
 import {
   scoreArticleRelevance,
@@ -87,20 +88,20 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
           result.lowScore++;
 
           // Still save to database but mark as rejected
-          await prisma.article.create({
+          const rejected = await prisma.article.create({
             data: {
               sourceUrl: article.link,
               title: article.title,
               content: article.content,
               author: article.author,
               publishedAt: article.publishedAt,
-              embedding,
               relevanceScore,
               status: "REJECTED",
               category: [],
               organizationId,
             },
           });
+          await setArticleEmbedding(rejected.id, embedding);
 
           continue;
         }
@@ -117,14 +118,13 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
         );
 
         // Save to database as pending review
-        await prisma.article.create({
+        const created = await prisma.article.create({
           data: {
             sourceUrl: article.link,
             title: article.title,
             content: article.content,
             author: article.author,
             publishedAt: article.publishedAt,
-            embedding,
             relevanceScore,
             summary,
             category: categories,
@@ -132,6 +132,7 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
             organizationId,
           },
         });
+        await setArticleEmbedding(created.id, embedding);
 
         console.log(`  ✓ Article curated successfully`);
         result.curated++;
@@ -329,20 +330,20 @@ export async function runCurationPipelineWithStreaming(
           result.lowScore++;
 
           // Still save to database but mark as rejected
-          await prisma.article.create({
+          const rejected = await prisma.article.create({
             data: {
               sourceUrl: article.link,
               title: article.title,
               content: article.content,
               author: article.author,
               publishedAt: article.publishedAt,
-              embedding,
               relevanceScore,
               status: "REJECTED",
               category: [],
               organizationId,
             },
           });
+          await setArticleEmbedding(rejected.id, embedding);
 
           if (jobId) {
             await updateJobStats(jobId, { lowScore: result.lowScore });
@@ -366,14 +367,13 @@ export async function runCurationPipelineWithStreaming(
         );
 
         // Save to database as pending review
-        await prisma.article.create({
+        const created = await prisma.article.create({
           data: {
             sourceUrl: article.link,
             title: article.title,
             content: article.content,
             author: article.author,
             publishedAt: article.publishedAt,
-            embedding,
             relevanceScore,
             summary,
             category: categories,
@@ -381,6 +381,7 @@ export async function runCurationPipelineWithStreaming(
             organizationId,
           },
         });
+        await setArticleEmbedding(created.id, embedding);
 
         onProgress({
           stage: "curated",
@@ -512,7 +513,6 @@ export async function curateArticle(
         title,
         content,
         publishedAt: new Date(),
-        embedding,
         relevanceScore,
         summary,
         category: categories,
@@ -523,6 +523,7 @@ export async function curateArticle(
         organizationId,
       },
     });
+    await setArticleEmbedding(article.id, embedding);
 
     return {
       success: true,

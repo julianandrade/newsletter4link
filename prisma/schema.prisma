@@ -207,7 +207,12 @@ model Article {
   publishedAt DateTime
 
   // AI-generated content
-  embedding      Float[] // pgvector embedding
+  // Stored as a pgvector column (1536 dims, cosine). Written via raw SQL
+  // (lib/db/embedding.ts) and queried with the <=> operator (deduplicator.ts)
+  // because Prisma's typed API cannot read/write Unsupported() columns.
+  // The HNSW index for this column is created in the pgvector migration, not
+  // here (Prisma cannot express indexes on Unsupported() columns).
+  embedding      Unsupported("vector(1536)")?
   relevanceScore Float?
   summary        String?  @db.Text
   category       String[]

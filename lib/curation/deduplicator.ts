@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
-import { cosineSimilarity } from "@/lib/ai/embeddings";
 import { config } from "@/lib/config";
+import { isStorableEmbedding, toVectorLiteral } from "@/lib/db/embedding";
 
 /**
  * Check if an article is a duplicate based on URL (within an organization)
@@ -26,51 +26,38 @@ export async function findSimilarArticles(
   organizationId: string,
   threshold: number = config.curation.vectorSimilarityThreshold
 ): Promise<Array<{ id: string; title: string; similarity: number }>> {
-  // Get all articles from the last 30 days (to limit comparison set)
+  // Wrong-dimension/empty embeddings can't be compared against the vector
+  // column — treat them as having no matches.
+  if (!isStorableEmbedding(embedding)) {
+    return [];
+  }
+
+  // Limit the comparison set to the last 30 days. Similarity is cosine
+  // similarity (1 - cosine distance); the HNSW index serves the ORDER BY.
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const recentArticles = await prisma.article.findMany({
-    where: {
-      organizationId,
-      createdAt: {
-        gte: thirtyDaysAgo,
-      },
-      embedding: {
-        isEmpty: false,
-      },
-    },
-    select: {
-      id: true,
-      title: true,
-      embedding: true,
-    },
-  });
+  const vectorLiteral = toVectorLiteral(embedding);
 
-  const similarArticles: Array<{
-    id: string;
-    title: string;
-    similarity: number;
-  }> = [];
+  const rows = await prisma.$queryRaw<
+    Array<{ id: string; title: string; similarity: number }>
+  >`
+    SELECT "id", "title", 1 - ("embedding" <=> ${vectorLiteral}::vector) AS "similarity"
+    FROM "Article"
+    WHERE "organizationId" = ${organizationId}
+      AND "createdAt" >= ${thirtyDaysAgo}
+      AND "embedding" IS NOT NULL
+      AND 1 - ("embedding" <=> ${vectorLiteral}::vector) >= ${threshold}
+    ORDER BY "embedding" <=> ${vectorLiteral}::vector ASC
+    LIMIT 20
+  `;
 
-  for (const article of recentArticles) {
-    if (article.embedding && article.embedding.length > 0) {
-      const similarity = cosineSimilarity(embedding, article.embedding);
-
-      if (similarity >= threshold) {
-        similarArticles.push({
-          id: article.id,
-          title: article.title,
-          similarity,
-        });
-      }
-    }
-  }
-
-  // Sort by similarity (highest first)
-  similarArticles.sort((a, b) => b.similarity - a.similarity);
-
-  return similarArticles;
+  // $queryRaw can surface numeric columns as strings depending on the driver.
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    similarity: Number(row.similarity),
+  }));
 }
 
 /**

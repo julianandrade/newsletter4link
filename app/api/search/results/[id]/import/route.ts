@@ -89,7 +89,8 @@ export async function POST(
         summary: searchResult.aiSummary,
         category: searchResult.aiTopics,
         status: "PENDING_REVIEW",
-        embedding: [],
+        // embedding is a pgvector column written via raw SQL only; imported
+        // articles have none and the column stays NULL.
       },
     });
 
