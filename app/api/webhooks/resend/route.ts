@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import { prisma } from "@/lib/db";
 import { config } from "@/lib/config";
+import { verifySvixSignature } from "@/lib/email/resend-webhook";
 
 // Resend webhook event types
 type ResendEventType =
@@ -52,68 +52,36 @@ function mapEventType(
   }
 }
 
-// Verify webhook signature
-function verifySignature(
-  payload: string,
-  signature: string,
-  secret: string
-): boolean {
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(payload)
-    .digest("hex");
-
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
-}
-
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = config.email.resend.webhookSecret;
 
+    // Fail closed: without a secret we cannot authenticate the sender
+    if (!webhookSecret) {
+      console.error(
+        "RESEND_WEBHOOK_SECRET is not configured; rejecting webhook. Set it from the Resend dashboard to enable email tracking."
+      );
+      return NextResponse.json(
+        { error: "Webhook not configured" },
+        { status: 503 }
+      );
+    }
+
     // Get raw body for signature verification
     const payload = await request.text();
 
-    // Verify signature if webhook secret is configured
-    if (webhookSecret) {
-      const signature = request.headers.get("svix-signature");
+    const svixHeaders = {
+      svixId: request.headers.get("svix-id"),
+      svixTimestamp: request.headers.get("svix-timestamp"),
+      svixSignature: request.headers.get("svix-signature"),
+    };
 
-      if (!signature) {
-        console.warn("Missing webhook signature");
-        return NextResponse.json(
-          { error: "Missing signature" },
-          { status: 401 }
-        );
-      }
-
-      // Resend uses Svix for webhooks - extract the signature from the header
-      // Format: v1,<signature>
-      const signatureParts = signature.split(",");
-      const v1Signature = signatureParts
-        .find((part) => part.startsWith("v1,"))
-        ?.replace("v1,", "");
-
-      if (v1Signature) {
-        const svixId = request.headers.get("svix-id") || "";
-        const svixTimestamp = request.headers.get("svix-timestamp") || "";
-        const signedPayload = `${svixId}.${svixTimestamp}.${payload}`;
-
-        const isValid = verifySignature(
-          signedPayload,
-          v1Signature,
-          webhookSecret
-        );
-
-        if (!isValid) {
-          console.warn("Invalid webhook signature");
-          return NextResponse.json(
-            { error: "Invalid signature" },
-            { status: 401 }
-          );
-        }
-      }
+    if (!verifySvixSignature(svixHeaders, payload, webhookSecret)) {
+      console.warn("Invalid or missing webhook signature");
+      return NextResponse.json(
+        { error: "Invalid signature" },
+        { status: 401 }
+      );
     }
 
     const event: ResendWebhookEvent = JSON.parse(payload);

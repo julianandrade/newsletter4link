@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { config } from "@/lib/config";
 import { markEditionAsSent } from "@/lib/queries";
 import { createTenantClient } from "@/lib/db/tenant";
+import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -15,12 +16,8 @@ export const maxDuration = 300; // 5 minutes
  */
 export async function GET(request: Request) {
   try {
-    // Verify cron secret (optional but recommended)
-    const authHeader = request.headers.get("authorization");
-    if (config.cron.secret) {
-      if (authHeader !== `Bearer ${config.cron.secret}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+    if (!isAuthorizedCronRequest(request)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     console.log("[CRON] Starting weekly newsletter send for all organizations...");

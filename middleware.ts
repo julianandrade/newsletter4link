@@ -3,7 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
   // Public routes that don't need auth
-  const publicPaths = ["/login", "/unsubscribe", "/api/unsubscribe", "/api/cron"];
+  // /api/unsubscribe is token-verified, /api/cron is bearer-token-verified,
+  // /api/webhooks is signature-verified - each route enforces its own auth
+  const publicPaths = [
+    "/login",
+    "/unsubscribe",
+    "/api/unsubscribe",
+    "/api/cron",
+    "/api/webhooks",
+  ];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );

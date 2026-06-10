@@ -109,14 +109,19 @@ export const OPML_PRESETS = [
   },
 ] as const;
 
-// Validation helper
+// Validation helper - called at server startup via instrumentation.ts
 export function validateConfig() {
-  const required = {
+  const required: Record<string, string | undefined> = {
     "DATABASE_URL": config.database.url,
     "ANTHROPIC_API_KEY": config.ai.anthropic.apiKey,
     "OPENAI_API_KEY": config.ai.openai.apiKey,
     "RESEND_API_KEY": config.email.resend.apiKey,
   };
+
+  if (config.app.env === "production") {
+    // Cron endpoints and unsubscribe-link signing fail closed without this
+    required["CRON_SECRET"] = config.cron.secret;
+  }
 
   const missing = Object.entries(required)
     .filter(([_, value]) => !value)
@@ -126,6 +131,16 @@ export function validateConfig() {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}\n` +
       `Please check your .env file and ensure all required variables are set.`
+    );
+  }
+
+  if (
+    config.app.env === "production" &&
+    config.email.provider === "resend" &&
+    !config.email.resend.webhookSecret
+  ) {
+    console.warn(
+      "RESEND_WEBHOOK_SECRET is not set: email open/click/bounce tracking webhooks will be rejected."
     );
   }
 }
