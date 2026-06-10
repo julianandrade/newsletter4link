@@ -33,13 +33,11 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      # ESLint is not configured in this project (no eslint dependency or config
-      # file present), so `next lint` is interactive/non-functional in CI.
-      # This step is non-blocking until ESLint is set up; remove
-      # `continue-on-error` once a flat config + eslint deps are added.
+      # ESLint flat config (eslint.config.mjs). Blocking on errors; the many
+      # existing warnings (any-types, unused vars, React Compiler hints) do not
+      # fail the build.
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Type check
         run: npx tsc --noEmit

@@ -453,7 +453,7 @@ export default function SearchPage() {
             case "progress": {
               // Handle different progress stages
               const stage = data.stage || "processing";
-              let progressInfo: SearchProgress = {
+              const progressInfo: SearchProgress = {
                 stage,
                 progress: data.progress || 0,
                 message: data.message || "Processing...",
