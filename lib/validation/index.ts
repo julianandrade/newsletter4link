@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { RateLimitError } from "@/lib/rate-limit";
 
 /**
  * Thrown when a request body fails schema validation. Route catch blocks
@@ -46,6 +47,16 @@ export async function parseJsonBody<T extends z.ZodTypeAny>(
  * Forbidden -> 403, fallback -> 500 mapping used across API routes.
  */
 export function errorResponse(error: unknown): NextResponse {
+  if (error instanceof RateLimitError) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      {
+        status: 429,
+        headers: { "Retry-After": String(error.retryAfterSec) },
+      }
+    );
+  }
+
   if (error instanceof ValidationError) {
     return NextResponse.json(
       {

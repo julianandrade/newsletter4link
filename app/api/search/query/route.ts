@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { enforceRateLimit, RateLimitError, RATE_LIMITS } from "@/lib/rate-limit";
 import { processQuery, mapTimeScopeToTimeRange } from "@/lib/search/query-processor";
 import {
   searchMultiProvider,
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
+
+    enforceRateLimit(`ai-search:${ctx.organization.id}`, RATE_LIMITS.ai);
 
     // Get available providers
     const availableProviders = getAvailableProviderNames();
@@ -93,6 +96,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Search error:", error);
+
+    if (error instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 429, headers: { "Retry-After": String(error.retryAfterSec) } }
+      );
+    }
 
     if (error instanceof Error) {
       if (error.message.includes("Unauthorized")) {

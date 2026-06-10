@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
+import { enforceRateLimit, RateLimitError, RATE_LIMITS } from "@/lib/rate-limit";
 import { generateNewsletter, GeneratedNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+    enforceRateLimit(`ai-generate:${ctx.organization.id}`, RATE_LIMITS.ai);
 
     const body = await request.json();
     const { editionId, articleIds, brandVoiceId } = body;
@@ -140,6 +142,12 @@ export async function POST(request: NextRequest) {
       draftId: draft.id,
     });
   } catch (error) {
+    if (error instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 429, headers: { "Retry-After": String(error.retryAfterSec) } }
+      );
+    }
     console.error("Newsletter generation failed:", error);
     return NextResponse.json(
       { error: "Failed to generate newsletter" },

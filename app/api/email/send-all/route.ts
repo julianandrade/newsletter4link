@@ -13,6 +13,7 @@ import {
   ValidationError,
   emailProviderField,
 } from "@/lib/validation";
+import { enforceRateLimit, RateLimitError, RATE_LIMITS } from "@/lib/rate-limit";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 import { z } from "zod";
@@ -78,6 +79,8 @@ interface CustomData {
 export async function POST(request: Request) {
   try {
     const { db, organization } = await requireOrgContext();
+    enforceRateLimit(`email-send:${organization.id}`, RATE_LIMITS.emailSend);
+
     const { editionId, templateId, customData, subscriberIds, emails, provider, draftId } =
       await parseJsonBody(request, sendAllSchema);
 
@@ -467,9 +470,10 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    // Validation/auth failures are client errors, not incidents to page on
+    // Validation/auth/rate-limit failures are client errors, not incidents
     const isClientError =
       error instanceof ValidationError ||
+      error instanceof RateLimitError ||
       (error instanceof Error &&
         (error.message.startsWith("Unauthorized") ||
           error.message.startsWith("Forbidden")));

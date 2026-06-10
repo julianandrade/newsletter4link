@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sendTestNewsletter, sendEmail, renderNewsletterEmail } from "@/lib/email/sender";
 import { requireOrgContext } from "@/lib/auth/context";
 import { parseJsonBody, errorResponse, emailField } from "@/lib/validation";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { renderTemplateById } from "@/lib/email/template-renderer";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,10 @@ interface CustomData {
  */
 export async function POST(request: Request) {
   try {
-    const { db } = await requireOrgContext();
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
+    enforceRateLimit(`email-test:${ctx.organization.id}`, RATE_LIMITS.emailTest);
+
     const { email, editionId, templateId, customData } = await parseJsonBody(
       request,
       sendTestSchema
