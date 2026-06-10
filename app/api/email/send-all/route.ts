@@ -7,10 +7,28 @@ import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
 import { reportError } from "@/lib/observability/report";
+import {
+  parseJsonBody,
+  errorResponse,
+  ValidationError,
+  emailProviderField,
+} from "@/lib/validation";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const sendAllSchema = z.object({
+  editionId: z.string().trim().min(1).optional(),
+  templateId: z.string().trim().min(1).optional(),
+  // Editor-generated payload; validated structurally by downstream renderers
+  customData: z.any().optional(),
+  subscriberIds: z.array(z.string().trim().min(1)).optional(),
+  emails: z.array(z.string()).optional(),
+  provider: emailProviderField.optional(),
+  draftId: z.string().trim().min(1).optional(),
+});
 export const maxDuration = 300; // 5 minutes
 
 interface CustomBlock {
@@ -60,16 +78,8 @@ interface CustomData {
 export async function POST(request: Request) {
   try {
     const { db, organization } = await requireOrgContext();
-    const body = await request.json();
-    const { editionId, templateId, customData, subscriberIds, emails, provider, draftId } = body;
-
-    // Validate provider if specified
-    if (provider && !["resend", "graph"].includes(provider)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid provider. Must be 'resend' or 'graph'." },
-        { status: 400 }
-      );
-    }
+    const { editionId, templateId, customData, subscriberIds, emails, provider, draftId } =
+      await parseJsonBody(request, sendAllSchema);
 
     // Check if specified provider is configured
     if (provider && !isSpecificProviderConfigured(provider)) {
@@ -457,15 +467,18 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    reportError(error, { route: "email/send-all" });
+    // Validation/auth failures are client errors, not incidents to page on
+    const isClientError =
+      error instanceof ValidationError ||
+      (error instanceof Error &&
+        (error.message.startsWith("Unauthorized") ||
+          error.message.startsWith("Forbidden")));
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    if (!isClientError) {
+      reportError(error, { route: "email/send-all" });
+    }
+
+    return errorResponse(error);
   }
 }
 

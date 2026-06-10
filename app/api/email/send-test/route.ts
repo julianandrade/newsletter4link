@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { sendTestNewsletter, sendEmail, renderNewsletterEmail } from "@/lib/email/sender";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
+import { parseJsonBody, errorResponse, emailField } from "@/lib/validation";
 import { renderTemplateById } from "@/lib/email/template-renderer";
 
 export const dynamic = "force-dynamic";
+
+const sendTestSchema = z.object({
+  email: emailField,
+  editionId: z.string().trim().min(1).optional(),
+  templateId: z.string().trim().min(1).optional(),
+  // Editor-generated payload; validated structurally by downstream renderers
+  customData: z.any().optional(),
+});
 
 interface CustomBlock {
   id: string;
@@ -41,30 +51,11 @@ interface CustomData {
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { email, editionId, templateId, customData } = body;
-
-    if (!email) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Email address is required",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid email format",
-        },
-        { status: 400 }
-      );
-    }
+    const { db } = await requireOrgContext();
+    const { email, editionId, templateId, customData } = await parseJsonBody(
+      request,
+      sendTestSchema
+    );
 
     let emailData: any;
     let week: number;
@@ -86,8 +77,8 @@ export async function POST(request: Request) {
       week = customData.week;
       year = customData.year;
     } else {
-      // Get approved articles
-      const articles = await prisma.article.findMany({
+      // Get approved articles (tenant-scoped)
+      const articles = await db.article.findMany({
         where: { status: "APPROVED" },
         orderBy: [
           { relevanceScore: "desc" },
@@ -96,8 +87,8 @@ export async function POST(request: Request) {
         take: 10,
       });
 
-      // Get featured projects
-      const projects = await prisma.project.findMany({
+      // Get featured projects (tenant-scoped)
+      const projects = await db.project.findMany({
         where: { featured: true },
         orderBy: { projectDate: "desc" },
         take: 3,
@@ -189,14 +180,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Error sending test email:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 

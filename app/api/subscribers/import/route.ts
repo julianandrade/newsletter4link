@@ -1,7 +1,31 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/context";
+import {
+  parseJsonBody,
+  errorResponse,
+  emailField,
+  languageField,
+  styleField,
+} from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+// Each row is validated individually below so one bad row doesn't reject the
+// whole import; here we only require the top-level shape and a sane size cap.
+const importSchema = z.object({
+  subscribers: z
+    .array(z.record(z.string(), z.unknown()))
+    .min(1, "Provide at least one subscriber")
+    .max(10000, "Too many subscribers in a single import (max 10000)"),
+});
+
+const importRowSchema = z.object({
+  email: emailField,
+  name: z.string().trim().max(200).optional(),
+  preferredLanguage: languageField.optional(),
+  preferredStyle: styleField.optional(),
+});
 
 /**
  * POST /api/subscribers/import
@@ -18,18 +42,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const { db } = await requireOrgContext();
-    const body = await request.json();
-    const { subscribers } = body;
-
-    if (!Array.isArray(subscribers)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid data format. Expected array of subscribers.",
-        },
-        { status: 400 }
-      );
-    }
+    const { subscribers } = await parseJsonBody(request, importSchema);
 
     const results = {
       success: 0,
@@ -38,28 +51,23 @@ export async function POST(request: Request) {
       errors: [] as string[],
     };
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const row of subscribers) {
+      const parsed = importRowSchema.safeParse(row);
 
-    for (const sub of subscribers) {
-      const { email, name, preferredLanguage, preferredStyle } = sub;
-
-      // Validate email
-      if (!email || typeof email !== "string") {
+      if (!parsed.success) {
         results.failed++;
-        results.errors.push(`Invalid email: ${email || "missing"}`);
+        const rawEmail =
+          typeof row.email === "string" ? row.email : "missing";
+        results.errors.push(`Invalid row (${rawEmail}): ${parsed.error.issues[0]?.message ?? "validation error"}`);
         continue;
       }
 
-      if (!emailRegex.test(email)) {
-        results.failed++;
-        results.errors.push(`Invalid email format: ${email}`);
-        continue;
-      }
+      const { email, name, preferredLanguage, preferredStyle } = parsed.data;
 
       try {
-        // Check if subscriber exists in this org
+        // Check if subscriber exists in this org (email already normalized)
         const existing = await db.subscriber.findFirst({
-          where: { email: email.toLowerCase().trim() },
+          where: { email },
         });
 
         if (existing) {
@@ -70,7 +78,7 @@ export async function POST(request: Request) {
         // Create subscriber
         await db.subscriber.create({
           data: {
-            email: email.toLowerCase().trim(),
+            email,
             name: name || null,
             preferredLanguage: preferredLanguage || "en",
             preferredStyle: preferredStyle || "comprehensive",
@@ -94,20 +102,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error importing subscribers:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

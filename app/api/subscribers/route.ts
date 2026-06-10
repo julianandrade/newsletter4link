@@ -1,8 +1,23 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/context";
 import { getActiveSubscribers, createSubscriber } from "@/lib/queries";
+import {
+  parseJsonBody,
+  errorResponse,
+  emailField,
+  languageField,
+  styleField,
+} from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+const createSubscriberSchema = z.object({
+  email: emailField,
+  name: z.string().trim().max(200).optional(),
+  preferredLanguage: languageField.optional(),
+  preferredStyle: styleField.optional(),
+});
 
 /**
  * GET /api/subscribers
@@ -29,21 +44,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Error fetching subscribers:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
@@ -56,31 +57,8 @@ export async function POST(request: Request) {
     const ctx = await requireOrgContext();
     const { db, organization } = ctx;
 
-    const body = await request.json();
-    const { email, name, preferredLanguage, preferredStyle } = body;
-
-    // Validation
-    if (!email) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Email is required",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid email format",
-        },
-        { status: 400 }
-      );
-    }
+    const { email, name, preferredLanguage, preferredStyle } =
+      await parseJsonBody(request, createSubscriberSchema);
 
     // Check if subscriber already exists in this org
     const existing = await db.subscriber.findFirst({
@@ -131,20 +109,6 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Error creating subscriber:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { parseJsonBody, errorResponse } from "@/lib/validation";
+
+const updateSummarySchema = z.object({
+  summary: z.string().trim().min(1, "Summary is required").max(10000),
+});
 
 /**
  * PATCH /api/articles/:id/summary
@@ -15,18 +21,7 @@ export async function PATCH(
     const ctx = await requireOrgContext();
     requireRole(ctx, "EDITOR");
 
-    const body = await request.json();
-    const { summary } = body;
-
-    if (!summary || typeof summary !== "string") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Summary is required and must be a string",
-        },
-        { status: 400 }
-      );
-    }
+    const { summary } = await parseJsonBody(request, updateSummarySchema);
 
     // updateMany is org-scoped, so articles from other orgs are not matched
     const { count } = await ctx.db.article.updateMany({
@@ -50,27 +45,6 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating summary:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    if (error instanceof Error && error.message.startsWith("Forbidden")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

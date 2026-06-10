@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getArticleById } from "@/lib/queries";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { parseJsonBody, errorResponse } from "@/lib/validation";
+
+const updateArticleSchema = z
+  .object({
+    summary: z.string().trim().max(10000),
+    category: z.array(z.string().trim().min(1).max(100)).max(50),
+  })
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Provide summary (string) or category (array) to update",
+  });
 
 /**
  * GET /api/articles/:id
@@ -32,14 +44,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("Error fetching article:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
@@ -56,30 +61,7 @@ export async function PATCH(
     const ctx = await requireOrgContext();
     requireRole(ctx, "EDITOR");
 
-    const body = await request.json();
-
-    const { summary, category } = body;
-
-    // Build update data
-    const updateData: { summary?: string; category?: string[] } = {};
-
-    if (typeof summary === "string") {
-      updateData.summary = summary;
-    }
-
-    if (Array.isArray(category)) {
-      updateData.category = category;
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No valid fields to update. Provide summary (string) or category (array).",
-        },
-        { status: 400 }
-      );
-    }
+    const updateData = await parseJsonBody(request, updateArticleSchema);
 
     // updateMany is org-scoped, so articles from other orgs are not matched
     const { count } = await ctx.db.article.updateMany({
@@ -103,27 +85,6 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating article:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    if (error instanceof Error && error.message.startsWith("Forbidden")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { unsubscribeUser } from "@/lib/queries";
 import { requireOrgContext } from "@/lib/auth/context";
+import {
+  parseJsonBody,
+  errorResponse,
+  languageField,
+  styleField,
+} from "@/lib/validation";
+
+const updateSubscriberSchema = z
+  .object({
+    name: z.string().trim().max(200),
+    preferredLanguage: languageField,
+    preferredStyle: styleField,
+    active: z.boolean(),
+  })
+  .partial();
 
 /**
  * GET /api/subscribers/:id
@@ -41,21 +57,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("Error fetching subscriber:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
@@ -71,21 +73,7 @@ export async function PATCH(
     const { id } = await params;
     const { db } = await requireOrgContext();
 
-    const body = await request.json();
-    const { name, preferredLanguage, preferredStyle, active } = body;
-
-    const updateData: {
-      name?: string;
-      preferredLanguage?: string;
-      preferredStyle?: string;
-      active?: boolean;
-    } = {};
-    if (name !== undefined) updateData.name = name;
-    if (preferredLanguage !== undefined)
-      updateData.preferredLanguage = preferredLanguage;
-    if (preferredStyle !== undefined)
-      updateData.preferredStyle = preferredStyle;
-    if (active !== undefined) updateData.active = active;
+    const updateData = await parseJsonBody(request, updateSubscriberSchema);
 
     // updateMany is org-scoped, so subscribers from other orgs are not matched
     const { count } = await db.subscriber.updateMany({
@@ -109,21 +97,7 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating subscriber:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
@@ -158,20 +132,6 @@ export async function DELETE(
     });
   } catch (error) {
     console.error("Error unsubscribing user:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server";
-import { updateProject, deleteProject } from "@/lib/queries";
-import { prisma } from "@/lib/db";
+import { z } from "zod";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { parseJsonBody, errorResponse } from "@/lib/validation";
+
+const updateProjectSchema = z
+  .object({
+    name: z.string().trim().min(1).max(300),
+    description: z.string().trim().min(1).max(5000),
+    team: z.string().trim().min(1).max(300),
+    projectDate: z.coerce.date(),
+    impact: z.string().trim().max(2000).nullable(),
+    imageUrl: z.string().trim().url().max(2000).nullable(),
+    featured: z.boolean(),
+  })
+  .partial();
 
 /**
  * GET /api/projects/:id
- * Get single project by ID
+ * Get single project by ID - tenant-scoped
  */
 export async function GET(
   request: Request,
@@ -12,41 +25,28 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { db } = await requireOrgContext();
 
-    const project = await prisma.project.findUnique({
-      where: { id },
-    });
+    // Tenant findUnique returns null for projects of other orgs
+    const project = await db.project.findUnique({ where: { id } });
 
     if (!project) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Project not found",
-        },
+        { success: false, error: "Project not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: project,
-    });
+    return NextResponse.json({ success: true, data: project });
   } catch (error) {
     console.error("Error fetching project:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
 /**
  * PATCH /api/projects/:id
- * Update a project
+ * Update a project - requires EDITOR role, tenant-scoped
  */
 export async function PATCH(
   request: Request,
@@ -54,21 +54,25 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { name, description, team, projectDate, impact, imageUrl, featured } =
-      body;
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
 
-    const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (team !== undefined) updateData.team = team;
-    if (projectDate !== undefined)
-      updateData.projectDate = new Date(projectDate);
-    if (impact !== undefined) updateData.impact = impact;
-    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
-    if (featured !== undefined) updateData.featured = featured;
+    const updateData = await parseJsonBody(request, updateProjectSchema);
 
-    const project = await updateProject(id, updateData);
+    // updateMany is org-scoped, so projects from other orgs are not matched
+    const { count } = await ctx.db.project.updateMany({
+      where: { id },
+      data: updateData,
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Project not found" },
+        { status: 404 }
+      );
+    }
+
+    const project = await ctx.db.project.findUnique({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -77,20 +81,13 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating project:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
 /**
  * DELETE /api/projects/:id
- * Delete a project
+ * Delete a project - requires EDITOR role, tenant-scoped
  */
 export async function DELETE(
   request: Request,
@@ -98,8 +95,20 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
 
-    await deleteProject(id);
+    // findUnique is org-scoped (returns null cross-org); verify before deleting
+    const project = await ctx.db.project.findUnique({ where: { id } });
+
+    if (!project) {
+      return NextResponse.json(
+        { success: false, error: "Project not found" },
+        { status: 404 }
+      );
+    }
+
+    await ctx.db.project.delete({ where: { id } });
 
     return NextResponse.json({
       success: true,
@@ -107,13 +116,6 @@ export async function DELETE(
     });
   } catch (error) {
     console.error("Error deleting project:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

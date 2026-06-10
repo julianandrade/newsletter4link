@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireOrgContext } from "@/lib/auth/context";
+import { z } from "zod";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { createProject } from "@/lib/queries";
+import { parseJsonBody, errorResponse } from "@/lib/validation";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+
+const createProjectSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  description: z.string().trim().min(1).max(5000),
+  team: z.string().trim().min(1).max(300),
+  projectDate: z.coerce.date(),
+  impact: z.string().trim().max(2000).optional(),
+  imageUrl: z.string().trim().url().max(2000).optional(),
+});
 
 /**
  * GET /api/projects
@@ -101,21 +112,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching projects:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }
 
@@ -127,26 +124,16 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireOrgContext();
     const { db } = ctx;
+    requireRole(ctx, "EDITOR");
 
-    const body = await request.json();
-    const { name, description, team, projectDate, impact, imageUrl } = body;
-
-    // Validation
-    if (!name || !description || !team || !projectDate) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Name, description, team, and projectDate are required",
-        },
-        { status: 400 }
-      );
-    }
+    const { name, description, team, projectDate, impact, imageUrl } =
+      await parseJsonBody(request, createProjectSchema);
 
     const project = await createProject(db, {
       name,
       description,
       team,
-      projectDate: new Date(projectDate),
+      projectDate,
       impact,
       imageUrl,
     });
@@ -161,20 +148,6 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Error creating project:", error);
-
-    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error);
   }
 }

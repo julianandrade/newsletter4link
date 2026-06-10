@@ -178,36 +178,6 @@ export async function createProject(
   });
 }
 
-/**
- * Update project (uses raw prisma - verify ownership before calling)
- */
-export async function updateProject(
-  id: string,
-  data: {
-    name?: string;
-    description?: string;
-    team?: string;
-    projectDate?: Date;
-    impact?: string;
-    imageUrl?: string;
-    featured?: boolean;
-  }
-) {
-  return await prisma.project.update({
-    where: { id },
-    data,
-  });
-}
-
-/**
- * Delete project (uses raw prisma - verify ownership before calling)
- */
-export async function deleteProject(id: string) {
-  return await prisma.project.delete({
-    where: { id },
-  });
-}
-
 // ==================== Subscriber Queries ====================
 
 /**
