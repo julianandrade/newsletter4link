@@ -229,8 +229,14 @@ npm test -- path/to/test
 
 ## Known Issues
 
-- **Curation API Timeout** - `/api/curation/collect` times out on Vercel (needs background job or streaming)
 - **UI/UX Polish Needed** - Dashboard needs design improvements
+
+> **Resolved:** Scheduled curation no longer risks the Vercel timeout. The
+> daily-collection cron enqueues one `CURATION` job per org onto a durable
+> Postgres-backed queue (`QueueJob` model + `lib/jobs/`), drained by the
+> `/api/cron/worker` tick (every 5 min) one job at a time within a time
+> budget. Interactive `/api/curation/collect` still uses SSE streaming.
+> Note: the `QueueJob` table requires `npx prisma db push` on deploy.
 
 ---
 
@@ -239,6 +245,7 @@ npm test -- path/to/test
 | Decision | Rationale | Date |
 |----------|-----------|------|
 | Next.js App Router | Server components for performance, RSC streaming | Jan 2026 |
+| Postgres-backed job queue | Durable curation jobs drained by a cron worker; no external service, uses existing DB | Jun 2026 |
 | Prisma + Supabase | Type-safe ORM, managed PostgreSQL with pgvector | Jan 2026 |
 | Claude for scoring | Best-in-class reasoning for content relevance | Jan 2026 |
 | Resend for email | Modern API, good deliverability, React Email support | Jan 2026 |

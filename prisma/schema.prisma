@@ -48,6 +48,7 @@ model Organization {
   searchTopics     SearchTopic[]
   searchHistory    SearchHistory[]
   backgroundJobs   BackgroundJob[]
+  queueJobs        QueueJob[]
   generationDrafts GenerationDraft[]
 
   @@index([slug])
@@ -704,6 +705,56 @@ enum JobType {
   GENERATION
   SEARCH
   EMAIL_SEND
+}
+
+// ==================== DURABLE JOB QUEUE ====================
+// Postgres-backed work queue processed by the /api/cron/worker tick.
+// Lets long-running work (per-org curation) run across multiple short
+// invocations instead of one request that risks the serverless timeout.
+
+model QueueJob {
+  id          String         @id @default(cuid())
+  type        QueueJobType
+  status      QueueJobStatus @default(PENDING)
+  payload     Json           @default("{}")
+  result      Json?
+  lastError   String?
+
+  attempts    Int            @default(0)
+  maxAttempts Int            @default(3)
+
+  // Visibility timeout: a claimed job is "locked" until lockedUntil; a worker
+  // only reclaims a RUNNING job once that passes (previous worker died/timed out).
+  availableAt DateTime       @default(now())
+  lockedUntil DateTime?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Optional dedupe key to avoid enqueuing the same logical work twice
+  // while it is still pending/running (enforced in enqueueJob, not as a
+  // permanent unique constraint, so a key can be reused once work finishes).
+  dedupeKey   String?
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String?
+
+  @@index([status, availableAt])
+  @@index([organizationId])
+  @@index([dedupeKey])
+}
+
+enum QueueJobType {
+  CURATION
+}
+
+enum QueueJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 enum JobStatus {

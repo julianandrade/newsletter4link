@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
-import { runCurationPipeline } from "@/lib/curation/curator";
 import { prisma } from "@/lib/db";
 import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 import { reportError } from "@/lib/observability/report";
+import { enqueueJob } from "@/lib/jobs/queue";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 minutes
+export const maxDuration = 60; // Only enqueues; the worker does the heavy lifting
 
 /**
  * GET /api/cron/daily-collection
- * Triggered by Vercel Cron every 6 hours
- * Runs the content curation pipeline for all organizations
+ * Triggered by Vercel Cron. Enqueues one curation job per organization onto
+ * the durable queue instead of running the pipelines inline - the
+ * /api/cron/worker tick processes them across invocations, so a large number
+ * of organizations can no longer time out a single request.
  */
 export async function GET(request: Request) {
   try {
@@ -18,58 +20,44 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("[CRON] Starting daily content collection for all organizations...");
+    console.log("[CRON] Enqueuing daily curation jobs for all organizations...");
 
-    // Get all organizations
     const organizations = await prisma.organization.findMany({
       select: { id: true, name: true },
     });
 
-    const results: Array<{
-      organizationId: string;
-      organizationName: string;
-      curated: number;
-      duplicates: number;
-      lowScore: number;
-      errors: number;
-    }> = [];
+    // Date-stamped dedupe key: at most one curation job per org per day, even
+    // if the cron double-fires.
+    const day = new Date().toISOString().slice(0, 10);
 
+    let enqueued = 0;
     for (const org of organizations) {
       try {
-        console.log(`[CRON] Processing organization: ${org.name}`);
-        const result = await runCurationPipeline(org.id);
-        results.push({
+        await enqueueJob({
+          type: "CURATION",
           organizationId: org.id,
-          organizationName: org.name,
-          curated: result.curated,
-          duplicates: result.duplicates,
-          lowScore: result.lowScore,
-          errors: result.errors.length,
+          dedupeKey: `curation:${org.id}:${day}`,
         });
-        console.log(`[CRON] ${org.name}: ${result.curated} curated, ${result.duplicates} duplicates`);
+        enqueued++;
       } catch (error) {
         reportError(error, {
           cron: "daily-collection",
+          phase: "enqueue",
           organizationId: org.id,
           organizationName: org.name,
-        });
-        results.push({
-          organizationId: org.id,
-          organizationName: org.name,
-          curated: 0,
-          duplicates: 0,
-          lowScore: 0,
-          errors: 1,
         });
       }
     }
 
-    console.log("[CRON] Daily content collection complete for all organizations");
+    console.log(
+      `[CRON] Enqueued ${enqueued}/${organizations.length} curation jobs`
+    );
 
     return NextResponse.json({
       success: true,
-      message: "Daily content collection completed",
-      results,
+      message: `Enqueued ${enqueued} curation jobs`,
+      enqueued,
+      organizations: organizations.length,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
