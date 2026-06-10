@@ -8,16 +8,17 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+  // Create the (singleton) browser client lazily during render so we don't need a
+  // synchronous setState inside the effect to initialize it.
+  const [supabase] = useState<SupabaseClient>(() => createClient());
 
-  // Initialize client only on mount (client-side)
+  // Subscribe to auth state on mount. All setState happens after an await
+  // (getSession) or inside the auth-change callback, never synchronously in the
+  // effect body.
   useEffect(() => {
-    const client = createClient();
-    setSupabase(client);
-
     // Get initial session
     const initSession = async () => {
-      const { data } = await client.auth.getSession();
+      const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setUser(data.session?.user ?? null);
       setLoading(false);
@@ -27,7 +28,7 @@ export function useAuth() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange(
+    } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, newSession: Session | null) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
@@ -35,7 +36,7 @@ export function useAuth() {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
   const signInWithAzure = useCallback(async () => {
     if (!supabase) return { error: new Error("Client not initialized") };

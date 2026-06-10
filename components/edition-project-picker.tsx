@@ -58,6 +58,23 @@ export function EditionProjectPicker({
   const [error, setError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  // Re-sync the (locally editable) selection from props when the incoming
+  // selectedIds/initialProjects change. Adjusting state during render (with a
+  // change sentinel) is React's supported pattern and avoids a setState-in-effect.
+  const [syncKey, setSyncKey] = useState<{
+    ids: string[];
+    projects: Project[];
+  }>({ ids: selectedIds, projects: initialProjects });
+  if (syncKey.ids !== selectedIds || syncKey.projects !== initialProjects) {
+    setSyncKey({ ids: selectedIds, projects: initialProjects });
+    if (initialProjects.length > 0 && selectedIds.length > 0) {
+      const orderedSelected = selectedIds
+        .map((id) => initialProjects.find((p) => p.id === id))
+        .filter(Boolean) as Project[];
+      setSelectedProjects(orderedSelected);
+    }
+  }
+
   // Fetch available projects
   const fetchProjects = useCallback(async () => {
     setIsLoading(true);
@@ -91,12 +108,8 @@ export function EditionProjectPicker({
     }
   }, [searchQuery]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  // Debounced search
+  // Initial fetch + debounced search. fetchProjects is async (setState happens
+  // after an await), and the timer covers the initial mount fetch too.
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
       fetchProjects();
@@ -104,16 +117,6 @@ export function EditionProjectPicker({
 
     return () => clearTimeout(debounceTimer);
   }, [searchQuery, fetchProjects]);
-
-  // Sync selected projects when selectedIds prop changes
-  useEffect(() => {
-    if (initialProjects.length > 0 && selectedIds.length > 0) {
-      const orderedSelected = selectedIds
-        .map((id) => initialProjects.find((p) => p.id === id))
-        .filter(Boolean) as Project[];
-      setSelectedProjects(orderedSelected);
-    }
-  }, [selectedIds, initialProjects]);
 
   // Add project to selection
   const handleAddProject = (project: Project) => {

@@ -57,6 +57,23 @@ export function EditionArticlePicker({
   const [error, setError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  // Re-sync the (locally editable) selection from props when the incoming
+  // selectedIds/initialArticles change. Adjusting state during render (with a
+  // change sentinel) is React's supported pattern and avoids a setState-in-effect.
+  const [syncKey, setSyncKey] = useState<{
+    ids: string[];
+    articles: Article[];
+  }>({ ids: selectedIds, articles: initialArticles });
+  if (syncKey.ids !== selectedIds || syncKey.articles !== initialArticles) {
+    setSyncKey({ ids: selectedIds, articles: initialArticles });
+    if (initialArticles.length > 0 && selectedIds.length > 0) {
+      const orderedSelected = selectedIds
+        .map((id) => initialArticles.find((a) => a.id === id))
+        .filter(Boolean) as Article[];
+      setSelectedArticles(orderedSelected);
+    }
+  }
+
   // Fetch available articles
   const fetchArticles = useCallback(async () => {
     setIsLoading(true);
@@ -92,16 +109,6 @@ export function EditionArticlePicker({
 
     return () => clearTimeout(debounceTimer);
   }, [fetchArticles]);
-
-  // Sync selected articles when selectedIds prop changes
-  useEffect(() => {
-    if (initialArticles.length > 0 && selectedIds.length > 0) {
-      const orderedSelected = selectedIds
-        .map((id) => initialArticles.find((a) => a.id === id))
-        .filter(Boolean) as Article[];
-      setSelectedArticles(orderedSelected);
-    }
-  }, [selectedIds, initialArticles]);
 
   // Add article to selection
   const handleAddArticle = (article: Article) => {

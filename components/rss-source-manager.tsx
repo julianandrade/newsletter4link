@@ -191,7 +191,11 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
    * Load sources on mount
    */
   useEffect(() => {
-    fetchSources();
+    // Wrapped in an async IIFE so setState only occurs after an await, never
+    // synchronously within the effect body.
+    void (async () => {
+      await fetchSources();
+    })();
   }, [fetchSources]);
 
   /**

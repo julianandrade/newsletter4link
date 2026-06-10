@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -60,7 +60,8 @@ interface ApiKeysCardProps {
 
 export function ApiKeysCard({ plan, hasAccess }: ApiKeysCardProps) {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Only show the loading state when we will actually fetch (i.e. user has access).
+  const [isLoading, setIsLoading] = useState(hasAccess);
   const [error, setError] = useState<string | null>(null);
 
   // New key creation
@@ -73,15 +74,7 @@ export function ApiKeysCard({ plan, hasAccess }: ApiKeysCardProps) {
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (hasAccess) {
-      fetchApiKeys();
-    } else {
-      setIsLoading(false);
-    }
-  }, [hasAccess]);
-
-  async function fetchApiKeys() {
+  const fetchApiKeys = useCallback(async () => {
     try {
       const res = await fetch("/api/api-keys");
       if (!res.ok) throw new Error("Failed to fetch API keys");
@@ -92,7 +85,16 @@ export function ApiKeysCard({ plan, hasAccess }: ApiKeysCardProps) {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!hasAccess) return;
+    // Wrapped in an async IIFE so setState only occurs after an await, never
+    // synchronously within the effect body.
+    void (async () => {
+      await fetchApiKeys();
+    })();
+  }, [hasAccess, fetchApiKeys]);
 
   async function createApiKey() {
     if (!newKeyName.trim()) return;

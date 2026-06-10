@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid, LayoutList, Table2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -54,6 +54,18 @@ export function LayoutToggle({
   );
 }
 
+function isLayoutType(value: string | null): value is LayoutType {
+  return value === "cards" || value === "compact" || value === "table";
+}
+
+// Notify subscribers within the same tab when we write to localStorage (the
+// native "storage" event only fires in *other* tabs).
+const layoutListeners = new Set<() => void>();
+
+function emitLayoutChange() {
+  for (const listener of layoutListeners) listener();
+}
+
 /**
  * Custom hook to persist layout preference in localStorage
  */
@@ -61,27 +73,37 @@ export function useLayoutPreference(
   key: string,
   defaultValue: LayoutType = "cards"
 ): [LayoutType, (layout: LayoutType) => void] {
-  const [layout, setLayout] = useState<LayoutType>(defaultValue);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(key);
-    if (stored && (stored === "cards" || stored === "compact" || stored === "table")) {
-      setLayout(stored as LayoutType);
-    }
-    setIsHydrated(true);
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === key) onStoreChange();
+    };
+    window.addEventListener("storage", onStorage);
+    layoutListeners.add(onStoreChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      layoutListeners.delete(onStoreChange);
+    };
   }, [key]);
+
+  const getSnapshot = useCallback((): LayoutType => {
+    const stored = localStorage.getItem(key);
+    return isLayoutType(stored) ? stored : defaultValue;
+  }, [key, defaultValue]);
+
+  // Server (and initial hydration) snapshot is always the default, matching the
+  // server-rendered output and avoiding a hydration mismatch.
+  const getServerSnapshot = useCallback((): LayoutType => defaultValue, [defaultValue]);
+
+  const layout = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   // Persist to localStorage when layout changes
   const setLayoutWithPersist = useCallback(
     (newLayout: LayoutType) => {
-      setLayout(newLayout);
       localStorage.setItem(key, newLayout);
+      emitLayoutChange();
     },
     [key]
   );
 
-  // Return default until hydrated to avoid hydration mismatch
-  return [isHydrated ? layout : defaultValue, setLayoutWithPersist];
+  return [layout, setLayoutWithPersist];
 }

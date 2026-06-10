@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -55,11 +55,7 @@ export function UsageCard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchUsage();
-  }, []);
-
-  async function fetchUsage() {
+  const fetchUsage = useCallback(async () => {
     try {
       const res = await fetch("/api/usage");
       if (!res.ok) throw new Error("Failed to fetch usage");
@@ -70,7 +66,15 @@ export function UsageCard() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    // Wrapped in an async IIFE so setState only occurs after an await, never
+    // synchronously within the effect body.
+    void (async () => {
+      await fetchUsage();
+    })();
+  }, [fetchUsage]);
 
   if (isLoading) {
     return (

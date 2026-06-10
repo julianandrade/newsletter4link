@@ -126,9 +126,12 @@ export function MediaLibrary({
    * Load media when dialog opens
    */
   useEffect(() => {
-    if (open) {
-      fetchMedia();
-    }
+    if (!open) return;
+    // Wrapped in an async IIFE so setState only occurs after an await, never
+    // synchronously within the effect body.
+    void (async () => {
+      await fetchMedia();
+    })();
   }, [open, fetchMedia]);
 
   /**

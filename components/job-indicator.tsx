@@ -85,12 +85,29 @@ export function JobIndicator({ collapsed = false }: JobIndicatorProps) {
     }
   }, []);
 
-  // Initial fetch and polling (faster when dropdown is open)
+  // Polling (faster when dropdown is open). The first tick runs immediately so
+  // there is no initial delay before the first fetch. All setState happens inside
+  // the async fetch (after an await) or the timer callback, never synchronously
+  // during the effect body.
   useEffect(() => {
-    fetchRunningJobs();
+    let cancelled = false;
 
-    const interval = setInterval(fetchRunningJobs, isOpen ? 2000 : POLL_INTERVAL);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (cancelled) return;
+      // Wrapped in an async IIFE so setState only occurs after an await, never
+      // synchronously within the effect body.
+      void (async () => {
+        await fetchRunningJobs();
+      })();
+    };
+
+    tick();
+    const interval = setInterval(tick, isOpen ? 2000 : POLL_INTERVAL);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [fetchRunningJobs, isOpen]);
 
   // Don't render anything if no running jobs and not loading

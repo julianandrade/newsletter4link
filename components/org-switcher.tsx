@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
@@ -53,11 +53,7 @@ export function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchOrganizations();
-  }, []);
-
-  const fetchOrganizations = async () => {
+  const fetchOrganizations = useCallback(async () => {
     try {
       const res = await fetch("/api/organizations");
       if (res.ok) {
@@ -70,7 +66,15 @@ export function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Wrapped in an async IIFE so setState only occurs after an await, never
+    // synchronously within the effect body.
+    void (async () => {
+      await fetchOrganizations();
+    })();
+  }, [fetchOrganizations]);
 
   const switchOrganization = async (orgId: string) => {
     if (orgId === currentOrgId) {
