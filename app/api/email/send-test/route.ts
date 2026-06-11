@@ -4,6 +4,8 @@ import { renderTemplateById } from "@/lib/email/template-renderer";
 import { requireOrgContext } from "@/lib/auth/context";
 import { sanitizeBlockHtml, sanitizeImageUrl } from "@/lib/email/sanitize";
 import { logger } from "@/lib/logger";
+import { getWeekNumber } from "@/lib/dates";
+import { buildTestSubject } from "@/lib/email/subject";
 
 export const dynamic = "force-dynamic";
 
@@ -156,21 +158,13 @@ export async function POST(request: Request) {
         );
       }
 
-      result = await sendEmail(
-        email,
-        `[TEST] Link AI Newsletter - Week ${week}, ${year}`,
-        templateResult.html
-      );
+      result = await sendEmail(email, buildTestSubject(emailData), templateResult.html);
     } else {
       // Use the default React Email component
       // Note: If customData has customBlocks, we need to render with custom blocks support
       if (customData?.customBlocks && customData.customBlocks.length > 0) {
         const html = await renderNewsletterEmailWithCustomBlocks(emailData);
-        result = await sendEmail(
-          email,
-          `[TEST] Link AI Newsletter - Week ${week}, ${year}`,
-          html
-        );
+        result = await sendEmail(email, buildTestSubject(emailData), html);
       } else {
         result = await sendTestNewsletter(email, emailData);
       }
@@ -208,16 +202,6 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
 /**

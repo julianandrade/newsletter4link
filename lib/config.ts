@@ -50,6 +50,10 @@ export const config = {
   // Curation
   curation: {
     relevanceThreshold: 6.0, // Minimum relevance score (0-10)
+    // Articles scoring at or above this skip human review and land as
+    // APPROVED (the weekly send itself still requires a human-finalized
+    // edition). Set AUTO_APPROVE_THRESHOLD > 10 to disable auto-approval.
+    autoApproveThreshold: Number(process.env.AUTO_APPROVE_THRESHOLD ?? 8),
     maxArticlesPerEdition: 10,
     vectorSimilarityThreshold: 0.85, // For deduplication
   },

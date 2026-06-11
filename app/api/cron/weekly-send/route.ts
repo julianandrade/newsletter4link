@@ -5,18 +5,19 @@ import { config } from "@/lib/config";
 import { markEditionAsSent } from "@/lib/queries";
 import { createTenantClient } from "@/lib/db/tenant";
 import { logger } from "@/lib/logger";
+import { getWeekNumber } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
 
-// Articles older than this never make an auto-finalized edition; covers a
-// full week of news plus slack for items approved a little late.
-const FRESHNESS_WINDOW_DAYS = 14;
-
 /**
  * GET /api/cron/weekly-send
- * Triggered by Vercel Cron every Sunday at 12:00 UTC
- * Auto-finalizes edition and sends newsletter for all organizations
+ * Triggered by Vercel Cron (see vercel.json for the schedule)
+ *
+ * Sends the week's edition for every organization — but ONLY if a human has
+ * finalized it in the dashboard. Editions that are missing or still DRAFT are
+ * skipped: article curation is automated (incl. auto-approval of top scores),
+ * the weekly send itself is deliberately human-gated.
  */
 export async function GET(request: Request) {
   try {
@@ -51,149 +52,54 @@ export async function GET(request: Request) {
         logger.info(`[CRON] Processing organization: ${org.name}`);
         const db = createTenantClient(org.id);
 
-        // Get or create edition for this week
-        let edition = await db.edition.findFirst({
+        // Get this week's edition
+        const edition = await db.edition.findFirst({
           where: { week, year },
         });
 
-        // Get related data separately since TenantClient doesn't support deep includes
-        let editionArticles: any[] = [];
-        let editionProjects: any[] = [];
-
-        if (edition) {
-          editionArticles = await prisma.editionArticle.findMany({
-            where: { editionId: edition.id },
-            include: { article: true },
-            orderBy: { order: "asc" },
+        // Human gate: only send editions a person finalized in the dashboard.
+        if (!edition || edition.status === "DRAFT") {
+          logger.info(
+            `[CRON] ${org.name}: No human-finalized edition for week ${week}, skipping`
+          );
+          results.push({
+            organizationId: org.id,
+            organizationName: org.name,
+            sent: 0,
+            failed: 0,
+            skipped: true,
+            error: "Edition not finalized (human approval required)",
           });
-          editionProjects = await prisma.editionProject.findMany({
-            where: { editionId: edition.id },
-            include: { project: true },
-            orderBy: { order: "asc" },
-          });
+          continue;
         }
 
-        // If edition doesn't exist or not finalized, auto-finalize
-        if (!edition || edition.status === "DRAFT") {
-          logger.info(`[CRON] ${org.name}: Edition not finalized, auto-finalizing...`);
+        // Get related data separately since TenantClient doesn't support deep includes
+        const editionArticles = await prisma.editionArticle.findMany({
+          where: { editionId: edition.id },
+          include: { article: true },
+          orderBy: { order: "asc" },
+        });
+        const editionProjects = await prisma.editionProject.findMany({
+          where: { editionId: edition.id },
+          include: { project: true },
+          orderBy: { order: "asc" },
+        });
 
-          // Get top approved articles for this org. Exclude anything already
-          // used in an edition (sent articles previously kept reappearing
-          // week after week) and keep only recent news so the edition is
-          // actually "this week's" content.
-          const freshSince = new Date();
-          freshSince.setDate(freshSince.getDate() - FRESHNESS_WINDOW_DAYS);
-
-          const topArticles = await db.article.findMany({
-            where: {
-              status: "APPROVED",
-              editions: { none: {} },
-              publishedAt: { gte: freshSince },
-            },
-            orderBy: [
-              { relevanceScore: "desc" },
-              { publishedAt: "desc" },
-            ],
-            take: config.curation.maxArticlesPerEdition,
+        if (editionArticles.length === 0) {
+          logger.info(`[CRON] ${org.name}: Finalized edition has no articles, skipping`);
+          results.push({
+            organizationId: org.id,
+            organizationName: org.name,
+            sent: 0,
+            failed: 0,
+            skipped: true,
+            error: "Finalized edition has no articles",
           });
-
-          // Get featured projects for this org
-          const featuredProjects = await db.project.findMany({
-            where: { featured: true },
-            orderBy: { projectDate: "desc" },
-            take: 3,
-          });
-
-          if (topArticles.length === 0) {
-            logger.info(`[CRON] ${org.name}: No approved articles, skipping`);
-            results.push({
-              organizationId: org.id,
-              organizationName: org.name,
-              sent: 0,
-              failed: 0,
-              skipped: true,
-              error: "No approved articles",
-            });
-            continue;
-          }
-
-          // Create or update edition
-          if (!edition) {
-            edition = await db.edition.create({
-              data: {
-                week,
-                year,
-                status: "FINALIZED",
-                finalizedAt: new Date(),
-              } as any,
-            });
-          } else {
-            await prisma.edition.update({
-              where: { id: edition.id },
-              data: {
-                status: "FINALIZED",
-                finalizedAt: new Date(),
-              },
-            });
-          }
-
-          // Add articles to edition
-          for (let i = 0; i < topArticles.length; i++) {
-            await prisma.editionArticle.upsert({
-              where: {
-                editionId_articleId: {
-                  editionId: edition.id,
-                  articleId: topArticles[i].id,
-                },
-              },
-              create: {
-                editionId: edition.id,
-                articleId: topArticles[i].id,
-                order: i,
-              },
-              update: {
-                order: i,
-              },
-            });
-          }
-
-          // Add projects to edition
-          for (let i = 0; i < featuredProjects.length; i++) {
-            await prisma.editionProject.upsert({
-              where: {
-                editionId_projectId: {
-                  editionId: edition.id,
-                  projectId: featuredProjects[i].id,
-                },
-              },
-              create: {
-                editionId: edition.id,
-                projectId: featuredProjects[i].id,
-                order: i,
-              },
-              update: {
-                order: i,
-              },
-            });
-          }
-
-          // Reload edition data
-          editionArticles = await prisma.editionArticle.findMany({
-            where: { editionId: edition.id },
-            include: { article: true },
-            orderBy: { order: "asc" },
-          });
-          editionProjects = await prisma.editionProject.findMany({
-            where: { editionId: edition.id },
-            include: { project: true },
-            orderBy: { order: "asc" },
-          });
-
-          logger.info(`[CRON] ${org.name}: Auto-finalized with ${topArticles.length} articles and ${featuredProjects.length} projects`);
+          continue;
         }
 
         // Check if already sent
-        if (edition!.status === "SENT") {
+        if (edition.status === "SENT") {
           logger.info(`[CRON] ${org.name}: Edition already sent, skipping`);
           results.push({
             organizationId: org.id,
@@ -221,8 +127,8 @@ export async function GET(request: Request) {
             impact: ep.project.impact || undefined,
             projectDate: ep.project.projectDate.toISOString(),
           })),
-          week: edition!.week,
-          year: edition!.year,
+          week: edition.week,
+          year: edition.year,
         };
 
         // Get subscriber count for this org
@@ -246,11 +152,11 @@ export async function GET(request: Request) {
         logger.info(`[CRON] ${org.name}: Sending to ${subscriberCount} subscribers...`);
 
         // Send to all subscribers in this org
-        const result = await sendNewsletterToAll(emailData, edition!.id);
+        const result = await sendNewsletterToAll(emailData, edition.id);
 
         // Mark edition as sent
         if (result.sent > 0) {
-          await markEditionAsSent(edition!.id);
+          await markEditionAsSent(edition.id);
         }
 
         results.push({
@@ -304,14 +210,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-}
-
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }

@@ -13,6 +13,7 @@ import { injectUnsubscribeUrl } from "@/lib/email/personalize";
 import { buildUnsubscribeUrl, buildListUnsubscribeHeaders } from "@/lib/email/unsubscribe-token";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 import { logger } from "@/lib/logger";
+import { getWeekNumber } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -513,16 +514,6 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
 /**

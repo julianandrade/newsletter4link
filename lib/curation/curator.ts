@@ -117,7 +117,11 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
           null
         );
 
-        // Save to database as pending review
+        // Top-scoring articles skip human review; the weekly send is still
+        // gated on a human-finalized edition.
+        const autoApproved =
+          relevanceScore >= config.curation.autoApproveThreshold;
+
         const created = await prisma.article.create({
           data: {
             sourceUrl: article.link,
@@ -128,13 +132,17 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
             relevanceScore,
             summary,
             category: categories,
-            status: "PENDING_REVIEW",
+            status: autoApproved ? "APPROVED" : "PENDING_REVIEW",
             organizationId,
           },
         });
         await setArticleEmbedding(created.id, embedding);
 
-        console.log(`  ✓ Article curated successfully`);
+        console.log(
+          autoApproved
+            ? `  ✓ Article auto-approved (score ${relevanceScore})`
+            : `  ✓ Article curated successfully`
+        );
         result.curated++;
         result.processed++;
 
@@ -366,7 +374,11 @@ export async function runCurationPipelineWithStreaming(
           settings.brandVoicePrompt
         );
 
-        // Save to database as pending review
+        // Top-scoring articles skip human review; the weekly send is still
+        // gated on a human-finalized edition.
+        const autoApproved =
+          relevanceScore >= config.curation.autoApproveThreshold;
+
         const created = await prisma.article.create({
           data: {
             sourceUrl: article.link,
@@ -377,7 +389,7 @@ export async function runCurationPipelineWithStreaming(
             relevanceScore,
             summary,
             category: categories,
-            status: "PENDING_REVIEW",
+            status: autoApproved ? "APPROVED" : "PENDING_REVIEW",
             organizationId,
           },
         });
@@ -385,14 +397,21 @@ export async function runCurationPipelineWithStreaming(
 
         onProgress({
           stage: "curated",
-          message: `Successfully curated: ${article.title.substring(0, 50)}`,
+          message: autoApproved
+            ? `Auto-approved (score ${relevanceScore}): ${article.title.substring(0, 50)}`
+            : `Successfully curated: ${article.title.substring(0, 50)}`,
         });
-        await log("info", `Curated (score ${relevanceScore}): ${article.title.substring(0, 80)}`, {
-          score: relevanceScore,
-          categories,
-          sourceUrl: article.link,
-          sourceName: article.sourceName,
-        });
+        await log(
+          "info",
+          `${autoApproved ? "Auto-approved" : "Curated"} (score ${relevanceScore}): ${article.title.substring(0, 80)}`,
+          {
+            score: relevanceScore,
+            categories,
+            autoApproved,
+            sourceUrl: article.link,
+            sourceName: article.sourceName,
+          }
+        );
 
         result.curated++;
         result.processed++;
@@ -506,7 +525,7 @@ export async function curateArticle(
       categories = await categorizeArticle(title, content, settings.brandVoicePrompt);
     }
 
-    // Save to database
+    // Save to database (top scores skip review entirely)
     const article = await prisma.article.create({
       data: {
         sourceUrl: url,
@@ -517,9 +536,11 @@ export async function curateArticle(
         summary,
         category: categories,
         status:
-          relevanceScore >= config.curation.relevanceThreshold
-            ? "PENDING_REVIEW"
-            : "REJECTED",
+          relevanceScore >= config.curation.autoApproveThreshold
+            ? "APPROVED"
+            : relevanceScore >= config.curation.relevanceThreshold
+              ? "PENDING_REVIEW"
+              : "REJECTED",
         organizationId,
       },
     });
