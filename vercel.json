@@ -5,6 +5,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/weekly-finalize",
+      "schedule": "0 18 * * 1"
+    },
+    {
       "path": "/api/cron/weekly-send",
       "schedule": "0 9 * * 2"
     }

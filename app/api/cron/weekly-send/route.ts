@@ -12,12 +12,11 @@ export const maxDuration = 300; // 5 minutes
 
 /**
  * GET /api/cron/weekly-send
- * Triggered by Vercel Cron (see vercel.json for the schedule)
+ * Triggered Tuesday morning (see vercel.json for the schedule)
  *
- * Sends the week's edition for every organization — but ONLY if a human has
- * finalized it in the dashboard. Editions that are missing or still DRAFT are
- * skipped: article curation is automated (incl. auto-approval of top scores),
- * the weekly send itself is deliberately human-gated.
+ * Sends each org's FINALIZED edition for the current week. Finalization
+ * happens either by an editor in the dashboard or by the Monday-EOD
+ * weekly-finalize cron; anything still missing/DRAFT at send time is skipped.
  */
 export async function GET(request: Request) {
   try {

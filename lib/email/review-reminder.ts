@@ -5,18 +5,17 @@ import { logger } from "@/lib/logger";
 import { getWeekNumber } from "@/lib/dates";
 
 /**
- * Editorial reminder ahead of the weekly send.
+ * Editorial reminder at the start of the weekly cycle.
  *
- * Article curation is automated (top scores are even auto-approved), but the
- * weekly send is deliberately human-gated: the cron only ships an edition a
- * person finalized in the dashboard. This reminder is the safety net — it
- * emails org owners/admins when articles are waiting for review and/or this
- * week's edition hasn't been finalized yet.
+ * Weekly rhythm: Monday morning this reminder goes out; editors have until
+ * Monday end of day to review pending articles and curate the edition; at
+ * 18:00 UTC the weekly-finalize cron promotes whatever is ready (their picks,
+ * or an auto-built edition from approved articles); Tuesday 09:00 UTC the
+ * send goes out. This email tells org owners/admins what still needs eyes.
  */
 
-/** Day of week (UTC, 0=Sunday) to send the reminder. Monday — the day
- * before the Tuesday-morning send — so editors have a full working day to
- * review and finalize. */
+/** Day of week (UTC, 0=Sunday) to send the reminder. Monday — the editors'
+ * curation day, ahead of the Monday-EOD auto-finalize. */
 export const REMINDER_DAY_UTC = 1;
 
 export function isReminderDay(now: Date = new Date()): boolean {
@@ -81,9 +80,10 @@ export async function sendReviewReminder(
   if (!editionFinalized) {
     items.push(
       `<li>This week's edition (week ${week}) has <strong>not been finalized</strong>.
-       The automated Tuesday-morning send only ships human-finalized editions —
-       <a href="${sendUrl}" style="color:#1e3a5f;">build &amp; finalize it</a> before
-       Tuesday 09:00 UTC or no newsletter goes out this week.</li>`
+       You have until <strong>end of day today (18:00 UTC)</strong> to
+       <a href="${sendUrl}" style="color:#1e3a5f;">curate &amp; finalize it</a> yourself —
+       after that it will be auto-finalized from the approved articles and sent
+       Tuesday morning.</li>`
     );
   }
 
