@@ -71,3 +71,18 @@ export function buildUnsubscribeUrl(subscriberId?: string): string {
   }
   return `${baseUrl}/unsubscribe`;
 }
+
+/**
+ * RFC 8058 one-click unsubscribe headers (Gmail/Yahoo bulk-sender requirement).
+ * Mail providers POST `List-Unsubscribe=One-Click` to the URL, so the token
+ * rides in the query string and /api/unsubscribe accepts it from there.
+ */
+export function buildListUnsubscribeHeaders(
+  subscriberId: string
+): Record<string, string> {
+  const url = `${config.app.url}/api/unsubscribe?token=${generateUnsubscribeToken(subscriberId)}`;
+  return {
+    "List-Unsubscribe": `<${url}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  };
+}

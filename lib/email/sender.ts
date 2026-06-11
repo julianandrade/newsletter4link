@@ -2,7 +2,8 @@ import { render } from "@react-email/components";
 import NewsletterEmail from "@/emails/newsletter";
 import { prisma } from "@/lib/db";
 import { sendEmailViaProvider, getProviderSettings } from "./provider";
-import { buildUnsubscribeUrl } from "./unsubscribe-token";
+import { buildUnsubscribeUrl, buildListUnsubscribeHeaders } from "./unsubscribe-token";
+import { buildNewsletterSubject, buildTestSubject } from "./subject";
 
 interface Article {
   title: string;
@@ -33,9 +34,10 @@ interface NewsletterData {
 export async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  headers?: Record<string, string>
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  return sendEmailViaProvider(to, subject, html);
+  return sendEmailViaProvider(to, subject, html, headers);
 }
 
 /**
@@ -105,11 +107,13 @@ export async function sendNewsletterToSubscriber(
     // Render email HTML
     const html = await renderNewsletterEmail(data, subscriberId);
 
-    // Send email
+    // Send email with the top story in the subject and one-click
+    // unsubscribe headers (RFC 8058)
     const result = await sendEmail(
       subscriber.email,
-      `Link AI Newsletter - Week ${data.week}, ${data.year}`,
-      html
+      buildNewsletterSubject(data),
+      html,
+      buildListUnsubscribeHeaders(subscriberId)
     );
 
     if (result.success) {
@@ -244,11 +248,7 @@ export async function sendTestNewsletter(
   try {
     const html = await renderNewsletterEmail(data);
 
-    const result = await sendEmail(
-      email,
-      `[TEST] Link AI Newsletter - Week ${data.week}, ${data.year}`,
-      html
-    );
+    const result = await sendEmail(email, buildTestSubject(data), html);
 
     return result;
   } catch (error) {

@@ -9,12 +9,17 @@ import { logger } from "@/lib/logger";
  * Public endpoint used by unsubscribe links in newsletter emails.
  * Requires a valid HMAC-signed token; raw subscriber IDs are not accepted.
  *
- * Body: { token: string }
+ * Token sources:
+ * - JSON body `{ token }` (the /unsubscribe page)
+ * - `?token=` query param (RFC 8058 one-click: mail providers POST
+ *   form-encoded `List-Unsubscribe=One-Click` to the List-Unsubscribe URL,
+ *   so the token must ride in the URL)
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
-    const token = body?.token;
+    const queryToken = new URL(request.url).searchParams.get("token");
+    const token = body?.token ?? queryToken;
 
     if (!token || typeof token !== "string") {
       return NextResponse.json(

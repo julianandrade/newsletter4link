@@ -61,16 +61,19 @@ export function getProviderSettings(): {
 export async function sendEmailViaProvider(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  headers?: Record<string, string>
 ): Promise<SendEmailResult> {
   const provider = getEmailProvider();
 
   if (provider === "graph") {
+    // Graph's internetMessageHeaders only accepts custom x-* headers, so
+    // standard headers like List-Unsubscribe cannot be set on this path.
     return sendEmailViaGraph(to, subject, html);
   }
 
   // Default to Resend
-  return sendEmailViaResend(to, subject, html);
+  return sendEmailViaResend(to, subject, html, headers);
 }
 
 /**
@@ -81,13 +84,14 @@ export async function sendEmailWithProvider(
   provider: "resend" | "graph",
   to: string,
   subject: string,
-  html: string
+  html: string,
+  headers?: Record<string, string>
 ): Promise<SendEmailResult> {
   if (provider === "graph") {
     return sendEmailViaGraph(to, subject, html);
   }
 
-  return sendEmailViaResend(to, subject, html);
+  return sendEmailViaResend(to, subject, html, headers);
 }
 
 /**
@@ -106,7 +110,8 @@ export function isSpecificProviderConfigured(provider: "resend" | "graph"): bool
 async function sendEmailViaResend(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  headers?: Record<string, string>
 ): Promise<SendEmailResult> {
   try {
     const resend = new Resend(config.email.resend.apiKey);
@@ -116,6 +121,7 @@ async function sendEmailViaResend(
       to,
       subject,
       html,
+      ...(headers ? { headers } : {}),
     });
 
     if (error) {

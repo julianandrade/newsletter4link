@@ -8,6 +8,9 @@ import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSetting
 import { requireOrgContext } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import { sanitizeBlockHtml, sanitizeImageUrl } from "@/lib/email/sanitize";
+import { buildNewsletterSubject } from "@/lib/email/subject";
+import { injectUnsubscribeUrl } from "@/lib/email/personalize";
+import { buildUnsubscribeUrl, buildListUnsubscribeHeaders } from "@/lib/email/unsubscribe-token";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 import { logger } from "@/lib/logger";
 
@@ -120,9 +123,18 @@ export async function POST(request: Request) {
         });
       }
     } else {
-      // Get approved articles and featured projects
+      // Get approved articles and featured projects. Exclude articles that
+      // already went out in a previous edition and stale news (same freshness
+      // rule as the weekly cron) so default sends don't repeat content.
+      const freshSince = new Date();
+      freshSince.setDate(freshSince.getDate() - 14);
+
       const articles = await db.article.findMany({
-        where: { status: "APPROVED" },
+        where: {
+          status: "APPROVED",
+          editions: { none: {} },
+          publishedAt: { gte: freshSince },
+        },
         orderBy: [
           { relevanceScore: "desc" },
           { publishedAt: "desc" },
@@ -571,7 +583,7 @@ async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string>
 interface EmailData {
   week: number;
   year: number;
-  articles: unknown[];
+  articles: Array<{ title: string }>;
   projects: unknown[];
 }
 
@@ -632,19 +644,25 @@ async function sendNewsletterWithTemplate(
       // Send all emails in batch concurrently
       const promises = batch.map(async (subscriber) => {
         try {
+          // Personalize the shared template per subscriber: working
+          // unsubscribe link in the body + one-click unsubscribe headers
+          const personalizedHtml = injectUnsubscribeUrl(
+            templateHtml,
+            buildUnsubscribeUrl(subscriber.id)
+          );
+          const subject = buildNewsletterSubject(data);
+          const headers = buildListUnsubscribeHeaders(subscriber.id);
+
           // Use provider override if specified, otherwise use default sendEmail
           const emailResult = providerOverride
             ? await sendEmailWithProvider(
                 providerOverride,
                 subscriber.email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
-                templateHtml
+                subject,
+                personalizedHtml,
+                headers
               )
-            : await sendEmail(
-                subscriber.email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
-                templateHtml
-              );
+            : await sendEmail(subscriber.email, subject, personalizedHtml, headers);
 
           if (emailResult.success) {
             // Log email event
@@ -784,18 +802,10 @@ async function sendToAdHocEmails(
 
       const promises = batch.map(async (email) => {
         try {
+          const subject = buildNewsletterSubject(data);
           const emailResult = providerOverride
-            ? await sendEmailWithProvider(
-                providerOverride,
-                email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
-                html
-              )
-            : await sendEmail(
-                email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
-                html
-              );
+            ? await sendEmailWithProvider(providerOverride, email, subject, html)
+            : await sendEmail(email, subject, html);
 
           // Note: We don't log email events for ad-hoc sends since the schema requires a subscriber reference
           // The metadata still gets logged via console for debugging

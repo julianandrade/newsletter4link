@@ -3,6 +3,7 @@ import { runCurationPipeline } from "@/lib/curation/curator";
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { isReminderDay, sendReviewReminder } from "@/lib/email/review-reminder";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -59,6 +60,16 @@ export async function GET(request: Request) {
           lowScore: 0,
           errors: 1,
         });
+      }
+
+      // Pre-weekend nudge: email org admins the pending-review count so
+      // Sunday's automated send has approved content. Never fails the cron.
+      if (isReminderDay()) {
+        try {
+          await sendReviewReminder(org.id, org.name);
+        } catch (error) {
+          logger.error(`[CRON] Review reminder failed for ${org.name}`, error);
+        }
       }
     }
 

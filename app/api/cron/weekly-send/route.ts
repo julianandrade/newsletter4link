@@ -9,6 +9,10 @@ import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
 
+// Articles older than this never make an auto-finalized edition; covers a
+// full week of news plus slack for items approved a little late.
+const FRESHNESS_WINDOW_DAYS = 14;
+
 /**
  * GET /api/cron/weekly-send
  * Triggered by Vercel Cron every Sunday at 12:00 UTC
@@ -73,9 +77,19 @@ export async function GET(request: Request) {
         if (!edition || edition.status === "DRAFT") {
           logger.info(`[CRON] ${org.name}: Edition not finalized, auto-finalizing...`);
 
-          // Get top approved articles for this org
+          // Get top approved articles for this org. Exclude anything already
+          // used in an edition (sent articles previously kept reappearing
+          // week after week) and keep only recent news so the edition is
+          // actually "this week's" content.
+          const freshSince = new Date();
+          freshSince.setDate(freshSince.getDate() - FRESHNESS_WINDOW_DAYS);
+
           const topArticles = await db.article.findMany({
-            where: { status: "APPROVED" },
+            where: {
+              status: "APPROVED",
+              editions: { none: {} },
+              publishedAt: { gte: freshSince },
+            },
             orderBy: [
               { relevanceScore: "desc" },
               { publishedAt: "desc" },
