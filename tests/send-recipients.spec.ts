@@ -64,14 +64,18 @@ test("subscribers appear in send recipients after adding", async ({ page }) => {
   await ensureEdition(page);
 
   // The recipients panel only renders on FINALIZED editions; finalize the
-  // draft first (the button opens a confirmation dialog).
+  // draft first (the button opens a confirmation dialog). The edition detail
+  // loads client-side, so wait for either the Finalize button (DRAFT) or the
+  // recipients panel (already FINALIZED) instead of an instant isVisible check.
   const finalizeButton = page.getByRole("button", { name: "Finalize", exact: true });
+  const recipientsPanel = page.getByText(/All subscribers \(\d+\)/);
+  await expect(finalizeButton.or(recipientsPanel).first()).toBeVisible({
+    timeout: 20000,
+  });
   if (await finalizeButton.isVisible()) {
     await finalizeButton.click();
     await page.getByRole("button", { name: "Finalize Edition" }).click();
   }
 
-  await expect(page.getByText(/All subscribers \(\d+\)/)).toBeVisible({
-    timeout: 20000,
-  });
+  await expect(recipientsPanel).toBeVisible({ timeout: 20000 });
 });

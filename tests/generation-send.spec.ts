@@ -46,33 +46,47 @@ test("approved draft shows subject line preview in send page", async ({ page }) 
 
   await page.goto("/dashboard/generate", { waitUntil: "networkidle" });
   await page.getByText("Select edition...").click();
-  const firstOption = page.getByRole("option").first();
-  const editionId = await firstOption.getAttribute("data-value");
-  await firstOption.click();
+  await page.getByRole("option").first().click();
+
+  // Radix options don't expose the edition id in the DOM; capture it from the
+  // generation request instead.
+  const generationRequest = page.waitForRequest(
+    (req) => req.url().includes("/api/generation/stream"),
+    { timeout: 20000 }
+  );
   await page.getByRole("button", { name: "Generate Newsletter" }).click();
+  const editionId = new URL((await generationRequest).url()).searchParams.get(
+    "editionId"
+  );
+  expect(editionId).toBeTruthy();
 
-  const viewButton = page.getByRole("button", { name: "View" }).first();
-  await viewButton.waitFor({ timeout: 60000 });
-  if (editionId) {
-    const draftsRes = await page.request.get(`/api/drafts?editionId=${editionId}`);
-    const draftsData = await draftsRes.json();
-    const firstDraftId = draftsData?.drafts?.[0]?.id;
-    if (firstDraftId) {
-      await page.request.post(`/api/drafts/${firstDraftId}/approve`);
-    }
-  } else {
-    const draftRow = viewButton.locator("..").locator("..");
-    const approveButton = draftRow.locator("button").nth(1);
-    await approveButton.click();
-  }
-  await page.getByText("APPROVED").first().waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "View" }).first().waitFor({ timeout: 60000 });
 
-  if (editionId) {
-    await page.goto(`/dashboard/send/${editionId}`, { waitUntil: "networkidle" });
-  } else {
-    await page.goto("/dashboard/send", { waitUntil: "networkidle" });
-    await page.getByText(/Week \d+, \d{4}/).first().click();
-  }
+  // Approve via API. The generate page doesn't re-fetch drafts after an
+  // out-of-band mutation, so assert approval through the API too.
+  const draftsRes = await page.request.get(`/api/drafts?editionId=${editionId}`);
+  expect(draftsRes.ok()).toBeTruthy();
+  const draftsData = await draftsRes.json();
+  const firstDraftId = draftsData?.drafts?.[0]?.id;
+  expect(firstDraftId).toBeTruthy();
+
+  const approveRes = await page.request.post(`/api/drafts/${firstDraftId}/approve`);
+  expect(approveRes.ok()).toBeTruthy();
+
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get(`/api/drafts?editionId=${editionId}`);
+        const data = await res.json();
+        return data?.drafts?.find(
+          (d: { id: string; status: string }) => d.id === firstDraftId
+        )?.status;
+      },
+      { timeout: 20000 }
+    )
+    .toBe("APPROVED");
+
+  await page.goto(`/dashboard/send/${editionId}`, { waitUntil: "networkidle" });
   const waitForSubjectLines = () =>
     Promise.race([
       page.getByText("Subject Lines").first().waitFor({ timeout: 5000 }),

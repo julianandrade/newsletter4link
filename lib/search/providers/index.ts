@@ -6,12 +6,21 @@
 
 import { SearchProvider, SearchProviderOptions, SearchProviderResponse } from "./types";
 import { TavilyProvider } from "./tavily";
+import { MockSearchProvider } from "./mock";
 
 // Registry of all provider instances
 const providers: Map<string, SearchProvider> = new Map();
 
 // Initialize providers
 function initializeProviders() {
+  // MOCK_SEARCH replaces real providers entirely so CI never hits paid APIs,
+  // matching the mock gates in query-processor.ts / result-analyzer.ts.
+  const mock = new MockSearchProvider();
+  if (mock.isAvailable()) {
+    providers.set(mock.name, mock);
+    return;
+  }
+
   const tavily = new TavilyProvider();
   if (tavily.isAvailable()) {
     providers.set(tavily.name, tavily);
