@@ -1,0 +1,26 @@
+# Dependencies / build output (reinstalled & rebuilt inside the image)
+node_modules
+.next
+
+# VCS
+.git
+.gitignore
+
+# Local dev / preview / test artifacts
+.preview
+test-results
+playwright-report
+supabase/.temp
+coverage
+
+# Docs & markdown (not needed at runtime/build)
+docs
+
+# Secrets & local env — NEVER ship these into the image layers
+.env
+.env.*
+
+# Editor / OS cruft
+.vscode
+.idea
+.DS_Store
