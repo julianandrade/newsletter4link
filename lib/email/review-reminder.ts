@@ -30,7 +30,7 @@ export async function sendReviewReminder(
   const week = getWeekNumber(now);
   const year = now.getFullYear();
 
-  const [pending, edition] = await Promise.all([
+  const [pending, edition, orgSettings] = await Promise.all([
     prisma.article.count({
       where: { organizationId, status: "PENDING_REVIEW" },
     }),
@@ -38,7 +38,13 @@ export async function sendReviewReminder(
       where: { organizationId, week, year },
       select: { status: true },
     }),
+    prisma.orgSettings.findUnique({
+      where: { organizationId },
+      select: { autoSendEnabled: true },
+    }),
   ]);
+
+  const autoSend = orgSettings?.autoSendEnabled ?? false;
 
   // FINALIZED or already SENT both mean no action is needed on the edition.
   const editionFinalized = !!edition && edition.status !== "DRAFT";
@@ -82,8 +88,12 @@ export async function sendReviewReminder(
       `<li>This week's edition (week ${week}) has <strong>not been finalized</strong>.
        You have until <strong>end of day today (18:00 UTC)</strong> to
        <a href="${sendUrl}" style="color:#1e3a5f;">curate &amp; finalize it</a> yourself —
-       after that it will be auto-finalized from the approved articles and sent
-       Tuesday morning.</li>`
+       after that it will be auto-finalized from the approved articles.
+       ${
+         autoSend
+           ? "It will then be <strong>sent automatically Tuesday morning</strong>."
+           : "Automated sending is <strong>off</strong>: once finalized, send it from the dashboard when you're ready."
+       }</li>`
     );
   }
 

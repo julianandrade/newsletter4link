@@ -126,6 +126,10 @@ export async function PUT(request: Request) {
       updates.theme = body.theme;
     }
 
+    if (typeof body.autoSendEnabled === "boolean") {
+      updates.autoSendEnabled = body.autoSendEnabled;
+    }
+
     const settings = await updateOrgSettings(ctx.db, updates);
     return NextResponse.json(settings);
   } catch (error) {

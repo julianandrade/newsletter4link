@@ -18,6 +18,7 @@ export interface OrgSettingsData extends AppSettings {
   fromName: string | null;
   replyToEmail: string | null;
   theme: string | null;
+  autoSendEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -38,6 +39,7 @@ const DEFAULT_ORG_SETTINGS: OrgSettingsData = {
   fromName: null,
   replyToEmail: null,
   theme: "linkroad-dark",
+  autoSendEnabled: false,
 };
 
 /**
@@ -144,6 +146,7 @@ export async function getOrgSettings(db: TenantClient): Promise<OrgSettingsData>
     fromName: settings.fromName,
     replyToEmail: settings.replyToEmail,
     theme: settings.theme ?? DEFAULT_ORG_SETTINGS.theme,
+    autoSendEnabled: settings.autoSendEnabled,
   };
 }
 
@@ -172,6 +175,7 @@ export async function updateOrgSettings(
     fromName: settings.fromName,
     replyToEmail: settings.replyToEmail,
     theme: settings.theme ?? DEFAULT_ORG_SETTINGS.theme,
+    autoSendEnabled: settings.autoSendEnabled,
   };
 }
 

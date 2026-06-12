@@ -45,3 +45,6 @@ prisma/migrations/**/migration_lock.toml
 .playwright-mcp/
 test-results/
 playwright-report/
+
+# Generated email previews (scripts/preview-newsletter.ts)
+.preview/

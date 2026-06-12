@@ -51,6 +51,26 @@ export async function GET(request: Request) {
         logger.info(`[CRON] Processing organization: ${org.name}`);
         const db = createTenantClient(org.id);
 
+        // Opt-in automation: orgs default to manual sending (an editor clicks
+        // Send in the dashboard). Only ship automatically when the org turned
+        // on "Automated weekly send" in Settings.
+        const orgSettings = await prisma.orgSettings.findUnique({
+          where: { organizationId: org.id },
+          select: { autoSendEnabled: true },
+        });
+        if (!orgSettings?.autoSendEnabled) {
+          logger.info(`[CRON] ${org.name}: automated send disabled, skipping`);
+          results.push({
+            organizationId: org.id,
+            organizationName: org.name,
+            sent: 0,
+            failed: 0,
+            skipped: true,
+            error: "Automated send disabled (manual send from dashboard)",
+          });
+          continue;
+        }
+
         // Get this week's edition
         const edition = await db.edition.findFirst({
           where: { week, year },

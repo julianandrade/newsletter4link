@@ -165,6 +165,11 @@ model OrgSettings {
   fromName     String?
   replyToEmail String?
 
+  // When false (default), the Tuesday weekly-send cron skips this org and an
+  // editor sends from the dashboard; when true, finalized editions go out
+  // automatically.
+  autoSendEnabled Boolean @default(false)
+
   updatedAt DateTime @updatedAt
 }
 

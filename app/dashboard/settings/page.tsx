@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Image, ChevronRight, Building2, Palette } from "lucide-react";
 import { UsageCard } from "@/components/usage-card";
 import Link from "next/link";
@@ -27,6 +28,7 @@ interface Settings {
   aiModel: string;
   embeddingModel: string;
   brandVoicePrompt: string | null;
+  autoSendEnabled: boolean;
 }
 
 const AI_MODELS = [
@@ -55,8 +57,9 @@ export default function SettingsPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const handleSaveSettings = async () => {
-    if (!settings) return;
+  const handleSaveSettings = async (override?: Settings) => {
+    const payload = override ?? settings;
+    if (!payload) return;
     setIsSaving(true);
     setSaveMessage(null);
 
@@ -64,7 +67,7 @@ export default function SettingsPage() {
       const response = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -203,10 +206,43 @@ export default function SettingsPage() {
                   </p>
                 )}
 
-                <Button onClick={handleSaveSettings} disabled={isSaving}>
+                <Button onClick={() => handleSaveSettings()} disabled={isSaving}>
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Settings
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Newsletter Automation</CardTitle>
+                <CardDescription>
+                  The weekly cycle: Monday-morning reminder, Monday 18:00 UTC
+                  auto-finalize, Tuesday 09:00 UTC send.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between gap-6">
+                  <div className="space-y-1">
+                    <Label htmlFor="auto-send">Automated weekly send</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {settings?.autoSendEnabled
+                        ? "On — the finalized edition is sent automatically every Tuesday at 09:00 UTC."
+                        : "Off — the edition is prepared automatically, but an editor must click Send in the dashboard."}
+                    </p>
+                  </div>
+                  <Switch
+                    id="auto-send"
+                    checked={settings?.autoSendEnabled ?? false}
+                    disabled={isSaving}
+                    onCheckedChange={(checked) => {
+                      if (!settings) return;
+                      const next = { ...settings, autoSendEnabled: checked };
+                      setSettings(next);
+                      handleSaveSettings(next);
+                    }}
+                  />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -297,7 +333,7 @@ export default function SettingsPage() {
                   </p>
                 )}
 
-                <Button onClick={handleSaveSettings} disabled={isSaving}>
+                <Button onClick={() => handleSaveSettings()} disabled={isSaving}>
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Settings
                 </Button>
