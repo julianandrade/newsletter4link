@@ -51,3 +51,75 @@ jobs:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+
+  # End-to-end tests against an ephemeral local Supabase stack (Postgres +
+  # Auth via Docker). Fully self-contained: no secrets, no shared
+  # environments — every run gets a fresh database seeded by
+  # tests/e2e/seed.ts. AI features run with MOCK_GENERATION/MOCK_SEARCH.
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      MOCK_GENERATION: "true"
+      MOCK_SEARCH: "true"
+      EMAIL_PROVIDER: resend
+      RESEND_API_KEY: re_placeholder_e2e
+      ANTHROPIC_API_KEY: sk-ant-placeholder-e2e
+      OPENAI_API_KEY: sk-placeholder-e2e
+      CRON_SECRET: e2e-cron-secret
+      UNSUBSCRIBE_SECRET: e2e-unsubscribe-secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase (Postgres + Auth)
+        run: supabase start
+
+      - name: Export local Supabase keys
+        run: |
+          STATUS="$(supabase status -o env)"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '\"')" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$STATUS" | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '\"')" >> "$GITHUB_ENV"
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed e2e data
+        run: npx tsx tests/e2e/seed.ts
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app
+        run: npm run build
+
+      - name: Run Playwright tests
+        run: npx playwright test
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
