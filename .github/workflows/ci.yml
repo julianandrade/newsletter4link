@@ -1,11 +1,12 @@
 name: CI
 
+# pull_request covers feature branches; pushing to claude/** as well doubled
+# every run.
 on:
   pull_request:
   push:
     branches:
       - master
-      - "claude/**"
 
 # Cancel in-progress runs for the same ref when a new run is triggered.
 concurrency:
@@ -115,6 +116,13 @@ jobs:
 
       - name: Run Playwright tests
         run: npx playwright test
+
+      # Surface what the page actually rendered when a locator failed —
+      # Playwright writes an ARIA snapshot next to each failing test.
+      - name: Dump failure context
+        if: failure()
+        run: |
+          find test-results -name "error-context.md" -print -exec cat {} \; 2>/dev/null || true
 
       - name: Upload traces on failure
         if: failure()

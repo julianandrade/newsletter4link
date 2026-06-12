@@ -18,5 +18,9 @@ export default defineConfig({
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Surface server-side errors (API route crashes, render failures) in the
+    // Playwright output instead of swallowing them.
+    stdout: "pipe",
+    stderr: "pipe",
   },
 });
