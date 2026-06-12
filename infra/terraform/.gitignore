@@ -1,0 +1,14 @@
+# Terraform state contains the generated DB password and secret metadata.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Local var files (cron_secret is sensitive). The committed example is fine.
+terraform.tfvars
+*.auto.tfvars
+!terraform.tfvars.example
+
+# Crash logs / plans
+crash.log
+*.tfplan

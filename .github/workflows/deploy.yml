@@ -31,8 +31,8 @@ env:
   GCP_PROJECT: newsletter-link-ai-radar
   GCP_REGION: europe-southwest1
   SERVICE: newsletter4link
-  # Artifact Registry repo path (repo `newsletter4link` assumed; owned by Terraform).
-  IMAGE_REPO: europe-southwest1-docker.pkg.dev/newsletter-link-ai-radar/newsletter4link/newsletter4link
+  # Artifact Registry repo `app` is created by infra/terraform/registry.tf.
+  IMAGE_REPO: europe-southwest1-docker.pkg.dev/newsletter-link-ai-radar/app/newsletter4link
 
 jobs:
   deploy:
