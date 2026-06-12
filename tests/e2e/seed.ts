@@ -12,6 +12,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "../../lib/db";
+import { getWeekNumber } from "../../lib/dates";
 
 const TEST_EMAIL = "test@example.com";
 const TEST_PASSWORD = "Test1234!";
@@ -55,6 +56,8 @@ async function ensureAuthUser(): Promise<string> {
 async function main() {
   const supabaseUserId = await ensureAuthUser();
 
+  // ENTERPRISE: the specs exercise Ghost Writer (generation) and Trend Radar
+  // (search), which are plan-gated and hidden from the UI on FREE.
   let organization = await prisma.organization.findUnique({
     where: { slug: "e2e-org" },
   });
@@ -63,8 +66,14 @@ async function main() {
       data: {
         name: "E2E Test Org",
         slug: "e2e-org",
+        plan: "ENTERPRISE",
         settings: { create: {} },
       },
+    });
+  } else if (organization.plan !== "ENTERPRISE") {
+    organization = await prisma.organization.update({
+      where: { id: organization.id },
+      data: { plan: "ENTERPRISE" },
     });
   }
 
@@ -150,8 +159,46 @@ async function main() {
     update: { active: true },
   });
 
+  // A draft edition for the current week with the articles attached, so the
+  // send and generate pages have an edition to open/select (the specs'
+  // create-edition fallback flow is flaky against an empty list).
+  const today = new Date();
+  const week = getWeekNumber(today);
+  const year = today.getFullYear();
+
+  let edition = await prisma.edition.findFirst({
+    where: { organizationId: organization.id, week, year },
+  });
+  if (!edition) {
+    edition = await prisma.edition.create({
+      data: {
+        week,
+        year,
+        status: "DRAFT",
+        organizationId: organization.id,
+      },
+    });
+  }
+
+  const seededArticles = await prisma.article.findMany({
+    where: {
+      organizationId: organization.id,
+      sourceUrl: { startsWith: "https://example.com/e2e-article-" },
+    },
+    orderBy: { relevanceScore: "desc" },
+  });
+  for (const [order, article] of seededArticles.entries()) {
+    await prisma.editionArticle.upsert({
+      where: {
+        editionId_articleId: { editionId: edition.id, articleId: article.id },
+      },
+      create: { editionId: edition.id, articleId: article.id, order },
+      update: { order },
+    });
+  }
+
   console.log(
-    `Seeded org ${organization.id}: ${articles.length} approved articles, 1 subscriber`
+    `Seeded org ${organization.id} (ENTERPRISE): ${articles.length} approved articles, 1 subscriber, edition week ${week}/${year}`
   );
 }
 
