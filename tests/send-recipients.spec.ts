@@ -62,5 +62,16 @@ test("subscribers appear in send recipients after adding", async ({ page }) => {
   await expect(page.getByText(uniqueEmail).first()).toBeVisible();
 
   await ensureEdition(page);
-  await expect(page.getByText(/All subscribers \(\d+\)/)).toBeVisible();
+
+  // The recipients panel only renders on FINALIZED editions; finalize the
+  // draft first (the button opens a confirmation dialog).
+  const finalizeButton = page.getByRole("button", { name: "Finalize", exact: true });
+  if (await finalizeButton.isVisible()) {
+    await finalizeButton.click();
+    await page.getByRole("button", { name: "Finalize Edition" }).click();
+  }
+
+  await expect(page.getByText(/All subscribers \(\d+\)/)).toBeVisible({
+    timeout: 20000,
+  });
 });

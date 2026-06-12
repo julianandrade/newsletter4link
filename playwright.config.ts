@@ -3,6 +3,9 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests",
   testMatch: ["**/*.spec.ts"],
+  // The specs share one seeded database; parallel workers interleave writes
+  // (e.g. one spec's unapproved draft changes another spec's page state).
+  workers: 1,
   timeout: 120_000,
   expect: {
     timeout: 10_000,
