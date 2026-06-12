@@ -1,74 +1,60 @@
-import { createServerClient } from "@supabase/ssr";
+import NextAuth from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
+import { authConfig } from "@/auth.config";
+
+// Edge-safe Auth.js instance. Uses ONLY the DB-free authConfig (no Prisma), so
+// it is valid in the middleware/edge runtime. The full config (auth.ts) adds the
+// jwt/session DB callbacks and only runs in the Node runtime.
+const { auth } = NextAuth(authConfig);
 
 export async function proxy(request: NextRequest) {
-  // Public routes that don't need auth
-  // /api/cron and /api/webhooks authenticate via secrets/signatures in the route handlers
+  // Public routes that don't need auth.
+  // /api/auth/* are the Auth.js handlers themselves (sign-in/callback/session).
+  // /api/cron and /api/webhooks authenticate via secrets/signatures in the
+  // route handlers.
   const publicPaths = [
     "/login",
     "/unsubscribe",
+    "/api/auth",
     "/api/unsubscribe",
     "/api/cron",
     "/api/webhooks",
   ];
-  const isPublicPath = publicPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
+  const { pathname } = request.nextUrl;
+  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
 
-  if (isPublicPath) {
-    return NextResponse.next();
-  }
+  // Resolve the session (reads the Auth.js JWT cookie; no DB access).
+  const session = await auth();
+  const isAuthenticated = !!session?.user;
 
-  let response = NextResponse.next({
-    request,
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Redirect to login if not authenticated and accessing protected routes
-  if (
-    !user &&
-    (request.nextUrl.pathname.startsWith("/dashboard") ||
-      request.nextUrl.pathname.startsWith("/api/"))
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
-
-  // Redirect to dashboard if authenticated and accessing login
-  if (user && request.nextUrl.pathname === "/login") {
+  // Authenticated user hitting /login -> send to dashboard.
+  if (isAuthenticated && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  return response;
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+
+  // Unauthenticated user on a protected route -> redirect to /login, preserving
+  // the originally requested path as ?redirect= (matches prior behavior used by
+  // the invite flow).
+  if (
+    !isAuthenticated &&
+    (pathname.startsWith("/dashboard") || pathname.startsWith("/api/"))
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    const target = pathname + request.nextUrl.search;
+    if (target && target !== "/login") {
+      url.search = `?redirect=${encodeURIComponent(target)}`;
+    }
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {

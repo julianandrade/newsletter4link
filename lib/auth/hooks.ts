@@ -1,91 +1,57 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
-import type { User, Session, SupabaseClient, AuthChangeEvent } from "@supabase/supabase-js";
+import { useCallback, useMemo } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
 
+/**
+ * Client auth hook backed by Auth.js (next-auth/react).
+ *
+ * Replaces the previous Supabase-based hook. Requires a <SessionProvider>
+ * ancestor — mounted in app/providers.tsx via the root layout.
+ *
+ * Auth migration: docs/MIGRATION-GCP.md Phase 2.
+ */
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  // Create the (singleton) browser client lazily during render so we don't need a
-  // synchronous setState inside the effect to initialize it.
-  const [supabase] = useState<SupabaseClient>(() => createClient());
+  const { data: session, status } = useSession();
 
-  // Subscribe to auth state on mount. All setState happens after an await
-  // (getSession) or inside the auth-change callback, never synchronously in the
-  // effect body.
-  useEffect(() => {
-    // Get initial session
-    const initSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    };
-    initSession();
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, newSession: Session | null) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [supabase]);
-
-  const signInWithAzure = useCallback(async () => {
-    if (!supabase) return { error: new Error("Client not initialized") };
-    return supabase.auth.signInWithOAuth({
-      provider: "azure",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: "email openid profile",
-      },
-    });
-  }, [supabase]);
-
-  const signInWithPassword = useCallback(
-    async (email: string, password: string) => {
-      if (!supabase) return { error: new Error("Client not initialized") };
-      return supabase.auth.signInWithPassword({ email, password });
-    },
-    [supabase]
+  const signInWithMicrosoft = useCallback(
+    (callbackUrl: string = "/dashboard") =>
+      signIn("microsoft-entra-id", { callbackUrl }),
+    []
   );
 
-  const signUp = useCallback(
-    async (email: string, password: string) => {
-      if (!supabase) return { error: new Error("Client not initialized") };
-      return supabase.auth.signUp({
+  // E2E/CI only: password sign-in via the credentials provider. Returns an
+  // object with an optional `error` so callers can surface failures.
+  const signInWithCredentials = useCallback(
+    async (
+      email: string,
+      password: string,
+      callbackUrl: string = "/dashboard"
+    ) => {
+      const result = await signIn("credentials", {
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+        redirect: false,
       });
+      return { error: result?.error ?? null, callbackUrl };
     },
-    [supabase]
+    []
   );
 
-  const signOut = useCallback(async () => {
-    if (!supabase) return { error: new Error("Client not initialized") };
-    return supabase.auth.signOut();
-  }, [supabase]);
+  const handleSignOut = useCallback(
+    (callbackUrl: string = "/login") => signOut({ callbackUrl }),
+    []
+  );
 
   return useMemo(
     () => ({
-      user,
-      session,
-      loading,
-      signInWithAzure,
-      signInWithPassword,
-      signUp,
-      signOut,
+      user: session?.user ?? null,
+      session: session ?? null,
+      loading: status === "loading",
+      signInWithMicrosoft,
+      signInWithCredentials,
+      signOut: handleSignOut,
     }),
-    [user, session, loading, signInWithAzure, signInWithPassword, signUp, signOut]
+    [session, status, signInWithMicrosoft, signInWithCredentials, handleSignOut]
   );
 }

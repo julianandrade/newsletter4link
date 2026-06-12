@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const rl = checkRateLimit(
       rateLimitKey([
         ctx.organization.id,
-        ctx.membership.supabaseUserId,
+        ctx.membership.id,
         "generation:subject-lines",
       ]),
       RATE_LIMIT

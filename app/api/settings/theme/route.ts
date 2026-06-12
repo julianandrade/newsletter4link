@@ -8,12 +8,7 @@ export async function GET() {
     const ctx = await requireOrgContext();
     const orgSettings = await ctx.db.orgSettings.findUnique();
     const membership = await prisma.orgUser.findUnique({
-      where: {
-        supabaseUserId_organizationId: {
-          supabaseUserId: ctx.membership.supabaseUserId,
-          organizationId: ctx.organization.id,
-        },
-      },
+      where: { id: ctx.membership.id },
     });
 
     return NextResponse.json({
@@ -49,12 +44,7 @@ export async function PUT(request: Request) {
     }
 
     const membership = await prisma.orgUser.update({
-      where: {
-        supabaseUserId_organizationId: {
-          supabaseUserId: ctx.membership.supabaseUserId,
-          organizationId: ctx.organization.id,
-        },
-      },
+      where: { id: ctx.membership.id },
       data: { theme: theme ?? null },
     });
 

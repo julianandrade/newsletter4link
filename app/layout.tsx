@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeSync } from "@/components/theme-sync";
+import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -66,7 +67,7 @@ export default function RootLayout({
           }}
         >
           <ThemeSync />
-          {children}
+          <Providers>{children}</Providers>
           <Toaster richColors position="top-right" />
         </ThemeProvider>
       </body>

@@ -50,8 +50,17 @@ jobs:
         run: npm run build
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          # Supabase vars are now storage-only; still needed because the storage
+          # client and seed build against them.
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          # Auth.js (Phase 2). Placeholders are fine for a build — the Entra
+          # provider is only contacted at runtime sign-in.
+          AUTH_SECRET: placeholder-auth-secret-for-build
+          AUTH_TRUST_HOST: "true"
+          AUTH_MICROSOFT_ENTRA_ID_ID: placeholder-entra-client-id
+          AUTH_MICROSOFT_ENTRA_ID_SECRET: placeholder-entra-client-secret
+          AUTH_MICROSOFT_ENTRA_ID_ISSUER: https://login.microsoftonline.com/placeholder-tenant-id/v2.0
 
   # End-to-end tests against an ephemeral local Supabase stack (Postgres +
   # Auth via Docker). Fully self-contained: no secrets, no shared
@@ -63,6 +72,8 @@ jobs:
     env:
       CI: "true"
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      # Supabase is still used for the local Postgres (and storage builds against
+      # the URL/anon key); AUTH is now Auth.js, not Supabase.
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
@@ -74,6 +85,20 @@ jobs:
       OPENAI_API_KEY: sk-placeholder-e2e
       CRON_SECRET: e2e-cron-secret
       UNSUBSCRIBE_SECRET: e2e-unsubscribe-secret
+      # Auth.js (Phase 2). E2E_TEST_MODE enables the credentials provider; the
+      # NEXT_PUBLIC_ variant renders the password form on /login. NEVER set
+      # these in production.
+      AUTH_SECRET: e2e-auth-secret-placeholder
+      AUTH_TRUST_HOST: "true"
+      E2E_TEST_MODE: "true"
+      NEXT_PUBLIC_E2E_TEST_MODE: "true"
+      E2E_TEST_EMAIL: test@example.com
+      E2E_TEST_PASSWORD: Test1234!
+      # Entra provider is registered but never contacted in e2e (credentials
+      # path is used); placeholders keep provider construction happy.
+      AUTH_MICROSOFT_ENTRA_ID_ID: placeholder-entra-client-id
+      AUTH_MICROSOFT_ENTRA_ID_SECRET: placeholder-entra-client-secret
+      AUTH_MICROSOFT_ENTRA_ID_ISSUER: https://login.microsoftonline.com/placeholder-tenant-id/v2.0
 
     steps:
       - name: Checkout

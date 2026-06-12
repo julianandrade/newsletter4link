@@ -1,8 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { createTenantClient, TenantClient } from "@/lib/db/tenant";
 import { cookies } from "next/headers";
-import { Organization, OrgRole, OrgUser, Plan } from "@prisma/client";
+import { Organization, OrgRole, OrgUser } from "@prisma/client";
 import { getPlanFeatures, hasFeature, PlanFeatures } from "@/lib/plans/features";
 
 const ORG_COOKIE_NAME = "selected_org_id";
@@ -18,10 +18,19 @@ export interface OrgContext {
 }
 
 /**
- * Full auth context including Supabase user
+ * The authenticated identity for the current request, resolved from the Auth.js
+ * session. `userId` is the stable Entra `oid` (or the e2e credentials id).
+ */
+export interface AuthUser {
+  userId: string;
+  email: string;
+}
+
+/**
+ * Full auth context including the resolved identity + org memberships.
  */
 export interface AuthContext {
-  supabaseUserId: string;
+  userId: string;
   email: string;
   organizations: Array<{
     organization: Organization;
@@ -31,24 +40,54 @@ export interface AuthContext {
 }
 
 /**
- * Get the Supabase user from the current session
+ * Resolve the current user from the Auth.js session (replaces the old
+ * Supabase getUser()). Returns null when unauthenticated.
  */
-export async function getSupabaseUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+export async function getAuthUser(): Promise<AuthUser | null> {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return null;
+  return {
+    userId,
+    email: (session.user.email ?? "").toLowerCase(),
+  };
 }
 
 /**
- * Get all organizations the current user is a member of
+ * Get all organizations the current user is a member of.
+ *
+ * Membership is keyed on the Entra `oid` (entraOid). During the migration we
+ * also fall back to matching by email (case-insensitive) and backfill entraOid
+ * when found, so accounts that pre-date Entra sign-in resolve transparently.
  */
-export async function getUserOrganizations(supabaseUserId: string) {
-  const memberships = await prisma.orgUser.findMany({
-    where: { supabaseUserId },
+export async function getUserOrganizations(user: AuthUser) {
+  let memberships = await prisma.orgUser.findMany({
+    where: { entraOid: user.userId },
     include: { organization: true },
   });
+
+  // Transition fallback: resolve by email and backfill entraOid for matches
+  // that don't yet carry it (skip the synthetic e2e id).
+  if (memberships.length === 0 && user.email) {
+    const byEmail = await prisma.orgUser.findMany({
+      where: { email: { equals: user.email, mode: "insensitive" } },
+      include: { organization: true },
+    });
+
+    const isEntraOid = !user.userId.startsWith("e2e:");
+    const toBackfill = byEmail.filter((m) => m.entraOid == null);
+    if (isEntraOid && toBackfill.length > 0) {
+      await prisma.orgUser.updateMany({
+        where: { id: { in: toBackfill.map((m) => m.id) } },
+        data: { entraOid: user.userId },
+      });
+      // Reflect the backfill in the objects we return this request.
+      for (const m of byEmail) {
+        if (m.entraOid == null) m.entraOid = user.userId;
+      }
+    }
+    memberships = byEmail;
+  }
 
   return memberships.map((m) => ({
     organization: m.organization,
@@ -81,10 +120,10 @@ export async function setSelectedOrgId(orgId: string): Promise<void> {
  * Get the full auth context for the current request
  */
 export async function getAuthContext(): Promise<AuthContext | null> {
-  const user = await getSupabaseUser();
+  const user = await getAuthUser();
   if (!user) return null;
 
-  const organizations = await getUserOrganizations(user.id);
+  const organizations = await getUserOrganizations(user);
   const selectedOrgId = await getSelectedOrgId();
 
   // Find current org - either selected or first available
@@ -106,8 +145,8 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   }
 
   return {
-    supabaseUserId: user.id,
-    email: user.email ?? "",
+    userId: user.userId,
+    email: user.email,
     organizations,
     currentOrg,
   };
@@ -118,41 +157,37 @@ export async function getAuthContext(): Promise<AuthContext | null> {
  * Throws error if user not authenticated or no org access
  */
 export async function requireOrgContext(): Promise<OrgContext> {
-  const auth = await getAuthContext();
+  const ctx = await getAuthContext();
 
-  if (!auth) {
+  if (!ctx) {
     throw new Error("Unauthorized: Not authenticated");
   }
 
-  if (!auth.currentOrg) {
+  if (!ctx.currentOrg) {
     throw new Error("Unauthorized: No organization selected");
   }
 
-  return auth.currentOrg;
+  return ctx.currentOrg;
 }
 
 /**
  * Get organization context by slug (for org-scoped routes)
  */
 export async function getOrgContextBySlug(slug: string): Promise<OrgContext | null> {
-  const user = await getSupabaseUser();
+  const user = await getAuthUser();
   if (!user) return null;
 
-  const membership = await prisma.orgUser.findFirst({
-    where: {
-      supabaseUserId: user.id,
-      organization: { slug },
-    },
-    include: { organization: true },
-  });
-
-  if (!membership) return null;
+  // Reuse the membership resolver (entraOid first, email fallback) then narrow
+  // to the requested slug.
+  const organizations = await getUserOrganizations(user);
+  const match = organizations.find((o) => o.organization.slug === slug);
+  if (!match) return null;
 
   return {
-    organization: membership.organization,
-    membership,
-    features: getPlanFeatures(membership.organization.plan),
-    db: createTenantClient(membership.organization.id),
+    organization: match.organization,
+    membership: match.membership,
+    features: getPlanFeatures(match.organization.plan),
+    db: createTenantClient(match.organization.id),
   };
 }
 
@@ -202,10 +237,12 @@ export function requireFeature(
 }
 
 /**
- * Create a new organization and add the user as owner
+ * Create a new organization and add the user as owner.
+ *
+ * `entraOid` is the stable Entra identity (or e2e id) of the creator.
  */
 export async function createOrganization(
-  supabaseUserId: string,
+  entraOid: string,
   email: string,
   name: string,
   slug: string,
@@ -227,7 +264,7 @@ export async function createOrganization(
       industry: industry as Organization["industry"] ?? "TECHNOLOGY",
       members: {
         create: {
-          supabaseUserId,
+          entraOid,
           email,
           role: "OWNER",
         },
@@ -279,9 +316,9 @@ export async function inviteToOrganization(
  * Accept an organization invite
  */
 export async function acceptInvite(
-  token: string,
-  supabaseUserId: string,
-  email: string
+  entraOid: string,
+  email: string,
+  token: string
 ): Promise<Organization> {
   const invite = await prisma.orgInvite.findUnique({
     where: { token },
@@ -299,7 +336,7 @@ export async function acceptInvite(
   // Create membership
   await prisma.orgUser.create({
     data: {
-      supabaseUserId,
+      entraOid,
       email,
       role: invite.role,
       organizationId: invite.organizationId,

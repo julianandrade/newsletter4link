@@ -17,8 +17,13 @@ locals {
     "cron-secret",
     "unsubscribe-secret",
     "tavily-api-key",
-    "supabase-url",       # NEXT_PUBLIC_SUPABASE_URL (Supabase auth stays in Phase 1)
-    "supabase-anon-key",  # NEXT_PUBLIC_SUPABASE_ANON_KEY
+    "supabase-url",       # NEXT_PUBLIC_SUPABASE_URL (Supabase STORAGE only post-Phase-2)
+    "supabase-anon-key",  # NEXT_PUBLIC_SUPABASE_ANON_KEY (storage)
+    # Auth.js + Microsoft Entra ID (docs/MIGRATION-GCP.md Phase 2).
+    "auth-secret",          # AUTH_SECRET (openssl rand -base64 33)
+    "entra-client-id",      # AUTH_MICROSOFT_ENTRA_ID_ID
+    "entra-client-secret",  # AUTH_MICROSOFT_ENTRA_ID_SECRET
+    "entra-issuer",         # AUTH_MICROSOFT_ENTRA_ID_ISSUER
   ]
 
   # Cloud SQL unix-socket DSN used by Cloud Run (Prisma reads DATABASE_URL/DIRECT_URL).

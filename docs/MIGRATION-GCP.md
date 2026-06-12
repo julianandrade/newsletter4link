@@ -232,11 +232,55 @@ hosting to Cloud Run the same day as the DB cutover.**
 
 ---
 
-## Phase 2 — Auth migration: Auth.js + Microsoft Entra ID (NOT YET IMPLEMENTED)
+## Phase 2 — Auth migration: Auth.js + Microsoft Entra ID (IMPLEMENTED)
 
-> Preview only. No code for this exists yet. Supabase Auth stays live through
-> Phase 1; Supabase can be **decommissioned only after this phase** is complete
-> and verified.
+> Implemented in code (this repo). Supabase Auth (GoTrue) has been replaced by
+> **Auth.js (NextAuth v5)** with a **Microsoft Entra ID** provider. Supabase
+> **Storage** is untouched (Phase 3). Supabase can be **decommissioned only after
+> this phase** is verified against real Entra sign-in in production.
+
+### What was built
+
+- **`auth.config.ts`** — edge-safe config (no Prisma): the Entra provider
+  (`microsoft-entra-id`, scopes `openid profile email`) reading
+  `AUTH_MICROSOFT_ENTRA_ID_ID/SECRET/ISSUER`, JWT session strategy, `trustHost`,
+  and the edge `authorized` callback. Imported by the middleware.
+- **`auth.ts`** — full Node-runtime config: spreads `auth.config.ts`, adds the
+  E2E-only Credentials provider, and the `jwt`/`session` callbacks. The `jwt`
+  callback performs the §2.2 lazy remap (entraOid → email fallback → backfill)
+  using Prisma. Exports `handlers/auth/signIn/signOut`.
+- **`app/api/auth/[...nextauth]/route.ts`** — Auth.js GET/POST handlers. The
+  Entra callback URL is `…/api/auth/callback/microsoft-entra-id`.
+- **`proxy.ts`** — middleware now checks the Auth.js session (edge config, no
+  DB). Same public-route list; unauthenticated → `/login?redirect=…`,
+  authenticated on `/login` → `/dashboard`.
+- **`lib/auth/context.ts`** — `requireOrgContext()` / `getAuthContext()` resolve
+  the user from `auth()`; membership lookup is by `entraOid` first, then email
+  (case-insensitive) with `entraOid` backfill. The `OrgContext`/`ctx.*` shape is
+  unchanged so the ~70 API routes need no edits. Rate-limit keys that used
+  `membership.supabaseUserId` now use the stable `membership.id`.
+- **`lib/auth/hooks.ts`** + **`app/providers.tsx`** — `useAuth()` wraps
+  `next-auth/react`; `<SessionProvider>` is mounted in the root layout.
+- **`app/login/page.tsx`** — primary "Sign in with Microsoft"
+  (`signIn("microsoft-entra-id")`); the password form (selectors `#login-email`,
+  `#login-password`, button "Sign In") renders **only** when
+  `NEXT_PUBLIC_E2E_TEST_MODE === "true"`. Sign-up flow removed.
+- **Prisma migration** `20260613100000_orguser_entra_oid`: adds
+  `OrgUser.entraOid TEXT UNIQUE` (nullable) and makes `supabaseUserId` nullable
+  (retained for rollback — not dropped).
+- **`lib/supabase/server.ts` / `client.ts`** and the `@supabase/ssr` dependency
+  were removed (auth-only). `lib/supabase/storage.ts` stays.
+
+### E2E / CI (test-only sign-in)
+
+A **Credentials** provider is registered **only** when `E2E_TEST_MODE === "true"`
+and validates `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` by exact match, returning a
+user with id `e2e:<email>`. The e2e seed (`tests/e2e/seed.ts`) creates the
+`OrgUser` with `entraOid = "e2e:<email>"` — **no Supabase admin calls**.
+
+> ⚠ **`E2E_TEST_MODE` (and `NEXT_PUBLIC_E2E_TEST_MODE`) must NEVER be set in
+> production.** With the flag unset there is no password sign-in path at all; the
+> only way in is Microsoft Entra ID.
 
 ### 2.1 Entra ID (Azure AD) app registration
 
@@ -254,29 +298,33 @@ In the Entra admin center → App registrations → New registration:
 6. (Optional) Token configuration / API permissions: `openid`, `profile`,
    `email`, `User.Read` — enough for sign-in + email claim.
 
-Store these as new Secret Manager secrets + Cloud Run env (mirror the Phase 0
-pattern): `entra-tenant-id`, `entra-client-id`, `entra-client-secret`, plus
-`AUTH_SECRET` (`openssl rand -base64 33`).
+Store these as new Secret Manager secrets + Cloud Run env (already wired in
+`infra/terraform/` — see the README's secret-loading commands):
+`entra-client-id` → `AUTH_MICROSOFT_ENTRA_ID_ID`, `entra-client-secret` →
+`AUTH_MICROSOFT_ENTRA_ID_SECRET`, `entra-issuer` →
+`AUTH_MICROSOFT_ENTRA_ID_ISSUER` (`https://login.microsoftonline.com/<tenant-id>/v2.0`),
+and `auth-secret` → `AUTH_SECRET` (`openssl rand -base64 33`). Cloud Run also
+sets `AUTH_TRUST_HOST=true`.
 
 ### 2.2 User remap (supabaseUserId → Entra OID), by email
 
 `OrgUser` currently links to Supabase via `OrgUser.supabaseUserId`. Entra issues
 a stable **OID** (`oid` claim) per user. Plan:
 
-1. Add an `entraOid` column to `OrgUser` (new Prisma migration). Keep
-   `supabaseUserId` during transition.
-2. **Remap-by-email script concept:** on first Entra sign-in, match the incoming
-   token's `email`/`preferred_username` (case-insensitive) to an existing
-   `OrgUser.email`; if found and `entraOid` is null, set `entraOid` to the
-   token's `oid`. This migrates accounts lazily and safely (no bulk guess).
-   For users who never sign in, optionally pre-seed `entraOid` from a directory
-   export joined on email.
-3. Once all active users have `entraOid`, make Auth.js key sessions on `entraOid`
-   and drop `supabaseUserId` in a later migration.
+1. ✅ `entraOid` column added to `OrgUser` (migration
+   `20260613100000_orguser_entra_oid`). `supabaseUserId` kept (now nullable).
+2. ✅ **Lazy remap-by-email implemented** in the `jwt` callback (`auth.ts`) and
+   in `getUserOrganizations` (`lib/auth/context.ts`): on Entra sign-in we match
+   the token's `email`/`preferred_username` (case-insensitive) to an existing
+   `OrgUser.email`; if found with a null `entraOid`, we set `entraOid` to the
+   token's `oid`. Sessions are keyed on `entraOid`. For users who never sign in,
+   optionally pre-seed `entraOid` from a directory export joined on email.
+3. Once all active users have `entraOid`, drop `supabaseUserId` in a later
+   migration (rollback safety until then — see Phase 2 rollback).
 
-> ⚠ Conceptual — no script is written. Email collisions / users with changed
-> emails must be reconciled manually. Verify Entra returns `email` for all org
-> users (some accounts only expose `upn`).
+> ⚠ Email collisions / users with changed emails must be reconciled manually.
+> Verify Entra returns `email` for all org users (some accounts only expose
+> `upn`; the provider falls back to `preferred_username`).
 
 ### 2.3 Cutover
 

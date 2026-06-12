@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const rl = checkRateLimit(
       rateLimitKey([
         organization.id,
-        membership.supabaseUserId,
+        membership.id,
         "generation:stream",
       ]),
       RATE_LIMIT

@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     }
 
     const organization = await createOrganization(
-      auth.supabaseUserId,
+      auth.userId,
       auth.email,
       name.trim(),
       slug,

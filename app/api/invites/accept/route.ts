@@ -26,9 +26,9 @@ export async function POST(request: Request) {
     }
 
     const organization = await acceptInvite(
-      token,
-      auth.supabaseUserId,
-      auth.email
+      auth.userId,
+      auth.email,
+      token
     );
 
     // Switch to the new organization

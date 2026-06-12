@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Home,
   FileText,
@@ -26,15 +26,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth/hooks";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { JobIndicator } from "@/components/job-indicator";
-import type { User } from "@supabase/supabase-js";
 
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
-  user: User;
+  userEmail: string;
 }
 
 const navItems = [
@@ -51,14 +50,12 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
-export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
+export function AppSidebar({ collapsed, onToggle, userEmail }: AppSidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const { signOut } = useAuth();
 
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
+    await signOut("/login");
   };
 
   return (
@@ -145,13 +142,13 @@ export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p className="font-medium">{user.email}</p>
+                <p className="font-medium">{userEmail}</p>
                 <p className="text-xs text-muted-foreground">Sign out</p>
               </TooltipContent>
             </Tooltip>
           ) : (
             <div className="px-2 py-1">
-              <p className="text-sm font-medium truncate">{user.email}</p>
+              <p className="text-sm font-medium truncate">{userEmail}</p>
               <Button
                 variant="ghost"
                 size="sm"

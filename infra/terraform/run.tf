@@ -26,6 +26,11 @@ locals {
     TAVILY_API_KEY                = "tavily-api-key"
     NEXT_PUBLIC_SUPABASE_URL      = "supabase-url"
     NEXT_PUBLIC_SUPABASE_ANON_KEY = "supabase-anon-key"
+    # Auth.js + Microsoft Entra ID (Phase 2).
+    AUTH_SECRET                    = "auth-secret"
+    AUTH_MICROSOFT_ENTRA_ID_ID     = "entra-client-id"
+    AUTH_MICROSOFT_ENTRA_ID_SECRET = "entra-client-secret"
+    AUTH_MICROSOFT_ENTRA_ID_ISSUER = "entra-issuer"
   }
 }
 
@@ -80,6 +85,12 @@ resource "google_cloud_run_v2_service" "app" {
       env {
         name  = "EMAIL_PROVIDER"
         value = "resend"
+      }
+      # Auth.js must trust the X-Forwarded-* headers behind the Cloud Run proxy
+      # so it derives the correct callback origin.
+      env {
+        name  = "AUTH_TRUST_HOST"
+        value = "true"
       }
 
       # Secret-backed env (latest version of each secret).

@@ -1,6 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth/context";
 import { AcceptInviteForm } from "./accept-invite-form";
 
 interface InvitePageProps {
@@ -43,21 +43,21 @@ export default async function InvitePage({ params }: InvitePageProps) {
   }
 
   // Check if user is logged in
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   // If not logged in, redirect to login with return URL
   if (!user) {
     redirect(`/login?redirect=/invite/${token}`);
   }
 
-  // Check if already a member
+  // Check if already a member (by Entra identity or email).
   const existingMember = await prisma.orgUser.findFirst({
     where: {
-      supabaseUserId: user.id,
       organizationId: invite.organizationId,
+      OR: [
+        { entraOid: user.userId },
+        { email: { equals: user.email, mode: "insensitive" } },
+      ],
     },
   });
 
@@ -73,7 +73,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
         organizationName={invite.organization.name}
         role={invite.role}
         invitedEmail={invite.email}
-        userEmail={user.email || ""}
+        userEmail={user.email}
       />
     </div>
   );

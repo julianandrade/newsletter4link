@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseUser } from "@/lib/auth/context";
+import { getAuthUser } from "@/lib/auth/context";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST() {
   try {
-    const user = await getSupabaseUser();
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -21,11 +21,14 @@ export async function POST() {
       );
     }
 
-    // Check if user is already a member
+    // Check if user is already a member (by Entra identity or email).
     const existingMember = await prisma.orgUser.findFirst({
       where: {
-        supabaseUserId: user.id,
         organizationId: DEFAULT_ORG_ID,
+        OR: [
+          { entraOid: user.userId },
+          { email: { equals: user.email, mode: "insensitive" } },
+        ],
       },
     });
 
@@ -52,9 +55,9 @@ export async function POST() {
     // Add user as OWNER (for the original admin)
     await prisma.orgUser.create({
       data: {
-        supabaseUserId: user.id,
+        entraOid: user.userId,
         email: user.email || "",
-        name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+        name: user.email?.split("@")[0] || "User",
         role: "OWNER",
         organizationId: DEFAULT_ORG_ID,
       },

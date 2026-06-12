@@ -73,10 +73,17 @@ enum Industry {
   OTHER
 }
 
-// Links Supabase auth users to organizations
+// Links auth identities to organizations.
+//
+// Auth migration (docs/MIGRATION-GCP.md Phase 2): identities are now keyed on
+// the Microsoft Entra ID `oid` claim (`entraOid`). `supabaseUserId` is retained
+// nullable during the transition so a rollback to the Supabase-auth build still
+// works and existing rows keep their linkage until backfilled. A later migration
+// drops it once all active users have `entraOid`.
 model OrgUser {
   id             String  @id @default(cuid())
-  supabaseUserId String // Supabase auth.users.id
+  entraOid       String? // Microsoft Entra ID `oid` claim (one row per org membership)
+  supabaseUserId String? // Legacy Supabase auth.users.id (nullable during transition)
   email          String
   name           String?
   role           OrgRole @default(VIEWER)
@@ -89,7 +96,9 @@ model OrgUser {
   updatedAt DateTime @updatedAt
 
   @@unique([supabaseUserId, organizationId], name: "supabaseUserId_organizationId")
+  @@unique([entraOid, organizationId])
   @@index([supabaseUserId])
+  @@index([entraOid])
   @@index([organizationId])
   @@index([email])
 }

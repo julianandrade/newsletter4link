@@ -94,6 +94,12 @@ printf '%s' "$(openssl rand -hex 32)" | gcloud secrets versions add unsubscribe-
 printf '%s' "tvly-..."    | gcloud secrets versions add tavily-api-key         --project=$PROJECT --data-file=-
 printf '%s' "https://<ref>.supabase.co" | gcloud secrets versions add supabase-url --project=$PROJECT --data-file=-
 printf '%s' "<anon-key>"  | gcloud secrets versions add supabase-anon-key      --project=$PROJECT --data-file=-
+
+# Auth.js + Microsoft Entra ID (Phase 2 — docs/MIGRATION-GCP.md §2.1).
+printf '%s' "$(openssl rand -base64 33)" | gcloud secrets versions add auth-secret --project=$PROJECT --data-file=-
+printf '%s' "<entra-application-client-id>"     | gcloud secrets versions add entra-client-id     --project=$PROJECT --data-file=-
+printf '%s' "<entra-client-secret-value>"       | gcloud secrets versions add entra-client-secret --project=$PROJECT --data-file=-
+printf '%s' "https://login.microsoftonline.com/<tenant-id>/v2.0" | gcloud secrets versions add entra-issuer --project=$PROJECT --data-file=-
 ```
 
 > Use `printf '%s'` (no trailing newline) so the secret has no stray `\n`.

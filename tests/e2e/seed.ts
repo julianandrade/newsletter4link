@@ -1,60 +1,29 @@
 /**
  * Seed for the CI e2e suite (tests/*.spec.ts).
  *
- * Creates the auth user the specs log in with, an organization with
- * membership + settings, and enough content (approved articles, a
- * subscriber) for the dashboard flows to work. Idempotent: safe to re-run.
+ * Auth migration (docs/MIGRATION-GCP.md Phase 2): the e2e user is now a plain
+ * OrgUser row keyed on a synthetic Entra identity — NO Supabase GoTrue admin
+ * calls. The specs sign in via the Auth.js Credentials provider (enabled by
+ * E2E_TEST_MODE), which returns `id: "e2e:<email>"`; that value is what we store
+ * as `entraOid` here so lib/auth/context.ts resolves the membership directly.
  *
- * Required env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- * DATABASE_URL.
+ * Creates the org (ENTERPRISE) with membership + settings and enough content
+ * (approved articles, a subscriber, a draft edition) for the dashboard flows.
+ * Idempotent: safe to re-run.
+ *
+ * Required env: DATABASE_URL.
  *
  * Usage: npx tsx tests/e2e/seed.ts
  */
-import { createClient } from "@supabase/supabase-js";
 import { prisma } from "../../lib/db";
 import { getWeekNumber } from "../../lib/dates";
 
-const TEST_EMAIL = "test@example.com";
-const TEST_PASSWORD = "Test1234!";
-
-async function ensureAuthUser(): Promise<string> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set"
-    );
-  }
-
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const created = await admin.auth.admin.createUser({
-    email: TEST_EMAIL,
-    password: TEST_PASSWORD,
-    email_confirm: true,
-  });
-
-  if (created.data.user) {
-    console.log(`Auth user created: ${created.data.user.id}`);
-    return created.data.user.id;
-  }
-
-  // Already exists (idempotent re-run): look it up.
-  const list = await admin.auth.admin.listUsers();
-  const existing = list.data.users.find((u) => u.email === TEST_EMAIL);
-  if (!existing) {
-    throw new Error(
-      `Could not create or find auth user: ${created.error?.message}`
-    );
-  }
-  console.log(`Auth user already exists: ${existing.id}`);
-  return existing.id;
-}
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "test@example.com";
+// Synthetic Entra identity matching the Credentials provider's returned id
+// (auth.ts / auth.config.ts: `e2e:${email}`).
+const TEST_ENTRA_OID = `e2e:${TEST_EMAIL}`;
 
 async function main() {
-  const supabaseUserId = await ensureAuthUser();
 
   // ENTERPRISE: the specs exercise Ghost Writer (generation) and Trend Radar
   // (search), which are plan-gated and hidden from the UI on FREE.
@@ -79,13 +48,13 @@ async function main() {
 
   await prisma.orgUser.upsert({
     where: {
-      supabaseUserId_organizationId: {
-        supabaseUserId,
+      entraOid_organizationId: {
+        entraOid: TEST_ENTRA_OID,
         organizationId: organization.id,
       },
     },
     create: {
-      supabaseUserId,
+      entraOid: TEST_ENTRA_OID,
       email: TEST_EMAIL,
       role: "OWNER",
       organizationId: organization.id,

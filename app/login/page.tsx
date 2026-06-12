@@ -1,66 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth/hooks";
 
+// E2E/CI only: the credentials form (password sign-in) is rendered solely when
+// NEXT_PUBLIC_E2E_TEST_MODE === "true". In production this is unset, so the only
+// sign-in path is Microsoft Entra ID. Never set this flag in production.
+const E2E_MODE = process.env.NEXT_PUBLIC_E2E_TEST_MODE === "true";
+
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
-  const { signInWithAzure, signInWithPassword, signUp, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const { signInWithMicrosoft, signInWithCredentials, loading: authLoading } = useAuth();
+
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
-  const handleAzureLogin = async () => {
+  const handleMicrosoftLogin = async () => {
     setError(null);
     setLoading(true);
-    const { error } = await signInWithAzure();
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    }
-    // Redirect happens automatically via OAuth flow
+    // Redirects to the Entra hosted login; redirect back happens via OAuth.
+    await signInWithMicrosoft(redirectTo);
   };
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setMessage(null);
     setLoading(true);
 
-    const { error } = await signInWithPassword(email, password);
+    const { error: signInError } = await signInWithCredentials(email, password, redirectTo);
 
-    if (error) {
-      setError(error.message);
+    if (signInError) {
+      setError("Invalid email or password.");
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      router.push(redirectTo);
+      router.refresh();
     }
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setLoading(true);
-
-    const { error } = await signUp(email, password);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setMessage("Check your email for the confirmation link.");
-    }
-    setLoading(false);
   };
 
   return (
@@ -73,9 +67,9 @@ export default function LoginPage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Office 365 Button */}
+          {/* Primary action: Microsoft Entra ID */}
           <Button
-            onClick={handleAzureLogin}
+            onClick={handleMicrosoftLogin}
             disabled={loading || authLoading}
             className="w-full bg-[#0078d4] hover:bg-[#106ebe] text-white"
             size="lg"
@@ -91,29 +85,24 @@ export default function LoginPage() {
               <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
               <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
             </svg>
-            {loading ? "Signing in..." : "Sign in with Office 365"}
+            {loading ? "Signing in..." : "Sign in with Microsoft"}
           </Button>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                or
-              </span>
-            </div>
-          </div>
+          {/* E2E-only password form. Hidden in production. */}
+          {E2E_MODE && (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator className="w-full" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    or
+                  </span>
+                </div>
+              </div>
 
-          {/* Email/Password Tabs */}
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              <form onSubmit={handleEmailLogin} className="space-y-4">
+              <form onSubmit={handleCredentialsLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
                   <Input
@@ -142,53 +131,13 @@ export default function LoginPage() {
                   {loading ? "Signing in..." : "Sign In"}
                 </Button>
               </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    disabled={loading}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : "Create Account"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            </>
+          )}
 
           {/* Error Message */}
           {error && (
             <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950 rounded-md">
               {error}
-            </div>
-          )}
-
-          {/* Success Message */}
-          {message && (
-            <div className="p-3 text-sm text-green-600 bg-green-50 dark:bg-green-950 rounded-md">
-              {message}
             </div>
           )}
         </CardContent>

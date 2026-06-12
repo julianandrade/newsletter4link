@@ -1,22 +1,16 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth/context";
 import { OnboardingForm } from "./onboarding-form";
 
 export default async function OnboardingPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const auth = await getAuthContext();
 
-  if (error || !user) {
+  if (!auth) {
     redirect("/login");
   }
 
   // Check if user already has organizations
-  const auth = await getAuthContext();
-  if (auth && auth.organizations.length > 0) {
+  if (auth.organizations.length > 0) {
     // User already has orgs, redirect to dashboard
     redirect("/dashboard");
   }
@@ -31,7 +25,7 @@ export default async function OnboardingPage() {
           </p>
         </div>
 
-        <OnboardingForm userEmail={user.email || ""} />
+        <OnboardingForm userEmail={auth.email || ""} />
       </div>
     </div>
   );

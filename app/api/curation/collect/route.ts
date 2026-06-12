@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     const rl = checkRateLimit(
       rateLimitKey([
         organization.id,
-        membership.supabaseUserId,
+        membership.id,
         "curation:collect",
       ]),
       RATE_LIMIT

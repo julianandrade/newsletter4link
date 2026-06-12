@@ -14,6 +14,26 @@ export const config = {
     directUrl: process.env.DIRECT_URL,
   },
 
+  // Auth (Auth.js + Microsoft Entra ID — docs/MIGRATION-GCP.md Phase 2)
+  auth: {
+    secret: process.env.AUTH_SECRET,
+    entra: {
+      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+      // issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
+      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+    },
+    // E2E/CI ONLY — must never be "true" in production.
+    e2eTestMode: process.env.E2E_TEST_MODE === "true",
+  },
+
+  // Storage (Supabase Storage stays until Phase 3; these are NOT auth vars).
+  storage: {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  },
+
   // AI Services
   ai: {
     anthropic: {
@@ -120,6 +140,17 @@ export function validateConfig() {
     "ANTHROPIC_API_KEY": config.ai.anthropic.apiKey,
     "OPENAI_API_KEY": config.ai.openai.apiKey,
     "RESEND_API_KEY": config.email.resend.apiKey,
+    // Auth.js + Microsoft Entra ID (Phase 2). Required in every real
+    // environment; in E2E_TEST_MODE the Entra provider is unused (credentials
+    // path) but AUTH_SECRET is still required to sign session JWTs.
+    "AUTH_SECRET": config.auth.secret,
+    ...(config.auth.e2eTestMode
+      ? {}
+      : {
+          "AUTH_MICROSOFT_ENTRA_ID_ID": config.auth.entra.clientId,
+          "AUTH_MICROSOFT_ENTRA_ID_SECRET": config.auth.entra.clientSecret,
+          "AUTH_MICROSOFT_ENTRA_ID_ISSUER": config.auth.entra.issuer,
+        }),
   };
 
   const missing = Object.entries(required)

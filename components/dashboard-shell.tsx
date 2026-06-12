@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { cn } from "@/lib/utils";
-import type { User } from "@supabase/supabase-js";
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  user: User;
+  userEmail: string;
 }
 
-export function DashboardShell({ children, user }: DashboardShellProps) {
+export function DashboardShell({ children, userEmail }: DashboardShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
@@ -18,7 +17,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       <AppSidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        user={user}
+        userEmail={userEmail}
       />
       <main
         className={cn(

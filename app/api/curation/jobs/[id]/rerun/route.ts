@@ -58,7 +58,7 @@ export async function POST(
     const rl = checkRateLimit(
       rateLimitKey([
         organization.id,
-        membership.supabaseUserId,
+        membership.id,
         "curation:rerun",
       ]),
       RATE_LIMIT
