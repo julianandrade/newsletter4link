@@ -60,7 +60,12 @@ test("approved draft shows subject line preview in send page", async ({ page }) 
   );
   expect(editionId).toBeTruthy();
 
-  await page.getByRole("button", { name: "View" }).first().waitFor({ timeout: 60000 });
+  // The draft card button reads "Selected" when the draft is auto-selected
+  // (the only draft always is) and "View" otherwise.
+  await page
+    .getByRole("button", { name: /^(View|Selected)$/ })
+    .first()
+    .waitFor({ timeout: 60000 });
 
   // Approve via API. The generate page doesn't re-fetch drafts after an
   // out-of-band mutation, so assert approval through the API too.
