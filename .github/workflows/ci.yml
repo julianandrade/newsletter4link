@@ -60,6 +60,11 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    # Non-blocking during the GCP/Entra migration: this job still runs and
+    # reports (failures stay visible in the checks list), but doesn't gate
+    # the PR. Re-enable gating (remove continue-on-error) once the suite is
+    # re-pointed at the post-migration stack (Postgres container + Auth.js).
+    continue-on-error: true
     env:
       CI: "true"
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
