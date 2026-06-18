@@ -24,8 +24,6 @@ locals {
     CRON_SECRET                   = "cron-secret"
     UNSUBSCRIBE_SECRET            = "unsubscribe-secret"
     TAVILY_API_KEY                = "tavily-api-key"
-    NEXT_PUBLIC_SUPABASE_URL      = "supabase-url"
-    NEXT_PUBLIC_SUPABASE_ANON_KEY = "supabase-anon-key"
     # Auth.js + Microsoft Entra ID (Phase 2).
     AUTH_SECRET                    = "auth-secret"
     AUTH_MICROSOFT_ENTRA_ID_ID     = "entra-client-id"
@@ -85,6 +83,12 @@ resource "google_cloud_run_v2_service" "app" {
       env {
         name  = "EMAIL_PROVIDER"
         value = "resend"
+      }
+      # GCS media bucket name (Phase 3). Auth is via the runtime SA's ADC +
+      # objectAdmin grant (iam.tf), so no key/secret is needed — just the name.
+      env {
+        name  = "GCS_MEDIA_BUCKET"
+        value = google_storage_bucket.media.name
       }
       # Auth.js must trust the X-Forwarded-* headers behind the Cloud Run proxy
       # so it derives the correct callback origin.

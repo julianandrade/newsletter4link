@@ -1,9 +1,10 @@
 # GCS buckets.
 #
 # media:   replaces Supabase Storage (Phase 3 swap). Uniform bucket-level access,
-#          NOT public. Objects are served via time-limited signed URLs generated
-#          by the app (the runtime SA has objectAdmin on this bucket only -
-#          see iam.tf). Public read is intentionally disabled.
+#          NOT public. Objects are served via the app's public proxy route
+#          GET /api/media/<id>, which streams bytes using the runtime SA's
+#          objectAdmin grant (ADC; see iam.tf). Public read is intentionally
+#          disabled — there is no public bucket URL or allUsers binding.
 # backups: holds pg_dump artifacts produced during the DB cutover and any future
 #          out-of-band logical backups. Versioned + lifecycle-aged.
 
@@ -15,7 +16,8 @@ resource "google_storage_bucket" "media" {
   public_access_prevention    = "enforced"
   force_destroy               = false
 
-  # No website / no public IAM binding => private by design. Access via signed URLs.
+  # No website / no public IAM binding => private by design. Access via the app
+  # proxy route using the runtime SA (iam.tf), never a public bucket URL.
 
   depends_on = [google_project_service.apis]
 }

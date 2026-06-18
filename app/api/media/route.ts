@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { deleteFile } from "@/lib/supabase/storage";
+import { deleteFile } from "@/lib/storage/gcs";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -88,23 +88,19 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Extract the storage path from the URL
-    // URL format: https://<project>.supabase.co/storage/v1/object/public/newsletter-media/<path>
-    const urlParts = mediaAsset.url.split("/newsletter-media/");
-    const storagePath = urlParts[1];
-
-    if (storagePath) {
-      // Delete from Supabase storage
+    // Delete the GCS object using the stored object path. Legacy rows have a
+    // null storagePath (Supabase URL); skip storage deletion for those.
+    if (mediaAsset.storagePath) {
       try {
-        await deleteFile(storagePath);
+        await deleteFile(mediaAsset.storagePath);
       } catch (storageError) {
         logger.error("Error deleting from storage", storageError);
-        // Continue with database deletion even if storage deletion fails
-        // The file might have been manually deleted
+        // Continue with database deletion even if storage deletion fails.
+        // The object might already have been removed.
       }
     } else {
       logger.warn(
-        "Media asset has no extractable storage path; possible orphaned storage file requiring manual cleanup",
+        "Media asset has no storagePath (legacy Supabase row); skipping GCS deletion, possible orphan requiring manual cleanup",
         { mediaAssetId: id, url: mediaAsset.url }
       );
     }

@@ -39,7 +39,7 @@ and uncomment the `backend "gcs"` block in `versions.tf`, then
 | `variables.tf` | Inputs incl. `cron_secret` (sensitive) |
 | `apis.tf` | `google_project_service` for all required APIs |
 | `sql.tf` | Cloud SQL PG17 instance, DB, app user, generated password |
-| `storage.tf` | media + backups buckets (private) |
+| `storage.tf` | media + backups buckets (private; media served via app proxy) |
 | `registry.tf` | Artifact Registry Docker repo `app` |
 | `secrets.tf` | Secret Manager secrets (+ TF-set DB url versions) |
 | `iam.tf` | runtime + deployer service accounts and least-privilege bindings |
@@ -92,8 +92,11 @@ printf '%s' "re_..."      | gcloud secrets versions add resend-api-key         -
 printf '%s' "whsec_..."   | gcloud secrets versions add resend-webhook-secret  --project=$PROJECT --data-file=-
 printf '%s' "$(openssl rand -hex 32)" | gcloud secrets versions add unsubscribe-secret --project=$PROJECT --data-file=-
 printf '%s' "tvly-..."    | gcloud secrets versions add tavily-api-key         --project=$PROJECT --data-file=-
-printf '%s' "https://<ref>.supabase.co" | gcloud secrets versions add supabase-url --project=$PROJECT --data-file=-
-printf '%s' "<anon-key>"  | gcloud secrets versions add supabase-anon-key      --project=$PROJECT --data-file=-
+
+# Media (Phase 3): served via the app proxy route GET /api/media/<id> from the
+# PRIVATE media bucket. No GCS key/secret — the runtime SA's objectAdmin grant
+# (iam.tf) authorizes access via ADC. Only GCS_MEDIA_BUCKET (plain env in
+# run.tf) is needed, so there is no secret to load here.
 
 # Auth.js + Microsoft Entra ID (Phase 2 — docs/MIGRATION-GCP.md §2.1).
 printf '%s' "$(openssl rand -base64 33)" | gcloud secrets versions add auth-secret --project=$PROJECT --data-file=-
@@ -116,7 +119,7 @@ printf '%s' "https://login.microsoftonline.com/<tenant-id>/v2.0" | gcloud secret
 | GCS (media + backups) | a few GB | <1 |
 | Artifact Registry | a few image versions | <1 |
 | Cloud Scheduler | 3 jobs (first 3 free) | 0 |
-| Secret Manager | ~13 secrets, few accesses | <1 |
+| Secret Manager | ~11 secrets, few accesses | <1 |
 | Egress / misc | low | 1-3 |
 | **Total (db-g1-small)** | | **~35-55** |
 | **Total (db-f1-micro)** | | **~12-22** |

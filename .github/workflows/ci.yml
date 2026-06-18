@@ -50,10 +50,9 @@ jobs:
         run: npm run build
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          # Supabase vars are now storage-only; still needed because the storage
-          # client and seed build against them.
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          # Media storage is GCS (Phase 3). The bucket name is only read lazily
+          # at first GCS call; a placeholder keeps the build green.
+          GCS_MEDIA_BUCKET: placeholder-media-bucket
           # Auth.js (Phase 2). Placeholders are fine for a build — the Entra
           # provider is only contacted at runtime sign-in.
           AUTH_SECRET: placeholder-auth-secret-for-build
@@ -72,8 +71,11 @@ jobs:
     env:
       CI: "true"
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
-      # Supabase is still used for the local Postgres (and storage builds against
-      # the URL/anon key); AUTH is now Auth.js, not Supabase.
+      # Media storage is GCS (Phase 3); the e2e specs never touch media so the
+      # bucket name is just a placeholder. (GCS is never actually called.)
+      GCS_MEDIA_BUCKET: placeholder-media-bucket
+      # Supabase CLI still boots the local Postgres for e2e (NOT auth — that's
+      # Auth.js now). These vars are tied to that local stack boot, not storage.
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres

@@ -17,8 +17,6 @@ locals {
     "cron-secret",
     "unsubscribe-secret",
     "tavily-api-key",
-    "supabase-url",       # NEXT_PUBLIC_SUPABASE_URL (Supabase STORAGE only post-Phase-2)
-    "supabase-anon-key",  # NEXT_PUBLIC_SUPABASE_ANON_KEY (storage)
     # Auth.js + Microsoft Entra ID (docs/MIGRATION-GCP.md Phase 2).
     "auth-secret",          # AUTH_SECRET (openssl rand -base64 33)
     "entra-client-id",      # AUTH_MICROSOFT_ENTRA_ID_ID

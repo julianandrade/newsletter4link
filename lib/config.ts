@@ -27,11 +27,11 @@ export const config = {
     e2eTestMode: process.env.E2E_TEST_MODE === "true",
   },
 
-  // Storage (Supabase Storage stays until Phase 3; these are NOT auth vars).
+  // Storage (Google Cloud Storage, Phase 3). Bucket name only; auth is via ADC.
+  // Validated lazily at first use in lib/storage/gcs.ts (not in validateConfig)
+  // to keep builds/CI green without a real bucket.
   storage: {
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    gcsMediaBucket: process.env.GCS_MEDIA_BUCKET,
   },
 
   // AI Services

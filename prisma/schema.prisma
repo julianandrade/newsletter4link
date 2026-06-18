@@ -549,8 +549,12 @@ model MediaAsset {
   id       String @id @default(cuid())
   filename String
   url      String
-  type     String // e.g., "image/png", "image/jpeg"
-  size     Int // file size in bytes
+  // Object path within the GCS media bucket. Nullable: legacy rows uploaded to
+  // Supabase Storage have a Supabase URL and no storagePath, so they cannot be
+  // served from GCS until re-uploaded/migrated.
+  storagePath String?
+  type        String // e.g., "image/png", "image/jpeg"
+  size        Int // file size in bytes
 
   // Multi-tenant
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

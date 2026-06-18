@@ -19,6 +19,11 @@ export async function proxy(request: NextRequest) {
     "/api/unsubscribe",
     "/api/cron",
     "/api/webhooks",
+    // Public media file proxy. The TRAILING SLASH is load-bearing: it matches
+    // the per-asset serve route GET /api/media/<id> (so newsletter images load
+    // without auth) while leaving the list/DELETE handlers at /api/media
+    // protected — "/api/media".startsWith("/api/media/") is false.
+    "/api/media/",
   ];
   const { pathname } = request.nextUrl;
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));

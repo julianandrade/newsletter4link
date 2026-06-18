@@ -12,7 +12,6 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { createClient } from "@supabase/supabase-js";
 
 const prisma = new PrismaClient();
 
@@ -164,58 +163,14 @@ async function main() {
     console.log("  ✓ Migrated branding settings to org settings");
   }
 
-  // Step 4: Link Supabase users as organization owners
-  console.log("\nStep 4: Linking Supabase users...");
-
-  // Try to get Supabase users if env vars are available
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (supabaseUrl && supabaseServiceKey) {
-    try {
-      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-
-      const { data: users, error } = await supabase.auth.admin.listUsers();
-
-      if (error) {
-        console.log(`  ⚠ Could not list Supabase users: ${error.message}`);
-      } else if (users?.users) {
-        for (const user of users.users) {
-          // Check if already a member
-          const existingMember = await prisma.orgUser.findUnique({
-            where: {
-              supabaseUserId_organizationId: {
-                supabaseUserId: user.id,
-                organizationId: orgId,
-              },
-            },
-          });
-
-          if (!existingMember) {
-            await prisma.orgUser.create({
-              data: {
-                supabaseUserId: user.id,
-                email: user.email ?? "unknown@example.com",
-                name: user.user_metadata?.full_name ?? null,
-                role: "OWNER",
-                organizationId: orgId,
-              },
-            });
-            console.log(`  ✓ Added ${user.email} as OWNER`);
-          } else {
-            console.log(`  ✓ User ${user.email} already linked`);
-          }
-        }
-      }
-    } catch (error) {
-      console.log(`  ⚠ Error linking Supabase users: ${error}`);
-    }
-  } else {
-    console.log("  ⚠ SUPABASE_SERVICE_ROLE_KEY not set - skipping user linking");
-    console.log("    You can manually add users via the OrgUser table");
-  }
+  // Step 4: Link organization owners.
+  //
+  // The original Supabase-Auth user-linking step was removed in Phase 3 along
+  // with the @supabase/supabase-js dependency (auth moved to Auth.js + Entra in
+  // Phase 2). Members are now provisioned via the Entra sign-in flow / OrgUser
+  // table directly; this one-off backfill script no longer links users.
+  console.log("\nStep 4: Skipping Supabase user linking (auth is Auth.js + Entra).");
+  console.log("    Add members via the Entra sign-in flow or the OrgUser table.");
 
   // Step 5: Summary
   console.log("\n✅ Migration complete!\n");

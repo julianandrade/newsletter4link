@@ -382,6 +382,9 @@ export function createTenantClient(organizationId: string) {
           data: { ...args.data, organizationId },
         } as T),
 
+      update: <T extends Prisma.MediaAssetUpdateArgs>(args: T) =>
+        prisma.mediaAsset.update(args),
+
       delete: <T extends Prisma.MediaAssetDeleteArgs>(args: T) =>
         prisma.mediaAsset.delete(args),
 

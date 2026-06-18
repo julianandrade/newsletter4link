@@ -342,25 +342,54 @@ until confidence is high.
 
 ---
 
-## Phase 3 — Media storage swap to GCS (note only)
+## Phase 3 — Media storage swap to GCS — **IMPLEMENTED**
 
-Not in scope to implement here. The `${project_id}-media` bucket and the runtime
-SA's `objectAdmin` binding already exist (Terraform). When implemented:
+Supabase Storage is replaced by GCS. The `${project_id}-media` bucket and the
+runtime SA's `objectAdmin` binding already exist (Terraform, untouched here).
 
-- Swap `lib/supabase/storage.ts` for a GCS client (`@google-cloud/storage`),
-  using the runtime SA (no key file — ADC on Cloud Run).
-- Serve private objects via **V4 signed URLs** (bucket is `public_access_prevention
-  = enforced`).
-- Migrate existing objects: `gsutil -m cp` / `gcloud storage cp` from a Supabase
-  Storage export into `gs://${project_id}-media`, preserving key paths.
-- Then `supabase-url` / `supabase-anon-key` / `supabase-service-role-key` secrets
-  and Cloud Run env can be removed.
+What was implemented:
+
+- **GCS client via ADC, no key file.** `lib/storage/gcs.ts` (`@google-cloud/storage`)
+  replaces `lib/supabase/storage.ts` (deleted). It uses Application Default
+  Credentials — the runtime service account on Cloud Run, or `gcloud auth
+  application-default login` locally. The bucket name comes from
+  `GCS_MEDIA_BUCKET` and is validated lazily on first use (so builds/CI stay
+  green without a real bucket).
+- **Private bucket + public proxy with stable URLs.** The bucket stays private
+  (`public_access_prevention = enforced`); we do **not** use signed URLs or a
+  public bucket. Each `MediaAsset` gets a stable app URL
+  `${NEXT_PUBLIC_APP_URL}/api/media/<id>`. The new **public, unauthenticated**
+  route `GET /api/media/[id]` streams the object bytes from GCS. This gives
+  permanent URLs embeddable in emailed newsletters while keeping the bucket
+  locked down. `proxy.ts` whitelists `"/api/media/"` (trailing slash) so the
+  per-asset route is public while list/DELETE at `/api/media` stay protected.
+- **Schema.** `MediaAsset.storagePath String?` added (migration
+  `20260613110000_mediaasset_storage_path`) to hold the GCS object path.
+- **Upload/delete.** `POST /api/media/upload` uploads to GCS, creates the row,
+  then sets `url` from the new id. `DELETE /api/media` deletes the GCS object
+  via `storagePath`.
+- **Supabase removed from the app.** `@supabase/supabase-js` is dropped from
+  `package.json`; nothing in `app/`/`lib/`/`components/` imports any `@supabase`
+  package. The `supabase-url` / `supabase-anon-key` Secret Manager entries and
+  the corresponding Cloud Run secret env were removed; `GCS_MEDIA_BUCKET` is a
+  plain Cloud Run env. The only remaining Supabase reference is the CI **e2e**
+  job, which boots Postgres via the Supabase CLI (`supabase start`); Phase 1 ops
+  swaps that local stack to a plain Postgres container — it is not app storage.
+
+> **Data-migration follow-up (not done in code).** Existing `MediaAsset` rows
+> have Supabase Storage URLs and a `null` `storagePath`; they will **not** serve
+> from GCS (the proxy returns 404 for null `storagePath`) until they are
+> re-uploaded or migrated. To migrate, copy objects into
+> `gs://${project_id}-media` (`gcloud storage cp`) and backfill `storagePath` +
+> the new `/api/media/<id>` `url` for each row. Do **not** decommission Supabase
+> Storage until this is complete.
 
 ### Phase 3 rollback
 
-Keep the Supabase storage code path behind the `EMAIL_PROVIDER`-style toggle or a
-feature flag; revert the Cloud Run revision. Objects copied to GCS are additive —
-Supabase originals remain until explicitly deleted.
+Revert the Cloud Run revision. The previous (Supabase-storage) image keeps
+working as long as the Supabase project is alive — so do **not** decommission
+Supabase Storage until media is fully re-uploaded/migrated to GCS. Any objects
+copied to GCS are additive; Supabase originals remain until explicitly deleted.
 
 ---
 

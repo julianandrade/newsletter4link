@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { uploadFile } from "@/lib/supabase/storage";
+import { uploadFile } from "@/lib/storage/gcs";
 import { requireOrgContext } from "@/lib/auth/context";
+import { config } from "@/lib/config";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ const ALLOWED_TYPES = [
 
 /**
  * POST /api/media/upload
- * Upload a file to Supabase storage and create a MediaAsset record
+ * Upload a file to GCS and create a MediaAsset record with a stable serve URL.
  */
 export async function POST(request: Request) {
   try {
@@ -60,17 +61,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Upload to Supabase storage
-    const { url } = await uploadFile(file, file.name, file.type);
+    // Upload bytes to the private GCS media bucket.
+    const { path } = await uploadFile(file, file.name, file.type);
 
-    // Create MediaAsset record in database
-    const mediaAsset = await db.mediaAsset.create({
+    // Create the record first to mint the DB-generated id, then set the stable
+    // serve URL `${appUrl}/api/media/<id>` (two writes because we need the id).
+    const created = await db.mediaAsset.create({
       data: {
         filename: file.name,
-        url,
+        url: "",
+        storagePath: path,
         type: file.type,
         size: file.size,
       } as any,
+    });
+
+    const url = `${config.app.url}/api/media/${created.id}`;
+    const mediaAsset = await db.mediaAsset.update({
+      where: { id: created.id },
+      data: { url },
     });
 
     return NextResponse.json(
