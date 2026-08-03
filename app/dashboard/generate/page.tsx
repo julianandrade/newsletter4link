@@ -1,43 +1,32 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Plan } from "@prisma/client";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { FeatureGate } from "@/components/upgrade-prompt";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+  Num,
+  PageHeading,
+  RadarButton,
+  RadarMain,
+  SectionLabel,
+  StatusChip,
+} from "@/components/radar/primitives";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Loader2,
-  Sparkles,
-  RefreshCw,
-  Wand2,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Copy,
-  Check,
-  FileText,
-  StopCircle,
-  XCircle,
-} from "lucide-react";
+  Callout,
+  EmptyState,
+  RadarField,
+  RadarPanel,
+  RadarProgress,
+  RadarSelect,
+  RadarTextarea,
+  SkeletonRows,
+  StatTile,
+} from "@/components/radar/controls";
 import { hasFeature } from "@/lib/plans/features";
+import { relativeTime } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEY_PREFIX = "generation_job_";
 
@@ -101,13 +90,31 @@ interface GenerationProgress {
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  planning: "Planning",
-  opening: "Opening",
-  articles: "Articles",
-  transitions: "Transitions",
-  closing: "Closing",
-  subjects: "Subject Lines",
+  starting: "Starting",
+  planning: "Planning the running order",
+  opening: "Writing the opening",
+  articles: "Writing the story summaries",
+  transitions: "Writing the transitions",
+  closing: "Writing the sign-off",
+  subjects: "Drafting subject lines",
   complete: "Complete",
+};
+
+const DRAFT_TONE: Record<
+  GenerationDraft["status"],
+  "ok" | "warn" | "err" | "info" | "neutral"
+> = {
+  DRAFT: "info",
+  APPROVED: "ok",
+  USED: "neutral",
+  DISCARDED: "neutral",
+};
+
+const DRAFT_LABEL: Record<GenerationDraft["status"], string> = {
+  DRAFT: "Draft",
+  APPROVED: "Approved",
+  USED: "Used in a send",
+  DISCARDED: "Discarded",
 };
 
 export default function GeneratePage() {
@@ -122,22 +129,29 @@ export default function GeneratePage() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null);
+  const [generationProgress, setGenerationProgress] =
+    useState<GenerationProgress | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedNewsletter | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<GenerationDraft[]>([]);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
-  const [isLoadingDraftContentId, setIsLoadingDraftContentId] = useState<string | null>(null);
+  const [isLoadingDraftContentId, setIsLoadingDraftContentId] = useState<
+    string | null
+  >(null);
   const [isApprovingDraftId, setIsApprovingDraftId] = useState<string | null>(null);
-  const [isDiscardingDraftId, setIsDiscardingDraftId] = useState<string | null>(null);
+  const [isDiscardingDraftId, setIsDiscardingDraftId] = useState<string | null>(
+    null
+  );
 
   const [editedContent, setEditedContent] = useState<{
     opening: string;
     closing: string;
     sections: GeneratedSection[];
   } | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
 
   const [selectedSubjectLine, setSelectedSubjectLine] = useState<number>(0);
   const [isRegeneratingSubjects, setIsRegeneratingSubjects] = useState(false);
@@ -204,7 +218,9 @@ export default function GeneratePage() {
           setGenerationProgress({
             stage: runningJob.currentStage,
             progress: runningJob.progress || 0,
-            message: `Resuming ${STAGE_LABELS[runningJob.currentStage] || runningJob.currentStage}...`,
+            message: `Picking up where it left off: ${
+              STAGE_LABELS[runningJob.currentStage] || runningJob.currentStage
+            }`,
           });
         }
 
@@ -236,6 +252,7 @@ export default function GeneratePage() {
       setDrafts([]);
       setSelectedDraftId(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEditionId, editions]);
 
   useEffect(() => {
@@ -264,7 +281,9 @@ export default function GeneratePage() {
       closing: selectedDraft.content.closing,
       sections: selectedDraft.content.sections,
     });
+    setIsDirty(false);
     setSelectedSubjectLine(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDraftId, drafts, isLoadingDrafts]);
 
   async function fetchEditions() {
@@ -280,7 +299,7 @@ export default function GeneratePage() {
       setEditions(filteredEditions);
     } catch (err) {
       console.error("Failed to fetch editions:", err);
-      setError("Failed to load editions");
+      setError("The edition list could not be loaded");
     } finally {
       setIsLoadingEditions(false);
     }
@@ -313,7 +332,10 @@ export default function GeneratePage() {
       if (res.ok && Array.isArray(data.drafts)) {
         setDrafts(data.drafts);
         setSelectedDraftId((prev) => {
-          if (prev && data.drafts.some((draft: GenerationDraft) => draft.id === prev)) {
+          if (
+            prev &&
+            data.drafts.some((draft: GenerationDraft) => draft.id === prev)
+          ) {
             return prev;
           }
           return data.drafts[0]?.id || null;
@@ -358,7 +380,7 @@ export default function GeneratePage() {
     setGenerationProgress({
       stage: "starting",
       progress: 0,
-      message: "Connecting...",
+      message: "Connecting",
     });
 
     try {
@@ -399,7 +421,7 @@ export default function GeneratePage() {
               setGenerationProgress({
                 stage: "starting",
                 progress: 0,
-                message: data.message || "Starting generation...",
+                message: data.message || "Starting",
               });
               break;
 
@@ -407,7 +429,7 @@ export default function GeneratePage() {
               setGenerationProgress({
                 stage: data.stage || "processing",
                 progress: data.progress || 0,
-                message: data.message || "Processing...",
+                message: data.message || "Working",
               });
               break;
 
@@ -420,7 +442,7 @@ export default function GeneratePage() {
               setGenerationProgress({
                 stage: "complete",
                 progress: 100,
-                message: "Generation complete!",
+                message: "Done",
               });
 
               // Extract newsletter from result
@@ -431,6 +453,7 @@ export default function GeneratePage() {
                   closing: data.result.newsletter.closing,
                   sections: data.result.newsletter.sections,
                 });
+                setIsDirty(false);
               }
 
               if (data.result?.draftId) {
@@ -459,7 +482,7 @@ export default function GeneratePage() {
               setIsGenerating(false);
               setIsCancelling(false);
               setGenerationProgress(null);
-              setError("Generation was cancelled");
+              setError("The run was cancelled before it finished");
               break;
 
             case "error":
@@ -470,7 +493,7 @@ export default function GeneratePage() {
               setCurrentJobId(null);
               setIsGenerating(false);
               setGenerationProgress(null);
-              setError(data.error || "Generation failed");
+              setError(data.error || "The run failed");
               break;
           }
         } catch {
@@ -506,7 +529,7 @@ export default function GeneratePage() {
       }
     } catch (err) {
       console.error("Generation failed:", err);
-      setError(err instanceof Error ? err.message : "Generation failed");
+      setError(err instanceof Error ? err.message : "The run failed");
       setIsGenerating(false);
       setGenerationProgress(null);
       setCurrentJobId(null);
@@ -515,6 +538,7 @@ export default function GeneratePage() {
         localStorage.removeItem(`${STORAGE_KEY_PREFIX}${orgId}`);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEditionId, selectedBrandVoiceId, orgId]);
 
   async function handleCancel() {
@@ -529,7 +553,7 @@ export default function GeneratePage() {
       }
       // The SSE stream will receive the cancelled event
       setGenerationProgress((prev) =>
-        prev ? { ...prev, message: "Cancelling..." } : null
+        prev ? { ...prev, message: "Cancelling" } : null
       );
     } catch (err) {
       console.error("Failed to cancel generation:", err);
@@ -553,9 +577,12 @@ export default function GeneratePage() {
             : draft
         )
       );
+      toast.success("Draft approved, ready for a send");
     } catch (err) {
       console.error("Failed to approve draft:", err);
-      setError(err instanceof Error ? err.message : "Failed to approve draft");
+      toast.error(
+        err instanceof Error ? err.message : "Could not approve that draft"
+      );
     } finally {
       setIsApprovingDraftId(null);
     }
@@ -577,11 +604,49 @@ export default function GeneratePage() {
       if (selectedDraftId === draftId) {
         setSelectedDraftId(null);
       }
+      toast.success("Draft discarded");
     } catch (err) {
       console.error("Failed to discard draft:", err);
-      setError(err instanceof Error ? err.message : "Failed to discard draft");
+      toast.error(
+        err instanceof Error ? err.message : "Could not discard that draft"
+      );
     } finally {
       setIsDiscardingDraftId(null);
+    }
+  }
+
+  /** Persists the copy edits; without this the textareas were decorative. */
+  async function handleSaveEdits() {
+    if (!selectedDraftId || !editedContent || isSavingEdits) return;
+
+    setIsSavingEdits(true);
+    try {
+      const res = await fetch(`/api/drafts/${selectedDraftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editedContent }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save the edits");
+      }
+
+      setDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === selectedDraftId && draft.content
+            ? { ...draft, content: { ...draft.content, ...editedContent } }
+            : draft
+        )
+      );
+      setGenerated((prev) => (prev ? { ...prev, ...editedContent } : prev));
+      setIsDirty(false);
+      toast.success("Edits saved to the draft");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not save the edits"
+      );
+    } finally {
+      setIsSavingEdits(false);
     }
   }
 
@@ -625,7 +690,11 @@ export default function GeneratePage() {
       setSelectedSubjectLine(0);
     } catch (err) {
       console.error("Failed to regenerate subject lines:", err);
-      setError(err instanceof Error ? err.message : "Failed to regenerate subject lines");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Could not draft new subject lines"
+      );
     } finally {
       setIsRegeneratingSubjects(false);
     }
@@ -638,526 +707,506 @@ export default function GeneratePage() {
     setTimeout(() => setCopiedSubject(false), 2000);
   }
 
+  /** Immutable summary edit: the old version mutated nested state in place. */
+  function updateArticleSummary(
+    sectionIndex: number,
+    articleIndex: number,
+    summary: string
+  ) {
+    setEditedContent((previous) => {
+      if (!previous) return previous;
+      return {
+        ...previous,
+        sections: previous.sections.map((section, sIndex) =>
+          sIndex !== sectionIndex
+            ? section
+            : {
+                ...section,
+                articles: section.articles.map((article, aIndex) =>
+                  aIndex !== articleIndex ? article : { ...article, summary }
+                ),
+              }
+        ),
+      };
+    });
+    setIsDirty(true);
+  }
+
   const isLoading = isLoadingEditions || isLoadingVoices || isLoadingOrg;
   const hasGhostWriterAccess = hasFeature(orgPlan, "ghostWriter");
   const getBrandVoiceName = (brandVoiceId?: string | null) => {
-    if (!brandVoiceId) return "Default";
-    return brandVoices.find((voice) => voice.id === brandVoiceId)?.name || "Custom";
+    if (!brandVoiceId) return "Default voice";
+    return (
+      brandVoices.find((voice) => voice.id === brandVoiceId)?.name || "Custom voice"
+    );
   };
 
+  const selectedDraft = useMemo(
+    () => drafts.find((draft) => draft.id === selectedDraftId) ?? null,
+    [drafts, selectedDraftId]
+  );
+  const canEditDraft = selectedDraft?.status === "DRAFT";
+
+  const heading = isGenerating
+    ? "Writing the edition"
+    : generated && selectedEdition
+      ? `Week ${selectedEdition.week} is drafted`
+      : selectedEdition
+        ? `Week ${selectedEdition.week} is ready to write`
+        : "Write the edition";
+
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader title="Ghost Writer" />
+    <>
+      <AppHeader />
 
       <FeatureGate
         feature="ghostWriter"
         currentPlan={orgPlan}
         hasAccess={hasGhostWriterAccess || isLoadingOrg}
       >
-        <main className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-              <Wand2 className="h-8 w-8" />
-              Ghost Writer
-            </h1>
-            <p className="text-muted-foreground">
-              AI-powered newsletter generation with brand voice matching
-            </p>
+        <RadarMain width="980px">
+          <PageHeading
+            eyebrow="Ghost Writer"
+            title={heading}
+            subtitle="Claude reads the approved stories in an edition, plans a running order, and writes the opening, the summaries, the transitions and the sign-off in your brand voice. Everything it writes is editable before it ships."
+            actions={
+              isGenerating ? (
+                <RadarButton
+                  onClick={handleCancel}
+                  disabled={isCancelling || !currentJobId}
+                  className="hover:border-radar-err hover:text-radar-err"
+                >
+                  {isCancelling ? "Cancelling…" : "Cancel the run"}
+                </RadarButton>
+              ) : (
+                <RadarButton
+                  variant="accent"
+                  onClick={handleGenerate}
+                  disabled={!selectedEditionId || isLoading}
+                >
+                  {generated ? "Write another draft" : "Write the edition"}
+                </RadarButton>
+              )
+            }
+          />
+
+          {error && (
+            <Callout
+              tone="err"
+              title="The last run did not finish"
+              className="mb-5"
+              actions={
+                <RadarButton size="sm" onClick={() => setError(null)}>
+                  Dismiss
+                </RadarButton>
+              }
+            >
+              {error}
+            </Callout>
+          )}
+
+          {/* Settings */}
+          <div className="mb-5 grid gap-4 rounded-xl border border-radar-line bg-radar-surface p-4 sm:grid-cols-2">
+            <RadarField
+              label="Edition"
+              htmlFor="generate-edition"
+              hint={
+                selectedEdition
+                  ? `${selectedEdition.articleCount} approved stories in this one`
+                  : "Only draft and finalised editions can be written."
+              }
+            >
+              <RadarSelect
+                id="generate-edition"
+                value={selectedEditionId}
+                disabled={isLoading || isGenerating}
+                onChange={(event) => setSelectedEditionId(event.target.value)}
+              >
+                <option value="">Choose an edition</option>
+                {editions.map((edition) => (
+                  <option key={edition.id} value={edition.id}>
+                    Week {edition.week}, {edition.year} · {edition.articleCount}{" "}
+                    stories
+                  </option>
+                ))}
+              </RadarSelect>
+            </RadarField>
+
+            <RadarField
+              label="Brand voice"
+              htmlFor="generate-voice"
+              hint="Sets register, sentence length and how much hedging is allowed."
+            >
+              <RadarSelect
+                id="generate-voice"
+                value={selectedBrandVoiceId}
+                disabled={isLoading || isGenerating}
+                onChange={(event) => setSelectedBrandVoiceId(event.target.value)}
+              >
+                <option value="default">Default, professional</option>
+                {brandVoices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name}
+                    {voice.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+              </RadarSelect>
+            </RadarField>
           </div>
 
-          {/* Error Display */}
-          {error && (
-            <Card className="mb-6 border-destructive">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-destructive">
-                    <XCircle className="h-5 w-5" />
-                    <p>{error}</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setError(null)}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Configuration */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Generation Settings</CardTitle>
-              <CardDescription>
-                Select an edition and brand voice to generate newsletter content
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Edition Selection */}
-                <div className="space-y-2">
-                  <Label>Edition</Label>
-                  <Select
-                    value={selectedEditionId}
-                    onValueChange={setSelectedEditionId}
-                    disabled={isLoading || isGenerating}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select edition..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {editions.map((edition) => (
-                        <SelectItem key={edition.id} value={edition.id}>
-                          Week {edition.week}, {edition.year} ({edition.articleCount} articles)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Brand Voice Selection */}
-                <div className="space-y-2">
-                  <Label>Brand Voice</Label>
-                  <Select
-                    value={selectedBrandVoiceId}
-                    onValueChange={setSelectedBrandVoiceId}
-                    disabled={isLoading || isGenerating}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Default voice" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="default">Default (Professional)</SelectItem>
-                      {brandVoices.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.id}>
-                          {voice.name} {voice.isDefault && "(Default)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Generate / Cancel Button */}
-                <div className="space-y-2">
-                  <Label className="invisible">Action</Label>
-                  {isGenerating ? (
-                    <Button
-                      variant="destructive"
-                      onClick={handleCancel}
-                      disabled={isCancelling}
-                      className="w-full"
-                    >
-                      {isCancelling ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Cancelling...
-                        </>
-                      ) : (
-                        <>
-                          <StopCircle className="h-4 w-4 mr-2" />
-                          Cancel Generation
-                        </>
-                      )}
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handleGenerate}
-                      disabled={!selectedEditionId || isGenerating}
-                      className="w-full"
-                    >
-                      {generated ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Regenerate
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Generate Newsletter
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
+          {/* Live run */}
+          {isGenerating && generationProgress && (
+            <Callout
+              tone="info"
+              live
+              className="mb-5"
+              title={
+                STAGE_LABELS[generationProgress.stage] || generationProgress.stage
+              }
+            >
+              <div className="flex items-center gap-3">
+                <RadarProgress
+                  value={generationProgress.progress}
+                  className="flex-1"
+                />
+                <Num className="shrink-0 text-[12px] text-radar-ink2">
+                  {Math.round(generationProgress.progress)}%
+                </Num>
               </div>
+              <p className="mt-2 mb-0 text-[12px] text-radar-ink3">
+                {generationProgress.message}
+              </p>
+            </Callout>
+          )}
 
-              {/* Generation Progress */}
-              {isGenerating && generationProgress && (
-                <div className="mt-6 pt-6 border-t">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="font-medium">
-                        {STAGE_LABELS[generationProgress.stage] || generationProgress.stage}
-                      </span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {Math.round(generationProgress.progress)}%
-                    </span>
-                  </div>
-                  <Progress value={generationProgress.progress} className="h-2" />
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {generationProgress.message}
-                  </p>
+          {/* Drafts for this edition */}
+          {selectedEditionId && !isGenerating && (
+            <RadarPanel
+              title="Drafts for this edition"
+              note="Each run keeps its own draft, so you can compare voices before approving one."
+              className="mb-5"
+              padded={false}
+            >
+              {isLoadingDrafts ? (
+                <div className="px-4 py-2">
+                  <SkeletonRows rows={2} />
                 </div>
-              )}
+              ) : drafts.length === 0 ? (
+                <p className="m-0 px-4 py-8 text-center text-[12.5px] text-radar-ink3">
+                  Nothing written for this edition yet.
+                </p>
+              ) : (
+                <ul className="m-0 list-none p-0">
+                  {drafts.map((draft) => {
+                    const isSelected = draft.id === selectedDraftId;
 
-              {/* Edition Info */}
-              {selectedEdition && !isGenerating && (
-                <div className="mt-4 pt-4 border-t flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <FileText className="h-4 w-4" />
-                    {selectedEdition.articleCount} articles
-                  </span>
-                  <Badge variant={selectedEdition.status === "DRAFT" ? "secondary" : "default"}>
-                    {selectedEdition.status}
-                  </Badge>
-                  {drafts.length > 0 && (
-                    <span>{drafts.length} draft{drafts.length !== 1 ? "s" : ""}</span>
+                    return (
+                      <li
+                        key={draft.id}
+                        className={cn(
+                          "flex flex-col gap-2.5 border-b border-radar-line2 px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between",
+                          isSelected && "bg-radar-surface2"
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[13px] font-medium text-radar-ink">
+                              {getBrandVoiceName(draft.brandVoiceId)}
+                            </span>
+                            <StatusChip tone={DRAFT_TONE[draft.status]}>
+                              {DRAFT_LABEL[draft.status]}
+                            </StatusChip>
+                          </div>
+                          <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3">
+                            Written {relativeTime(draft.generatedAt)}
+                            {draft.approvedAt &&
+                              ` · approved ${relativeTime(draft.approvedAt)}`}
+                            {isLoadingDraftContentId === draft.id &&
+                              " · loading the copy…"}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <RadarButton
+                            size="sm"
+                            variant={isSelected ? "accent" : "outline"}
+                            onClick={() => setSelectedDraftId(draft.id)}
+                          >
+                            {isSelected ? "Open" : "Read"}
+                          </RadarButton>
+                          {draft.status === "DRAFT" && (
+                            <RadarButton
+                              size="sm"
+                              onClick={() => handleApproveDraft(draft.id)}
+                              disabled={isApprovingDraftId === draft.id}
+                            >
+                              {isApprovingDraftId === draft.id
+                                ? "Approving…"
+                                : "Approve"}
+                            </RadarButton>
+                          )}
+                          {(draft.status === "DRAFT" ||
+                            draft.status === "APPROVED") && (
+                            <RadarButton
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDiscardDraft(draft.id)}
+                              disabled={isDiscardingDraftId === draft.id}
+                              className="hover:border-radar-err hover:text-radar-err"
+                            >
+                              {isDiscardingDraftId === draft.id
+                                ? "Discarding…"
+                                : "Discard"}
+                            </RadarButton>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </RadarPanel>
+          )}
+
+          {/* The written edition */}
+          {generated && editedContent && !isGenerating && (
+            <div className="flex flex-col gap-5">
+              {/* Sticky save bar, only when something changed */}
+              {isDirty && (
+                <div className="radar-enter sticky top-[68px] z-20 flex flex-wrap items-center gap-3 rounded-xl border border-radar-accent bg-radar-surface px-4 py-3 shadow-radar-lg">
+                  <p className="m-0 flex-1 text-[12.5px] text-radar-ink">
+                    {canEditDraft
+                      ? "You have unsaved copy edits."
+                      : "This draft is locked, so edits cannot be saved. Generate a new draft to make changes."}
+                  </p>
+                  {canEditDraft && (
+                    <RadarButton
+                      size="sm"
+                      variant="accent"
+                      onClick={handleSaveEdits}
+                      disabled={isSavingEdits}
+                    >
+                      {isSavingEdits ? "Saving…" : "Save edits"}
+                    </RadarButton>
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Drafts */}
-          {selectedEditionId && !isGenerating && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Generation Drafts</CardTitle>
-                <CardDescription>
-                  Review and approve generated drafts before sending
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingDrafts ? (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
-                ) : drafts.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No drafts yet. Generate a draft to see it here.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {drafts.map((draft) => {
-                      const isSelected = draft.id === selectedDraftId;
-                      return (
-                        <div
-                          key={draft.id}
-                          className={`flex items-center justify-between gap-4 rounded-lg border p-3 ${
-                            isSelected ? "border-primary bg-primary/5" : ""
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">
-                                {getBrandVoiceName(draft.brandVoiceId)}
-                              </span>
-                              <Badge
-                                variant={
-                                  draft.status === "APPROVED"
-                                    ? "default"
-                                    : draft.status === "DISCARDED"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                              >
-                                {draft.status}
-                              </Badge>
-                              {draft.status === "APPROVED" && draft.approvedAt && (
-                                <span className="text-xs text-muted-foreground">
-                                  Approved {new Date(draft.approvedAt).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                              <Clock className="h-3 w-3" />
-                              Generated {new Date(draft.generatedAt).toLocaleString()}
-                              {isLoadingDraftContentId === draft.id && (
-                                <span className="ml-2 flex items-center gap-1">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  Loading content...
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Button
-                              variant={isSelected ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => setSelectedDraftId(draft.id)}
-                            >
-                              {isSelected ? "Selected" : "View"}
-                            </Button>
-                            {draft.status === "DRAFT" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleApproveDraft(draft.id)}
-                                disabled={isApprovingDraftId === draft.id}
-                              >
-                                {isApprovingDraftId === draft.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
-                            {(draft.status === "DRAFT" || draft.status === "APPROVED") && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDiscardDraft(draft.id)}
-                                disabled={isDiscardingDraftId === draft.id}
-                              >
-                                {isDiscardingDraftId === draft.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <XCircle className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Generated Content */}
-          {generated && editedContent && !isGenerating && (
-            <div className="space-y-6">
-              {/* Subject Lines */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        Subject Lines
-                        <Badge variant="outline">{generated.subjectLines.length} variants</Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Select a subject line for your newsletter email
-                      </CardDescription>
-                    </div>
-                    <Button
-                      variant="outline"
+              {/* Subject lines */}
+              <RadarPanel
+                title="Subject lines"
+                note={`${generated.subjectLines.length} options. Inbox previews cut around 60 characters.`}
+                actions={
+                  <>
+                    <RadarButton size="sm" variant="ghost" onClick={copySubjectLine}>
+                      {copiedSubject ? "Copied" : "Copy the chosen one"}
+                    </RadarButton>
+                    <RadarButton
                       size="sm"
                       onClick={handleRegenerateSubjectLines}
                       disabled={isRegeneratingSubjects || !selectedDraftId}
                     >
-                      {isRegeneratingSubjects ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                      )}
-                      Regenerate
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {generated.subjectLines.map((subject, index) => (
-                      <div
-                        key={index}
+                      {isRegeneratingSubjects ? "Writing…" : "New options"}
+                    </RadarButton>
+                  </>
+                }
+              >
+                <div
+                  role="radiogroup"
+                  aria-label="Subject line"
+                  className="flex flex-col gap-1.5"
+                >
+                  {generated.subjectLines.map((subject, index) => {
+                    const chosen = selectedSubjectLine === index;
+
+                    return (
+                      <button
+                        key={`${subject}-${index}`}
+                        type="button"
+                        role="radio"
+                        aria-checked={chosen}
                         onClick={() => setSelectedSubjectLine(index)}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedSubjectLine === index
-                            ? "border-primary bg-primary/5"
-                            : "hover:border-muted-foreground/50"
-                        }`}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors",
+                          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent",
+                          chosen
+                            ? "border-radar-accent bg-radar-surface2"
+                            : "border-radar-line hover:border-radar-ink3"
+                        )}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-2">
-                            {selectedSubjectLine === index && (
-                              <CheckCircle2 className="h-4 w-4 text-primary" />
-                            )}
-                            {subject}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {subject.length} chars
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 flex justify-end">
-                    <Button variant="outline" size="sm" onClick={copySubjectLine}>
-                      {copiedSubject ? (
-                        <>
-                          <Check className="h-4 w-4 mr-2" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copy Selected
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "h-2 w-2 shrink-0 rounded-full",
+                            chosen ? "bg-radar-accent" : "bg-radar-line"
+                          )}
+                        />
+                        <span className="min-w-0 flex-1 text-[13px] text-radar-ink">
+                          {subject}
+                        </span>
+                        <Num
+                          className={cn(
+                            "shrink-0 text-[11px]",
+                            subject.length > 60
+                              ? "text-radar-warn"
+                              : "text-radar-ink3"
+                          )}
+                        >
+                          {subject.length}
+                        </Num>
+                      </button>
+                    );
+                  })}
+                </div>
+              </RadarPanel>
 
               {/* Opening */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Opening</CardTitle>
-                  <CardDescription>
-                    The hook that draws readers in
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={editedContent.opening}
-                    onChange={(e) =>
-                      setEditedContent({ ...editedContent, opening: e.target.value })
-                    }
-                    rows={4}
-                    className="resize-none"
-                  />
-                </CardContent>
-              </Card>
+              <RadarPanel
+                title="Opening"
+                note="The first thing a reader sees after the subject line."
+              >
+                <RadarTextarea
+                  aria-label="Opening"
+                  value={editedContent.opening}
+                  readOnly={!canEditDraft}
+                  onChange={(event) => {
+                    setEditedContent({
+                      ...editedContent,
+                      opening: event.target.value,
+                    });
+                    setIsDirty(true);
+                  }}
+                  rows={4}
+                />
+              </RadarPanel>
 
               {/* Sections */}
               {editedContent.sections.map((section, sectionIndex) => (
-                <Card key={sectionIndex}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      {section.name}
-                      <Badge variant="secondary">{section.articles.length} articles</Badge>
-                    </CardTitle>
-                    {section.transition && (
-                      <CardDescription>
-                        Transition: {section.transition}
-                      </CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                <RadarPanel
+                  key={`${section.name}-${sectionIndex}`}
+                  title={section.name}
+                  note={
+                    section.transition
+                      ? `Leads in with: ${section.transition}`
+                      : `${section.articles.length} ${section.articles.length === 1 ? "story" : "stories"}`
+                  }
+                >
+                  <div className="flex flex-col gap-4">
                     {section.articles.map((article, articleIndex) => (
                       <div
                         key={article.id}
-                        className={`p-4 rounded-lg border ${
-                          article.isHero ? "border-primary bg-primary/5" : ""
-                        }`}
+                        className={cn(
+                          "rounded-lg border p-3.5",
+                          article.isHero
+                            ? "border-radar-accent"
+                            : "border-radar-line2"
+                        )}
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold">{article.title}</h4>
-                            {article.isHero && (
-                              <Badge variant="default">Hero</Badge>
-                            )}
-                          </div>
-                          <a
-                            href={article.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <h3 className="font-editorial m-0 text-[15px] font-medium leading-[1.3] text-radar-ink text-pretty">
+                            <a
+                              href={article.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-radar-ink no-underline hover:text-radar-accent"
+                            >
+                              {article.title}
+                            </a>
+                          </h3>
+                          {article.isHero && (
+                            <StatusChip tone="warn">Lead story</StatusChip>
+                          )}
                         </div>
-                        <Textarea
+                        <RadarTextarea
+                          aria-label={`Summary for ${article.title}`}
                           value={article.summary}
-                          onChange={(e) => {
-                            const newSections = [...editedContent.sections];
-                            newSections[sectionIndex].articles[articleIndex].summary = e.target.value;
-                            setEditedContent({ ...editedContent, sections: newSections });
-                          }}
+                          readOnly={!canEditDraft}
+                          onChange={(event) =>
+                            updateArticleSummary(
+                              sectionIndex,
+                              articleIndex,
+                              event.target.value
+                            )
+                          }
                           rows={3}
-                          className="resize-none"
                         />
                       </div>
                     ))}
-                  </CardContent>
-                </Card>
+                  </div>
+                </RadarPanel>
               ))}
 
               {/* Closing */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Closing</CardTitle>
-                  <CardDescription>
-                    Sign-off with call to action
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={editedContent.closing}
-                    onChange={(e) =>
-                      setEditedContent({ ...editedContent, closing: e.target.value })
-                    }
-                    rows={4}
-                    className="resize-none"
-                  />
-                </CardContent>
-              </Card>
+              <RadarPanel title="Sign-off" note="The last word and the ask.">
+                <RadarTextarea
+                  aria-label="Closing"
+                  value={editedContent.closing}
+                  readOnly={!canEditDraft}
+                  onChange={(event) => {
+                    setEditedContent({
+                      ...editedContent,
+                      closing: event.target.value,
+                    });
+                    setIsDirty(true);
+                  }}
+                  rows={4}
+                />
+              </RadarPanel>
 
-              {/* Stats */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Generation Stats</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div>
-                      <div className="text-2xl font-bold">{generated.plan.totalArticles}</div>
-                      <div className="text-sm text-muted-foreground">Articles</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{editedContent.sections.length}</div>
-                      <div className="text-sm text-muted-foreground">Sections</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{generated.subjectLines.length}</div>
-                      <div className="text-sm text-muted-foreground">Subject Lines</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">
-                        {new Date(generated.generatedAt).toLocaleTimeString()}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Generated</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <div>
+                <SectionLabel className="mb-3">This draft</SectionLabel>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <StatTile
+                    label="Stories"
+                    value={generated.plan.totalArticles}
+                  />
+                  <StatTile
+                    label="Sections"
+                    value={editedContent.sections.length}
+                  />
+                  <StatTile
+                    label="Subject lines"
+                    value={generated.subjectLines.length}
+                  />
+                  <StatTile
+                    label="Written"
+                    value={relativeTime(generated.generatedAt)}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Empty State */}
-          {!generated && !isLoading && !isGenerating && selectedEditionId && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Wand2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Ready to Generate</h3>
-                <p className="text-muted-foreground mb-4">
-                  Click the Generate button to create AI-powered newsletter content
-                </p>
-              </CardContent>
-            </Card>
+          {/* Nothing chosen yet */}
+          {!selectedEditionId && !isLoading && !isGenerating && (
+            <EmptyState title="Pick an edition to write">
+              Ghost Writer works from the approved stories already collected in an
+              edition. Choose one above and it will plan and write the whole issue in
+              about a minute.
+            </EmptyState>
           )}
 
-          {/* No Edition Selected */}
-          {!selectedEditionId && !isLoading && !isGenerating && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Select an Edition</h3>
-                <p className="text-muted-foreground">
-                  Choose an edition above to generate newsletter content
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </main>
+          {selectedEditionId &&
+            !generated &&
+            !isLoading &&
+            !isGenerating &&
+            !isLoadingDrafts &&
+            drafts.length === 0 && (
+              <EmptyState
+                title="Ready when you are"
+                actions={
+                  <RadarButton variant="accent" onClick={handleGenerate}>
+                    Write the edition
+                  </RadarButton>
+                }
+              >
+                {selectedEdition?.articleCount
+                  ? `${selectedEdition.articleCount} approved stories are waiting in this edition.`
+                  : "This edition has no approved stories yet, so there is nothing to write about."}
+              </EmptyState>
+            )}
+        </RadarMain>
       </FeatureGate>
-    </div>
+    </>
   );
 }
