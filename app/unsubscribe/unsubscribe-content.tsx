@@ -48,7 +48,7 @@ export default function UnsubscribeContent() {
           {status === "error" && "Error"}
         </h1>
 
-        <p className="text-gray-600 dark:text-gray-400 mb-8">{message}</p>
+        <p className="text-radar-ink2 mb-8">{message}</p>
 
         {status === "success" && (
           <div className="space-y-4">
@@ -56,7 +56,7 @@ export default function UnsubscribeContent() {
               You will no longer receive newsletters from Link Consulting AI
               Newsletter.
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-radar-ink3">
               If you change your mind, please contact your administrator to
               re-subscribe.
             </p>
@@ -64,7 +64,7 @@ export default function UnsubscribeContent() {
         )}
 
         {status === "error" && (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-radar-ink3">
             Please contact support if you continue to experience issues.
           </p>
         )}
@@ -72,7 +72,7 @@ export default function UnsubscribeContent() {
         <div className="mt-8">
           <a
             href="/"
-            className="text-blue-600 hover:text-blue-700 underline text-sm"
+            className="text-radar-primary2 hover:text-radar-accent underline text-sm"
           >
             Return to home
           </a>

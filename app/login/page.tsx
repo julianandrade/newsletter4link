@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/radar/compat";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/radar/compat";
+import { Input } from "@/components/radar/compat";
+import { Label } from "@/components/radar/compat";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth/hooks";
@@ -64,11 +64,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-radar-bg p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Newsletter Admin</CardTitle>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-radar-ink2 text-sm">
             Sign in to manage your newsletter
           </p>
         </CardHeader>
@@ -99,7 +99,7 @@ export default function LoginPage() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
+              <span className="bg-radar-bg px-2 text-radar-ink2">
                 or
               </span>
             </div>
@@ -180,14 +180,14 @@ export default function LoginPage() {
 
           {/* Error Message */}
           {error && (
-            <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950 rounded-md">
+            <div className="p-3 text-sm text-radar-err bg-radar-surface rounded-md">
               {error}
             </div>
           )}
 
           {/* Success Message */}
           {message && (
-            <div className="p-3 text-sm text-green-600 bg-green-50 dark:bg-green-950 rounded-md">
+            <div className="p-3 text-sm text-radar-ok bg-radar-surface rounded-md">
               {message}
             </div>
           )}
