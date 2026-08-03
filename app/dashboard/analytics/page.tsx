@@ -1,40 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+  ChipGroup,
+  Num,
+  PageHeading,
+  RadarButton,
+  RadarMain,
+  SectionLabel,
+  Tag,
+} from "@/components/radar/primitives";
 import {
-  Mail,
-  MailOpen,
-  MousePointerClick,
-  AlertTriangle,
-  Loader2,
-  TrendingUp,
-  ExternalLink,
-  CheckCircle2,
-  UserMinus,
-  Calendar,
-  FileText,
-  Link as LinkIcon,
-  Globe,
-  Sparkles,
-  Users,
-  UserCheck,
-  Clock,
-  UserPlus,
-  Activity,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+  EmptyState,
+  RadarField,
+  RadarInput,
+  RadarPanel,
+  RadarSelect,
+  SkeletonRows,
+  StatTile,
+  TableShell,
+  tableClass,
+  tdClass,
+  theadClass,
+  thClass,
+  trClass,
+} from "@/components/radar/controls";
+import { sourceIdentity } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
 
 type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
 
@@ -105,6 +98,68 @@ interface AnalyticsData {
   engagementHealth?: EngagementHealth;
 }
 
+const EMPTY_METRICS = {
+  sent: 0,
+  delivered: 0,
+  opened: 0,
+  clicked: 0,
+  bounced: 0,
+  unsubscribed: 0,
+  openRate: 0,
+  clickRate: 0,
+  bounceRate: 0,
+  deliveryRate: 0,
+  unsubscribeRate: 0,
+};
+
+/** Engagement health maps onto the reserved status colours, label always present. */
+const HEALTH_BANDS = [
+  {
+    key: "active" as const,
+    label: "Active",
+    note: "opened something in the last 30 days",
+    color: "var(--r-ok)",
+  },
+  {
+    key: "dormant" as const,
+    label: "Dormant",
+    note: "last opened 30 to 90 days ago",
+    color: "var(--r-warn)",
+  },
+  {
+    key: "atRisk" as const,
+    label: "At risk",
+    note: "nothing opened in over 90 days",
+    color: "var(--r-err)",
+  },
+  {
+    key: "new" as const,
+    label: "New",
+    note: "fewer than three editions received",
+    color: "var(--r-primary2)",
+  },
+];
+
+function shortDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function truncateUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const path =
+      parsed.pathname.length > 30
+        ? parsed.pathname.substring(0, 30) + "…"
+        : parsed.pathname;
+    return parsed.hostname + path;
+  } catch {
+    return url.substring(0, 50) + (url.length > 50 ? "…" : "");
+  }
+}
+
 export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,12 +168,15 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState<DateRange>("14d");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [segmentBy, setSegmentBy] = useState<"language" | "style">("language");
+  const [showTimelineTable, setShowTimelineTable] = useState(false);
 
   useEffect(() => {
     // Only fetch when not in custom mode, or when both custom dates are filled
     if (dateRange !== "custom" || (customStartDate && customEndDate)) {
       fetchAnalytics();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEdition, dateRange, customStartDate, customEndDate]);
 
   const fetchAnalytics = async () => {
@@ -155,538 +213,589 @@ export default function AnalyticsPage() {
     }
   };
 
-  if (isLoading && !data) {
-    return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Analytics" />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
+  const metrics = data?.metrics || EMPTY_METRICS;
+  const timeline = data?.timeline ?? [];
+  const segments = useMemo(() => {
+    if (!data?.segmentation) return [];
+    return segmentBy === "language"
+      ? data.segmentation.byLanguage.map((s) => ({
+          key: s.language,
+          label: s.label,
+          count: s.count,
+          openRate: s.openRate,
+        }))
+      : data.segmentation.byStyle.map((s) => ({
+          key: s.style,
+          label: s.label,
+          count: s.count,
+          openRate: s.openRate,
+        }));
+  }, [data, segmentBy]);
+
+  const segmentTotal = segments.reduce((sum, s) => sum + s.count, 0);
+  const healthTotal = data?.engagementHealth
+    ? HEALTH_BANDS.reduce(
+        (sum, band) => sum + data.engagementHealth![band.key].count,
+        0
+      )
+    : 0;
+  const topClicks = data?.topLinks?.[0]?.clicks ?? 0;
+
+  const filters = (
+    <>
+      <RadarSelect
+        aria-label="Date range"
+        className="w-auto min-w-[150px]"
+        value={dateRange}
+        onChange={(event) => setDateRange(event.target.value as DateRange)}
+      >
+        <option value="7d">Last 7 days</option>
+        <option value="14d">Last 14 days</option>
+        <option value="30d">Last 30 days</option>
+        <option value="90d">Last 90 days</option>
+        <option value="custom">Custom range</option>
+      </RadarSelect>
+
+      <RadarSelect
+        aria-label="Edition"
+        className="w-auto min-w-[170px]"
+        value={selectedEdition}
+        onChange={(event) => setSelectedEdition(event.target.value)}
+      >
+        <option value="all">Every edition</option>
+        {data?.editions?.map((edition) => (
+          <option key={edition.id} value={edition.id}>
+            Week {edition.week}, {edition.year}
+          </option>
+        ))}
+      </RadarSelect>
+    </>
+  );
 
   if (error && !data) {
     return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Analytics" />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
-            <p className="text-muted-foreground">{error}</p>
-          </div>
-        </div>
-      </div>
+      <>
+        <AppHeader />
+        <RadarMain width="1180px">
+          <PageHeading eyebrow="Analytics" title="Analytics are unavailable" />
+          <EmptyState
+            title="The analytics request failed"
+            actions={
+              <RadarButton variant="accent" onClick={() => void fetchAnalytics()}>
+                Try again
+              </RadarButton>
+            }
+          >
+            {error}
+          </EmptyState>
+        </RadarMain>
+      </>
     );
   }
 
-  const metrics = data?.metrics || {
-    sent: 0,
-    delivered: 0,
-    opened: 0,
-    clicked: 0,
-    bounced: 0,
-    unsubscribed: 0,
-    openRate: 0,
-    clickRate: 0,
-    bounceRate: 0,
-    deliveryRate: 0,
-    unsubscribeRate: 0,
-  };
-
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Analytics" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6 space-y-6">
-        {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-lg font-semibold">Email Performance</h2>
-          <div className="flex flex-wrap items-end gap-3">
-            {/* Date Range Selector */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                Timeline Range
-              </Label>
-              <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Date range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="14d">Last 14 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="90d">Last 90 days</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
+      <RadarMain width="1180px">
+        <PageHeading
+          eyebrow="Analytics"
+          title={
+            isLoading && !data
+              ? "Analytics"
+              : metrics.sent === 0
+                ? "Nothing has been sent in this window"
+                : `${metrics.openRate.toFixed(0)}% of ${metrics.delivered} delivered were opened`
+          }
+          subtitle="Open and click figures come from the tracking pixel and link redirects, so they undercount readers who block images."
+          actions={filters}
+        />
+
+        {dateRange === "custom" && (
+          <div className="mb-5 grid gap-4 rounded-xl border border-radar-line bg-radar-surface p-4 sm:grid-cols-2 lg:max-w-[420px]">
+            <RadarField label="From" htmlFor="analytics-from">
+              <RadarInput
+                id="analytics-from"
+                type="date"
+                value={customStartDate}
+                max={customEndDate || undefined}
+                onChange={(event) => setCustomStartDate(event.target.value)}
+              />
+            </RadarField>
+            <RadarField label="To" htmlFor="analytics-to">
+              <RadarInput
+                id="analytics-to"
+                type="date"
+                value={customEndDate}
+                min={customStartDate || undefined}
+                onChange={(event) => setCustomEndDate(event.target.value)}
+              />
+            </RadarField>
+          </div>
+        )}
+
+        {isLoading && !data ? (
+          <SkeletonRows rows={6} />
+        ) : (
+          <div className="flex flex-col gap-8">
+            {/* Headline figures */}
+            <div>
+              <SectionRuleLabel>Delivery and engagement</SectionRuleLabel>
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <StatTile
+                  label="Sent"
+                  value={metrics.sent}
+                  note={`${metrics.delivered} delivered`}
+                />
+                <StatTile
+                  label="Open rate"
+                  value={`${metrics.openRate.toFixed(1)}%`}
+                  note={`${metrics.opened} opens`}
+                  color="var(--r-chart-1)"
+                />
+                <StatTile
+                  label="Click rate"
+                  value={`${metrics.clickRate.toFixed(1)}%`}
+                  note={`${metrics.clicked} clicks`}
+                  color="var(--r-chart-2)"
+                />
+                <StatTile
+                  label="Delivered"
+                  value={`${metrics.deliveryRate.toFixed(1)}%`}
+                  note={`${metrics.delivered} of ${metrics.sent}`}
+                />
+                <StatTile
+                  label="Bounced"
+                  value={`${metrics.bounceRate.toFixed(1)}%`}
+                  note={`${metrics.bounced} bounces`}
+                  color={metrics.bounceRate > 2 ? "var(--r-err)" : undefined}
+                />
+                <StatTile
+                  label="Unsubscribed"
+                  value={`${metrics.unsubscribeRate.toFixed(1)}%`}
+                  note={`${metrics.unsubscribed} left`}
+                  color={metrics.unsubscribeRate > 1 ? "var(--r-warn)" : undefined}
+                />
+              </div>
             </div>
 
-            {/* Custom Date Inputs */}
-            {dateRange === "custom" && (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="startDate" className="text-xs text-muted-foreground">
-                    Start Date
-                  </Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={customStartDate}
-                    max={customEndDate || undefined}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-[140px]"
-                  />
+            {/* Timeline */}
+            <RadarPanel
+              title="Opens and clicks by day"
+              note={
+                timeline.length > 0
+                  ? `${shortDate(timeline[0].date)} to ${shortDate(timeline[timeline.length - 1].date)}`
+                  : "Nothing recorded in this window."
+              }
+              actions={
+                timeline.length > 0 ? (
+                  <RadarButton
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowTimelineTable((previous) => !previous)}
+                    aria-expanded={showTimelineTable}
+                  >
+                    {showTimelineTable ? "Show the chart" : "Show the numbers"}
+                  </RadarButton>
+                ) : undefined
+              }
+            >
+              {timeline.length === 0 ? (
+                <p className="m-0 py-10 text-center text-[12.5px] text-radar-ink3">
+                  No opens or clicks have been recorded in this window yet.
+                </p>
+              ) : showTimelineTable ? (
+                <TableShell>
+                  <table className={tableClass}>
+                    <caption className="sr-only">Opens and clicks by day</caption>
+                    <thead>
+                      <tr className={theadClass}>
+                        <th scope="col" className={thClass}>
+                          Day
+                        </th>
+                        <th scope="col" className={cn(thClass, "text-right")}>
+                          Opens
+                        </th>
+                        <th scope="col" className={cn(thClass, "text-right")}>
+                          Clicks
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {timeline.map((day) => (
+                        <tr key={day.date} className={trClass}>
+                          <td className={tdClass}>{shortDate(day.date)}</td>
+                          <td className={cn(tdClass, "text-right")}>
+                            <Num>{day.opens}</Num>
+                          </td>
+                          <td className={cn(tdClass, "text-right")}>
+                            <Num>{day.clicks}</Num>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableShell>
+              ) : (
+                <TimelineChart points={timeline} />
+              )}
+            </RadarPanel>
+
+            {/* Engagement health */}
+            {data?.engagementHealth && healthTotal > 0 && (
+              <RadarPanel
+                title="Where the list stands"
+                note={`${healthTotal} subscribers, grouped by how recently they opened something`}
+              >
+                <div
+                  className="flex h-3 w-full gap-[2px] overflow-hidden"
+                  role="img"
+                  aria-label={HEALTH_BANDS.map(
+                    (band) =>
+                      `${band.label} ${data.engagementHealth![band.key].count}`
+                  ).join(", ")}
+                >
+                  {HEALTH_BANDS.map((band) => {
+                    const value = data.engagementHealth![band.key];
+                    if (value.count === 0) return null;
+                    return (
+                      <span
+                        key={band.key}
+                        className="h-full rounded-[3px]"
+                        style={{
+                          width: `${(value.count / healthTotal) * 100}%`,
+                          background: band.color,
+                        }}
+                      />
+                    );
+                  })}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="endDate" className="text-xs text-muted-foreground">
-                    End Date
-                  </Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={customEndDate}
-                    min={customStartDate || undefined}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-[140px]"
-                  />
-                </div>
-              </>
+
+                <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {HEALTH_BANDS.map((band) => {
+                    const value = data.engagementHealth![band.key];
+                    return (
+                      <div key={band.key}>
+                        <dt className="flex items-center gap-2 text-[12px] font-medium text-radar-ink">
+                          <span
+                            aria-hidden="true"
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ background: band.color }}
+                          />
+                          {band.label}
+                        </dt>
+                        <dd className="m-0 mt-1">
+                          <Num className="text-[17px] text-radar-ink">
+                            {value.count}
+                          </Num>
+                          <span className="ml-1.5 text-[11.5px] text-radar-ink3">
+                            {value.percentage.toFixed(1)}%
+                          </span>
+                        </dd>
+                        <p className="mt-0.5 mb-0 text-[11px] text-radar-ink3 text-pretty">
+                          {band.note}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </RadarPanel>
             )}
 
-            {/* Edition Selector */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Edition</Label>
-              <Select value={selectedEdition} onValueChange={setSelectedEdition}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select edition" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Editions</SelectItem>
-                  {data?.editions && data.editions.length > 0 ? (
-                    data.editions.map((edition) => (
-                      <SelectItem key={edition.id} value={edition.id}>
-                        Week {edition.week}, {edition.year}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                      No newsletters sent yet
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {/* Key Metrics */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Emails Sent</CardTitle>
-              <Mail className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metrics.sent}</div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.delivered} delivered
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Open Rate</CardTitle>
-              <MailOpen className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.openRate.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.opened} opened
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Click Rate</CardTitle>
-              <MousePointerClick className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.clickRate.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.clicked} clicks
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Bounce Rate</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.bounceRate.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.bounced} bounced
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Delivery Rate</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.deliveryRate.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.delivered}/{metrics.sent} delivered
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Unsubscribe Rate</CardTitle>
-              <UserMinus className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.unsubscribeRate.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.unsubscribed} unsubscribed
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Engagement Health */}
-        {data?.engagementHealth && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Engagement Health
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Active */}
-                <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <UserCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-green-700 dark:text-green-300">Active</span>
-                  </div>
-                  <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-                    {data.engagementHealth.active.count}
-                  </div>
-                  <p className="text-xs text-green-600/80 dark:text-green-400/80">
-                    {data.engagementHealth.active.percentage.toFixed(1)}% of subscribers
+            {/* Segmentation */}
+            {data?.segmentation && (
+              <RadarPanel
+                title="Who reads which variant"
+                note="Share of the list, with the open rate each variant earns"
+                actions={
+                  <ChipGroup<"language" | "style">
+                    label="Segment by"
+                    kind="options"
+                    size="sm"
+                    value={segmentBy}
+                    onChange={setSegmentBy}
+                    options={[
+                      { value: "language", label: "Language" },
+                      { value: "style", label: "Style" },
+                    ]}
+                  />
+                }
+              >
+                {segments.length === 0 ? (
+                  <p className="m-0 py-8 text-center text-[12.5px] text-radar-ink3">
+                    No subscriber {segmentBy} data yet.
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Activity in last 30 days
-                  </p>
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-3.5">
+                    {segments.map((segment) => {
+                      const share =
+                        segmentTotal > 0 ? (segment.count / segmentTotal) * 100 : 0;
 
-                {/* Dormant */}
-                <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                    <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Dormant</span>
+                      return (
+                        <div key={segment.key}>
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[12.5px] font-medium text-radar-ink">
+                              {segment.label}
+                            </span>
+                            <span className="text-[11.5px] text-radar-ink3">
+                              <Num className="text-radar-ink2">{segment.count}</Num>{" "}
+                              subscribers ·{" "}
+                              <Num className="text-radar-ink">
+                                {segment.openRate.toFixed(1)}%
+                              </Num>{" "}
+                              open rate
+                            </span>
+                          </div>
+                          <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-radar-line2">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${share}%`,
+                                background: "var(--r-chart-2)",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
-                    {data.engagementHealth.dormant.count}
-                  </div>
-                  <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80">
-                    {data.engagementHealth.dormant.percentage.toFixed(1)}% of subscribers
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Last activity 30-90 days ago
-                  </p>
-                </div>
+                )}
+              </RadarPanel>
+            )}
 
-                {/* At Risk */}
-                <div className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    <span className="text-sm font-medium text-red-700 dark:text-red-300">At Risk</span>
-                  </div>
-                  <div className="text-2xl font-bold text-red-700 dark:text-red-300">
-                    {data.engagementHealth.atRisk.count}
-                  </div>
-                  <p className="text-xs text-red-600/80 dark:text-red-400/80">
-                    {data.engagementHealth.atRisk.percentage.toFixed(1)}% of subscribers
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    No activity in 90+ days
-                  </p>
-                </div>
-
-                {/* New */}
-                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <UserPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">New</span>
-                  </div>
-                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                    {data.engagementHealth.new.count}
-                  </div>
-                  <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
-                    {data.engagementHealth.new.percentage.toFixed(1)}% of subscribers
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Received &lt;3 newsletters
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Subscriber Segmentation */}
-        {data?.segmentation && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Subscriber Segmentation
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="language">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="language" className="flex items-center gap-2">
-                    <Globe className="h-4 w-4" />
-                    By Language
-                  </TabsTrigger>
-                  <TabsTrigger value="style" className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    By Style
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="language">
-                  {data.segmentation.byLanguage.length > 0 ? (
-                    <div className="space-y-3">
-                      {data.segmentation.byLanguage.map((segment) => (
-                        <SegmentBar
-                          key={segment.language}
-                          label={segment.label}
-                          count={segment.count}
-                          openRate={segment.openRate}
-                          total={data.segmentation!.byLanguage.reduce(
-                            (sum, s) => sum + s.count,
-                            0
-                          )}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No subscriber language data available
-                    </p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="style">
-                  {data.segmentation.byStyle.length > 0 ? (
-                    <div className="space-y-3">
-                      {data.segmentation.byStyle.map((segment) => (
-                        <SegmentBar
-                          key={segment.style}
-                          label={segment.label}
-                          count={segment.count}
-                          openRate={segment.openRate}
-                          total={data.segmentation!.byStyle.reduce(
-                            (sum, s) => sum + s.count,
-                            0
-                          )}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No subscriber style data available
-                    </p>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Top Links */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Top Clicked Links
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data?.topLinks && data.topLinks.length > 0 ? (
-              <div className="space-y-4">
-                {data.topLinks.map((link, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start justify-between gap-4 pb-3 border-b last:border-0 last:pb-0"
-                  >
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className="text-sm text-muted-foreground w-6 pt-0.5 flex-shrink-0">
-                        {index + 1}.
-                      </span>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          {link.isArticle ? (
-                            <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          ) : (
-                            <LinkIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          )}
+            {/* Top links */}
+            <RadarPanel
+              title="What readers clicked"
+              note={
+                data?.topLinks && data.topLinks.length > 0
+                  ? `${data.topLinks.length} links, most clicked first`
+                  : "No clicks recorded in this window."
+              }
+              padded={false}
+            >
+              {!data?.topLinks || data.topLinks.length === 0 ? (
+                <p className="m-0 px-4 py-10 text-center text-[12.5px] text-radar-ink3">
+                  Clicks appear here once a send goes out and readers follow a link.
+                </p>
+              ) : (
+                <ol className="m-0 list-none p-0">
+                  {data.topLinks.map((link, index) => (
+                    <li
+                      key={`${link.url}-${index}`}
+                      className="border-b border-radar-line2 px-4 py-3 last:border-0"
+                    >
+                      <div className="flex items-start gap-3">
+                        <Num className="w-5 shrink-0 pt-0.5 text-[11.5px] text-radar-ink3">
+                          {index + 1}
+                        </Num>
+                        <div className="min-w-0 flex-1">
                           <a
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm font-medium text-foreground hover:text-blue-600 hover:underline truncate flex items-center gap-1.5"
                             title={link.url}
+                            className="block truncate text-[13px] font-medium text-radar-ink no-underline hover:text-radar-accent"
                           >
                             {link.title}
-                            <ExternalLink className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                           </a>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-muted-foreground truncate max-w-[300px]">
-                            {truncateUrl(link.url)}
-                          </span>
+                          <p className="mt-0.5 mb-0 flex flex-wrap items-center gap-2 text-[11px] text-radar-ink3">
+                            <span className="truncate">{truncateUrl(link.url)}</span>
+                            {link.isArticle && (
+                              <span className="text-radar-ink2">
+                                {sourceIdentity(link.url).name}
+                              </span>
+                            )}
+                          </p>
                           {link.category && link.category.length > 0 && (
-                            <div className="flex gap-1 flex-wrap">
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {link.category.slice(0, 3).map((cat) => (
-                                <Badge
-                                  key={cat}
-                                  variant="secondary"
-                                  className="text-[10px] px-1.5 py-0"
-                                >
-                                  {cat}
-                                </Badge>
+                                <Tag key={cat}>{cat}</Tag>
                               ))}
-                              {link.category.length > 3 && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  +{link.category.length - 3}
-                                </span>
-                              )}
                             </div>
                           )}
+                          <div className="mt-2 h-1.5 w-full max-w-[420px] overflow-hidden rounded-full bg-radar-line2">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${topClicks > 0 ? (link.clicks / topClicks) * 100 : 0}%`,
+                                background: "var(--r-chart-2)",
+                              }}
+                            />
+                          </div>
                         </div>
+                        <span className="shrink-0 text-right text-[11.5px] text-radar-ink2">
+                          <Num className="text-[14px] text-radar-ink">
+                            {link.clicks}
+                          </Num>
+                          <span className="ml-1">
+                            {link.clicks === 1 ? "click" : "clicks"}
+                          </span>
+                        </span>
                       </div>
-                    </div>
-                    <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-                      {link.clicks} {link.clicks === 1 ? "click" : "clicks"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No click data available yet
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </RadarPanel>
+          </div>
+        )}
+      </RadarMain>
+    </>
+  );
+}
 
-        {/* Engagement Timeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Engagement Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data?.timeline && data.timeline.length > 0 ? (
-              <div className="space-y-2">
-                {data.timeline.map((day, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <span className="text-sm">
-                      {new Date(day.date).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                    <div className="flex gap-6">
-                      <span className="text-sm text-muted-foreground">
-                        <MailOpen className="h-3 w-3 inline mr-1" />
-                        {day.opens} opens
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        <MousePointerClick className="h-3 w-3 inline mr-1" />
-                        {day.clicks} clicks
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No engagement data available yet
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+/** Section label with the rule, used between the page's stacked blocks. */
+function SectionRuleLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center gap-3.5">
+      <SectionLabel>{children}</SectionLabel>
+      <div aria-hidden="true" className="h-px flex-1 bg-radar-line2" />
     </div>
   );
 }
 
-function truncateUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const path =
-      parsed.pathname.length > 30
-        ? parsed.pathname.substring(0, 30) + "..."
-        : parsed.pathname;
-    return parsed.hostname + path;
-  } catch {
-    return url.substring(0, 50) + (url.length > 50 ? "..." : "");
-  }
-}
+/**
+ * Two series on one scale, because opens and clicks are the same unit. A legend
+ * plus end labels carry identity, so colour is never the only signal, and the
+ * panel offers the same data as a table.
+ */
+function TimelineChart({
+  points,
+}: {
+  points: Array<{ date: string; opens: number; clicks: number }>;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
 
-interface SegmentBarProps {
-  label: string;
-  count: number;
-  openRate: number;
-  total: number;
-}
+  // User units inside the stretched plot area; the axis labels live in HTML.
+  const plotWidth = 720;
+  const plotHeight = 160;
+  const inset = 3;
 
-function SegmentBar({ label, count, openRate, total }: SegmentBarProps) {
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const max = Math.max(
+    1,
+    ...points.map((point) => Math.max(point.opens, point.clicks))
+  );
+
+  const xFor = (index: number) =>
+    points.length === 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth;
+  const yFor = (value: number) =>
+    plotHeight - inset - (value / max) * (plotHeight - inset * 2);
+
+  const line = (key: "opens" | "clicks") =>
+    points
+      .map((point, index) => `${xFor(index).toFixed(1)},${yFor(point[key]).toFixed(1)}`)
+      .join(" ");
+
+  const gridValues = [0, max / 2, max];
+  const active = hover === null ? null : points[hover];
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{label}</span>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>{count} subscribers</span>
-          <span className="font-medium text-foreground">
-            {openRate.toFixed(1)}% open rate
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-4">
+        {[
+          { label: "Opens", color: "var(--r-chart-1)" },
+          { label: "Clicks", color: "var(--r-chart-2)" },
+        ].map((series) => (
+          <span
+            key={series.label}
+            className="flex items-center gap-2 text-[11.5px] text-radar-ink2"
+          >
+            <span
+              aria-hidden="true"
+              className="h-[3px] w-4 rounded-full"
+              style={{ background: series.color }}
+            />
+            {series.label}
           </span>
-        </div>
+        ))}
+        <span className="flex-1" />
+        {active && (
+          <span className="text-[11.5px] text-radar-ink2">
+            {shortDate(active.date)}: <Num>{active.opens}</Num> opens,{" "}
+            <Num>{active.clicks}</Num> clicks
+          </span>
+        )}
       </div>
-      <div className="h-2 bg-muted rounded-full overflow-hidden">
-        <div
-          className="h-full bg-primary rounded-full transition-all duration-300"
-          style={{ width: `${percentage}%` }}
-        />
+
+      {/* Geometry stretches to the panel; the labels stay HTML so they never
+          distort with the non-uniform scale. */}
+      <div className="flex gap-2.5">
+        <div className="flex w-7 shrink-0 flex-col justify-between py-px text-right">
+          {[...gridValues].reverse().map((value) => (
+            <Num key={value} className="text-[10px] leading-none text-radar-ink3">
+              {Math.round(value)}
+            </Num>
+          ))}
+        </div>
+
+        <svg
+          viewBox={`0 0 ${plotWidth} ${plotHeight}`}
+          preserveAspectRatio="none"
+          className="h-[180px] w-full touch-none"
+          role="img"
+          aria-label={`Opens and clicks per day. Peak ${max} in a single day across ${points.length} days.`}
+          onPointerLeave={() => setHover(null)}
+          onPointerMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const ratio = (event.clientX - rect.left) / rect.width;
+            const index = Math.round(ratio * (points.length - 1));
+            setHover(Math.max(0, Math.min(points.length - 1, index)));
+          }}
+        >
+          {gridValues.map((value) => (
+            <line
+              key={value}
+              x1={0}
+              x2={plotWidth}
+              y1={yFor(value)}
+              y2={yFor(value)}
+              stroke="var(--r-line2)"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+
+          {hover !== null && (
+            <line
+              x1={xFor(hover)}
+              x2={xFor(hover)}
+              y1={0}
+              y2={plotHeight}
+              stroke="var(--r-ink3)"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+
+          <polyline
+            points={line("opens")}
+            fill="none"
+            stroke="var(--r-chart-1)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          <polyline
+            points={line("clicks")}
+            fill="none"
+            stroke="var(--r-chart-2)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
+
+      <div className="mt-1.5 flex justify-between pl-[38px]">
+        <Num className="text-[10px] text-radar-ink3">
+          {shortDate(points[0].date)}
+        </Num>
+        <Num className="text-[10px] text-radar-ink3">
+          {shortDate(points[points.length - 1].date)}
+        </Num>
       </div>
     </div>
   );
