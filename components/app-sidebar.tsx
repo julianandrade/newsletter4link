@@ -2,24 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Home,
-  FileText,
-  Briefcase,
-  Send,
-  ChevronLeft,
-  ChevronRight,
-  History,
-  Layout,
-  Settings,
-  LogOut,
-  BarChart3,
-  Users,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -29,29 +13,49 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { JobIndicator } from "@/components/job-indicator";
+import { RadarIcon, RadarMark, type RadarIconName } from "@/components/radar/icons";
 import type { User } from "@supabase/supabase-js";
 
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   user: User;
+  /** Live counts rendered beside primary nav entries. */
+  counts?: Partial<Record<"feed" | "editions" | "sources", number>>;
+  /** Below lg the sidebar is an off-canvas drawer driven by the header. */
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
 }
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/dashboard/review", label: "Review Articles", icon: FileText },
-  { href: "/dashboard/projects", label: "Projects", icon: Briefcase },
-  { href: "/dashboard/curation", label: "Curation", icon: History },
-  { href: "/dashboard/search", label: "Trend Radar", icon: Search },
-  { href: "/dashboard/generate", label: "Ghost Writer", icon: Sparkles },
-  { href: "/dashboard/templates", label: "Templates", icon: Layout },
-  { href: "/dashboard/subscribers", label: "Subscribers", icon: Users },
-  { href: "/dashboard/send", label: "Send Newsletter", icon: Send },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+/** Primary destinations, in the order the design fixes. */
+const PRIMARY: { key: RadarIconName; href: string; label: string }[] = [
+  { key: "feed", href: "/dashboard", label: "Feed" },
+  { key: "trends", href: "/dashboard/trends", label: "Trends" },
+  { key: "search", href: "/dashboard/search", label: "Search" },
+  { key: "editions", href: "/dashboard/send", label: "Editions" },
+  { key: "sources", href: "/dashboard/sources", label: "Sources" },
+  { key: "analytics", href: "/dashboard/analytics", label: "Analytics" },
+  { key: "settings", href: "/dashboard/settings", label: "Settings" },
 ];
 
-export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
+/** Everything else, grouped out of the primary rhythm. */
+const WORKSPACE = [
+  { href: "/dashboard/review", label: "Review queue" },
+  { href: "/dashboard/projects", label: "Projects" },
+  { href: "/dashboard/curation", label: "Curation jobs" },
+  { href: "/dashboard/generate", label: "Ghost Writer" },
+  { href: "/dashboard/templates", label: "Templates" },
+  { href: "/dashboard/subscribers", label: "Subscribers" },
+];
+
+export function AppSidebar({
+  collapsed,
+  onToggle,
+  user,
+  counts,
+  mobileOpen = false,
+  onNavigate,
+}: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -61,88 +65,178 @@ export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
     router.push("/login");
   };
 
+  // /dashboard must match exactly, or it would light up on every child route.
+  const isActive = (href: string) =>
+    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+
+  const initials =
+    (user.email ?? "?")
+      .split("@")[0]
+      .split(/[._-]/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p.charAt(0).toUpperCase())
+      .join("") || "?";
+
   return (
-    <aside
-      className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r bg-background transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
-      <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center border-b px-4">
+    <TooltipProvider delayDuration={0}>
+      <aside
+        className={cn(
+          // Off-canvas drawer on small screens, sticky rail from lg up.
+          "fixed inset-y-0 left-0 z-50 flex h-screen w-[248px] shrink-0 flex-col",
+          "border-r border-radar-line bg-radar-bg",
+          "transition-transform duration-200 ease-out",
+          // `invisible` keeps the closed drawer's links out of the tab order;
+          // lg:visible restores the rail on desktop regardless of drawer state.
+          mobileOpen
+            ? "visible translate-x-0"
+            : "invisible -translate-x-full lg:visible lg:translate-x-0",
+          "lg:sticky lg:top-0 lg:z-40 lg:self-start lg:transition-[width] lg:duration-200",
+          collapsed ? "lg:w-[62px]" : "lg:w-[248px]"
+        )}
+        onClick={(event) => {
+          // Any nav click inside the mobile drawer should close it.
+          if (
+            onNavigate &&
+            (event.target as HTMLElement).closest("a[href]") !== null
+          ) {
+            onNavigate();
+          }
+        }}
+      >
+        {/* Wordmark */}
+        <div className="flex h-[60px] items-center gap-2.5 border-b border-radar-line2 px-[18px]">
+          <RadarMark />
           {!collapsed && (
-            <span className="text-lg font-semibold">Newsletter</span>
+            <span className="text-[14.5px] font-semibold tracking-[-0.01em] whitespace-nowrap text-radar-ink">
+              AI Radar
+            </span>
           )}
         </div>
 
-        {/* Organization Switcher */}
-        <div className="border-b">
+        {/* Organization */}
+        <div className="border-b border-radar-line2">
           <OrgSwitcher collapsed={collapsed} />
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-2">
-          <TooltipProvider delayDuration={0}>
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              const Icon = item.icon;
+        <nav
+          aria-label="Primary"
+          className="flex min-h-0 flex-1 flex-col gap-px overflow-x-hidden overflow-y-auto px-2 py-2.5"
+        >
+          {PRIMARY.map((item) => {
+            const active = isActive(item.href);
+            const count = counts?.[item.key as keyof typeof counts];
 
-              return collapsed ? (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-md mx-auto",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-muted"
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
-                </Tooltip>
-              ) : (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex h-10 items-center gap-3 rounded-md px-3",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </TooltipProvider>
+            const link = (
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-[11px] rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent",
+                  collapsed && "justify-center px-0",
+                  active
+                    ? "bg-radar-surface2 font-semibold text-radar-ink"
+                    : "font-medium text-radar-ink2 hover:bg-radar-surface2 hover:text-radar-ink"
+                )}
+              >
+                <RadarIcon name={item.key} className="shrink-0 opacity-90" />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 text-left whitespace-nowrap">
+                      {item.label}
+                    </span>
+                    {count !== undefined && count > 0 && (
+                      <span className="font-num text-[10.5px] tabular-nums text-radar-ink3">
+                        {count}
+                      </span>
+                    )}
+                  </>
+                )}
+              </Link>
+            );
+
+            return collapsed ? (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right">
+                  {item.label}
+                  {count !== undefined && count > 0 ? ` · ${count}` : ""}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <div key={item.href}>{link}</div>
+            );
+          })}
+
+          {!collapsed && (
+            <div className="mt-4 mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.09em] text-radar-ink3">
+              Workspace
+            </div>
+          )}
+          {collapsed && (
+            <div
+              aria-hidden="true"
+              className="mx-auto my-3 h-px w-6 bg-radar-line2"
+            />
+          )}
+
+          {WORKSPACE.map((item) => {
+            const active = isActive(item.href);
+
+            const link = (
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent",
+                  collapsed && "justify-center px-0",
+                  active
+                    ? "bg-radar-surface2 font-semibold text-radar-ink"
+                    : "text-radar-ink2 hover:bg-radar-surface2 hover:text-radar-ink"
+                )}
+              >
+                <span className="flex w-4 shrink-0 justify-center" aria-hidden="true">
+                  <span
+                    className={cn(
+                      "h-[3px] w-[3px] rounded-full",
+                      active ? "bg-radar-accent" : "bg-radar-ink3"
+                    )}
+                  />
+                </span>
+                {!collapsed && (
+                  <span className="whitespace-nowrap">{item.label}</span>
+                )}
+              </Link>
+            );
+
+            return collapsed ? (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <div key={item.href}>{link}</div>
+            );
+          })}
         </nav>
 
-        {/* Jobs & User & Toggle */}
-        <div className="border-t p-2 space-y-2">
-          {/* Job Indicator */}
-          <TooltipProvider delayDuration={0}>
-            <JobIndicator collapsed={collapsed} />
-          </TooltipProvider>
+        {/* Jobs, account, collapse */}
+        <div className="flex flex-col gap-1 border-t border-radar-line2 px-2 py-2.5">
+          <JobIndicator collapsed={collapsed} />
 
-          {/* User Info */}
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
+                  type="button"
                   onClick={handleSignOut}
-                  className="w-full justify-center"
+                  className="mx-auto flex h-9 w-9 items-center justify-center rounded-md text-radar-ink3 transition-colors hover:bg-radar-surface2 hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
                 >
                   <LogOut className="h-4 w-4" />
-                </Button>
+                  <span className="sr-only">Sign out</span>
+                </button>
               </TooltipTrigger>
               <TooltipContent side="right">
                 <p className="font-medium">{user.email}</p>
@@ -150,38 +244,49 @@ export function AppSidebar({ collapsed, onToggle, user }: AppSidebarProps) {
               </TooltipContent>
             </Tooltip>
           ) : (
-            <div className="px-2 py-1">
-              <p className="text-sm font-medium truncate">{user.email}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSignOut}
-                className="w-full justify-start px-0 h-auto py-1 text-muted-foreground hover:text-foreground"
+            <div className="flex items-center gap-2.5 px-1.5 py-1">
+              <span
+                aria-hidden="true"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-radar-primary text-[10px] font-semibold tracking-[0.02em] text-white"
               >
-                <LogOut className="h-3 w-3 mr-2" />
-                Sign out
-              </Button>
+                {initials}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[12px] text-radar-ink2">
+                {user.email}
+              </span>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                title="Sign out"
+                className="shrink-0 rounded p-1 text-radar-ink3 transition-colors hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="sr-only">Sign out</span>
+              </button>
             </div>
           )}
 
-          {/* Toggle Button */}
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={onToggle}
-            className={cn("w-full", collapsed && "justify-center")}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Collapse
-              </>
+            aria-expanded={!collapsed}
+            className={cn(
+              // The rail only collapses from lg up, so hide the control below it.
+              "hidden items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[12px] text-radar-ink3 transition-colors lg:flex",
+              "hover:bg-radar-surface2 hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent",
+              collapsed && "justify-center px-0"
             )}
-          </Button>
+          >
+            <span aria-hidden="true" className="w-4 text-center">
+              {collapsed ? "›" : "‹"}
+            </span>
+            {!collapsed && <span>Collapse</span>}
+            <span className="sr-only">
+              {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            </span>
+          </button>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </TooltipProvider>
   );
 }

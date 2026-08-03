@@ -30,7 +30,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 
 interface Organization {
   id: string;
@@ -258,15 +257,12 @@ export function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
         </PopoverContent>
       </Popover>
 
-      {/* Plan badge */}
+      {/* Plan, stated quietly: it is reference information, not a call to action. */}
       {currentOrg && (
-        <div className="mt-2 px-1">
-          <Badge
-            variant={currentOrg.plan === "FREE" ? "secondary" : "default"}
-            className="text-xs"
-          >
+        <div className="mt-1.5 px-1">
+          <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-radar-ink3">
             {currentOrg.plan.toLowerCase()} plan
-          </Badge>
+          </span>
         </div>
       )}
     </div>

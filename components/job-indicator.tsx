@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/radar/compat";
+import { Button } from "@/components/radar/compat";
+import { Progress } from "@/components/radar/compat";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,7 +111,7 @@ export function JobIndicator({ collapsed = false }: JobIndicatorProps) {
                 size="sm"
                 className={cn(
                   "w-10 h-10 p-0 mx-auto relative",
-                  jobCount > 0 && "text-primary"
+                  jobCount > 0 && "text-radar-accent"
                 )}
                 disabled={isLoading && jobCount === 0}
               >
@@ -152,7 +152,7 @@ export function JobIndicator({ collapsed = false }: JobIndicatorProps) {
           size="sm"
           className={cn(
             "w-full justify-start gap-2",
-            jobCount > 0 && "text-primary"
+            jobCount > 0 && "text-radar-accent"
           )}
           disabled={isLoading && jobCount === 0}
         >
@@ -184,7 +184,7 @@ function JobDropdownContent({ jobs }: { jobs: BackgroundJob[] }) {
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>Background Jobs</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+        <div className="px-2 py-4 text-center text-sm text-radar-ink2">
           No running jobs
         </div>
       </DropdownMenuContent>
@@ -203,12 +203,12 @@ function JobDropdownContent({ jobs }: { jobs: BackgroundJob[] }) {
           <DropdownMenuItem key={job.id} asChild className="cursor-pointer">
             <Link href={config.href} className="flex flex-col gap-2 p-3">
               <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-primary" />
+                <Icon className="h-4 w-4 text-radar-accent" />
                 <span className="font-medium">{config.label}</span>
                 <StatusIcon status={job.status} />
               </div>
               <div className="w-full space-y-1">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center justify-between text-xs text-radar-ink2">
                   <span>{job.currentStage || "Processing..."}</span>
                   <span>{job.progress}%</span>
                 </div>
@@ -225,12 +225,12 @@ function JobDropdownContent({ jobs }: { jobs: BackgroundJob[] }) {
 function StatusIcon({ status }: { status: BackgroundJob["status"] }) {
   switch (status) {
     case "RUNNING":
-      return <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />;
+      return <Loader2 className="h-3 w-3 animate-spin text-radar-accent ml-auto" />;
     case "COMPLETED":
-      return <CheckCircle2 className="h-3 w-3 text-green-500 ml-auto" />;
+      return <CheckCircle2 className="h-3 w-3 text-radar-ok ml-auto" />;
     case "FAILED":
     case "CANCELLED":
-      return <XCircle className="h-3 w-3 text-destructive ml-auto" />;
+      return <XCircle className="h-3 w-3 text-radar-err ml-auto" />;
     default:
       return null;
   }
