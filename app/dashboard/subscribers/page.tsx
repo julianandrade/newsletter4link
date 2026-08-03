@@ -1,26 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -28,34 +10,34 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  ChipGroup,
+  Num,
+  PageHeading,
+  RadarButton,
+  RadarMain,
+  StatusChip,
+  Tag,
+} from "@/components/radar/primitives";
+import { SearchIcon } from "@/components/radar/icons";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Loader2,
-  Plus,
-  Upload,
-  Search,
-  Users,
-  MoreHorizontal,
-  Trash2,
-  Mail,
-  UserX,
-  UserCheck,
-  Download,
-} from "lucide-react";
+  EmptyState,
+  RadarField,
+  RadarInput,
+  RadarSelect,
+  RadarTextarea,
+  SkeletonRows,
+  StatTile,
+  TableShell,
+  tableClass,
+  tdClass,
+  theadClass,
+  thClass,
+  trClass,
+} from "@/components/radar/controls";
+import { relativeTime } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
 
 interface Subscriber {
   id: string;
@@ -67,12 +49,28 @@ interface Subscriber {
   createdAt: string;
 }
 
+type Audience = "active" | "everyone";
+
+const LANGUAGES: [string, string][] = [
+  ["en", "English"],
+  ["pt-pt", "Portuguese (PT)"],
+  ["pt-br", "Portuguese (BR)"],
+  ["es", "Spanish"],
+  ["ar", "Arabic"],
+];
+
+const STYLES: [string, string][] = [
+  ["executive", "Executive"],
+  ["technical", "Technical"],
+  ["comprehensive", "Comprehensive"],
+];
+
 export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showInactive, setShowInactive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [audience, setAudience] = useState<Audience>("active");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -80,29 +78,41 @@ export default function SubscribersPage() {
   const [newLanguage, setNewLanguage] = useState("en");
   const [newStyle, setNewStyle] = useState("comprehensive");
   const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [csvContent, setCsvContent] = useState("");
   const [isImporting, setIsImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    skipped: number;
+  } | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<Subscriber | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadSubscribers();
-  }, [showInactive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audience]);
 
   const loadSubscribers = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
-      const url = showInactive ? "/api/subscribers?all=true" : "/api/subscribers";
+      const url =
+        audience === "everyone"
+          ? "/api/subscribers?all=true"
+          : "/api/subscribers";
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setSubscribers(data.data);
       } else {
-        setError(data.error);
+        setLoadError(data.error || "The subscriber list request failed");
       }
     } catch (e) {
-      setError("Failed to load subscribers");
+      setLoadError("The subscriber list request failed");
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +122,7 @@ export default function SubscribersPage() {
     if (!newEmail.trim() || isAdding) return;
 
     setIsAdding(true);
-    setError(null);
+    setAddError(null);
 
     try {
       const res = await fetch("/api/subscribers", {
@@ -134,55 +144,64 @@ export default function SubscribersPage() {
         setNewName("");
         setNewLanguage("en");
         setNewStyle("comprehensive");
+        toast.success("Subscriber added");
       } else {
-        setError(data.error);
+        setAddError(data.error || "Could not add that subscriber");
       }
     } catch (e) {
-      setError("Failed to add subscriber");
+      setAddError("Could not add that subscriber");
     } finally {
       setIsAdding(false);
     }
   };
 
   const handleToggleActive = async (subscriber: Subscriber) => {
+    const next = !subscriber.active;
+    setSubscribers((previous) =>
+      previous.map((s) => (s.id === subscriber.id ? { ...s, active: next } : s))
+    );
+
     try {
       const res = await fetch(`/api/subscribers/${subscriber.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: !subscriber.active }),
+        body: JSON.stringify({ active: next }),
       });
 
       const data = await res.json();
-      if (data.success) {
-        setSubscribers(
-          subscribers.map((s) =>
-            s.id === subscriber.id ? { ...s, active: !s.active } : s
-          )
-        );
-      } else {
-        setError(data.error);
-      }
+      if (!data.success) throw new Error(data.error || "Update failed");
+      toast.success(next ? "Subscribing again" : "Unsubscribed");
     } catch (e) {
-      setError("Failed to update subscriber");
+      setSubscribers((previous) =>
+        previous.map((s) =>
+          s.id === subscriber.id ? { ...s, active: subscriber.active } : s
+        )
+      );
+      toast.error("Could not change that subscription");
     }
   };
 
-  const handleDelete = async (subscriberId: string) => {
-    if (!confirm("Are you sure you want to delete this subscriber?")) return;
+  const handleDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
 
+    setIsDeleting(true);
     try {
-      const res = await fetch(`/api/subscribers/${subscriberId}`, {
+      const res = await fetch(`/api/subscribers/${deleteTarget.id}`, {
         method: "DELETE",
       });
 
       if (res.ok) {
-        setSubscribers(subscribers.filter((s) => s.id !== subscriberId));
+        setSubscribers(subscribers.filter((s) => s.id !== deleteTarget.id));
+        toast.success("Subscriber deleted");
+        setDeleteTarget(null);
       } else {
         const data = await res.json();
-        setError(data.error);
+        toast.error(data.error || "Could not delete that subscriber");
       }
     } catch (e) {
-      setError("Failed to delete subscriber");
+      toast.error("Could not delete that subscriber");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -190,7 +209,6 @@ export default function SubscribersPage() {
     if (!csvContent.trim() || isImporting) return;
 
     setIsImporting(true);
-    setError(null);
     setImportResult(null);
 
     try {
@@ -205,10 +223,10 @@ export default function SubscribersPage() {
         setImportResult({ imported: data.imported, skipped: data.skipped });
         loadSubscribers();
       } else {
-        setError(data.error);
+        toast.error(data.error || "The import failed");
       }
     } catch (e) {
-      setError("Failed to import subscribers");
+      toast.error("The import failed");
     } finally {
       setIsImporting(false);
     }
@@ -230,6 +248,7 @@ export default function SubscribersPage() {
     a.download = "subscribers.csv";
     a.click();
     URL.revokeObjectURL(url);
+    toast.success(`Exported ${subscribers.length} rows`);
   };
 
   const filteredSubscribers = subscribers.filter((s) => {
@@ -243,330 +262,421 @@ export default function SubscribersPage() {
 
   const activeCount = subscribers.filter((s) => s.active).length;
   const inactiveCount = subscribers.filter((s) => !s.active).length;
+  const languageCount = new Set(subscribers.map((s) => s.preferredLanguage)).size;
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader title="Subscribers" />
+    <>
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Users className="h-8 w-8" />
-              Subscribers
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your newsletter subscribers
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+      <RadarMain width="1180px">
+        <PageHeading
+          eyebrow="Subscribers"
+          title={
+            isLoading && subscribers.length === 0
+              ? "Subscribers"
+              : activeCount === 0
+                ? "Nobody is subscribed yet"
+                : `${activeCount} ${activeCount === 1 ? "person" : "people"} get the newsletter`
+          }
+          subtitle="Every send goes to the active list. Language and style decide which variant each reader receives."
+          actions={
+            <>
+              <RadarButton
+                onClick={handleExport}
+                disabled={subscribers.length === 0}
+              >
+                Export CSV
+              </RadarButton>
+              <RadarButton onClick={() => setIsImportDialogOpen(true)}>
+                Import
+              </RadarButton>
+              <RadarButton
+                variant="accent"
+                onClick={() => {
+                  setAddError(null);
+                  setIsAddDialogOpen(true);
+                }}
+              >
+                Add subscriber
+              </RadarButton>
+            </>
+          }
+        />
 
-            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Import Subscribers</DialogTitle>
-                  <DialogDescription>
-                    Paste CSV content with email addresses (one per line or comma-separated)
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <textarea
-                    className="w-full h-40 p-3 border rounded-md font-mono text-sm"
-                    placeholder="email@example.com&#10;another@example.com&#10;&#10;Or with names:&#10;email@example.com,John Doe"
-                    value={csvContent}
-                    onChange={(e) => setCsvContent(e.target.value)}
-                  />
-                  {importResult && (
-                    <div className="text-sm">
-                      <span className="text-green-600">
-                        Imported: {importResult.imported}
-                      </span>
-                      {importResult.skipped > 0 && (
-                        <span className="text-muted-foreground ml-4">
-                          Skipped: {importResult.skipped}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-                    Close
-                  </Button>
-                  <Button onClick={handleImport} disabled={isImporting}>
-                    {isImporting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      "Import"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Subscriber
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Subscriber</DialogTitle>
-                  <DialogDescription>
-                    Add a new subscriber to your newsletter
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="email@example.com"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name (optional)</Label>
-                    <Input
-                      id="name"
-                      placeholder="John Doe"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Language</Label>
-                      <Select value={newLanguage} onValueChange={setNewLanguage}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="en">English</SelectItem>
-                          <SelectItem value="pt-pt">Portuguese (PT)</SelectItem>
-                          <SelectItem value="pt-br">Portuguese (BR)</SelectItem>
-                          <SelectItem value="es">Spanish</SelectItem>
-                          <SelectItem value="ar">Arabic</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Style</Label>
-                      <Select value={newStyle} onValueChange={setNewStyle}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="executive">Executive</SelectItem>
-                          <SelectItem value="technical">Technical</SelectItem>
-                          <SelectItem value="comprehensive">Comprehensive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleAddSubscriber} disabled={isAdding}>
-                    {isAdding ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Adding...
-                      </>
-                    ) : (
-                      "Add Subscriber"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+          <StatTile
+            label="Active"
+            value={activeCount}
+            note="receive the next send"
+            color="var(--r-ok)"
+          />
+          <StatTile
+            label="Unsubscribed"
+            value={inactiveCount}
+            note={
+              audience === "active" ? "switch to everyone to see them" : "kept on file"
+            }
+          />
+          <StatTile
+            label="Languages"
+            value={languageCount}
+            note="variants generated per send"
+          />
         </div>
 
-        {error && (
-          <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg mb-6">
-            {error}
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
+          <div className="relative min-w-[220px] flex-1 sm:max-w-[380px]">
+            <SearchIcon
+              size={15}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
+            />
+            <RadarInput
+              type="search"
+              aria-label="Search subscribers"
+              placeholder="Search by email or name"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="pl-9"
+            />
           </div>
+          <ChipGroup<Audience>
+            label="Which subscribers"
+            kind="options"
+            value={audience}
+            onChange={setAudience}
+            options={[
+              { value: "active", label: "Active only" },
+              { value: "everyone", label: "Everyone" },
+            ]}
+          />
+        </div>
+
+        {loadError && !isLoading && (
+          <EmptyState
+            title="The subscriber list could not be loaded"
+            actions={
+              <RadarButton variant="accent" onClick={() => void loadSubscribers()}>
+                Try again
+              </RadarButton>
+            }
+          >
+            {loadError}
+          </EmptyState>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <UserCheck className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{activeCount}</p>
-                  <p className="text-sm text-muted-foreground">Active</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-gray-100 rounded-lg">
-                  <UserX className="h-6 w-6 text-gray-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{inactiveCount}</p>
-                  <p className="text-sm text-muted-foreground">Inactive</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Users className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{subscribers.length}</p>
-                  <p className="text-sm text-muted-foreground">Total</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {isLoading && subscribers.length === 0 && !loadError && (
+          <SkeletonRows rows={6} />
+        )}
 
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by email or name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Button
-                variant={showInactive ? "default" : "outline"}
-                onClick={() => setShowInactive(!showInactive)}
-              >
-                {showInactive ? "Showing All" : "Show Inactive"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {!isLoading && !loadError && filteredSubscribers.length === 0 && (
+          <EmptyState
+            title={
+              searchQuery
+                ? "Nobody matches that search"
+                : "No subscribers on this list"
+            }
+            actions={
+              searchQuery ? (
+                <RadarButton variant="accent" onClick={() => setSearchQuery("")}>
+                  Clear the search
+                </RadarButton>
+              ) : (
+                <>
+                  <RadarButton
+                    variant="accent"
+                    onClick={() => setIsAddDialogOpen(true)}
+                  >
+                    Add someone
+                  </RadarButton>
+                  <RadarButton onClick={() => setIsImportDialogOpen(true)}>
+                    Import a CSV
+                  </RadarButton>
+                </>
+              )
+            }
+          >
+            {searchQuery
+              ? "Try part of the address instead of the whole thing."
+              : "Paste a CSV of addresses to fill the list in one go, or add people one at a time."}
+          </EmptyState>
+        )}
 
-        {/* Subscribers Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Subscribers</CardTitle>
-            <CardDescription>
-              {filteredSubscribers.length} subscriber{filteredSubscribers.length !== 1 ? "s" : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : filteredSubscribers.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                {searchQuery ? "No subscribers match your search" : "No subscribers yet"}
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Language</TableHead>
-                    <TableHead>Style</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Added</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+        {filteredSubscribers.length > 0 && !loadError && (
+          <>
+            <TableShell>
+              <table className={tableClass}>
+                <caption className="sr-only">Newsletter subscribers</caption>
+                <thead>
+                  <tr className={theadClass}>
+                    <th scope="col" className={thClass}>
+                      Email
+                    </th>
+                    <th scope="col" className={thClass}>
+                      Name
+                    </th>
+                    <th scope="col" className={thClass}>
+                      Variant
+                    </th>
+                    <th scope="col" className={thClass}>
+                      Status
+                    </th>
+                    <th scope="col" className={thClass}>
+                      Added
+                    </th>
+                    <th scope="col" className={cn(thClass, "text-right")}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
                   {filteredSubscribers.map((subscriber) => (
-                    <TableRow key={subscriber.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          {subscriber.email}
+                    <tr key={subscriber.id} className={trClass}>
+                      <td className={cn(tdClass, "text-radar-ink")}>
+                        {subscriber.email}
+                      </td>
+                      <td className={tdClass}>{subscriber.name || "not given"}</td>
+                      <td className={tdClass}>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Tag>{subscriber.preferredLanguage}</Tag>
+                          <Tag>{subscriber.preferredStyle}</Tag>
                         </div>
-                      </TableCell>
-                      <TableCell>{subscriber.name || "-"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{subscriber.preferredLanguage}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{subscriber.preferredStyle}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={subscriber.active ? "default" : "outline"}>
-                          {subscriber.active ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(subscriber.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleToggleActive(subscriber)}>
-                              {subscriber.active ? (
-                                <>
-                                  <UserX className="mr-2 h-4 w-4" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="mr-2 h-4 w-4" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(subscriber.id)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                      <td className={tdClass}>
+                        <StatusChip tone={subscriber.active ? "ok" : "neutral"}>
+                          {subscriber.active ? "Subscribed" : "Unsubscribed"}
+                        </StatusChip>
+                      </td>
+                      <td className={cn(tdClass, "whitespace-nowrap")}>
+                        {relativeTime(subscriber.createdAt)}
+                      </td>
+                      <td className={cn(tdClass, "text-right")}>
+                        <div className="flex justify-end gap-1.5">
+                          <RadarButton
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleToggleActive(subscriber)}
+                          >
+                            {subscriber.active ? "Unsubscribe" : "Resubscribe"}
+                            <span className="sr-only"> {subscriber.email}</span>
+                          </RadarButton>
+                          <RadarButton
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeleteTarget(subscriber)}
+                            className="hover:border-radar-err hover:text-radar-err"
+                          >
+                            Delete
+                            <span className="sr-only"> {subscriber.email}</span>
+                          </RadarButton>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
+            </TableShell>
+
+            <p className="mt-3 mb-0 text-[11.5px] text-radar-ink3">
+              <Num>{filteredSubscribers.length}</Num> of{" "}
+              <Num>{subscribers.length}</Num> shown
+              {searchQuery && ` for “${searchQuery}”`}
+            </p>
+          </>
+        )}
+      </RadarMain>
+
+      {/* Add */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a subscriber</DialogTitle>
+            <DialogDescription>
+              They start subscribed and will receive the next edition.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            {addError && (
+              <p
+                role="alert"
+                className="m-0 rounded-lg border border-radar-err bg-radar-surface px-3 py-2 text-[12.5px] text-radar-err"
+              >
+                {addError}
+              </p>
             )}
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+
+            <RadarField label="Email" htmlFor="subscriber-email" required>
+              <RadarInput
+                id="subscriber-email"
+                type="email"
+                placeholder="name@linkconsulting.com"
+                value={newEmail}
+                onChange={(event) => setNewEmail(event.target.value)}
+              />
+            </RadarField>
+
+            <RadarField label="Name" htmlFor="subscriber-name">
+              <RadarInput
+                id="subscriber-name"
+                placeholder="Used in the greeting when it is set"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+            </RadarField>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <RadarField label="Language" htmlFor="subscriber-language">
+                <RadarSelect
+                  id="subscriber-language"
+                  value={newLanguage}
+                  onChange={(event) => setNewLanguage(event.target.value)}
+                >
+                  {LANGUAGES.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </RadarSelect>
+              </RadarField>
+
+              <RadarField
+                label="Style"
+                htmlFor="subscriber-style"
+                hint="How much detail their edition carries."
+              >
+                <RadarSelect
+                  id="subscriber-style"
+                  value={newStyle}
+                  onChange={(event) => setNewStyle(event.target.value)}
+                >
+                  {STYLES.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </RadarSelect>
+              </RadarField>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <RadarButton
+              onClick={() => setIsAddDialogOpen(false)}
+              disabled={isAdding}
+            >
+              Cancel
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              onClick={handleAddSubscriber}
+              disabled={isAdding || !newEmail.trim()}
+            >
+              {isAdding ? "Adding…" : "Add subscriber"}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import subscribers</DialogTitle>
+            <DialogDescription>
+              One address per line. Add a comma and a name to set the greeting.
+              Addresses already on the list are skipped, not duplicated.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3">
+            <RadarTextarea
+              aria-label="CSV content"
+              className="font-num h-40 text-[12px]"
+              placeholder={"ana@linkconsulting.com\njoao@linkconsulting.com,João Silva"}
+              value={csvContent}
+              onChange={(event) => setCsvContent(event.target.value)}
+            />
+
+            {importResult && (
+              <p
+                role="status"
+                className="m-0 rounded-lg border border-radar-ok bg-radar-surface px-3 py-2 text-[12.5px] text-radar-ink"
+              >
+                Imported <Num>{importResult.imported}</Num>
+                {importResult.skipped > 0 && (
+                  <>
+                    , skipped <Num>{importResult.skipped}</Num> already on the list
+                  </>
+                )}
+                .
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <RadarButton
+              onClick={() => {
+                setIsImportDialogOpen(false);
+                setImportResult(null);
+                setCsvContent("");
+              }}
+              disabled={isImporting}
+            >
+              {importResult ? "Done" : "Cancel"}
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              onClick={handleImport}
+              disabled={isImporting || !csvContent.trim()}
+            >
+              {isImporting ? "Importing…" : "Import"}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this subscriber?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.email} is removed along with their send history. If you
+              only want them to stop receiving editions, unsubscribe them instead:
+              that keeps the record.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <RadarButton
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </RadarButton>
+            <RadarButton
+              onClick={() => {
+                if (deleteTarget) {
+                  void handleToggleActive(deleteTarget);
+                  setDeleteTarget(null);
+                }
+              }}
+              disabled={isDeleting || !deleteTarget?.active}
+            >
+              Unsubscribe instead
+            </RadarButton>
+            <RadarButton
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="border-radar-err text-radar-err"
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
