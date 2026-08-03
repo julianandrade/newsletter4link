@@ -2,19 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -24,33 +13,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Clock,
-  FileText,
-  CheckCircle,
-  XCircle,
-  Ban,
-  Trash2,
-  RefreshCw,
-  Calendar,
-  ArrowUpDown,
-  Rss,
-  Play,
-  StopCircle,
-  ChevronDown,
-} from "lucide-react";
+  ChipGroup,
+  Num,
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  SectionLabel,
+  StatusChip,
+} from "@/components/radar/primitives";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Callout,
+  EmptyState,
+  Pagination,
+  RadarCheckbox,
+  RadarField,
+  RadarInput,
+  RadarProgress,
+  RadarSelect,
+  SkeletonRows,
+} from "@/components/radar/controls";
 import { RSSSourceManager } from "@/components/rss-source-manager";
+import { relativeTime } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
 
 interface CurationJob {
   id: string;
@@ -66,15 +51,32 @@ interface CurationJob {
   durationMs: number | null;
 }
 
-const statusConfig = {
-  RUNNING: { label: "Running", variant: "default" as const, icon: Loader2 },
-  COMPLETED: { label: "Completed", variant: "secondary" as const, icon: CheckCircle },
-  FAILED: { label: "Failed", variant: "destructive" as const, icon: XCircle },
-  CANCELLED: { label: "Cancelled", variant: "outline" as const, icon: Ban },
-};
+interface RssSourceOption {
+  id: string;
+  name: string;
+  category: string;
+}
 
 type SortField = "startedAt" | "durationMs" | "totalFound";
 type SortOrder = "asc" | "desc";
+type View = "jobs" | "sources";
+
+const STATUS_TONE: Record<
+  CurationJob["status"],
+  "ok" | "warn" | "err" | "info" | "neutral"
+> = {
+  RUNNING: "info",
+  COMPLETED: "ok",
+  FAILED: "err",
+  CANCELLED: "neutral",
+};
+
+const STATUS_LABEL: Record<CurationJob["status"], string> = {
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+};
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -84,20 +86,18 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString("en-US", {
-    month: "short",
+function formatStamp(dateStr: string): string {
+  return new Date(dateStr).toLocaleString("en-GB", {
     day: "numeric",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function formatDateForInput(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
 export default function CurationHistoryPage() {
+  const [view, setView] = useState<View>("jobs");
+
   const [isLoading, setIsLoading] = useState(true);
   const [jobs, setJobs] = useState<CurationJob[]>([]);
   const [page, setPage] = useState(1);
@@ -107,15 +107,14 @@ export default function CurationHistoryPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
 
   // Bulk delete state
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Re-run state
   const [rerunningJobId, setRerunningJobId] = useState<string | null>(null);
-  const [rerunError, setRerunError] = useState<string | null>(null);
 
   // Curation state
   const [curationStatus, setCurationStatus] = useState<{
@@ -123,14 +122,16 @@ export default function CurationHistoryPage() {
     message: string;
     progress?: { current: number; total: number };
     jobId?: string;
+    failed?: boolean;
   }>({
     running: false,
     message: "",
   });
   const [isCancelling, setIsCancelling] = useState(false);
-  const [rssSources, setRssSources] = useState<Array<{ id: string; name: string; category: string }>>([]);
+  const [rssSources, setRssSources] = useState<RssSourceOption[]>([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [showSourcePicker, setShowSourcePicker] = useState(false);
 
   const fetchJobs = () => {
     setIsLoading(true);
@@ -187,6 +188,7 @@ export default function CurationHistoryPage() {
 
   useEffect(() => {
     fetchJobs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter, sortField, sortOrder, dateFrom, dateTo]);
 
   // Fetch RSS sources on mount
@@ -203,16 +205,17 @@ export default function CurationHistoryPage() {
   }, []);
 
   const handleRunCuration = async () => {
-    setCurationStatus({ running: true, message: "Connecting..." });
+    setCurationStatus({ running: true, message: "Connecting to the collector" });
 
     try {
-      const url = selectedSourceIds.length > 0
-        ? `/api/curation/collect?sourceIds=${selectedSourceIds.join(",")}`
-        : "/api/curation/collect";
+      const url =
+        selectedSourceIds.length > 0
+          ? `/api/curation/collect?sourceIds=${selectedSourceIds.join(",")}`
+          : "/api/curation/collect";
 
       const response = await fetch(url, {
         method: "GET",
-        headers: { "Accept": "text/event-stream" },
+        headers: { Accept: "text/event-stream" },
       });
 
       if (!response.ok) {
@@ -232,32 +235,43 @@ export default function CurationHistoryPage() {
           const data = JSON.parse(dataStr);
           switch (eventType) {
             case "start":
-              setCurationStatus({ running: true, message: data.message, jobId: data.jobId });
+              setCurationStatus({
+                running: true,
+                message: data.message,
+                jobId: data.jobId,
+              });
               break;
             case "progress":
               setCurationStatus((prev) => ({
                 running: true,
-                message: data.message || "Processing...",
-                progress: data.current && data.total ? { current: data.current, total: data.total } : undefined,
+                message: data.message || "Processing",
+                progress:
+                  data.current && data.total
+                    ? { current: data.current, total: data.total }
+                    : undefined,
                 jobId: data.jobId || prev.jobId,
               }));
               break;
             case "complete":
-              setCurationStatus({ running: false, message: "✓ " + data.message });
+              setCurationStatus({ running: false, message: data.message });
               setTimeout(() => {
                 fetchJobs();
                 setCurationStatus({ running: false, message: "" });
               }, 3000);
               break;
             case "cancelled":
-              setCurationStatus({ running: false, message: "Curation cancelled" });
+              setCurationStatus({ running: false, message: "Run cancelled" });
               setTimeout(() => {
                 fetchJobs();
                 setCurationStatus({ running: false, message: "" });
               }, 3000);
               break;
             case "error":
-              setCurationStatus({ running: false, message: "✗ Error: " + (data.error || "Unknown error") });
+              setCurationStatus({
+                running: false,
+                failed: true,
+                message: data.error || "The run failed",
+              });
               break;
           }
         } catch {
@@ -294,7 +308,9 @@ export default function CurationHistoryPage() {
     } catch (error) {
       setCurationStatus({
         running: false,
-        message: "✗ Error: " + (error instanceof Error ? error.message : "Connection failed"),
+        failed: true,
+        message:
+          error instanceof Error ? error.message : "The connection failed",
       });
     }
   };
@@ -307,9 +323,10 @@ export default function CurationHistoryPage() {
         const data = await response.json();
         throw new Error(data.error || "Failed to cancel");
       }
-      setCurationStatus((prev) => ({ ...prev, message: "Cancelling..." }));
+      setCurationStatus((prev) => ({ ...prev, message: "Cancelling" }));
     } catch (error) {
       console.error("Failed to cancel curation:", error);
+      toast.error("Could not cancel the run");
     } finally {
       setIsCancelling(false);
     }
@@ -317,7 +334,6 @@ export default function CurationHistoryPage() {
 
   const handleBulkDelete = async () => {
     setIsDeleting(true);
-    setDeleteResult(null);
 
     try {
       const response = await fetch("/api/curation/jobs?olderThanDays=30", {
@@ -327,23 +343,14 @@ export default function CurationHistoryPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setDeleteResult({
-          success: true,
-          message: data.message || `Deleted ${data.deletedCount} job(s)`,
-        });
-        // Refresh the list
+        toast.success(data.message || `Deleted ${data.deletedCount} jobs`);
+        setIsBulkDeleteDialogOpen(false);
         fetchJobs();
       } else {
-        setDeleteResult({
-          success: false,
-          message: data.error || "Failed to delete jobs",
-        });
+        toast.error(data.error || "Could not delete the old jobs");
       }
     } catch (error) {
-      setDeleteResult({
-        success: false,
-        message: "An error occurred while deleting jobs",
-      });
+      toast.error("Could not delete the old jobs");
     } finally {
       setIsDeleting(false);
     }
@@ -351,7 +358,6 @@ export default function CurationHistoryPage() {
 
   const handleRerun = async (jobId: string) => {
     setRerunningJobId(jobId);
-    setRerunError(null);
 
     try {
       const response = await fetch(`/api/curation/jobs/${jobId}/rerun`, {
@@ -363,16 +369,16 @@ export default function CurationHistoryPage() {
         throw new Error(data.error || "Failed to re-run job");
       }
 
-      // The response is a stream, we'll just wait a moment and refresh
-      // In a full implementation, you'd want to redirect to the job details page
-      // or show a streaming progress indicator
+      // The re-run streams on the server; give it a beat, then show the new job.
+      toast.success("Re-run started");
       setTimeout(() => {
         fetchJobs();
         setRerunningJobId(null);
       }, 2000);
-
     } catch (error) {
-      setRerunError(error instanceof Error ? error.message : "Failed to re-run job");
+      toast.error(
+        error instanceof Error ? error.message : "Could not re-run that job"
+      );
       setRerunningJobId(null);
     }
   };
@@ -386,469 +392,441 @@ export default function CurationHistoryPage() {
     setPage(1);
   };
 
-  const hasActiveFilters = statusFilter !== "all" || dateFrom || dateTo || sortField !== "startedAt" || sortOrder !== "desc";
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo) ||
+    sortField !== "startedAt" ||
+    sortOrder !== "desc";
+
+  const runningJob = jobs.find((job) => job.status === "RUNNING");
+  const lastCompleted = jobs.find((job) => job.status === "COMPLETED");
+
+  const heading = curationStatus.running
+    ? "Collecting now"
+    : runningJob
+      ? "A run is in progress"
+      : lastCompleted
+        ? `Last run kept ${lastCompleted.curated} of ${lastCompleted.totalFound}`
+        : jobs.length > 0
+          ? "Curation history"
+          : "No runs yet";
+
+  const progressPct = curationStatus.progress
+    ? (curationStatus.progress.current / curationStatus.progress.total) * 100
+    : 0;
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Curation" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6">
-        <Tabs defaultValue="jobs" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="jobs" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Jobs
-            </TabsTrigger>
-            <TabsTrigger value="rss-sources" className="flex items-center gap-2">
-              <Rss className="h-4 w-4" />
-              RSS Sources
-            </TabsTrigger>
-          </TabsList>
+      <RadarMain width="1180px">
+        <PageHeading
+          eyebrow="Curation"
+          title={heading}
+          subtitle="Curation fetches every active feed, drops duplicates, scores what is left against your brand voice, and sends anything above the threshold to the review queue."
+          actions={
+            <>
+              <ChipGroup<View>
+                label="Curation views"
+                idBase="curation-view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "jobs", label: "Runs" },
+                  {
+                    value: "sources",
+                    label: `Feeds${rssSources.length > 0 ? ` · ${rssSources.length}` : ""}`,
+                  },
+                ]}
+              />
+              <RadarButton
+                variant="accent"
+                onClick={handleRunCuration}
+                disabled={curationStatus.running}
+              >
+                {curationStatus.running ? "Running…" : "Run curation"}
+              </RadarButton>
+            </>
+          }
+        />
 
-          {/* Jobs Tab */}
-          <TabsContent value="jobs" className="space-y-6">
-            {/* Run Curation */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Play className="h-4 w-4" />
-                  Run Curation
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {/* Curation Status Message */}
-                {curationStatus.message && (
-                  <div className="flex items-center gap-2 mb-4 p-3 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900">
-                    {curationStatus.running && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <p className="text-sm flex-1">{curationStatus.message}</p>
-                    {curationStatus.progress && (
-                      <span className="text-xs text-muted-foreground">
-                        {curationStatus.progress.current}/{curationStatus.progress.total}
-                      </span>
-                    )}
-                    {curationStatus.running && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelCuration}
-                        disabled={isCancelling}
-                      >
-                        {isCancelling ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <StopCircle className="h-4 w-4 mr-1" />
-                            Cancel
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                )}
+        {view === "jobs" && (
+          <div
+            role="tabpanel"
+            id="curation-view-panel-jobs"
+            aria-labelledby="curation-view-tab-jobs"
+            className="flex flex-col gap-5"
+          >
+            {/* Live run */}
+            {curationStatus.message && (
+              <Callout
+                tone={curationStatus.failed ? "err" : "info"}
+                live
+                title={curationStatus.message}
+                actions={
+                  curationStatus.running ? (
+                    <RadarButton
+                      size="sm"
+                      onClick={handleCancelCuration}
+                      disabled={isCancelling}
+                      className="hover:border-radar-err hover:text-radar-err"
+                    >
+                      {isCancelling ? "Cancelling…" : "Cancel the run"}
+                    </RadarButton>
+                  ) : undefined
+                }
+              >
+                {curationStatus.progress ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <RadarProgress value={progressPct} className="flex-1" />
+                      <Num className="shrink-0 text-[12px] text-radar-ink2">
+                        {curationStatus.progress.current} /{" "}
+                        {curationStatus.progress.total}
+                      </Num>
+                    </div>
+                  </>
+                ) : null}
+              </Callout>
+            )}
 
-                <div className="flex flex-wrap items-end gap-4">
-                  {/* RSS Source Selector */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Feed Selection</span>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-[200px] justify-between"
-                          disabled={sourcesLoading || curationStatus.running}
-                        >
-                          {sourcesLoading
-                            ? "Loading feeds..."
-                            : selectedSourceIds.length === 0
-                              ? "All Feeds"
-                              : `${selectedSourceIds.length} feed(s) selected`}
-                          <ChevronDown className="h-4 w-4 ml-2" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-56">
-                        <DropdownMenuLabel>Select RSS Feeds</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuCheckboxItem
-                          checked={selectedSourceIds.length === 0}
-                          onCheckedChange={() => setSelectedSourceIds([])}
-                        >
-                          All Feeds
-                        </DropdownMenuCheckboxItem>
-                        <DropdownMenuSeparator />
-                        {rssSources.map((source) => (
-                          <DropdownMenuCheckboxItem
-                            key={source.id}
-                            checked={selectedSourceIds.includes(source.id)}
-                            onCheckedChange={(checked) => {
-                              setSelectedSourceIds((prev) =>
-                                checked
-                                  ? [...prev, source.id]
-                                  : prev.filter((id) => id !== source.id)
-                              );
-                            }}
-                          >
-                            <span className="flex items-center gap-2">
-                              {source.name}
-                              <Badge variant="secondary" className="text-xs">
-                                {source.category}
-                              </Badge>
-                            </span>
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  {/* Start Button */}
-                  <Button
-                    onClick={handleRunCuration}
-                    disabled={curationStatus.running}
+            {/* Which feeds to collect */}
+            <div className="rounded-xl border border-radar-line bg-radar-surface px-4 py-3.5">
+              <div className="flex flex-wrap items-center gap-3">
+                <SectionLabel>Feeds in the next run</SectionLabel>
+                <span className="text-[12.5px] text-radar-ink2">
+                  {sourcesLoading
+                    ? "loading the feed list…"
+                    : selectedSourceIds.length === 0
+                      ? `all ${rssSources.length} active feeds`
+                      : `${selectedSourceIds.length} of ${rssSources.length} selected`}
+                </span>
+                <span className="flex-1" />
+                <RadarButton
+                  size="sm"
+                  onClick={() => setShowSourcePicker((previous) => !previous)}
+                  aria-expanded={showSourcePicker}
+                  disabled={sourcesLoading || rssSources.length === 0}
+                >
+                  {showSourcePicker ? "Done choosing" : "Choose feeds"}
+                </RadarButton>
+                {selectedSourceIds.length > 0 && (
+                  <RadarButton
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedSourceIds([])}
                   >
-                    {curationStatus.running ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Running...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-2 h-4 w-4" />
-                        Start Curation
-                      </>
-                    )}
-                  </Button>
+                    Use all
+                  </RadarButton>
+                )}
+              </div>
+
+              {showSourcePicker && (
+                <div className="radar-enter mt-3.5 grid gap-2 border-t border-radar-line2 pt-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {rssSources.map((source) => (
+                    <RadarCheckbox
+                      key={source.id}
+                      checked={selectedSourceIds.includes(source.id)}
+                      disabled={curationStatus.running}
+                      onChange={(event) =>
+                        setSelectedSourceIds((previous) =>
+                          event.target.checked
+                            ? [...previous, source.id]
+                            : previous.filter((id) => id !== source.id)
+                        )
+                      }
+                      label={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate">{source.name}</span>
+                          <span className="shrink-0 text-[10.5px] text-radar-ink3">
+                            {source.category}
+                          </span>
+                        </span>
+                      }
+                    />
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
 
             {/* Filters */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base">Filters</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap items-end gap-4">
-                  {/* Status Filter */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Status</span>
-                    <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value); setPage(1); }}>
-                      <SelectTrigger className="w-[150px]">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="RUNNING">Running</SelectItem>
-                        <SelectItem value="COMPLETED">Completed</SelectItem>
-                        <SelectItem value="FAILED">Failed</SelectItem>
-                        <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <RadarSelect
+                  aria-label="Filter by status"
+                  className="w-auto min-w-[150px]"
+                  value={statusFilter}
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="all">Every status</option>
+                  <option value="RUNNING">Running</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="FAILED">Failed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </RadarSelect>
 
-                  {/* Date From */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">From Date</span>
-                    <Input
+                <RadarButton
+                  onClick={() => setShowFilters((previous) => !previous)}
+                  aria-expanded={showFilters}
+                >
+                  Dates and sorting
+                </RadarButton>
+
+                {hasActiveFilters && (
+                  <RadarButton variant="ghost" onClick={clearFilters}>
+                    Clear all
+                  </RadarButton>
+                )}
+
+                <span className="flex-1" />
+
+                <RadarButton
+                  onClick={() => setIsBulkDeleteDialogOpen(true)}
+                  className="hover:border-radar-err hover:text-radar-err"
+                >
+                  Delete runs over 30 days old
+                </RadarButton>
+              </div>
+
+              {showFilters && (
+                <div className="radar-enter grid gap-4 rounded-xl border border-radar-line bg-radar-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <RadarField label="Started from">
+                    <RadarInput
                       type="date"
                       value={dateFrom}
-                      onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-                      className="w-[150px]"
+                      onChange={(event) => {
+                        setDateFrom(event.target.value);
+                        setPage(1);
+                      }}
                     />
-                  </div>
-
-                  {/* Date To */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">To Date</span>
-                    <Input
+                  </RadarField>
+                  <RadarField label="Started to">
+                    <RadarInput
                       type="date"
                       value={dateTo}
-                      onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-                      className="w-[150px]"
+                      onChange={(event) => {
+                        setDateTo(event.target.value);
+                        setPage(1);
+                      }}
                     />
-                  </div>
-
-                  {/* Sort Field */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Sort By</span>
-                    <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
-                      <SelectTrigger className="w-[150px]">
-                        <ArrowUpDown className="h-4 w-4 mr-2" />
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="startedAt">Start Time</SelectItem>
-                        <SelectItem value="durationMs">Duration</SelectItem>
-                        <SelectItem value="totalFound">Articles Found</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Sort Order */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Order</span>
-                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)}>
-                      <SelectTrigger className="w-[130px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="desc">Newest First</SelectItem>
-                        <SelectItem value="asc">Oldest First</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Clear Filters */}
-                  {hasActiveFilters && (
-                    <Button variant="ghost" onClick={clearFilters} className="text-muted-foreground">
-                      Clear filters
-                    </Button>
-                  )}
-
-                  {/* Bulk Delete */}
-                  <div className="ml-auto">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsBulkDeleteDialogOpen(true)}
-                      className="text-destructive hover:text-destructive"
+                  </RadarField>
+                  <RadarField label="Sort by">
+                    <RadarSelect
+                      value={sortField}
+                      onChange={(event) =>
+                        setSortField(event.target.value as SortField)
+                      }
                     >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Old Jobs
-                    </Button>
-                  </div>
+                      <option value="startedAt">Start time</option>
+                      <option value="durationMs">Duration</option>
+                      <option value="totalFound">Stories found</option>
+                    </RadarSelect>
+                  </RadarField>
+                  <RadarField label="Order">
+                    <RadarSelect
+                      value={sortOrder}
+                      onChange={(event) =>
+                        setSortOrder(event.target.value as SortOrder)
+                      }
+                    >
+                      <option value="desc">Newest first</option>
+                      <option value="asc">Oldest first</option>
+                    </RadarSelect>
+                  </RadarField>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
 
-            {/* Re-run error message */}
-            {rerunError && (
-              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-4 py-3 rounded-md">
-                <XCircle className="h-4 w-4" />
-                {rerunError}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setRerunError(null)}
-                  className="ml-auto"
-                >
-                  Dismiss
-                </Button>
-              </div>
-            )}
+            {/* Runs */}
+            {isLoading && jobs.length === 0 ? (
+              <SkeletonRows rows={5} />
+            ) : jobs.length === 0 ? (
+              <EmptyState
+                title={
+                  hasActiveFilters
+                    ? "No runs match those filters"
+                    : "Curation has never run here"
+                }
+                actions={
+                  hasActiveFilters ? (
+                    <RadarButton variant="accent" onClick={clearFilters}>
+                      Clear filters
+                    </RadarButton>
+                  ) : (
+                    <RadarButton variant="accent" onClick={handleRunCuration}>
+                      Run it now
+                    </RadarButton>
+                  )
+                }
+              >
+                {hasActiveFilters
+                  ? "Widen the dates, or set the status back to every status."
+                  : "A run takes a couple of minutes and fills the review queue with scored stories."}
+              </EmptyState>
+            ) : (
+              <>
+                <div className="border-t border-radar-line">
+                  {jobs.map((job) => {
+                    const canRerun = ["FAILED", "COMPLETED", "CANCELLED"].includes(
+                      job.status
+                    );
+                    const isRerunning = rerunningJobId === job.id;
 
-            {/* Jobs List */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Curation Jobs</CardTitle>
-                <CardDescription>History of all curation runs</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : jobs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <FileText className="h-10 w-10 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No curation jobs found.</p>
-                    <p className="text-sm text-muted-foreground">
-                      Run a curation from the dashboard to get started.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {jobs.map((job) => {
-                      const config = statusConfig[job.status];
-                      const StatusIcon = config.icon;
-                      const canRerun = ["FAILED", "COMPLETED", "CANCELLED"].includes(job.status);
-                      const isRerunning = rerunningJobId === job.id;
-
-                      return (
-                        <div
-                          key={job.id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <StatusIcon
-                                className={`h-5 w-5 ${
-                                  job.status === "RUNNING"
-                                    ? "animate-spin text-blue-500"
-                                    : job.status === "COMPLETED"
-                                    ? "text-green-500"
-                                    : job.status === "FAILED"
-                                    ? "text-red-500"
-                                    : "text-muted-foreground"
-                                }`}
+                    return (
+                      <div
+                        key={job.id}
+                        className="flex flex-col gap-3 border-b border-radar-line2 py-4 transition-colors hover:bg-radar-surface2 lg:flex-row lg:items-center lg:gap-6"
+                      >
+                        <div className="min-w-0 lg:w-[210px]">
+                          <div className="flex items-center gap-2.5">
+                            <StatusChip tone={STATUS_TONE[job.status]}>
+                              {STATUS_LABEL[job.status]}
+                            </StatusChip>
+                            {job.status === "RUNNING" && (
+                              <span
+                                aria-hidden="true"
+                                className="h-1.5 w-1.5 animate-pulse rounded-full bg-radar-primary2"
                               />
-                              <Badge variant={config.variant}>{config.label}</Badge>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium">
-                                {formatDate(job.startedAt)}
-                              </p>
-                              {job.durationMs && (
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {formatDuration(job.durationMs)}
-                                </p>
-                              )}
-                            </div>
+                            )}
                           </div>
-
-                          <div className="flex items-center gap-6">
-                            <div className="grid grid-cols-4 gap-4 text-center">
-                              <div>
-                                <p className="text-lg font-semibold">{job.totalFound}</p>
-                                <p className="text-xs text-muted-foreground">Found</p>
-                              </div>
-                              <div>
-                                <p className="text-lg font-semibold text-green-600">{job.curated}</p>
-                                <p className="text-xs text-muted-foreground">Curated</p>
-                              </div>
-                              <div>
-                                <p className="text-lg font-semibold text-yellow-600">{job.duplicates}</p>
-                                <p className="text-xs text-muted-foreground">Duplicates</p>
-                              </div>
-                              <div>
-                                <p className="text-lg font-semibold text-red-600">{job.errorsCount}</p>
-                                <p className="text-xs text-muted-foreground">Errors</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              {job.status === "RUNNING" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={handleCancelCuration}
-                                  disabled={isCancelling}
-                                  title="Cancel this job"
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  {isCancelling ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <StopCircle className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                              {canRerun && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleRerun(job.id)}
-                                  disabled={isRerunning || rerunningJobId !== null}
-                                  title="Re-run this job"
-                                >
-                                  {isRerunning ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <RefreshCw className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                              <Button variant="ghost" size="icon" asChild>
-                                <Link href={`/dashboard/curation/${job.id}`}>
-                                  <Eye className="h-4 w-4" />
-                                </Link>
-                              </Button>
-                            </div>
-                          </div>
+                          <p className="mt-1.5 mb-0 text-[12.5px] text-radar-ink">
+                            {formatStamp(job.startedAt)}
+                          </p>
+                          <p className="mt-0.5 mb-0 text-[11px] text-radar-ink3">
+                            {relativeTime(job.startedAt)}
+                            {job.durationMs
+                              ? ` · took ${formatDuration(job.durationMs)}`
+                              : ""}
+                          </p>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">
-                      Page {page} of {totalPages}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                        <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+                          {[
+                            { label: "Found", value: job.totalFound, tone: "" },
+                            {
+                              label: "Kept",
+                              value: job.curated,
+                              tone: "text-radar-ok",
+                            },
+                            {
+                              label: "Duplicates",
+                              value: job.duplicates,
+                              tone: "text-radar-ink2",
+                            },
+                            {
+                              label: "Errors",
+                              value: job.errorsCount,
+                              tone:
+                                job.errorsCount > 0
+                                  ? "text-radar-err"
+                                  : "text-radar-ink3",
+                            },
+                          ].map((stat) => (
+                            <div key={stat.label}>
+                              <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-radar-ink3">
+                                {stat.label}
+                              </dt>
+                              <dd
+                                className={cn(
+                                  "font-num m-0 mt-0.5 text-[15px] tabular-nums text-radar-ink",
+                                  stat.tone
+                                )}
+                              >
+                                {stat.value}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
 
-          {/* RSS Sources Tab */}
-          <TabsContent value="rss-sources">
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {job.status === "RUNNING" && (
+                            <RadarButton
+                              size="sm"
+                              onClick={handleCancelCuration}
+                              disabled={isCancelling}
+                              className="hover:border-radar-err hover:text-radar-err"
+                            >
+                              Cancel
+                            </RadarButton>
+                          )}
+                          {canRerun && (
+                            <RadarButton
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRerun(job.id)}
+                              disabled={rerunningJobId !== null}
+                            >
+                              {isRerunning ? "Starting…" : "Re-run"}
+                            </RadarButton>
+                          )}
+                          <Link
+                            href={`/dashboard/curation/${job.id}`}
+                            className={radarButtonClass("outline", "sm")}
+                          >
+                            Details
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPage={setPage}
+                  busy={isLoading}
+                />
+              </>
+            )}
+          </div>
+        )}
+
+        {view === "sources" && (
+          <div
+            role="tabpanel"
+            id="curation-view-panel-sources"
+            aria-labelledby="curation-view-tab-sources"
+          >
             <RSSSourceManager />
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        )}
+      </RadarMain>
 
-      {/* Bulk Delete Confirmation Dialog */}
-      <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+      {/* Bulk delete */}
+      <Dialog
+        open={isBulkDeleteDialogOpen}
+        onOpenChange={setIsBulkDeleteDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Old Jobs</DialogTitle>
+            <DialogTitle>Delete runs over 30 days old?</DialogTitle>
             <DialogDescription>
-              This will permanently delete all curation jobs older than 30 days. This action cannot be undone.
+              Only the run records go. The stories they collected stay in the feed,
+              the review queue and any edition that used them.
             </DialogDescription>
           </DialogHeader>
-
-          {deleteResult && (
-            <div
-              className={`flex items-center gap-2 text-sm px-3 py-2 rounded-md ${
-                deleteResult.success
-                  ? "text-green-600 bg-green-50"
-                  : "text-destructive bg-destructive/10"
-              }`}
-            >
-              {deleteResult.success ? (
-                <CheckCircle className="h-4 w-4" />
-              ) : (
-                <XCircle className="h-4 w-4" />
-              )}
-              {deleteResult.message}
-            </div>
-          )}
-
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsBulkDeleteDialogOpen(false);
-                setDeleteResult(null);
-              }}
+            <RadarButton
+              onClick={() => setIsBulkDeleteDialogOpen(false)}
               disabled={isDeleting}
             >
-              {deleteResult?.success ? "Close" : "Cancel"}
-            </Button>
-            {!deleteResult?.success && (
-              <Button
-                variant="destructive"
-                onClick={handleBulkDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Delete Jobs
-              </Button>
-            )}
+              Keep them
+            </RadarButton>
+            <RadarButton
+              onClick={handleBulkDelete}
+              disabled={isDeleting}
+              className="border-radar-err text-radar-err"
+            >
+              {isDeleting ? "Deleting…" : "Delete old runs"}
+            </RadarButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

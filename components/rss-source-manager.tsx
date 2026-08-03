@@ -9,10 +9,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/radar/compat";
+import { Input } from "@/components/radar/compat";
+import { Label } from "@/components/radar/compat";
+import { Badge } from "@/components/radar/compat";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/radar/compat";
 import { cn } from "@/lib/utils";
 import {
   Rss,
@@ -573,7 +573,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">RSS Sources</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-radar-ink2">
             Manage RSS feeds for article curation
             {sources.length > 0 && (
               <span className="ml-1">
@@ -599,7 +599,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-radar-ink2" />
             <Input
               placeholder="Search by name or URL..."
               value={searchQuery}
@@ -609,7 +609,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-radar-ink2 hover:text-radar-ink"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -680,7 +680,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
 
       {/* Error state */}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-4 py-3 rounded-md">
+        <div className="flex items-center gap-2 text-sm text-radar-err bg-radar-surface2 px-4 py-3 rounded-md">
           <AlertCircle className="h-4 w-4" />
           {error}
           <Button
@@ -697,7 +697,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin text-radar-ink2" />
         </div>
       )}
 
@@ -705,9 +705,9 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
       {!loading && sources.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Rss className="h-12 w-12 text-muted-foreground mb-4" />
+            <Rss className="h-12 w-12 text-radar-ink2 mb-4" />
             <h3 className="text-lg font-medium mb-2">No RSS sources</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-radar-ink2 mb-4">
               Add your first RSS feed to start curating articles
             </p>
             <Button onClick={handleCreate}>
@@ -722,9 +722,9 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
       {!loading && sources.length > 0 && filteredSources.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Search className="h-12 w-12 text-muted-foreground mb-4" />
+            <Search className="h-12 w-12 text-radar-ink2 mb-4" />
             <h3 className="text-lg font-medium mb-2">No matching sources</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-radar-ink2 mb-4">
               Try adjusting your search or filters
             </p>
             <Button variant="outline" onClick={clearFilters}>
@@ -745,7 +745,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base font-medium flex items-center gap-2">
                     <Badge variant="secondary">{category}</Badge>
-                    <span className="text-muted-foreground text-sm font-normal">
+                    <span className="text-radar-ink2 text-sm font-normal">
                       {categorySources.length} source
                       {categorySources.length !== 1 ? "s" : ""}
                     </span>
@@ -790,7 +790,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {formError && (
-              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+              <div className="flex items-center gap-2 text-sm text-radar-err bg-radar-surface2 px-3 py-2 rounded-md">
                 <AlertCircle className="h-4 w-4" />
                 {formError}
               </div>
@@ -951,12 +951,12 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
                   placeholder="https://example.com/feeds.opml"
                 />
                 {OPML_PRESETS.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-radar-ink2">
                     <span className="font-medium">Preset:</span>{" "}
                     <button
                       type="button"
                       onClick={() => setImportUrl(OPML_PRESETS[0].url)}
-                      className="text-primary hover:underline"
+                      className="text-radar-accent hover:underline"
                     >
                       {OPML_PRESETS[0].name}
                     </button>
@@ -999,7 +999,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-radar-ink2">
                   Feeds will use their OPML category if available, or this default.
                 </p>
               </div>
@@ -1009,7 +1009,7 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
                   <Label htmlFor="import-active" className="cursor-pointer">
                     Activate on import
                   </Label>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-radar-ink2">
                     Enable feeds immediately for curation
                   </p>
                 </div>
@@ -1027,8 +1027,8 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
                 className={cn(
                   "p-3 rounded-md text-sm",
                   importResult.errors.length > 0 && importResult.imported === 0
-                    ? "bg-destructive/10 text-destructive"
-                    : "bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200"
+                    ? "border border-radar-err bg-radar-surface text-radar-err"
+                    : "border border-radar-ok bg-radar-surface text-radar-ink"
                 )}
               >
                 <div className="flex items-start gap-2">
@@ -1130,20 +1130,20 @@ function RSSSourceRow({
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground truncate max-w-[300px] flex items-center gap-1"
+            className="text-xs text-radar-ink2 hover:text-radar-ink truncate max-w-[300px] flex items-center gap-1"
           >
             {source.url}
             <ExternalLink className="h-3 w-3 flex-shrink-0" />
           </a>
         </div>
-        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 mt-2 text-xs text-radar-ink2">
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             Last fetched: {formatDate(source.lastFetchedAt)}
           </span>
         </div>
         {source.lastError && (
-          <p className="text-xs text-destructive mt-1 truncate" title={source.lastError}>
+          <p className="text-xs text-radar-err mt-1 truncate" title={source.lastError}>
             {source.lastError}
           </p>
         )}
@@ -1151,7 +1151,7 @@ function RSSSourceRow({
           <div
             className={cn(
               "flex items-center gap-1 text-xs mt-1",
-              testResult.success ? "text-green-600" : "text-destructive"
+              testResult.success ? "text-radar-ok" : "text-radar-err"
             )}
           >
             {testResult.success ? (
@@ -1166,7 +1166,7 @@ function RSSSourceRow({
 
       {/* Active toggle */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-radar-ink2">
           {source.active ? "Active" : "Inactive"}
         </span>
         <Switch
@@ -1199,7 +1199,7 @@ function RSSSourceRow({
           size="icon"
           onClick={onDelete}
           title="Delete"
-          className="text-destructive hover:text-destructive"
+          className="text-radar-err hover:text-radar-err"
         >
           <Trash2 className="h-4 w-4" />
         </Button>

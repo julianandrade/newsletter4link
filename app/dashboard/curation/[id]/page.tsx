@@ -4,24 +4,22 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Loader2,
-  ArrowLeft,
-  Clock,
-  FileText,
-  CheckCircle,
-  XCircle,
-  Ban,
-  Info,
-  AlertTriangle,
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+  Num,
+  PageHeading,
+  radarButtonClass,
+  RadarMain,
+  SectionLabel,
+  StatusChip,
+} from "@/components/radar/primitives";
+import {
+  EmptyState,
+  RadarPanel,
+  SkeletonRows,
+  StatTile,
+} from "@/components/radar/controls";
+import { relativeTime } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
 
 interface LogEntry {
   timestamp: string;
@@ -45,17 +43,27 @@ interface CurationJob {
   logs: LogEntry[];
 }
 
-const statusConfig = {
-  RUNNING: { label: "Running", variant: "default" as const, icon: Loader2, color: "text-blue-500" },
-  COMPLETED: { label: "Completed", variant: "secondary" as const, icon: CheckCircle, color: "text-green-500" },
-  FAILED: { label: "Failed", variant: "destructive" as const, icon: XCircle, color: "text-red-500" },
-  CANCELLED: { label: "Cancelled", variant: "outline" as const, icon: Ban, color: "text-muted-foreground" },
+const STATUS_TONE: Record<
+  CurationJob["status"],
+  "ok" | "warn" | "err" | "info" | "neutral"
+> = {
+  RUNNING: "info",
+  COMPLETED: "ok",
+  FAILED: "err",
+  CANCELLED: "neutral",
 };
 
-const logLevelConfig = {
-  info: { icon: Info, color: "text-blue-500" },
-  warn: { icon: AlertTriangle, color: "text-yellow-500" },
-  error: { icon: AlertCircle, color: "text-red-500" },
+const STATUS_LABEL: Record<CurationJob["status"], string> = {
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+};
+
+const LOG_TONE: Record<LogEntry["level"], string> = {
+  info: "bg-radar-primary2",
+  warn: "bg-radar-warn",
+  error: "bg-radar-err",
 };
 
 function formatDuration(ms: number): string {
@@ -67,9 +75,9 @@ function formatDuration(ms: number): string {
 }
 
 function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString("en-US", {
-    month: "short",
+  return new Date(dateStr).toLocaleString("en-GB", {
     day: "numeric",
+    month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
@@ -78,7 +86,7 @@ function formatDateTime(dateStr: string): string {
 }
 
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString("en-US", {
+  return new Date(dateStr).toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -92,6 +100,7 @@ export default function CurationJobDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [job, setJob] = useState<CurationJob | null>(null);
   const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
+  const [levelFilter, setLevelFilter] = useState<"all" | LogEntry["level"]>("all");
 
   useEffect(() => {
     if (!jobId) return;
@@ -121,208 +130,212 @@ export default function CurationJobDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Curation Job" />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
+      <>
+        <AppHeader />
+        <RadarMain width="980px">
+          <PageHeading eyebrow="Curation run" title="Loading the run" />
+          <SkeletonRows rows={6} />
+        </RadarMain>
+      </>
     );
   }
 
   if (!job) {
     return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Curation Job" />
-        <div className="flex-1 p-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <AlertCircle className="h-10 w-10 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Job not found.</p>
-                <Button variant="outline" className="mt-4" asChild>
-                  <Link href="/dashboard/curation">
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back to History
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <>
+        <AppHeader />
+        <RadarMain width="980px">
+          <PageHeading eyebrow="Curation run" title="That run is not here" />
+          <EmptyState
+            title="No run with that id"
+            actions={
+              <Link href="/dashboard/curation" className={radarButtonClass("accent")}>
+                Back to the run history
+              </Link>
+            }
+          >
+            It may have been deleted by the 30-day cleanup, or the link may be stale.
+          </EmptyState>
+        </RadarMain>
+      </>
     );
   }
 
-  const config = statusConfig[job.status];
-  const StatusIcon = config.icon;
+  const logs = job.logs ?? [];
+  const errorCount = logs.filter((log) => log.level === "error").length;
+  const warnCount = logs.filter((log) => log.level === "warn").length;
+  const shownLogs =
+    levelFilter === "all" ? logs : logs.filter((log) => log.level === levelFilter);
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Curation Job Details" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6 space-y-6">
-        {/* Back Button */}
-        <Button variant="ghost" asChild>
-          <Link href="/dashboard/curation">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to History
-          </Link>
-        </Button>
+      <RadarMain width="980px">
+        <PageHeading
+          eyebrow="Curation run"
+          title={
+            job.status === "COMPLETED"
+              ? `Kept ${job.curated} of ${job.totalFound} stories`
+              : job.status === "FAILED"
+                ? "The run failed"
+                : job.status === "RUNNING"
+                  ? "Running now"
+                  : "The run was cancelled"
+          }
+          subtitle={
+            <>
+              Started {formatDateTime(job.startedAt)} ({relativeTime(job.startedAt)})
+              {job.durationMs ? ` · took ${formatDuration(job.durationMs)}` : ""}
+            </>
+          }
+          actions={
+            <>
+              <StatusChip tone={STATUS_TONE[job.status]}>
+                {STATUS_LABEL[job.status]}
+              </StatusChip>
+              <Link href="/dashboard/curation" className={radarButtonClass()}>
+                All runs
+              </Link>
+            </>
+          }
+        />
 
-        {/* Job Overview */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <StatusIcon
-                  className={`h-6 w-6 ${config.color} ${
-                    job.status === "RUNNING" ? "animate-spin" : ""
-                  }`}
-                />
-                <div>
-                  <CardTitle>Curation Job</CardTitle>
-                  <CardDescription className="font-mono text-xs">
-                    {job.id}
-                  </CardDescription>
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatTile label="Found" value={job.totalFound} />
+          <StatTile
+            label="Kept"
+            value={job.curated}
+            color="var(--r-ok)"
+            note="above your score threshold"
+          />
+          <StatTile label="Duplicates" value={job.duplicates} />
+          <StatTile
+            label="Below threshold"
+            value={job.lowScore}
+            note="scored and dropped"
+          />
+          <StatTile
+            label="Errors"
+            value={job.errorsCount}
+            color={job.errorsCount > 0 ? "var(--r-err)" : undefined}
+          />
+        </div>
+
+        {job.completedAt && (
+          <p className="mt-3 mb-0 text-[11.5px] text-radar-ink3">
+            Finished {formatDateTime(job.completedAt)}. Processed{" "}
+            <Num>{job.processed}</Num> of <Num>{job.totalFound}</Num> items.
+          </p>
+        )}
+
+        <div className="mt-8">
+          <RadarPanel
+            title="Run log"
+            note={
+              logs.length === 0
+                ? "Nothing was recorded for this run."
+                : `${logs.length} entries${errorCount > 0 ? `, ${errorCount} errors` : ""}${warnCount > 0 ? `, ${warnCount} warnings` : ""}`
+            }
+            actions={
+              logs.length > 0 ? (
+                <div className="flex gap-1.5">
+                  {(["all", "info", "warn", "error"] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      aria-pressed={levelFilter === level}
+                      onClick={() => setLevelFilter(level)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
+                        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent",
+                        levelFilter === level
+                          ? "border-radar-accent text-radar-ink"
+                          : "border-radar-line text-radar-ink3 hover:text-radar-ink"
+                      )}
+                    >
+                      {level === "all" ? "Everything" : level}
+                    </button>
+                  ))}
                 </div>
-              </div>
-              <Badge variant={config.variant} className="text-sm">
-                {config.label}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Timing */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">Timing</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Started:</span>
-                    <span>{formatDateTime(job.startedAt)}</span>
-                  </div>
-                  {job.completedAt && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Completed:</span>
-                      <span>{formatDateTime(job.completedAt)}</span>
-                    </div>
-                  )}
-                  {job.durationMs && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Duration:</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDuration(job.durationMs)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">Statistics</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 border rounded-lg">
-                    <p className="text-2xl font-bold">{job.totalFound}</p>
-                    <p className="text-xs text-muted-foreground">Articles Found</p>
-                  </div>
-                  <div className="p-3 border rounded-lg">
-                    <p className="text-2xl font-bold text-green-600">{job.curated}</p>
-                    <p className="text-xs text-muted-foreground">Curated</p>
-                  </div>
-                  <div className="p-3 border rounded-lg">
-                    <p className="text-2xl font-bold text-yellow-600">{job.duplicates}</p>
-                    <p className="text-xs text-muted-foreground">Duplicates</p>
-                  </div>
-                  <div className="p-3 border rounded-lg">
-                    <p className="text-2xl font-bold text-orange-600">{job.lowScore}</p>
-                    <p className="text-xs text-muted-foreground">Low Score</p>
-                  </div>
-                </div>
-                {job.errorsCount > 0 && (
-                  <div className="p-3 border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950 rounded-lg">
-                    <p className="text-2xl font-bold text-red-600">{job.errorsCount}</p>
-                    <p className="text-xs text-red-600">Errors</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Logs */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Logs</CardTitle>
-            <CardDescription>
-              {job.logs?.length || 0} log entries
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!job.logs || job.logs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <FileText className="h-10 w-10 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">No logs available.</p>
-              </div>
+              ) : undefined
+            }
+            padded={false}
+          >
+            {shownLogs.length === 0 ? (
+              <p className="m-0 px-4 py-10 text-center text-[12.5px] text-radar-ink3">
+                {logs.length === 0
+                  ? "This run finished without writing a log."
+                  : `No ${levelFilter} entries in this run.`}
+              </p>
             ) : (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-2">
-                  {job.logs.map((log, index) => {
-                    const levelConfig = logLevelConfig[log.level];
-                    const LogIcon = levelConfig.icon;
-                    const isExpanded = expandedLogs.has(index);
-                    const hasData = log.data && Object.keys(log.data).length > 0;
+              <ol className="m-0 max-h-[480px] list-none overflow-y-auto p-0">
+                {shownLogs.map((log, index) => {
+                  const hasData = log.data && Object.keys(log.data).length > 0;
+                  const isExpanded = expandedLogs.has(index);
 
-                    return (
-                      <div
-                        key={index}
-                        className={`p-3 border rounded-lg ${
-                          log.level === "error"
-                            ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
-                            : log.level === "warn"
-                            ? "border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950"
-                            : ""
-                        }`}
-                      >
-                        <div
-                          className={`flex items-start gap-2 ${
-                            hasData ? "cursor-pointer" : ""
-                          }`}
-                          onClick={() => hasData && toggleLogExpand(index)}
-                        >
-                          {hasData && (
-                            <span className="mt-0.5">
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                              )}
-                            </span>
+                  return (
+                    <li
+                      key={`${log.timestamp}-${index}`}
+                      className="border-b border-radar-line2 last:border-0"
+                    >
+                      <div className="flex items-start gap-3 px-4 py-2.5">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full",
+                            LOG_TONE[log.level]
                           )}
-                          <LogIcon className={`h-4 w-4 mt-0.5 ${levelConfig.color}`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm break-words">{log.message}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatTime(log.timestamp)}
-                            </p>
-                          </div>
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              "m-0 text-[12.5px] break-words",
+                              log.level === "error"
+                                ? "text-radar-err"
+                                : log.level === "warn"
+                                  ? "text-radar-warn"
+                                  : "text-radar-ink"
+                            )}
+                          >
+                            {log.message}
+                          </p>
+                          {hasData && isExpanded && (
+                            <pre className="font-num mt-2 mb-0 overflow-x-auto rounded-lg border border-radar-line2 bg-radar-surface2 p-2.5 text-[11px] text-radar-ink2">
+                              {JSON.stringify(log.data, null, 2)}
+                            </pre>
+                          )}
                         </div>
-                        {hasData && isExpanded && (
-                          <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
-                            {JSON.stringify(log.data, null, 2)}
-                          </pre>
+                        <time
+                          dateTime={log.timestamp}
+                          className="font-num shrink-0 text-[10.5px] text-radar-ink3"
+                        >
+                          {formatTime(log.timestamp)}
+                        </time>
+                        {hasData && (
+                          <button
+                            type="button"
+                            onClick={() => toggleLogExpand(index)}
+                            aria-expanded={isExpanded}
+                            className="shrink-0 rounded px-1.5 text-[11px] text-radar-ink3 transition-colors hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+                          >
+                            {isExpanded ? "Hide" : "Detail"}
+                          </button>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          </RadarPanel>
+        </div>
+
+        <div className="mt-4">
+          <SectionLabel>Run id</SectionLabel>
+          <p className="font-num mt-1 mb-0 text-[11.5px] text-radar-ink3">{job.id}</p>
+        </div>
+      </RadarMain>
+    </>
   );
 }
