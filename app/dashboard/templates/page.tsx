@@ -5,41 +5,27 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  StatusChip,
+} from "@/components/radar/primitives";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Loader2,
-  Plus,
-  Pencil,
-  Trash2,
-  Zap,
-  Star,
-  Info,
-} from "lucide-react";
+  EmptyState,
+  RadarToggle,
+  SkeletonRows,
+} from "@/components/radar/controls";
+import { relativeTime } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
 
 interface Template {
   id: string;
@@ -51,19 +37,12 @@ interface Template {
   updatedAt: string;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 export default function TemplatesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchTemplates = () => {
     setIsLoading(true);
@@ -91,13 +70,12 @@ export default function TemplatesPage() {
 
       if (!response.ok) throw new Error("Failed to update template");
 
-      // Update local state optimistically
+      // Active is exclusive, so switching one on switches the rest off.
       setTemplates((prev) =>
         prev.map((t) => {
           if (t.id === template.id) {
             return { ...t, isActive: !template.isActive };
           }
-          // If activating this one, deactivate others
           if (!template.isActive && t.isActive) {
             return { ...t, isActive: false };
           }
@@ -106,7 +84,8 @@ export default function TemplatesPage() {
       );
     } catch (error) {
       console.error("Error updating template:", error);
-      fetchTemplates(); // Refresh on error
+      toast.error("Could not change which template is in use");
+      fetchTemplates();
     } finally {
       setUpdating(null);
     }
@@ -123,13 +102,11 @@ export default function TemplatesPage() {
 
       if (!response.ok) throw new Error("Failed to update template");
 
-      // Update local state optimistically
       setTemplates((prev) =>
         prev.map((t) => {
           if (t.id === template.id) {
             return { ...t, isDefault: !template.isDefault };
           }
-          // If setting this as default, unset others
           if (!template.isDefault && t.isDefault) {
             return { ...t, isDefault: false };
           }
@@ -138,15 +115,17 @@ export default function TemplatesPage() {
       );
     } catch (error) {
       console.error("Error updating template:", error);
-      fetchTemplates(); // Refresh on error
+      toast.error("Could not change the preselected template");
+      fetchTemplates();
     } finally {
       setUpdating(null);
     }
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
 
+    setDeleting(true);
     try {
       const response = await fetch(`/api/templates/${deleteTarget.id}`, {
         method: "DELETE",
@@ -158,231 +137,171 @@ export default function TemplatesPage() {
       }
 
       setTemplates((prev) => prev.filter((t) => t.id !== deleteTarget.id));
-      toast.success("Template deleted successfully");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete template");
-    } finally {
+      toast.success("Template deleted");
       setDeleteTarget(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not delete that template"
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
+  const active = templates.find((t) => t.isActive);
+
   return (
-    <TooltipProvider>
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Email Templates" />
+    <>
+      <AppHeader />
 
-        <div className="flex-1 p-6 space-y-6">
-          {/* Info Card */}
-          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-            <CardContent className="p-4">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  <p className="font-medium mb-1">Template Settings</p>
-                  <ul className="space-y-1 text-blue-700 dark:text-blue-300">
-                    <li>
-                      <strong>Active</strong> — Used when sending newsletters
-                      without selecting a specific template
-                    </li>
-                    <li>
-                      <strong>Default</strong> — Pre-selected in the template
-                      dropdown on the Send page
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <RadarMain width="980px">
+        <PageHeading
+          eyebrow="Templates"
+          title={
+            isLoading && templates.length === 0
+              ? "Templates"
+              : active
+                ? `Sending with “${active.name}”`
+                : templates.length > 0
+                  ? "No template is in use"
+                  : "No templates yet"
+          }
+          subtitle="A template is the frame every edition is poured into. One is in use at a time; the default is the one the builder preselects."
+          actions={
+            <Link
+              href="/dashboard/templates/new"
+              className={radarButtonClass("accent")}
+            >
+              New template
+            </Link>
+          }
+        />
 
-          {/* Templates List */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Templates</CardTitle>
-                <CardDescription>
-                  Manage your newsletter email templates
-                </CardDescription>
-              </div>
-              <Button asChild>
-                <Link href="/dashboard/templates/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Template
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : templates.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-muted-foreground mb-4">No templates yet.</p>
-                  <Button asChild>
-                    <Link href="/dashboard/templates/new">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Your First Template
-                    </Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {templates.map((template) => (
-                    <div
-                      key={template.id}
-                      className={`p-4 border rounded-lg transition-colors ${
-                        template.isActive
-                          ? "border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/50"
-                          : "hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        {/* Template Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium">{template.name}</h3>
-                            {template.isActive && (
-                              <Badge
-                                variant="secondary"
-                                className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                              >
-                                <Zap className="h-3 w-3 mr-1" />
-                                Active
-                              </Badge>
-                            )}
-                            {template.isDefault && (
-                              <Badge
-                                variant="secondary"
-                                className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-                              >
-                                <Star className="h-3 w-3 mr-1" />
-                                Default
-                              </Badge>
-                            )}
-                          </div>
-                          {template.description && (
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                              {template.description}
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Updated {formatDate(template.updatedAt)}
-                          </p>
-                        </div>
+        {isLoading && templates.length === 0 && <SkeletonRows rows={3} />}
 
-                        {/* Controls */}
-                        <div className="flex items-center gap-6">
-                          {/* Toggle Switches */}
-                          <div className="flex items-center gap-6">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-2">
-                                  <Switch
-                                    id={`active-${template.id}`}
-                                    checked={template.isActive}
-                                    onCheckedChange={() => handleToggleActive(template)}
-                                    disabled={updating === template.id}
-                                  />
-                                  <Label
-                                    htmlFor={`active-${template.id}`}
-                                    className="text-sm cursor-pointer"
-                                  >
-                                    Active
-                                  </Label>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Used when sending without selecting a template</p>
-                              </TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-2">
-                                  <Switch
-                                    id={`default-${template.id}`}
-                                    checked={template.isDefault}
-                                    onCheckedChange={() => handleToggleDefault(template)}
-                                    disabled={updating === template.id}
-                                  />
-                                  <Label
-                                    htmlFor={`default-${template.id}`}
-                                    className="text-sm cursor-pointer"
-                                  >
-                                    Default
-                                  </Label>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Pre-selected in the Send page dropdown</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-1 border-l pl-4">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" asChild>
-                                  <Link href={`/dashboard/templates/${template.id}`}>
-                                    <Pencil className="h-4 w-4" />
-                                  </Link>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Edit template</TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteTarget(template)}
-                                  disabled={template.isActive}
-                                  className={template.isActive ? "opacity-50" : ""}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {template.isActive
-                                  ? "Cannot delete active template"
-                                  : "Delete template"}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Template</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete &quot;{deleteTarget?.name}&quot;? This
-                action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                className="bg-red-600 hover:bg-red-700"
+        {!isLoading && templates.length === 0 && (
+          <EmptyState
+            title="Nothing to pour an edition into"
+            actions={
+              <Link
+                href="/dashboard/templates/new"
+                className={radarButtonClass("accent")}
               >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </TooltipProvider>
+                Create the first template
+              </Link>
+            }
+          >
+            A template holds the header, footer and layout that every send inherits.
+            Until one exists, editions fall back to the built-in frame.
+          </EmptyState>
+        )}
+
+        {templates.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {templates.map((template) => (
+              <article
+                key={template.id}
+                className={cn(
+                  "rounded-xl border bg-radar-surface p-4 shadow-radar transition-colors",
+                  template.isActive
+                    ? "border-radar-ok"
+                    : "border-radar-line hover:border-radar-ink3"
+                )}
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="m-0 text-[14.5px] font-semibold text-radar-ink">
+                        {template.name}
+                      </h2>
+                      {template.isActive && <StatusChip tone="ok">In use</StatusChip>}
+                      {template.isDefault && (
+                        <StatusChip tone="warn">Preselected</StatusChip>
+                      )}
+                    </div>
+                    {template.description && (
+                      <p className="mt-1.5 mb-0 max-w-[70ch] text-[12.5px] text-radar-ink2 text-pretty">
+                        {template.description}
+                      </p>
+                    )}
+                    <p className="mt-2 mb-0 text-[11px] text-radar-ink3">
+                      Updated {relativeTime(template.updatedAt)}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-col gap-1 lg:w-[300px]">
+                    <RadarToggle
+                      id={`active-${template.id}`}
+                      checked={template.isActive}
+                      disabled={updating === template.id}
+                      onChange={() => handleToggleActive(template)}
+                      label="Use this one"
+                      hint="Applied when a send does not name a template."
+                    />
+                    <RadarToggle
+                      id={`default-${template.id}`}
+                      checked={template.isDefault}
+                      disabled={updating === template.id}
+                      onChange={() => handleToggleDefault(template)}
+                      label="Preselect in the builder"
+                    />
+                    <div className="mt-2 flex justify-end gap-1.5 border-t border-radar-line2 pt-2.5">
+                      <Link
+                        href={`/dashboard/templates/${template.id}`}
+                        className={radarButtonClass("outline", "sm")}
+                      >
+                        Edit
+                      </Link>
+                      <RadarButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDeleteTarget(template)}
+                        disabled={template.isActive}
+                        title={
+                          template.isActive
+                            ? "Switch to another template before deleting this one"
+                            : undefined
+                        }
+                        className="hover:border-radar-err hover:text-radar-err"
+                      >
+                        Delete
+                      </RadarButton>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </RadarMain>
+
+      {/* Delete */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this template?</DialogTitle>
+            <DialogDescription>
+              &ldquo;{deleteTarget?.name}&rdquo; goes for good. Editions already sent
+              keep the HTML they were sent with.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <RadarButton onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Keep it
+            </RadarButton>
+            <RadarButton
+              onClick={handleDelete}
+              disabled={deleting}
+              className="border-radar-err text-radar-err"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

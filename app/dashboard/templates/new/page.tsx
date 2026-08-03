@@ -3,23 +3,25 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import {
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  SectionLabel,
+} from "@/components/radar/primitives";
+import { RadarField, RadarInput, RadarTextarea } from "@/components/radar/controls";
 import type { EditorRef, EmailEditorProps } from "react-email-editor";
 
 // Dynamically import the email editor to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-[600px] bg-muted rounded-lg">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    <div className="radar-skeleton flex h-[600px] items-center justify-center rounded-xl border border-radar-line bg-radar-surface2">
+      <span className="text-[12.5px] text-radar-ink3">Loading the editor…</span>
     </div>
   ),
 });
@@ -60,6 +62,14 @@ const editorOptions: EmailEditorProps["options"] = {
   },
 };
 
+const MERGE_TAGS = [
+  "{{articles}}",
+  "{{projects}}",
+  "{{week}}",
+  "{{year}}",
+  "{{unsubscribe_url}}",
+];
+
 export default function NewTemplatePage() {
   const router = useRouter();
   const emailEditorRef = useRef<EditorRef | null>(null);
@@ -68,19 +78,22 @@ export default function NewTemplatePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
 
-  const handleEditorReady: EmailEditorProps["onReady"] = useCallback((unlayer: any) => {
-    emailEditorRef.current = { editor: unlayer } as EditorRef;
-    setIsEditorReady(true);
-  }, []);
+  const handleEditorReady: EmailEditorProps["onReady"] = useCallback(
+    (unlayer: any) => {
+      emailEditorRef.current = { editor: unlayer } as EditorRef;
+      setIsEditorReady(true);
+    },
+    []
+  );
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast.error("Please enter a template name");
+      toast.error("Give the template a name first");
       return;
     }
 
     if (!emailEditorRef.current?.editor) {
-      toast.error("Editor is not ready");
+      toast.error("The editor is still loading");
       return;
     }
 
@@ -108,10 +121,12 @@ export default function NewTemplatePage() {
             throw new Error(errorData.error || "Failed to save template");
           }
 
-          toast.success("Template created successfully!");
+          toast.success("Template created");
           router.push("/dashboard/templates");
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to save template");
+          toast.error(
+            error instanceof Error ? error.message : "Could not save the template"
+          );
           setIsSaving(false);
         }
       });
@@ -121,82 +136,78 @@ export default function NewTemplatePage() {
   };
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="New Template" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6 space-y-6">
-        {/* Back Button */}
-        <Button variant="ghost" asChild>
-          <Link href="/dashboard/templates">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Templates
-          </Link>
-        </Button>
+      <RadarMain width="1320px">
+        <PageHeading
+          eyebrow="Templates"
+          title="Build a template"
+          subtitle="Drag the frame into shape, then drop in merge tags where the edition's content should land."
+          actions={
+            <>
+              <Link href="/dashboard/templates" className={radarButtonClass()}>
+                Cancel
+              </Link>
+              <RadarButton
+                variant="accent"
+                onClick={handleSave}
+                disabled={isSaving || !isEditorReady || !name.trim()}
+              >
+                {isSaving ? "Saving…" : "Save template"}
+              </RadarButton>
+            </>
+          }
+        />
 
-        {/* Template Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Template Details</CardTitle>
-            <CardDescription>Name and describe your template</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Template Name *</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Weekly Newsletter"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Main template for weekly AI newsletter"
-                  rows={1}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mb-5 grid gap-4 rounded-xl border border-radar-line bg-radar-surface p-4 md:grid-cols-2">
+          <RadarField label="Name" htmlFor="template-name" required>
+            <RadarInput
+              id="template-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Weekly newsletter"
+            />
+          </RadarField>
+          <RadarField
+            label="Description"
+            htmlFor="template-description"
+            hint="For your own reference in the template list."
+          >
+            <RadarTextarea
+              id="template-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="The standard frame for the weekly AI brief"
+              rows={2}
+            />
+          </RadarField>
+        </div>
 
-        {/* Editor */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Design Your Template</CardTitle>
-              <CardDescription>
-                Use the drag-and-drop editor. Use merge tags for dynamic content.
-              </CardDescription>
-            </div>
-            <Button onClick={handleSave} disabled={isSaving || !isEditorReady}>
-              {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              Save Template
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg overflow-hidden">
-              <EmailEditor
-                ref={emailEditorRef}
-                onReady={handleEditorReady}
-                options={editorOptions}
-                minHeight="600px"
-                appearance={{
-                  theme: "modern_light",
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <SectionLabel>Merge tags</SectionLabel>
+          {MERGE_TAGS.map((tag) => (
+            <code
+              key={tag}
+              className="font-num rounded border border-radar-line bg-radar-surface2 px-1.5 py-0.5 text-[11px] text-radar-ink2"
+            >
+              {tag}
+            </code>
+          ))}
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-radar-line">
+          <EmailEditor
+            ref={emailEditorRef}
+            onReady={handleEditorReady}
+            options={editorOptions}
+            minHeight="640px"
+            appearance={{
+              theme: "modern_light",
+            }}
+          />
+        </div>
+      </RadarMain>
+    </>
   );
 }
