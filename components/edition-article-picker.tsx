@@ -12,10 +12,10 @@ import {
   ExternalLink,
   Loader2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/radar/compat";
+import { Input } from "@/components/radar/compat";
+import { Badge } from "@/components/radar/compat";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/radar/compat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -204,7 +204,7 @@ export function EditionArticlePicker({
             Available Articles
           </CardTitle>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-radar-ink2" />
             <Input
               placeholder="Search articles..."
               value={searchQuery}
@@ -217,14 +217,14 @@ export function EditionArticlePicker({
           <ScrollArea className="h-[400px] pr-4">
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Loader2 className="h-6 w-6 animate-spin text-radar-ink2" />
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center h-32 text-sm text-destructive">
+              <div className="flex items-center justify-center h-32 text-sm text-radar-err">
                 {error}
               </div>
             ) : filteredAvailable.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center h-32 text-sm text-radar-ink2">
                 {searchQuery
                   ? "No articles match your search"
                   : "No approved articles available"}
@@ -234,7 +234,7 @@ export function EditionArticlePicker({
                 {filteredAvailable.map((article) => (
                   <div
                     key={article.id}
-                    className="group flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    className="group flex items-start gap-3 p-3 rounded-lg border bg-radar-surface hover:bg-accent/50 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -251,7 +251,7 @@ export function EditionArticlePicker({
                           <span className="sr-only">Add article</span>
                         </Button>
                       </div>
-                      <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 mt-1.5 text-xs text-radar-ink2">
                         {article.relevanceScore && (
                           <Badge variant="secondary" className="text-xs">
                             Score: {article.relevanceScore.toFixed(1)}
@@ -284,7 +284,7 @@ export function EditionArticlePicker({
               </div>
             )}
           </ScrollArea>
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+          <div className="mt-3 pt-3 border-t text-xs text-radar-ink2">
             {filteredAvailable.length} article
             {filteredAvailable.length !== 1 ? "s" : ""} available
           </div>
@@ -297,14 +297,14 @@ export function EditionArticlePicker({
           <CardTitle className="text-base font-medium">
             Selected Articles ({selectedArticles.length})
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-radar-ink2">
             Drag to reorder or use the arrow buttons
           </p>
         </CardHeader>
         <CardContent className="pt-0">
           <ScrollArea className="h-[400px] pr-4">
             {selectedArticles.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center h-32 text-sm text-radar-ink2">
                 No articles selected. Add articles from the left panel.
               </div>
             ) : (
@@ -317,17 +317,17 @@ export function EditionArticlePicker({
                     onDragOver={(e) => handleDragOver(e, index)}
                     onDragEnd={handleDragEnd}
                     className={cn(
-                      "group flex items-start gap-2 p-3 rounded-lg border bg-card transition-all",
-                      draggedIndex === index && "opacity-50 border-primary"
+                      "group flex items-start gap-2 p-3 rounded-lg border bg-radar-surface transition-all",
+                      draggedIndex === index && "opacity-50 border-radar-accent"
                     )}
                   >
                     {/* Drag Handle */}
                     <div className="cursor-grab active:cursor-grabbing pt-0.5">
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                      <GripVertical className="h-4 w-4 text-radar-ink2" />
                     </div>
 
                     {/* Order Number */}
-                    <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-full bg-radar-surface2 text-radar-accent text-xs font-medium shrink-0">
                       {index + 1}
                     </div>
 
@@ -336,7 +336,7 @@ export function EditionArticlePicker({
                       <h4 className="text-sm font-medium leading-tight line-clamp-2">
                         {article.title}
                       </h4>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 mt-1 text-xs text-radar-ink2">
                         {article.relevanceScore && (
                           <Badge variant="secondary" className="text-xs">
                             {article.relevanceScore.toFixed(1)}
@@ -347,7 +347,7 @@ export function EditionArticlePicker({
                           href={article.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="hover:text-primary inline-flex items-center gap-0.5"
+                          className="hover:text-radar-accent inline-flex items-center gap-0.5"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <ExternalLink className="h-3 w-3" />
@@ -383,7 +383,7 @@ export function EditionArticlePicker({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                      className="h-6 w-6 text-radar-ink2 hover:text-radar-err shrink-0"
                       onClick={() => handleRemoveArticle(article.id)}
                     >
                       <X className="h-3 w-3" />
@@ -394,7 +394,7 @@ export function EditionArticlePicker({
               </div>
             )}
           </ScrollArea>
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+          <div className="mt-3 pt-3 border-t text-xs text-radar-ink2">
             {selectedArticles.length} article
             {selectedArticles.length !== 1 ? "s" : ""} selected
           </div>

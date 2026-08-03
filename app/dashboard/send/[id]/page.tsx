@@ -8,9 +8,19 @@ import { EditionArticlePicker, Article } from "@/components/edition-article-pick
 import { EditionProjectPicker, Project } from "@/components/edition-project-picker";
 import { EditionUnlayerEditor, EditionUnlayerEditorRef } from "@/components/edition-unlayer-editor";
 import { replaceContentMergeTags, type Article as ContentArticle, type Project as ContentProject } from "@/lib/email/content-renderer";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/radar/compat";
+import { Button } from "@/components/radar/compat";
+import { Badge } from "@/components/radar/compat";
+import {
+  PageHeading,
+  RadarButton,
+  RadarMain,
+} from "@/components/radar/primitives";
+import {
+  Callout,
+  EmptyState,
+  SkeletonRows,
+} from "@/components/radar/controls";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -37,7 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/radar/compat";
 import {
   Loader2,
   Save,
@@ -61,9 +71,9 @@ import {
   RefreshCw,
   Globe,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/radar/compat";
+import { Input } from "@/components/radar/compat";
+import { Textarea } from "@/components/radar/compat";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // Types
@@ -118,7 +128,7 @@ function getStatusBadge(status: EditionDetail["status"]) {
     case "DRAFT":
       return <Badge variant="secondary">Draft</Badge>;
     case "FINALIZED":
-      return <Badge variant="warning">Finalized</Badge>;
+      return <Badge variant="warning">Finalised</Badge>;
     case "SENT":
       return <Badge variant="success">Sent</Badge>;
     default:
@@ -126,12 +136,12 @@ function getStatusBadge(status: EditionDetail["status"]) {
   }
 }
 
-// Format date helper
+// Format date helper. en-GB, to match every other stamp in the app.
 function formatDate(dateString: string | null) {
-  if (!dateString) return "-";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
+  if (!dateString) return "not set";
+  return new Date(dateString).toLocaleString("en-GB", {
     day: "numeric",
+    month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
@@ -884,171 +894,132 @@ export default function EditionDetailPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="flex flex-col h-full">
-        <AppHeader title="Edition Details" />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <span>Loading edition...</span>
-          </div>
-        </div>
-      </div>
+      <>
+        <AppHeader />
+        <RadarMain width="1320px">
+          <PageHeading eyebrow="Edition" title="Opening the builder" />
+          <SkeletonRows rows={5} />
+        </RadarMain>
+      </>
     );
   }
 
   // Error state
   if (error && !edition) {
     return (
-      <div className="flex flex-col h-full">
-        <AppHeader title="Edition Details" />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <Card className="max-w-md">
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Error Loading Edition</h2>
-              <p className="text-muted-foreground mb-6">{error}</p>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" onClick={() => router.push("/dashboard/send")}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Editions
-                </Button>
-                <Button onClick={loadEdition}>Try Again</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <>
+        <AppHeader />
+        <RadarMain width="980px">
+          <PageHeading eyebrow="Edition" title="That edition could not be opened" />
+          <EmptyState
+            title="The edition would not load"
+            actions={
+              <>
+                <RadarButton variant="accent" onClick={loadEdition}>
+                  Try again
+                </RadarButton>
+                <RadarButton onClick={() => router.push("/dashboard/send")}>
+                  Back to editions
+                </RadarButton>
+              </>
+            }
+          >
+            {error}
+          </EmptyState>
+        </RadarMain>
+      </>
     );
   }
 
   if (!edition) return null;
 
   return (
-    <div className="flex flex-col h-full">
-      <AppHeader title={`Week ${edition.week}, ${edition.year}`} />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6 overflow-auto">
-        {/* Error Toast */}
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
-        )}
+      <RadarMain width="1320px">
+        <PageHeading
+          eyebrow={`Edition · week ${edition.week}, ${edition.year}`}
+          title={
+            isSent
+              ? "Sent and locked"
+              : isFinalized
+                ? `Ready to send to ${recipientCount} ${recipientCount === 1 ? "reader" : "readers"}`
+                : "Building the edition"
+          }
+          subtitle={
+            <>
+              Created {formatDate(edition.createdAt)}
+              {edition.finalizedAt && ` · finalised ${formatDate(edition.finalizedAt)}`}
+              {edition.sentAt && ` · sent ${formatDate(edition.sentAt)}`}
+              {hasUnsavedChanges && " · unsaved changes"}
+            </>
+          }
+          actions={
+            <>
+              <span id="preview-panel" className="sr-only" />
+              {getStatusBadge(edition.status)}
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/dashboard/send")}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">
-                  Week {edition.week}, {edition.year}
-                </h1>
-                {getStatusBadge(edition.status)}
-                {(isDirty || isEditorDirty) && isEditable && (
-                  <Badge variant="outline" className="text-yellow-600 border-yellow-400">
-                    Unsaved changes
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Created {formatDate(edition.createdAt)}
-                {edition.finalizedAt && ` | Finalized ${formatDate(edition.finalizedAt)}`}
-                {edition.sentAt && ` | Sent ${formatDate(edition.sentAt)}`}
-              </p>
-            </div>
-          </div>
+              <RadarButton onClick={() => router.push("/dashboard/send")}>
+                All editions
+              </RadarButton>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span id="preview-panel" className="sr-only" />
-            {/* Save Draft - only for DRAFT status */}
-            {isEditable && (
-              <Button
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={saving || (!isDirty && !isEditorDirty)}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Draft
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Preview - available for all statuses */}
-            <Button variant="outline" onClick={handlePreview} disabled={previewing}>
-              {previewing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <Eye className="w-4 h-4 mr-2" />
-                  Preview
-                </>
+              {isEditable && (
+                <RadarButton
+                  onClick={handleSaveDraft}
+                  disabled={saving || (!isDirty && !isEditorDirty)}
+                >
+                  {saving ? "Saving…" : "Save draft"}
+                </RadarButton>
               )}
-            </Button>
 
-            {/* Finalize - only for DRAFT status */}
-            {isEditable && (
-              <Button onClick={() => setShowFinalizeDialog(true)} disabled={finalizing}>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Finalize
-              </Button>
-            )}
+              <RadarButton onClick={handlePreview} disabled={previewing}>
+                {previewing ? "Rendering…" : "Preview"}
+              </RadarButton>
 
-            {/* Revert to Draft - only for FINALIZED status */}
-            {isFinalized && (
-              <Button variant="outline" onClick={handleRevertToDraft}>
-                <Clock className="w-4 h-4 mr-2" />
-                Revert to Draft
-              </Button>
-            )}
+              {isEditable && (
+                <RadarButton
+                  variant="accent"
+                  onClick={() => setShowFinalizeDialog(true)}
+                  disabled={finalizing}
+                >
+                  Finalise
+                </RadarButton>
+              )}
 
-            {/* Send - only for FINALIZED status */}
-            {isFinalized && (
-              <div className="flex flex-col items-start">
-                <Button
+              {isFinalized && (
+                <RadarButton onClick={handleRevertToDraft}>
+                  Back to draft
+                </RadarButton>
+              )}
+
+              {isFinalized && (
+                <RadarButton
+                  variant="accent"
                   onClick={() => setShowSendDialog(true)}
                   disabled={sending || !canSend}
-                  className="bg-green-600 hover:bg-green-700"
+                  title={!canSend ? sendBlockReason || undefined : undefined}
                 >
-                  <Send className="w-4 h-4 mr-2" />
-                  Send to {recipientCount} Recipient{recipientCount !== 1 ? "s" : ""}
-                </Button>
-                {!canSend && sendBlockReason && (
-                  <span className="mt-1 text-xs text-red-600">
-                    {sendBlockReason}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {selectedApprovedDraftId
-              ? `Draft ${selectedApprovedDraftId.slice(0, 6)} selected`
-              : drafts.length > 0
-                ? "No approved draft selected"
-                : "No drafts required"}
-            {lastPreviewedAt && ` • Previewed ${formatDate(lastPreviewedAt)}`}
-            {hasUnsavedChanges && " • Unsaved changes"}
-          </div>
-        </div>
+                  Send to {recipientCount}{" "}
+                  {recipientCount === 1 ? "reader" : "readers"}
+                </RadarButton>
+              )}
+            </>
+          }
+        />
+
+        {/* Load failure that still left an edition on screen */}
+        {error && (
+          <Callout tone="err" title="Something went wrong" className="mb-5">
+            {error}
+          </Callout>
+        )}
+
+        {isFinalized && !canSend && sendBlockReason && (
+          <Callout tone="warn" title="Not ready to send yet" className="mb-5">
+            {sendBlockReason}
+          </Callout>
+        )}
 
         {/* Send Readiness */}
         <Card className="mb-6">
@@ -1063,7 +1034,7 @@ export default function EditionDetailPage() {
               <div className="flex items-center justify-between rounded-md border p-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">Approved Draft</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-radar-ink2">
                     {drafts.length === 0
                       ? "No drafts required"
                       : selectedApprovedDraftId
@@ -1083,7 +1054,7 @@ export default function EditionDetailPage() {
               <div className="flex items-center justify-between rounded-md border p-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">Template</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-radar-ink2">
                     {selectedTemplateId ? "Custom template selected" : "Default template"}
                   </p>
                 </div>
@@ -1095,7 +1066,7 @@ export default function EditionDetailPage() {
               <div className="flex items-center justify-between rounded-md border p-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">Recipients</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-radar-ink2">
                     {recipientCount > 0
                       ? `${recipientCount} ${recipientMode === "adhoc" ? "email" : "subscriber"}${recipientCount !== 1 ? "s" : ""}`
                       : "No recipients selected"}
@@ -1113,7 +1084,7 @@ export default function EditionDetailPage() {
               <div className="flex items-center justify-between rounded-md border p-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">Preview</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-radar-ink2">
                     {lastPreviewedAt
                       ? `Last previewed ${formatDate(lastPreviewedAt)}`
                       : "Run a preview before sending"}
@@ -1131,7 +1102,7 @@ export default function EditionDetailPage() {
               <div className="flex items-center justify-between rounded-md border p-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">Unsaved Changes</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-radar-ink2">
                     {hasUnsavedChanges ? "Save before final send" : "All changes saved"}
                   </p>
                 </div>
@@ -1150,14 +1121,14 @@ export default function EditionDetailPage() {
 
         {/* Sent Edition Read-Only Banner */}
         {isSent && (
-          <div className="mb-6 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+          <div className="mb-6 p-4 rounded-lg bg-radar-surface border border-radar-ok">
             <div className="flex items-center gap-3">
-              <Lock className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <Lock className="w-5 h-5 text-radar-ok" />
               <div>
-                <p className="font-medium text-green-800 dark:text-green-200">
+                <p className="font-medium text-radar-ink">
                   This edition has been sent
                 </p>
-                <p className="text-sm text-green-700 dark:text-green-300">
+                <p className="text-sm text-radar-ink2">
                   Sent on {formatDate(edition.sentAt)}. The content below is read-only.
                 </p>
               </div>
@@ -1176,7 +1147,7 @@ export default function EditionDetailPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-md border p-3">
                   <p className="text-sm font-medium">Recipients</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-radar-ink2">
                     {sendResult?.data ? (
                       <>
                         {sendResult.data.sent} sent
@@ -1189,13 +1160,13 @@ export default function EditionDetailPage() {
                 </div>
                 <div className="rounded-md border p-3">
                   <p className="text-sm font-medium">Draft</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-radar-ink2">
                     {selectedApprovedDraftId ? `Draft ${selectedApprovedDraftId.slice(0, 6)}` : "No draft selected"}
                   </p>
                 </div>
                 <div className="rounded-md border p-3">
                   <p className="text-sm font-medium">SharePoint</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-radar-ink2">
                     {edition.sharePointUrl ? "Published" : edition.sharePointError ? "Error" : "Not published"}
                   </p>
                 </div>
@@ -1224,31 +1195,31 @@ export default function EditionDetailPage() {
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     edition.sharePointUrl
-                      ? "bg-teal-100 dark:bg-teal-900/30"
+                      ? "bg-radar-surface2"
                       : edition.sharePointError
-                      ? "bg-red-100 dark:bg-red-900/30"
-                      : "bg-gray-100 dark:bg-gray-800"
+                      ? "bg-radar-surface2"
+                      : "bg-radar-surface2"
                   }`}>
                     <Globe className={`w-5 h-5 ${
                       edition.sharePointUrl
-                        ? "text-teal-600 dark:text-teal-400"
+                        ? "text-radar-primary2"
                         : edition.sharePointError
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-gray-600 dark:text-gray-400"
+                        ? "text-radar-err"
+                        : "text-radar-ink2"
                     }`} />
                   </div>
                   <div>
                     <p className="font-medium">SharePoint Archive</p>
                     {edition.sharePointUrl ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-radar-ink2">
                         Published {formatDate(edition.sharePointPublishedAt)}
                       </p>
                     ) : edition.sharePointError ? (
-                      <p className="text-sm text-red-600 dark:text-red-400">
+                      <p className="text-sm text-radar-err">
                         Failed: {edition.sharePointError}
                       </p>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-radar-ink2">
                         Not published to SharePoint
                       </p>
                     )}
@@ -1295,12 +1266,12 @@ export default function EditionDetailPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <div className="w-10 h-10 rounded-lg bg-radar-surface2 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-radar-primary2" />
                 </div>
                 <div>
                   <div className="text-2xl font-bold">{selectedArticleIds.length}</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-radar-ink2">
                     Article{selectedArticleIds.length !== 1 ? "s" : ""} Selected
                   </div>
                 </div>
@@ -1311,12 +1282,12 @@ export default function EditionDetailPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <div className="w-10 h-10 rounded-lg bg-radar-surface2 flex items-center justify-center">
+                  <Briefcase className="w-5 h-5 text-radar-primary2" />
                 </div>
                 <div>
                   <div className="text-2xl font-bold">{selectedProjectIds.length}</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-radar-ink2">
                     Project{selectedProjectIds.length !== 1 ? "s" : ""} Selected
                   </div>
                 </div>
@@ -1327,14 +1298,14 @@ export default function EditionDetailPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <div className="w-10 h-10 rounded-lg bg-radar-surface2 flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-radar-ink2" />
                 </div>
                 <div>
                   <div className="text-lg font-bold">
                     Week {edition.week}, {edition.year}
                   </div>
-                  <div className="text-sm text-muted-foreground">Edition Period</div>
+                  <div className="text-sm text-radar-ink2">Edition Period</div>
                 </div>
               </div>
             </CardContent>
@@ -1342,21 +1313,21 @@ export default function EditionDetailPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <div className="w-10 h-10 rounded-lg bg-radar-surface2 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-radar-ink2" />
                 </div>
                 <div>
                   <div className="text-sm font-medium">Activity</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-radar-ink2">
                     Updated {formatDate(edition.updatedAt)}
                   </div>
                   {edition.finalizedAt && (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-radar-ink2">
                       Finalized {formatDate(edition.finalizedAt)}
                     </div>
                   )}
                   {edition.sentAt && (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-radar-ink2">
                       Sent {formatDate(edition.sentAt)}
                     </div>
                   )}
@@ -1373,21 +1344,21 @@ export default function EditionDetailPage() {
               <div>
                 <p className="font-medium">Generation Drafts</p>
                 {isLoadingDrafts ? (
-                  <p className="text-sm text-muted-foreground">Loading drafts...</p>
+                  <p className="text-sm text-radar-ink2">Loading drafts...</p>
                 ) : drafts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-radar-ink2">
                     No drafts found for this edition.
                   </p>
                 ) : (
                   <>
                     {drafts.filter((draft) => draft.status === "APPROVED").length > 0 ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-radar-ink2">
                         {drafts.filter((draft) => draft.status === "APPROVED").length > 1 && !selectedApprovedDraftId
                           ? "Multiple approved drafts available. Select one to send."
                           : "Select an approved draft to send."}
                       </p>
                     ) : (
-                      <p className="text-sm text-red-600 dark:text-red-400">
+                      <p className="text-sm text-radar-err">
                         Drafts exist but none are approved. Approve one before sending.
                       </p>
                     )}
@@ -1431,22 +1402,22 @@ export default function EditionDetailPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Subject Lines</p>
                   {isLoadingApprovedDraft && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-4 w-4 animate-spin text-radar-ink2" />
                   )}
                 </div>
                 {approvedDraftSubjectLines.length === 0 ? (
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="text-sm text-radar-ink2 mt-2">
                     No subject lines available for this draft.
                   </p>
                 ) : (
-                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <ul className="mt-2 space-y-1 text-sm text-radar-ink2">
                     {approvedDraftSubjectLines.slice(0, 3).map((line, index) => (
                       <li key={`${index}-${line}`} className="truncate">
                         {index + 1}. {line}
                       </li>
                     ))}
                     {approvedDraftSubjectLines.length > 3 && (
-                      <li className="text-xs text-muted-foreground">
+                      <li className="text-xs text-radar-ink2">
                         + {approvedDraftSubjectLines.length - 3} more
                       </li>
                     )}
@@ -1455,11 +1426,11 @@ export default function EditionDetailPage() {
                 {(approvedDraftHeroTitle || approvedDraftHeroSummary) && (
                   <div className="mt-3 border-t border-dashed border-muted-foreground/30 pt-3">
                     <p className="text-sm font-medium">Hero Preview</p>
-                    <p className="mt-1 text-sm text-muted-foreground truncate">
+                    <p className="mt-1 text-sm text-radar-ink2 truncate">
                       {approvedDraftHeroTitle || "Untitled hero"}
                     </p>
                     {approvedDraftHeroSummary && (
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                      <p className="mt-1 text-xs text-radar-ink2 line-clamp-2">
                         {approvedDraftHeroSummary}
                       </p>
                     )}
@@ -1474,7 +1445,7 @@ export default function EditionDetailPage() {
         <Card id="template-panel" className="mb-6">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Palette className="w-5 h-5 text-muted-foreground" />
+              <Palette className="w-5 h-5 text-radar-ink2" />
               <CardTitle className="text-base font-medium">Email Template</CardTitle>
             </div>
             <CardDescription>
@@ -1513,9 +1484,9 @@ export default function EditionDetailPage() {
               )}
             </div>
             {templates.length === 0 && (
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-radar-ink2 mt-2">
                 No custom templates available.{" "}
-                <a href="/dashboard/templates" className="text-primary hover:underline">
+                <a href="/dashboard/templates" className="text-radar-accent hover:underline">
                   Create one
                 </a>
               </p>
@@ -1528,7 +1499,7 @@ export default function EditionDetailPage() {
           <Card className="mb-6">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Mail className="w-5 h-5 text-muted-foreground" />
+                <Mail className="w-5 h-5 text-radar-ink2" />
                 <CardTitle className="text-base font-medium">Email Provider</CardTitle>
               </div>
               <CardDescription>
@@ -1546,7 +1517,7 @@ export default function EditionDetailPage() {
                     <div
                       className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-colors ${
                         selectedProvider === provider.id
-                          ? "border-primary bg-primary/5"
+                          ? "border-radar-accent bg-radar-surface2"
                           : "border-muted hover:border-muted-foreground/50"
                       } ${!provider.configured ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                       onClick={() => provider.configured && setSelectedProvider(provider.id)}
@@ -1569,15 +1540,15 @@ export default function EditionDetailPage() {
                             </Badge>
                           )}
                         </Label>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-sm text-radar-ink2 mt-1">
                           {provider.configured ? (
                             <>From: {provider.fromEmail}</>
                           ) : (
-                            <span className="text-yellow-600">Not configured</span>
+                            <span className="text-radar-warn">Not configured</span>
                           )}
                         </p>
                         {provider.configured && (
-                          <Badge variant="outline" className="mt-2 text-xs text-green-600 border-green-300">
+                          <Badge variant="outline" className="mt-2 text-xs text-radar-ok border-green-300">
                             <CheckCircle className="w-3 h-3 mr-1" />
                             Ready
                           </Badge>
@@ -1596,16 +1567,16 @@ export default function EditionDetailPage() {
           <Card className="mb-6">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Mail className="w-5 h-5 text-muted-foreground" />
+                <Mail className="w-5 h-5 text-radar-ink2" />
                 <CardTitle className="text-base font-medium">Email Provider</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                <CheckCircle className="w-5 h-5 text-green-600" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-radar-surface2">
+                <CheckCircle className="w-5 h-5 text-radar-ok" />
                 <div>
                   <p className="font-medium">{configuredProviders[0].name}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-radar-ink2">
                     From: {configuredProviders[0].fromEmail}
                   </p>
                 </div>
@@ -1619,7 +1590,7 @@ export default function EditionDetailPage() {
           <Card id="recipients-panel" className="mb-6">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-muted-foreground" />
+                <Users className="w-5 h-5 text-radar-ink2" />
                 <div>
                   <CardTitle className="text-base font-medium">Recipients</CardTitle>
                   <CardDescription>
@@ -1649,7 +1620,7 @@ export default function EditionDetailPage() {
                       />
                       <Label
                         htmlFor="mode-all"
-                        className={`cursor-pointer ${subscribers.length === 0 ? "text-muted-foreground" : ""}`}
+                        className={`cursor-pointer ${subscribers.length === 0 ? "text-radar-ink2" : ""}`}
                       >
                         All subscribers ({subscribers.length})
                       </Label>
@@ -1662,7 +1633,7 @@ export default function EditionDetailPage() {
                       />
                       <Label
                         htmlFor="mode-selected"
-                        className={`cursor-pointer ${subscribers.length === 0 ? "text-muted-foreground" : ""}`}
+                        className={`cursor-pointer ${subscribers.length === 0 ? "text-radar-ink2" : ""}`}
                       >
                         Select specific subscribers
                       </Label>
@@ -1679,19 +1650,19 @@ export default function EditionDetailPage() {
                         rows={5}
                         className="font-mono text-sm"
                       />
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-radar-ink2">
                         {parsedAdHocEmails.length > 0 ? (
                           <>
-                            <span className="text-green-600 font-medium">{parsedAdHocEmails.length}</span> valid email{parsedAdHocEmails.length !== 1 ? "s" : ""} detected
+                            <span className="text-radar-ok font-medium">{parsedAdHocEmails.length}</span> valid email{parsedAdHocEmails.length !== 1 ? "s" : ""} detected
                           </>
                         ) : (
-                          <span className="text-yellow-600">Enter at least one valid email address</span>
+                          <span className="text-radar-warn">Enter at least one valid email address</span>
                         )}
                         {invalidAdHocEmails.length > 0 && (
                           <>
                             {" "}
                             •{" "}
-                            <span className="text-red-600 font-medium">
+                            <span className="text-radar-err font-medium">
                               {invalidAdHocEmails.length}
                             </span>{" "}
                             invalid
@@ -1699,7 +1670,7 @@ export default function EditionDetailPage() {
                         )}
                       </p>
                       {invalidAdHocEmails.length > 0 && (
-                        <div className="mt-2 flex flex-col gap-2 text-xs text-muted-foreground">
+                        <div className="mt-2 flex flex-col gap-2 text-xs text-radar-ink2">
                           <div className="flex flex-wrap gap-1">
                             {invalidAdHocEmails.slice(0, 3).map((email) => (
                               <Badge key={email} variant="destructive" className="text-xs">
@@ -1732,7 +1703,7 @@ export default function EditionDetailPage() {
                       {/* Search and actions */}
                       <div className="flex flex-col sm:flex-row gap-3 mb-4">
                         <div className="relative flex-1">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-radar-ink2" />
                           <Input
                             placeholder="Search subscribers..."
                             value={subscriberSearch}
@@ -1787,7 +1758,7 @@ export default function EditionDetailPage() {
                       {/* Subscriber list */}
                       <div className="border rounded-lg max-h-64 overflow-y-auto">
                         {filteredSubscribers.length === 0 ? (
-                          <div className="p-4 text-center text-muted-foreground">
+                          <div className="p-4 text-center text-radar-ink2">
                             {subscriberSearch ? "No subscribers match your search" : "No active subscribers"}
                           </div>
                         ) : (
@@ -1795,7 +1766,7 @@ export default function EditionDetailPage() {
                             {filteredSubscribers.map((subscriber) => (
                               <div
                                 key={subscriber.id}
-                                className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                                className="flex items-center gap-3 p-3 hover:bg-radar-surface2 cursor-pointer"
                                 onClick={() => handleToggleSubscriber(subscriber.id)}
                               >
                                 <Checkbox
@@ -1807,7 +1778,7 @@ export default function EditionDetailPage() {
                                     {subscriber.name || subscriber.email}
                                   </p>
                                   {subscriber.name && (
-                                    <p className="text-xs text-muted-foreground truncate">
+                                    <p className="text-xs text-radar-ink2 truncate">
                                       {subscriber.email}
                                     </p>
                                   )}
@@ -1819,9 +1790,9 @@ export default function EditionDetailPage() {
                       </div>
 
                       {/* Selection summary */}
-                      <div className="mt-3 text-sm text-muted-foreground">
+                      <div className="mt-3 text-sm text-radar-ink2">
                         {selectedSubscriberIds.length === 0 ? (
-                          <span className="text-yellow-600 font-medium">
+                          <span className="text-radar-warn font-medium">
                             No subscribers selected
                           </span>
                         ) : (
@@ -1835,7 +1806,7 @@ export default function EditionDetailPage() {
 
                   {/* All subscribers info */}
                   {recipientMode === "all" && subscribers.length > 0 && (
-                    <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                    <div className="p-3 rounded-lg bg-radar-surface2 text-sm">
                       Newsletter will be sent to all <strong>{subscribers.length}</strong> active subscriber{subscribers.length !== 1 ? "s" : ""}.
                     </div>
                   )}
@@ -1850,7 +1821,7 @@ export default function EditionDetailPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-medium">Content Mode</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-radar-ink2">
                     {contentMode === "select"
                       ? "Select which articles and projects to include"
                       : "Edit article summaries, project descriptions, and add custom content"}
@@ -1882,12 +1853,12 @@ export default function EditionDetailPage() {
                 </div>
               </div>
               {contentMode === "edit" && isEditorDirty && (
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                <p className="text-xs text-radar-warn mt-2">
                   Layout has been edited. Changes will be included when you preview or send.
                 </p>
               )}
               {!selectedTemplateId && !editorDesign && (
-                <p className="text-xs text-muted-foreground mt-2">
+                <p className="text-xs text-radar-ink2 mt-2">
                   Select a template above to enable layout editing.
                 </p>
               )}
@@ -1923,22 +1894,22 @@ export default function EditionDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {selectedArticles.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No articles were included.</p>
+                    <p className="text-sm text-radar-ink2">No articles were included.</p>
                   ) : (
                     <div className="space-y-3">
                       {selectedArticles.map((article, index) => (
                         <div
                           key={article.id}
-                          className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                          className="flex items-start gap-3 p-3 rounded-lg border bg-radar-surface"
                         >
-                          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+                          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-radar-surface2 text-radar-accent text-xs font-medium shrink-0">
                             {index + 1}
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="text-sm font-medium leading-tight">
                               {article.title}
                             </h4>
-                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 mt-1 text-xs text-radar-ink2">
                               {article.relevanceScore && (
                                 <Badge variant="secondary" className="text-xs">
                                   Score: {article.relevanceScore.toFixed(1)}
@@ -1981,19 +1952,19 @@ export default function EditionDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {selectedProjects.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No projects were included.</p>
+                    <p className="text-sm text-radar-ink2">No projects were included.</p>
                   ) : (
                     <div className="space-y-3">
                       {selectedProjects.map((project, index) => (
                         <div
                           key={project.id}
-                          className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                          className="flex items-start gap-3 p-3 rounded-lg border bg-radar-surface"
                         >
-                          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+                          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-radar-surface2 text-radar-accent text-xs font-medium shrink-0">
                             {index + 1}
                           </div>
                           {project.imageUrl && (
-                            <div className="w-10 h-10 rounded-md overflow-hidden bg-muted shrink-0">
+                            <div className="w-10 h-10 rounded-md overflow-hidden bg-radar-surface2 shrink-0">
                               <img
                                 src={project.imageUrl}
                                 alt={project.name}
@@ -2005,10 +1976,10 @@ export default function EditionDetailPage() {
                             <h4 className="text-sm font-medium leading-tight">
                               {project.name}
                             </h4>
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            <p className="text-xs text-radar-ink2 line-clamp-1 mt-0.5">
                               {project.description}
                             </p>
-                            <div className="text-xs text-muted-foreground mt-1">
+                            <div className="text-xs text-radar-ink2 mt-1">
                               {project.team}
                             </div>
                           </div>
@@ -2079,7 +2050,7 @@ export default function EditionDetailPage() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </RadarMain>
 
       {/* Preview Dialog */}
       <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
@@ -2090,13 +2061,13 @@ export default function EditionDetailPage() {
               Preview of how the newsletter will appear to subscribers
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+          <div className="rounded-lg border bg-radar-surface2/40 p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               {selectedApprovedDraftId && (
                 <Badge variant="secondary">Draft {selectedApprovedDraftId.slice(0, 6)}</Badge>
               )}
               {lastPreviewedAt && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-radar-ink2">
                   Last previewed {formatDate(lastPreviewedAt)}
                 </span>
               )}
@@ -2106,8 +2077,8 @@ export default function EditionDetailPage() {
             </div>
             {approvedDraftSubjectLines.length > 0 && (
               <div className="mt-2">
-                <p className="text-xs font-medium text-muted-foreground">Subject lines</p>
-                <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                <p className="text-xs font-medium text-radar-ink2">Subject lines</p>
+                <ul className="mt-1 space-y-1 text-xs text-radar-ink2">
                   {approvedDraftSubjectLines.slice(0, 3).map((line, index) => (
                     <li key={`${index}-${line}`} className="truncate">
                       {index + 1}. {line}
@@ -2125,7 +2096,7 @@ export default function EditionDetailPage() {
                 title="Email Preview"
               />
             ) : (
-              <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+              <div className="flex items-center justify-center h-[400px] text-radar-ink2">
                 <Loader2 className="w-6 h-6 animate-spin mr-2" />
                 Loading preview...
               </div>
@@ -2184,12 +2155,12 @@ export default function EditionDetailPage() {
                 <div className="space-y-2">
                   <p>{sendResult.message}</p>
                   {sendResult.data && (
-                    <div className="mt-3 p-3 rounded-lg bg-muted">
+                    <div className="mt-3 p-3 rounded-lg bg-radar-surface2">
                       <p className="text-sm">
                         <strong>Sent:</strong> {sendResult.data.sent} subscribers
                       </p>
                       {sendResult.data.failed > 0 && (
-                        <p className="text-sm text-red-600">
+                        <p className="text-sm text-radar-err">
                           <strong>Failed:</strong> {sendResult.data.failed} subscribers
                         </p>
                       )}
@@ -2236,7 +2207,7 @@ export default function EditionDetailPage() {
                       <br />
                       <strong>Provider:</strong> {selectedProviderInfo.name}
                       {selectedProviderInfo.fromEmail && (
-                        <span className="text-muted-foreground"> ({selectedProviderInfo.fromEmail})</span>
+                        <span className="text-radar-ink2"> ({selectedProviderInfo.fromEmail})</span>
                       )}
                     </>
                   )}
@@ -2255,7 +2226,7 @@ export default function EditionDetailPage() {
                 <AlertDialogAction
                   onClick={handleSend}
                   disabled={sending || !canSend}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-radar-ok hover:brightness-110"
                 >
                   {sending ? (
                     <>
@@ -2274,6 +2245,6 @@ export default function EditionDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

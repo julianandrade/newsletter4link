@@ -9,7 +9,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/radar/compat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
@@ -264,14 +264,14 @@ export function MediaLibrary({
             )}
           </Button>
 
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-radar-ink2">
             Max 5MB. Supports JPEG, PNG, GIF, WebP, SVG
           </p>
         </div>
 
         {/* Error message */}
         {error && (
-          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+          <div className="flex items-center gap-2 text-sm text-radar-err bg-radar-surface2 px-3 py-2 rounded-md">
             <AlertCircle className="h-4 w-4" />
             {error}
           </div>
@@ -281,10 +281,10 @@ export function MediaLibrary({
         <ScrollArea className="h-[400px]">
           {loading ? (
             <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <Loader2 className="h-8 w-8 animate-spin text-radar-ink2" />
             </div>
           ) : media.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <div className="flex flex-col items-center justify-center h-full text-radar-ink2">
               <ImagePlus className="h-12 w-12 mb-4" />
               <p className="text-lg font-medium">No media uploaded yet</p>
               <p className="text-sm">Upload your first image to get started</p>
@@ -352,7 +352,7 @@ function MediaItem({
           "relative aspect-square w-full overflow-hidden rounded-lg border-2 transition-all",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
           isSelected
-            ? "border-primary ring-2 ring-primary ring-offset-2"
+            ? "border-radar-accent ring-2 ring-primary ring-offset-2"
             : "border-transparent hover:border-muted-foreground/50"
         )}
       >
@@ -367,7 +367,7 @@ function MediaItem({
         {/* Selected indicator */}
         {isSelected && (
           <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-            <div className="bg-primary text-primary-foreground rounded-full p-1">
+            <div className="bg-primary text-radar-accent-foreground rounded-full p-1">
               <Check className="h-4 w-4" />
             </div>
           </div>
@@ -390,7 +390,7 @@ function MediaItem({
           }}
           className={cn(
             "absolute top-1 right-1 p-1.5 rounded-md",
-            "bg-destructive text-destructive-foreground",
+            "bg-destructive text-radar-err-foreground",
             "opacity-0 group-hover:opacity-100 transition-opacity",
             "hover:bg-destructive/90 focus:opacity-100"
           )}

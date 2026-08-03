@@ -9,8 +9,8 @@ import { generateMergeTagSamples, type Article, type Project } from "@/lib/email
 const EmailEditor = dynamic(() => import("react-email-editor"), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex items-center justify-center bg-muted/30">
-      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+    <div className="h-full w-full flex items-center justify-center bg-radar-surface2">
+      <div className="flex flex-col items-center gap-3 text-radar-ink2">
         <div className="w-8 h-8 border-2 border-current border-t-transparent rounded-full animate-spin" />
         <span>Loading editor...</span>
       </div>

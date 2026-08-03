@@ -14,10 +14,10 @@ import {
   Calendar,
   Loader2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/radar/compat";
+import { Input } from "@/components/radar/compat";
+import { Badge } from "@/components/radar/compat";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/radar/compat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -216,7 +216,7 @@ export function EditionProjectPicker({
             Available Projects
           </CardTitle>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-radar-ink2" />
             <Input
               placeholder="Search projects..."
               value={searchQuery}
@@ -229,14 +229,14 @@ export function EditionProjectPicker({
           <ScrollArea className="h-[400px] pr-4">
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Loader2 className="h-6 w-6 animate-spin text-radar-ink2" />
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center h-32 text-sm text-destructive">
+              <div className="flex items-center justify-center h-32 text-sm text-radar-err">
                 {error}
               </div>
             ) : filteredAvailable.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center h-32 text-sm text-radar-ink2">
                 {searchQuery
                   ? "No projects match your search"
                   : "No projects available"}
@@ -246,11 +246,11 @@ export function EditionProjectPicker({
                 {filteredAvailable.map((project) => (
                   <div
                     key={project.id}
-                    className="group flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    className="group flex items-start gap-3 p-3 rounded-lg border bg-radar-surface hover:bg-accent/50 transition-colors"
                   >
                     {/* Project Image Thumbnail */}
                     {project.imageUrl && (
-                      <div className="w-12 h-12 rounded-md overflow-hidden bg-muted shrink-0">
+                      <div className="w-12 h-12 rounded-md overflow-hidden bg-radar-surface2 shrink-0">
                         <img
                           src={project.imageUrl}
                           alt={project.name}
@@ -266,7 +266,7 @@ export function EditionProjectPicker({
                             {project.name}
                           </h4>
                           {project.featured && (
-                            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
+                            <Star className="h-3.5 w-3.5 text-radar-warn fill-yellow-500 shrink-0" />
                           )}
                         </div>
                         <Button
@@ -279,10 +279,10 @@ export function EditionProjectPicker({
                           <span className="sr-only">Add project</span>
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                      <p className="text-xs text-radar-ink2 line-clamp-2 mt-0.5">
                         {project.description}
                       </p>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-radar-ink2">
                         <span className="inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {project.team}
@@ -298,7 +298,7 @@ export function EditionProjectPicker({
               </div>
             )}
           </ScrollArea>
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+          <div className="mt-3 pt-3 border-t text-xs text-radar-ink2">
             {filteredAvailable.length} project
             {filteredAvailable.length !== 1 ? "s" : ""} available
           </div>
@@ -311,14 +311,14 @@ export function EditionProjectPicker({
           <CardTitle className="text-base font-medium">
             Selected Projects ({selectedProjects.length})
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-radar-ink2">
             Drag to reorder or use the arrow buttons
           </p>
         </CardHeader>
         <CardContent className="pt-0">
           <ScrollArea className="h-[400px] pr-4">
             {selectedProjects.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center h-32 text-sm text-radar-ink2">
                 No projects selected. Add projects from the left panel.
               </div>
             ) : (
@@ -331,23 +331,23 @@ export function EditionProjectPicker({
                     onDragOver={(e) => handleDragOver(e, index)}
                     onDragEnd={handleDragEnd}
                     className={cn(
-                      "group flex items-start gap-2 p-3 rounded-lg border bg-card transition-all",
-                      draggedIndex === index && "opacity-50 border-primary"
+                      "group flex items-start gap-2 p-3 rounded-lg border bg-radar-surface transition-all",
+                      draggedIndex === index && "opacity-50 border-radar-accent"
                     )}
                   >
                     {/* Drag Handle */}
                     <div className="cursor-grab active:cursor-grabbing pt-0.5">
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                      <GripVertical className="h-4 w-4 text-radar-ink2" />
                     </div>
 
                     {/* Order Number */}
-                    <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+                    <div className="flex items-center justify-center h-6 w-6 rounded-full bg-radar-surface2 text-radar-accent text-xs font-medium shrink-0">
                       {index + 1}
                     </div>
 
                     {/* Project Image Thumbnail */}
                     {project.imageUrl && (
-                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted shrink-0">
+                      <div className="w-10 h-10 rounded-md overflow-hidden bg-radar-surface2 shrink-0">
                         <img
                           src={project.imageUrl}
                           alt={project.name}
@@ -363,10 +363,10 @@ export function EditionProjectPicker({
                           {project.name}
                         </h4>
                         {project.featured && (
-                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 shrink-0" />
+                          <Star className="h-3 w-3 text-radar-warn fill-yellow-500 shrink-0" />
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-radar-ink2">
                         <span className="inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {project.team}
@@ -404,7 +404,7 @@ export function EditionProjectPicker({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                      className="h-6 w-6 text-radar-ink2 hover:text-radar-err shrink-0"
                       onClick={() => handleRemoveProject(project.id)}
                     >
                       <X className="h-3 w-3" />
@@ -415,7 +415,7 @@ export function EditionProjectPicker({
               </div>
             )}
           </ScrollArea>
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+          <div className="mt-3 pt-3 border-t text-xs text-radar-ink2">
             {selectedProjects.length} project
             {selectedProjects.length !== 1 ? "s" : ""} selected
           </div>

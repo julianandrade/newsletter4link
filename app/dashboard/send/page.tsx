@@ -1,13 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -17,19 +13,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus,
-  Loader2,
-  FileText,
-  Briefcase,
-  Calendar,
-  Clock,
-  Send,
-  CheckCircle,
-  AlertCircle,
-  Inbox,
-  ChevronRight,
-  Globe,
-} from "lucide-react";
+  ChipGroup,
+  Num,
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  ScoreMeter,
+  SectionLabel,
+  SkeletonBar,
+  StatusChip,
+  Tag,
+} from "@/components/radar/primitives";
+import { relativeTime, sourceIdentity } from "@/lib/radar/source";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Edition {
   id: string;
@@ -42,93 +40,100 @@ interface Edition {
   updatedAt: string;
   articleCount: number;
   projectCount: number;
-  // SharePoint fields
   sharePointUrl: string | null;
   sharePointPublishedAt: string | null;
   sharePointError: string | null;
 }
 
-function getStatusBadge(status: Edition["status"]) {
-  switch (status) {
-    case "DRAFT":
-      return <Badge variant="secondary">Draft</Badge>;
-    case "FINALIZED":
-      return <Badge variant="warning">Finalized</Badge>;
-    case "SENT":
-      return <Badge variant="success">Sent</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
+interface PipelineArticle {
+  id: string;
+  title: string;
+  sourceUrl: string;
+  publishedAt: string;
+  relevanceScore: number | null;
+  category: string[];
+  editionCount?: number;
 }
 
-function formatDate(dateString: string | null) {
-  if (!dateString) return "-";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
+type View = "pipeline" | "editions";
+
+function currentWeekAndYear(): { week: number; year: number } {
+  const now = new Date();
+  const temp = new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  );
+  temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(
+    ((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
+  );
+  return { week, year: temp.getUTCFullYear() };
+}
+
+function formatStamp(value: string | null): string {
+  if (!value) return "not sent";
+  return new Date(value).toLocaleDateString("en-GB", {
     day: "numeric",
+    month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function getCurrentWeekAndYear(): { week: number; year: number } {
-  const now = new Date();
-  const year = now.getFullYear();
-
-  // Calculate ISO week number
-  const tempDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  tempDate.setUTCDate(tempDate.getUTCDate() + 4 - (tempDate.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(tempDate.getUTCFullYear(), 0, 1));
-  const week = Math.ceil((((tempDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-
-  return { week, year };
-}
-
 export default function EditionsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+
+  const [view, setView] = useState<View>("pipeline");
   const [editions, setEditions] = useState<Edition[]>([]);
+  const [pending, setPending] = useState<PipelineArticle[]>([]);
+  const [approved, setApproved] = useState<PipelineArticle[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Create edition dialog state
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [newEditionWeek, setNewEditionWeek] = useState<number>(1);
-  const [newEditionYear, setNewEditionYear] = useState<number>(2026);
+  const [week, setWeek] = useState(1);
+  const [year, setYear] = useState(new Date().getFullYear());
 
-  useEffect(() => {
-    loadEditions();
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-    // Set default week/year for new edition
-    const { week, year } = getCurrentWeekAndYear();
-    setNewEditionWeek(week);
-    setNewEditionYear(year);
+    try {
+      const [editionsRes, pendingRes, approvedRes] = await Promise.all([
+        fetch("/api/editions"),
+        fetch("/api/articles/pending?sortBy=relevanceScore&sortOrder=desc"),
+        fetch("/api/articles/approved"),
+      ]);
+
+      const editionsJson = await editionsRes.json();
+      if (!editionsJson.success) {
+        throw new Error(editionsJson.error || "Could not load editions");
+      }
+      setEditions(editionsJson.data ?? []);
+
+      const pendingJson = await pendingRes.json();
+      setPending(pendingJson.success ? (pendingJson.data ?? []) : []);
+
+      const approvedJson = await approvedRes.json();
+      setApproved(approvedJson.success ? (approvedJson.data ?? []) : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load editions");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const loadEditions = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  useEffect(() => {
+    void load();
+    const { week: w, year: y } = currentWeekAndYear();
+    setWeek(w);
+    setYear(y);
+  }, [load]);
 
-      const res = await fetch("/api/editions");
-      const result = await res.json();
-
-      if (result.success) {
-        setEditions(result.data);
-      } else {
-        setError(result.error || "Failed to load editions");
-      }
-    } catch (err) {
-      console.error("Error loading editions:", err);
-      setError("Failed to load editions");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateEdition = async () => {
+  const createEdition = async () => {
     setCreating(true);
     setCreateError(null);
 
@@ -136,361 +141,486 @@ export default function EditionsPage() {
       const res = await fetch("/api/editions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          week: newEditionWeek,
-          year: newEditionYear,
-          autoPopulate: true,
-        }),
+        body: JSON.stringify({ week, year, autoPopulate: true }),
       });
+      const json = await res.json();
 
-      const result = await res.json();
-
-      if (result.success) {
-        setShowCreateDialog(false);
-        // Navigate to the new edition
-        router.push(`/dashboard/send/${result.data.id}`);
-      } else {
-        setCreateError(result.error || "Failed to create edition");
+      if (!json.success) {
+        throw new Error(json.error || "Could not create the edition");
       }
+
+      setShowCreate(false);
+      router.push(`/dashboard/send/${json.data.id}`);
     } catch (err) {
-      console.error("Error creating edition:", err);
-      setCreateError("Failed to create edition");
+      setCreateError(
+        err instanceof Error ? err.message : "Could not create the edition"
+      );
     } finally {
       setCreating(false);
     }
   };
 
-  const handleEditionClick = (editionId: string) => {
-    router.push(`/dashboard/send/${editionId}`);
-  };
+  /* --------------------------------------------------------- derived pipeline */
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="flex flex-col h-full">
-        <AppHeader title="Newsletter Editions" />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <span>Loading editions...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const waitingApproved = useMemo(
+    () => approved.filter((a) => !a.editionCount),
+    [approved]
+  );
+  const inEdition = useMemo(
+    () => approved.filter((a) => Boolean(a.editionCount)),
+    [approved]
+  );
+  const sentEditions = useMemo(
+    () =>
+      editions
+        .filter((e) => e.status === "SENT")
+        .sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? "")),
+    [editions]
+  );
 
-  // Error state
-  if (error) {
-    return (
-      <div className="flex flex-col h-full">
-        <AppHeader title="Newsletter Editions" />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <Card className="max-w-md">
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Error Loading Editions</h2>
-              <p className="text-muted-foreground mb-6">{error}</p>
-              <Button onClick={loadEditions}>Try Again</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  const openEdition = useMemo(
+    () => editions.find((e) => e.status !== "SENT") ?? null,
+    [editions]
+  );
 
-  // Empty state
-  if (editions.length === 0) {
-    return (
-      <div className="flex flex-col h-full">
-        <AppHeader title="Newsletter Editions" />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <Card className="max-w-md">
-            <CardContent className="p-8 text-center">
-              <Inbox className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-lg font-semibold mb-2">No Editions Yet</h2>
-              <p className="text-muted-foreground mb-6">
-                Create your first newsletter edition to get started. Editions help you organize
-                and track your newsletters by week.
-              </p>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Create First Edition
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+  const headline = openEdition
+    ? `Week ${openEdition.week} · ${openEdition.year}`
+    : "No edition in progress";
 
-        {/* Create Edition Dialog */}
-        <CreateEditionDialog
-          open={showCreateDialog}
-          onOpenChange={setShowCreateDialog}
-          week={newEditionWeek}
-          year={newEditionYear}
-          onWeekChange={setNewEditionWeek}
-          onYearChange={setNewEditionYear}
-          onSubmit={handleCreateEdition}
-          creating={creating}
-          error={createError}
-        />
-      </div>
-    );
-  }
+  const subtitle = openEdition ? (
+    <>
+      <Num>{openEdition.articleCount}</Num> stories and{" "}
+      <Num>{openEdition.projectCount}</Num> projects in the draft ·{" "}
+      <Num>{waitingApproved.length}</Num> approved and waiting ·{" "}
+      <Num>{pending.length}</Num> still in review
+    </>
+  ) : (
+    <>
+      <Num>{waitingApproved.length}</Num> approved stories are waiting for an
+      edition, and <Num>{pending.length}</Num> are still in review.
+    </>
+  );
 
-  // Editions list
   return (
-    <div className="flex flex-col h-full">
-      <AppHeader title="Newsletter Editions" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6 overflow-auto">
-        {/* Header with Create Button */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg font-semibold">All Editions</h2>
-            <p className="text-sm text-muted-foreground">
-              {editions.length} edition{editions.length !== 1 ? "s" : ""} total
-            </p>
-          </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Edition
-          </Button>
-        </div>
-
-        {/* Editions Table/Cards */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {editions.map((edition) => (
-                <div
-                  key={edition.id}
-                  className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer transition-colors"
-                  onClick={() => handleEditionClick(edition.id)}
+      <RadarMain width="1320px">
+        <PageHeading
+          eyebrow="Editions"
+          title={headline}
+          subtitle={subtitle}
+          actions={
+            <>
+              <ChipGroup<View>
+                label="Editions view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "pipeline", label: "Pipeline" },
+                  { value: "editions", label: `All editions · ${editions.length}` },
+                ]}
+              />
+              {openEdition ? (
+                <Link
+                  href={`/dashboard/send/${openEdition.id}`}
+                  className={radarButtonClass("accent")}
                 >
-                  {/* Left: Week/Year and Status */}
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Calendar className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                          Week {edition.week}, {edition.year}
-                        </span>
-                        {getStatusBadge(edition.status)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Created {formatDate(edition.createdAt)}
-                      </div>
-                    </div>
-                  </div>
+                  Open builder
+                </Link>
+              ) : (
+                <RadarButton variant="accent" onClick={() => setShowCreate(true)}>
+                  Create edition
+                </RadarButton>
+              )}
+            </>
+          }
+        />
 
-                  {/* Middle: Counts */}
-                  <div className="hidden md:flex items-center gap-6">
-                    <div className="flex items-center gap-2 text-sm">
-                      <FileText className="w-4 h-4 text-muted-foreground" />
-                      <span>{edition.articleCount} articles</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Briefcase className="w-4 h-4 text-muted-foreground" />
-                      <span>{edition.projectCount} projects</span>
-                    </div>
-                  </div>
+        {error && !isLoading && (
+          <div className="rounded-xl border border-radar-err bg-radar-surface px-4 py-3.5">
+            <p className="m-0 text-[13px] font-semibold text-radar-ink">
+              Editions could not be loaded
+            </p>
+            <p className="mt-1 mb-3 text-[12.5px] text-radar-ink2">{error}</p>
+            <RadarButton size="sm" onClick={() => void load()}>
+              Try again
+            </RadarButton>
+          </div>
+        )}
 
-                  {/* Right: Sent Date or Status Indicator */}
-                  <div className="flex items-center gap-4">
-                    {edition.status === "SENT" && edition.sentAt ? (
-                      <div className="hidden sm:flex items-center gap-3">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Send className="w-4 h-4" />
-                          <span>{formatDate(edition.sentAt)}</span>
-                        </div>
-                        {/* SharePoint status indicator */}
-                        {edition.sharePointUrl ? (
-                          <div className="flex items-center gap-1 text-teal-600 dark:text-teal-400" title="Published to SharePoint">
-                            <Globe className="w-4 h-4" />
-                          </div>
-                        ) : edition.sharePointError ? (
-                          <div className="flex items-center gap-1 text-red-500" title={`SharePoint error: ${edition.sharePointError}`}>
-                            <AlertCircle className="w-4 h-4" />
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : edition.status === "FINALIZED" ? (
-                      <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Ready to send</span>
-                      </div>
-                    ) : (
-                      <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="w-4 h-4" />
-                        <span>In progress</span>
-                      </div>
-                    )}
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        {isLoading && (
+          <div className="grid gap-4 lg:grid-cols-4" aria-busy="true">
+            <span className="sr-only">Loading the edition pipeline</span>
+            {[0, 1, 2, 3].map((column) => (
+              <div key={column} className="flex flex-col gap-2.5">
+                <SkeletonBar width="70%" height={14} className="mb-2" />
+                {[0, 1, 2].map((card) => (
+                  <div
+                    key={card}
+                    className="radar-skeleton rounded-xl border border-radar-line bg-radar-surface p-3.5"
+                  >
+                    <SkeletonBar width="45%" height={10} />
+                    <SkeletonBar width="92%" height={15} className="mt-2.5" />
+                    <SkeletonBar width="60%" height={15} className="mt-1.5" />
                   </div>
-                </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Pipeline board */}
+        {!isLoading && !error && view === "pipeline" && (
+          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <PipelineColumn
+              title="In review"
+              dot="var(--r-warn)"
+              count={pending.length}
+              note="awaiting an editor"
+              empty="Nothing waiting on a reader."
+            >
+              {pending.slice(0, 8).map((article) => (
+                <ArticleCard key={article.id} article={article} />
               ))}
+              {pending.length > 8 && (
+                <Link
+                  href="/dashboard/review"
+                  className="rounded-xl border border-dashed border-radar-line px-3.5 py-3 text-center text-[12px] text-radar-ink3 no-underline transition-colors hover:border-radar-accent hover:text-radar-ink"
+                >
+                  {pending.length - 8} more in the review queue →
+                </Link>
+              )}
+            </PipelineColumn>
+
+            <PipelineColumn
+              title="Approved"
+              dot="var(--r-ok)"
+              count={waitingApproved.length}
+              note="ready for an edition"
+              empty="Approve stories in the feed and they land here."
+            >
+              {waitingApproved.slice(0, 8).map((article) => (
+                <ArticleCard key={article.id} article={article} />
+              ))}
+            </PipelineColumn>
+
+            <PipelineColumn
+              title="In edition"
+              dot="var(--r-accent)"
+              count={inEdition.length}
+              note={openEdition ? `Week ${openEdition.week}` : "unscheduled"}
+              empty="Create an edition to pull approved stories in."
+            >
+              {inEdition.slice(0, 8).map((article) => (
+                <ArticleCard key={article.id} article={article} />
+              ))}
+            </PipelineColumn>
+
+            <PipelineColumn
+              title="Sent"
+              dot="var(--r-primary2)"
+              count={sentEditions.length}
+              note={
+                sentEditions[0]?.sentAt
+                  ? `last ${relativeTime(sentEditions[0].sentAt)}`
+                  : "none yet"
+              }
+              empty="Nothing has shipped yet."
+            >
+              {sentEditions.slice(0, 6).map((edition) => (
+                <Link
+                  key={edition.id}
+                  href={`/dashboard/send/${edition.id}`}
+                  className="block rounded-xl border border-radar-line bg-radar-surface p-3.5 no-underline shadow-radar transition-colors hover:border-radar-ink3"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[11px] text-radar-ink3">
+                      Week {edition.week} · {edition.year}
+                    </span>
+                    <span className="flex-1" />
+                    {edition.sharePointUrl && (
+                      <StatusChip tone="ok">archived</StatusChip>
+                    )}
+                  </div>
+                  <div className="font-editorial text-[15px] leading-[1.3] text-radar-ink">
+                    {edition.articleCount}{" "}
+                    {edition.articleCount === 1 ? "story" : "stories"},{" "}
+                    {edition.projectCount}{" "}
+                    {edition.projectCount === 1 ? "project" : "projects"}
+                  </div>
+                  <div className="mt-2 text-[11px] text-radar-ink3">
+                    Sent {formatStamp(edition.sentAt)}
+                  </div>
+                </Link>
+              ))}
+            </PipelineColumn>
+          </div>
+        )}
+
+        {/* All editions */}
+        {!isLoading && !error && view === "editions" && (
+          <div>
+            {editions.length === 0 ? (
+              <div className="radar-enter mx-auto max-w-[560px] py-16 text-center">
+                <h2 className="font-editorial m-0 text-[25px] font-medium text-radar-ink">
+                  No editions yet
+                </h2>
+                <p className="mt-3 mb-6 text-[13.5px] text-radar-ink2 text-pretty">
+                  An edition collects a week&rsquo;s approved stories and featured
+                  projects into one send. Creating one pulls in whatever is already
+                  approved.
+                </p>
+                <RadarButton variant="accent" onClick={() => setShowCreate(true)}>
+                  Create the first edition
+                </RadarButton>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded-xl border border-radar-line">
+                  <table className="w-full border-collapse text-left">
+                    <caption className="sr-only">
+                      All newsletter editions, newest first
+                    </caption>
+                    <thead>
+                      <tr className="border-b border-radar-line bg-radar-surface2 text-[10px] font-semibold uppercase tracking-[0.09em] text-radar-ink3">
+                        <th scope="col" className="px-4 py-2.5 font-semibold">
+                          Edition
+                        </th>
+                        <th scope="col" className="px-4 py-2.5 font-semibold">
+                          Contents
+                        </th>
+                        <th scope="col" className="px-4 py-2.5 font-semibold">
+                          Sent
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-4 py-2.5 text-right font-semibold"
+                        >
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editions.map((edition) => (
+                        <tr
+                          key={edition.id}
+                          className="border-b border-radar-line2 transition-colors last:border-0 hover:bg-radar-surface2"
+                        >
+                          <td className="px-4 py-3">
+                            <Link
+                              href={`/dashboard/send/${edition.id}`}
+                              className="text-[13px] font-medium text-radar-ink no-underline hover:text-radar-accent"
+                            >
+                              Week {edition.week} · {edition.year}
+                            </Link>
+                            <div className="mt-0.5 text-[11px] text-radar-ink3">
+                              Created {formatStamp(edition.createdAt)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-[12.5px] text-radar-ink2">
+                            <Num>{edition.articleCount}</Num>{" "}
+                            {edition.articleCount === 1 ? "story" : "stories"} ·{" "}
+                            <Num>{edition.projectCount}</Num>{" "}
+                            {edition.projectCount === 1 ? "project" : "projects"}
+                          </td>
+                          <td className="px-4 py-3 text-[12.5px] text-radar-ink2">
+                            {edition.sentAt ? formatStamp(edition.sentAt) : "not sent"}
+                            {edition.sharePointError && (
+                              <div
+                                className="mt-0.5 text-[11px] text-radar-err"
+                                title={edition.sharePointError}
+                              >
+                                archive failed
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <StatusChip
+                              tone={
+                                edition.status === "SENT"
+                                  ? "ok"
+                                  : edition.status === "FINALIZED"
+                                    ? "warn"
+                                    : "neutral"
+                              }
+                            >
+                              {edition.status === "SENT"
+                                ? "Sent"
+                                : edition.status === "FINALIZED"
+                                  ? "Ready"
+                                  : "Draft"}
+                            </StatusChip>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <SectionLabel>
+                    {editions.length}{" "}
+                    {editions.length === 1 ? "edition" : "editions"} total
+                  </SectionLabel>
+                  <RadarButton onClick={() => setShowCreate(true)}>
+                    Create edition
+                  </RadarButton>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </RadarMain>
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create an edition</DialogTitle>
+            <DialogDescription>
+              Approved stories and featured projects are pulled in automatically.
+              You can reorder and cut them in the builder.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {createError && (
+              <p
+                role="alert"
+                className="m-0 rounded-lg border border-radar-err bg-radar-surface px-3 py-2 text-[12.5px] text-radar-err"
+              >
+                {createError}
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block">
+                <span className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2">
+                  Week number
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={53}
+                  value={week}
+                  onChange={(event) =>
+                    setWeek(parseInt(event.target.value, 10) || 1)
+                  }
+                  className="h-9 w-full rounded-lg border border-radar-line bg-radar-bg px-3 text-[13px] text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2">
+                  Year
+                </span>
+                <input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={year}
+                  onChange={(event) =>
+                    setYear(
+                      parseInt(event.target.value, 10) || new Date().getFullYear()
+                    )
+                  }
+                  className="h-9 w-full rounded-lg border border-radar-line bg-radar-bg px-3 text-[13px] text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+                />
+              </label>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">
-                    {editions.filter((e) => e.status === "DRAFT").length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Draft Editions</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">
-                    {editions.filter((e) => e.status === "FINALIZED").length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Ready to Send</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">
-                    {editions.filter((e) => e.status === "SENT").length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Sent Editions</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Create Edition Dialog */}
-      <CreateEditionDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        week={newEditionWeek}
-        year={newEditionYear}
-        onWeekChange={setNewEditionWeek}
-        onYearChange={setNewEditionYear}
-        onSubmit={handleCreateEdition}
-        creating={creating}
-        error={createError}
-      />
-    </div>
+          <DialogFooter>
+            <RadarButton onClick={() => setShowCreate(false)} disabled={creating}>
+              Cancel
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              onClick={createEdition}
+              disabled={creating}
+            >
+              {creating ? "Creating…" : `Create Week ${week}`}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-interface CreateEditionDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  week: number;
-  year: number;
-  onWeekChange: (week: number) => void;
-  onYearChange: (year: number) => void;
-  onSubmit: () => void;
-  creating: boolean;
-  error: string | null;
+function PipelineColumn({
+  title,
+  dot,
+  count,
+  note,
+  empty,
+  children,
+}: {
+  title: string;
+  dot: string;
+  count: number;
+  note: string;
+  empty: string;
+  children: React.ReactNode;
+}) {
+  // Count is the authority on emptiness; inspecting children is unreliable.
+  const hasCards = count > 0;
+
+  return (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-2 border-b border-radar-line px-0.5 pb-2.5">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: dot }}
+        />
+        <h2 className="m-0 text-[11.5px] font-semibold uppercase tracking-[0.04em] text-radar-ink">
+          {title}
+        </h2>
+        <Num className="text-[11px] text-radar-ink3">{count}</Num>
+        <span className="flex-1" />
+        <span className="truncate text-[11px] text-radar-ink3">{note}</span>
+      </div>
+
+      {hasCards ? (
+        children
+      ) : (
+        <p className="m-0 rounded-xl border border-dashed border-radar-line px-3.5 py-6 text-center text-[12px] text-radar-ink3">
+          {empty}
+        </p>
+      )}
+    </section>
+  );
 }
 
-function CreateEditionDialog({
-  open,
-  onOpenChange,
-  week,
-  year,
-  onWeekChange,
-  onYearChange,
-  onSubmit,
-  creating,
-  error,
-}: CreateEditionDialogProps) {
+function ArticleCard({ article }: { article: PipelineArticle }) {
+  const identity = sourceIdentity(article.sourceUrl);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Edition</DialogTitle>
-          <DialogDescription>
-            Create a new newsletter edition. Approved articles and featured projects
-            will be automatically added.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="py-4 space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="week">Week Number</Label>
-              <Input
-                id="week"
-                type="number"
-                min={1}
-                max={53}
-                value={week}
-                onChange={(e) => onWeekChange(parseInt(e.target.value) || 1)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="year">Year</Label>
-              <Input
-                id="year"
-                type="number"
-                min={2000}
-                max={2100}
-                value={year}
-                onChange={(e) => onYearChange(parseInt(e.target.value) || 2026)}
-              />
-            </div>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            This will create a draft edition for Week {week}, {year} and automatically
-            populate it with approved articles and featured projects.
-          </p>
+    <a
+      href={article.sourceUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "block rounded-xl border border-radar-line bg-radar-surface p-3.5 no-underline shadow-radar transition-colors",
+        "hover:border-radar-ink3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+      )}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span className="truncate text-[11px] text-radar-ink3">
+          {identity.name}
+        </span>
+        <span className="flex-1" />
+        <ScoreMeter score={article.relevanceScore} />
+      </div>
+      <div className="font-editorial text-[15px] leading-[1.3] text-radar-ink text-pretty">
+        {article.title}
+      </div>
+      {article.category.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {article.category.slice(0, 2).map((tag) => (
+            <Tag key={tag}>{tag}</Tag>
+          ))}
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
-            Cancel
-          </Button>
-          <Button onClick={onSubmit} disabled={creating}>
-            {creating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Edition
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      )}
+    </a>
   );
 }

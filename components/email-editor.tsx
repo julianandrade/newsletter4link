@@ -11,10 +11,10 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+} from "@/components/radar/compat";
+import { Button } from "@/components/radar/compat";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/radar/compat";
 import {
   Dialog,
   DialogContent,
@@ -23,8 +23,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/radar/compat";
+import { Label } from "@/components/radar/compat";
 import { MediaLibrary } from "@/components/media-library";
 import { cn } from "@/lib/utils";
 import {
@@ -131,7 +131,7 @@ function Toolbar({ editor, onInsertImage }: ToolbarProps) {
 
   return (
     <>
-      <div className="flex items-center gap-1 p-2 border-b bg-muted/30">
+      <div className="flex items-center gap-1 p-2 border-b bg-radar-surface2">
         <Button
           type="button"
           variant={editor.isActive("bold") ? "secondary" : "ghost"}
@@ -254,7 +254,7 @@ function InlineEditor({
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: "text-primary underline",
+          class: "text-radar-accent underline",
         },
       }),
       Image.configure({
@@ -290,7 +290,7 @@ function InlineEditor({
   };
 
   return (
-    <div className="border rounded-md bg-background">
+    <div className="border rounded-md bg-radar-bg">
       <Toolbar
         editor={editor}
         onInsertImage={() => setShowMediaLibrary(true)}
@@ -399,7 +399,7 @@ function ArticleCard({
               variant="ghost"
               size="sm"
               onClick={onRemove}
-              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+              className="h-7 w-7 p-0 text-radar-err hover:text-radar-err"
               title="Remove from newsletter"
             >
               <X className="h-4 w-4" />
@@ -417,7 +417,7 @@ function ArticleCard({
           />
         ) : (
           <div
-            className="prose prose-sm max-w-none text-muted-foreground cursor-pointer hover:bg-muted/50 rounded p-2 -m-2 transition-colors"
+            className="prose prose-sm max-w-none text-radar-ink2 cursor-pointer hover:bg-radar-surface2 rounded p-2 -m-2 transition-colors"
             onClick={() => setIsEditing(true)}
             dangerouslySetInnerHTML={{ __html: article.summary }}
           />
@@ -426,7 +426,7 @@ function ArticleCard({
           href={article.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
+          className="inline-flex items-center gap-1 text-xs text-radar-accent hover:underline mt-2"
         >
           <ExternalLink className="h-3 w-3" />
           Read original
@@ -483,7 +483,7 @@ function ProjectCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-base">{project.name}</CardTitle>
-            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-radar-ink2">
               <span className="inline-flex items-center gap-1">
                 <Users className="h-3 w-3" />
                 {project.team}
@@ -532,7 +532,7 @@ function ProjectCard({
               variant="ghost"
               size="sm"
               onClick={onRemove}
-              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+              className="h-7 w-7 p-0 text-radar-err hover:text-radar-err"
               title="Remove from newsletter"
             >
               <X className="h-4 w-4" />
@@ -562,13 +562,13 @@ function ProjectCard({
               />
             ) : (
               <div
-                className="prose prose-sm max-w-none text-muted-foreground cursor-pointer hover:bg-muted/50 rounded p-2 -m-2 transition-colors"
+                className="prose prose-sm max-w-none text-radar-ink2 cursor-pointer hover:bg-radar-surface2 rounded p-2 -m-2 transition-colors"
                 onClick={() => setIsEditing(true)}
                 dangerouslySetInnerHTML={{ __html: project.description }}
               />
             )}
             {project.impact && (
-              <p className="text-xs text-primary mt-2 font-medium">
+              <p className="text-xs text-radar-accent mt-2 font-medium">
                 Impact: {project.impact}
               </p>
             )}
@@ -603,9 +603,9 @@ function CustomBlockCard({ block, onEdit, onRemove }: CustomBlockCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {block.type === "text" ? (
-              <Type className="h-4 w-4 text-muted-foreground" />
+              <Type className="h-4 w-4 text-radar-ink2" />
             ) : (
-              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              <ImageIcon className="h-4 w-4 text-radar-ink2" />
             )}
             <span className="text-sm font-medium">Custom Block</span>
           </div>
@@ -627,7 +627,7 @@ function CustomBlockCard({ block, onEdit, onRemove }: CustomBlockCardProps) {
               variant="ghost"
               size="sm"
               onClick={onRemove}
-              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+              className="h-7 w-7 p-0 text-radar-err hover:text-radar-err"
               title="Remove block"
             >
               <X className="h-4 w-4" />
@@ -646,7 +646,7 @@ function CustomBlockCard({ block, onEdit, onRemove }: CustomBlockCardProps) {
             />
           ) : (
             <div
-              className="prose prose-sm max-w-none cursor-pointer hover:bg-muted/50 rounded p-2 -m-2 transition-colors"
+              className="prose prose-sm max-w-none cursor-pointer hover:bg-radar-surface2 rounded p-2 -m-2 transition-colors"
               onClick={() => setIsEditing(true)}
               dangerouslySetInnerHTML={{ __html: block.content }}
             />
@@ -827,13 +827,13 @@ export function EmailEditor({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b bg-muted/30">
+      <div className="flex-shrink-0 p-4 border-b bg-radar-surface2">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold">
               Week {week}, {year}
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-radar-ink2">
               {articles.length} article{articles.length !== 1 ? "s" : ""},{" "}
               {projects.length} project{projects.length !== 1 ? "s" : ""}
             </p>
@@ -958,7 +958,7 @@ export function EmailEditor({
 
           {/* Empty State */}
           {articles.length === 0 && projects.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-12 text-radar-ink2">
               <FileText className="h-12 w-12 mb-4" />
               <p className="text-lg font-medium">No content yet</p>
               <p className="text-sm">
