@@ -1,16 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Search, X, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { SearchIcon } from "@/components/radar/icons";
+import { RadarButton, SectionLabel } from "@/components/radar/primitives";
+import { RadarField, RadarInput, RadarSelect } from "@/components/radar/controls";
 import { cn } from "@/lib/utils";
 
 export interface ProjectFilters {
@@ -47,6 +40,17 @@ export function ProjectFiltersComponent({
   className,
 }: ProjectFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [searchValue, setSearchValue] = useState(filters.search);
+
+  // Typing used to refetch on every keystroke; hold it for a beat instead.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchValue !== filters.search) {
+        onFiltersChange({ ...filters, search: searchValue });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchValue, filters, onFiltersChange]);
 
   const updateFilter = useCallback(
     <K extends keyof ProjectFilters>(key: K, value: ProjectFilters[K]) => {
@@ -56,6 +60,8 @@ export function ProjectFiltersComponent({
   );
 
   const clearFilters = useCallback(() => {
+    setSearchValue("");
+    setShowAdvanced(false);
     onFiltersChange(defaultProjectFilters);
   }, [onFiltersChange]);
 
@@ -69,127 +75,105 @@ export function ProjectFiltersComponent({
     filters.sortOrder !== "desc";
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* Primary filters row */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search projects..."
-            value={filters.search}
-            onChange={(e) => updateFilter("search", e.target.value)}
+    <div className={cn("flex flex-col gap-3", className)}>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="relative min-w-[200px] flex-1 sm:max-w-[340px]">
+          <SearchIcon
+            size={15}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
+          />
+          <RadarInput
+            type="search"
+            aria-label="Search projects"
+            placeholder="Search names and descriptions"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
             className="pl-9"
           />
         </div>
 
-        {/* Team filter */}
-        <Select
+        <RadarSelect
+          aria-label="Filter by team"
+          className="w-auto min-w-[150px]"
           value={filters.team}
-          onValueChange={(value) => updateFilter("team", value)}
+          onChange={(event) => updateFilter("team", event.target.value)}
         >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="All Teams" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Teams</SelectItem>
-            {teams.map((team) => (
-              <SelectItem key={team} value={team}>
-                {team}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <option value="all">Every team</option>
+          {teams.map((team) => (
+            <option key={team} value={team}>
+              {team}
+            </option>
+          ))}
+        </RadarSelect>
 
-        {/* Featured filter */}
-        <Select
+        <RadarSelect
+          aria-label="Filter by newsletter placement"
+          className="w-auto min-w-[150px]"
           value={filters.featured}
-          onValueChange={(value) => updateFilter("featured", value)}
+          onChange={(event) => updateFilter("featured", event.target.value)}
         >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="true">Featured</SelectItem>
-            <SelectItem value="false">Not Featured</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="all">Featured or not</option>
+          <option value="true">In the newsletter</option>
+          <option value="false">Not featured</option>
+        </RadarSelect>
 
-        {/* Advanced toggle */}
-        <Button
-          variant={showAdvanced ? "secondary" : "outline"}
-          size="icon"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          title="Advanced filters"
+        <RadarButton
+          onClick={() => setShowAdvanced((previous) => !previous)}
+          aria-expanded={showAdvanced}
         >
-          <SlidersHorizontal className="h-4 w-4" />
-        </Button>
+          Dates and sorting
+        </RadarButton>
 
-        {/* Clear filters */}
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="h-4 w-4 mr-1" />
-            Clear
-          </Button>
+          <RadarButton variant="ghost" onClick={clearFilters}>
+            Clear all
+          </RadarButton>
         )}
       </div>
 
-      {/* Advanced filters row */}
       {showAdvanced && (
-        <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/50 rounded-lg">
-          {/* Date range */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Date:</span>
-            <Input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => updateFilter("dateFrom", e.target.value)}
-              className="w-[140px]"
-              placeholder="From"
-            />
-            <span className="text-muted-foreground">to</span>
-            <Input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => updateFilter("dateTo", e.target.value)}
-              className="w-[140px]"
-              placeholder="To"
-            />
-          </div>
+        <div className="radar-enter rounded-xl border border-radar-line bg-radar-surface p-4">
+          <SectionLabel className="mb-3">Narrow and order</SectionLabel>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <RadarField label="Delivered from">
+              <RadarInput
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => updateFilter("dateFrom", event.target.value)}
+              />
+            </RadarField>
 
-          {/* Sort */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Sort by:</span>
-            <Select
-              value={filters.sortBy}
-              onValueChange={(value) => updateFilter("sortBy", value)}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="createdAt">Created Date</SelectItem>
-                <SelectItem value="projectDate">Project Date</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="team">Team</SelectItem>
-              </SelectContent>
-            </Select>
+            <RadarField label="Delivered to">
+              <RadarInput
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => updateFilter("dateTo", event.target.value)}
+              />
+            </RadarField>
 
-            <Select
-              value={filters.sortOrder}
-              onValueChange={(value) =>
-                updateFilter("sortOrder", value as "asc" | "desc")
-              }
-            >
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="desc">Newest First</SelectItem>
-                <SelectItem value="asc">Oldest First</SelectItem>
-              </SelectContent>
-            </Select>
+            <RadarField label="Sort by">
+              <RadarSelect
+                value={filters.sortBy}
+                onChange={(event) => updateFilter("sortBy", event.target.value)}
+              >
+                <option value="createdAt">When it was added</option>
+                <option value="projectDate">When it shipped</option>
+                <option value="name">Name</option>
+                <option value="team">Team</option>
+              </RadarSelect>
+            </RadarField>
+
+            <RadarField label="Order">
+              <RadarSelect
+                value={filters.sortOrder}
+                onChange={(event) =>
+                  updateFilter("sortOrder", event.target.value as "asc" | "desc")
+                }
+              >
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </RadarSelect>
+            </RadarField>
           </div>
         </div>
       )}

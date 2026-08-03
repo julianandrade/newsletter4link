@@ -1,13 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -15,16 +10,40 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Star, Users, Calendar } from "lucide-react";
-import { LayoutToggle, useLayoutPreference, LayoutType } from "@/components/layout-toggle";
+import {
+  Num,
+  PageHeading,
+  RadarButton,
+  RadarMain,
+  SectionLabel,
+  StatusChip,
+  Tag,
+} from "@/components/radar/primitives";
+import {
+  EmptyState,
+  RadarField,
+  RadarInput,
+  RadarTextarea,
+  SkeletonRows,
+  TableShell,
+  tableClass,
+  tdClass,
+  theadClass,
+  thClass,
+  trClass,
+} from "@/components/radar/controls";
+import {
+  LayoutToggle,
+  useLayoutPreference,
+} from "@/components/layout-toggle";
 import {
   ProjectFiltersComponent,
   ProjectFilters,
   defaultProjectFilters,
   buildProjectQueryString,
 } from "@/components/project-filters";
+import { cn } from "@/lib/utils";
 
 interface Project {
   id: string;
@@ -38,37 +57,37 @@ interface Project {
   createdAt: string;
 }
 
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  team: "",
+  projectDate: "",
+  impact: "",
+  imageUrl: "",
+};
+
+/** "Mar 2026" for the shipped-on stamp; older rows may carry no usable date. */
+function formatMonth(dateString: string | null | undefined) {
+  if (!dateString) return "no date";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "no date";
+  return date.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+}
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    team: "",
-    projectDate: "",
-    impact: "",
-    imageUrl: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
-  // Layout and filters
   const [layout, setLayout] = useLayoutPreference("projects-layout", "cards");
   const [filters, setFilters] = useState<ProjectFilters>(defaultProjectFilters);
-
-  // Fetch teams list once on mount
-  useEffect(() => {
-    fetchTeams();
-  }, []);
-
-  // Fetch projects whenever filters change
-  useEffect(() => {
-    fetchProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
 
   const fetchTeams = async () => {
     try {
@@ -84,36 +103,64 @@ export default function ProjectsPage() {
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const queryString = buildProjectQueryString(filters);
       const res = await fetch(`/api/projects${queryString}`);
       const data = await res.json();
       if (data.success) {
         setProjects(data.data);
+      } else {
+        setLoadError(data.error || "The project list request failed");
       }
     } catch (error) {
       console.error("Error fetching projects:", error);
+      setLoadError(
+        error instanceof Error ? error.message : "The project list request failed"
+      );
     } finally {
       setLoading(false);
     }
   }, [filters]);
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      description: "",
-      team: "",
-      projectDate: "",
-      impact: "",
-      imageUrl: "",
-    });
+  useEffect(() => {
+    fetchTeams();
+  }, []);
+
+  useEffect(() => {
+    void fetchProjects();
+  }, [fetchProjects]);
+
+  const openAddDialog = () => {
+    setFormData(EMPTY_FORM);
     setEditingId(null);
-    setDialogOpen(false);
+    setDialogOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openEditDialog = (project: Project) => {
+    setFormData({
+      name: project.name,
+      description: project.description,
+      team: project.team,
+      projectDate: project.projectDate.split("T")[0],
+      impact: project.impact || "",
+      imageUrl: project.imageUrl || "",
+    });
+    setEditingId(project.id);
+    setDialogOpen(true);
+  };
 
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingId(null);
+    setFormData(EMPTY_FORM);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+
+    setSaving(true);
     try {
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
       const method = editingId ? "PATCH" : "POST";
@@ -128,319 +175,244 @@ export default function ProjectsPage() {
 
       if (data.success) {
         await fetchProjects();
-        await fetchTeams(); // Refresh teams in case a new team was added
-        resetForm();
+        await fetchTeams();
+        toast.success(editingId ? "Project updated" : "Project added");
+        closeDialog();
+      } else {
+        toast.error(data.error || "Could not save that project");
       }
     } catch (error) {
       console.error("Error saving project:", error);
+      toast.error("Could not save that project");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleEdit = (project: Project) => {
-    setFormData({
-      name: project.name,
-      description: project.description,
-      team: project.team,
-      projectDate: project.projectDate.split("T")[0],
-      impact: project.impact || "",
-      imageUrl: project.imageUrl || "",
-    });
-    setEditingId(project.id);
-    setDialogOpen(true);
-  };
-
-  const handleDeleteClick = (project: Project) => {
-    setProjectToDelete(project);
-    setDeleteDialogOpen(true);
-  };
-
   const handleDeleteConfirm = async () => {
-    if (!projectToDelete) return;
+    if (!deleteTarget || deleting) return;
 
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/projects/${projectToDelete.id}`, {
+      const res = await fetch(`/api/projects/${deleteTarget.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
 
       if (data.success) {
-        setProjects(projects.filter((p) => p.id !== projectToDelete.id));
-        await fetchTeams(); // Refresh teams in case the deleted project's team is now empty
+        setProjects(projects.filter((p) => p.id !== deleteTarget.id));
+        await fetchTeams();
+        toast.success("Project deleted");
+      } else {
+        toast.error(data.error || "Could not delete that project");
       }
     } catch (error) {
       console.error("Error deleting project:", error);
+      toast.error("Could not delete that project");
     } finally {
-      setDeleteDialogOpen(false);
-      setProjectToDelete(null);
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
-  const toggleFeatured = async (id: string, featured: boolean) => {
+  const toggleFeatured = async (project: Project) => {
+    // Optimistic: the star is the whole point of the row, so it must feel instant.
+    const next = !project.featured;
+    setProjects((previous) =>
+      previous.map((p) => (p.id === project.id ? { ...p, featured: next } : p))
+    );
+
     try {
-      const res = await fetch(`/api/projects/${id}`, {
+      const res = await fetch(`/api/projects/${project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ featured: !featured }),
+        body: JSON.stringify({ featured: next }),
       });
 
       const data = await res.json();
-
-      if (data.success) {
-        setProjects(
-          projects.map((p) =>
-            p.id === id ? { ...p, featured: !featured } : p
-          )
-        );
-      }
+      if (!data.success) throw new Error(data.error || "Update failed");
     } catch (error) {
       console.error("Error toggling featured:", error);
+      setProjects((previous) =>
+        previous.map((p) =>
+          p.id === project.id ? { ...p, featured: project.featured } : p
+        )
+      );
+      toast.error("Could not change the newsletter placement");
     }
   };
 
-  const openAddDialog = () => {
-    resetForm();
-    setDialogOpen(true);
-  };
+  const featuredCount = projects.filter((p) => p.featured).length;
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-  };
+  const hasActiveFilters =
+    filters.search !== "" ||
+    filters.team !== "all" ||
+    filters.featured !== "all" ||
+    filters.dateFrom !== "" ||
+    filters.dateTo !== "";
 
-  // Render Cards View
+  /** Row actions, identical in all three layouts. */
+  const RowActions = ({ project }: { project: Project }) => (
+    <div className="flex items-center gap-1.5">
+      <RadarButton
+        size="sm"
+        variant={project.featured ? "accent" : "outline"}
+        onClick={() => toggleFeatured(project)}
+      >
+        {project.featured ? "Featured" : "Feature"}
+        <span className="sr-only"> {project.name} in the newsletter</span>
+      </RadarButton>
+      <RadarButton size="sm" variant="ghost" onClick={() => openEditDialog(project)}>
+        Edit
+        <span className="sr-only"> {project.name}</span>
+      </RadarButton>
+      <RadarButton
+        size="sm"
+        variant="ghost"
+        onClick={() => setDeleteTarget(project)}
+        className="hover:border-radar-err hover:text-radar-err"
+      >
+        Delete
+        <span className="sr-only"> {project.name}</span>
+      </RadarButton>
+    </div>
+  );
+
   const renderCardsView = () => (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
       {projects.map((project) => (
-        <Card key={project.id} className="flex flex-col">
-          <CardContent className="flex-1 pt-6">
-            {project.featured && (
-              <Badge variant="default" className="mb-3 gap-1">
-                <Star className="h-3 w-3 fill-current" />
-                Featured
-              </Badge>
-            )}
-
-            <h3 className="text-lg font-semibold mb-2">{project.name}</h3>
-
-            <div className="flex flex-wrap gap-2 mb-3">
-              <Badge variant="secondary" className="gap-1">
-                <Users className="h-3 w-3" />
-                {project.team}
-              </Badge>
-              <span className="text-sm text-muted-foreground flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {formatDate(project.projectDate)}
-              </span>
-            </div>
-
-            <CardDescription className="line-clamp-3 mb-3">
-              {project.description}
-            </CardDescription>
-
-            {project.impact && (
-              <div className="p-3 bg-muted rounded-lg mb-3">
-                <p className="text-xs font-semibold text-muted-foreground mb-1">
-                  Impact
-                </p>
-                <p className="text-sm">{project.impact}</p>
-              </div>
-            )}
-          </CardContent>
-
-          <div className="flex items-center gap-1 p-4 pt-0 border-t mt-auto">
-            <Button
-              size="sm"
-              variant={project.featured ? "secondary" : "ghost"}
-              onClick={() => toggleFeatured(project.id, project.featured)}
-              title={project.featured ? "Remove from featured" : "Feature in newsletter"}
-            >
-              <Star
-                className={`h-4 w-4 ${project.featured ? "fill-current" : ""}`}
-              />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => handleEdit(project)}
-              title="Edit project"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => handleDeleteClick(project)}
-              title="Delete project"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+        <article
+          key={project.id}
+          className={cn(
+            "flex flex-col rounded-xl border bg-radar-surface p-4 shadow-radar transition-colors",
+            project.featured
+              ? "border-radar-accent"
+              : "border-radar-line hover:border-radar-ink3"
+          )}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <Tag>{project.team}</Tag>
+            <span className="text-[11px] text-radar-ink3">
+              {formatMonth(project.projectDate)}
+            </span>
+            <span className="flex-1" />
+            {project.featured && <StatusChip tone="warn">In the next send</StatusChip>}
           </div>
-        </Card>
+
+          <h3 className="font-editorial m-0 text-[17px] font-medium leading-[1.25] tracking-[-0.01em] text-radar-ink text-balance">
+            {project.name}
+          </h3>
+
+          <p className="mt-2 mb-0 line-clamp-3 text-[13px] leading-[1.55] text-radar-ink2 text-pretty">
+            {project.description}
+          </p>
+
+          {project.impact && (
+            <div className="mt-3 rounded-lg border border-radar-line2 bg-radar-surface2 px-3 py-2.5">
+              <SectionLabel className="mb-1">Impact</SectionLabel>
+              <p className="m-0 text-[12.5px] text-radar-ink text-pretty">
+                {project.impact}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-4 flex justify-end border-t border-radar-line2 pt-3.5">
+            <RowActions project={project} />
+          </div>
+        </article>
       ))}
     </div>
   );
 
-  // Render Compact Cards View
   const renderCompactView = () => (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="border-t border-radar-line">
       {projects.map((project) => (
-        <Card key={project.id} className="flex items-center p-4 gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+        <div
+          key={project.id}
+          className="flex flex-col gap-2.5 border-b border-radar-line2 py-3.5 transition-colors hover:bg-radar-surface2 sm:flex-row sm:items-center sm:gap-4"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
               {project.featured && (
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-radar-accent"
+                />
               )}
-              <h3 className="font-medium truncate">{project.name}</h3>
+              <h3 className="m-0 truncate text-[13.5px] font-semibold text-radar-ink">
+                {project.name}
+              </h3>
             </div>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                {project.team}
-              </span>
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {formatDate(project.projectDate)}
-              </span>
-            </div>
+            <p className="mt-0.5 mb-0 text-[11.5px] text-radar-ink3">
+              {project.team} · {formatMonth(project.projectDate)}
+              {project.featured && " · featured"}
+            </p>
           </div>
-
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => toggleFeatured(project.id, project.featured)}
-              title={project.featured ? "Remove from featured" : "Feature in newsletter"}
-            >
-              <Star
-                className={`h-4 w-4 ${project.featured ? "fill-yellow-400 text-yellow-400" : ""}`}
-              />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => handleEdit(project)}
-              title="Edit project"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => handleDeleteClick(project)}
-              title="Delete project"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          <div className="shrink-0">
+            <RowActions project={project} />
           </div>
-        </Card>
+        </div>
       ))}
     </div>
   );
 
-  // Render Table View
   const renderTableView = () => (
-    <div className="border rounded-lg overflow-hidden">
-      <table className="w-full">
-        <thead className="bg-muted/50">
-          <tr>
-            <th className="text-left p-4 font-medium">Name</th>
-            <th className="text-left p-4 font-medium">Team</th>
-            <th className="text-left p-4 font-medium">Date</th>
-            <th className="text-center p-4 font-medium">Featured</th>
-            <th className="text-right p-4 font-medium">Actions</th>
+    <TableShell>
+      <table className={tableClass}>
+        <caption className="sr-only">Internal projects</caption>
+        <thead>
+          <tr className={theadClass}>
+            <th scope="col" className={thClass}>
+              Project
+            </th>
+            <th scope="col" className={thClass}>
+              Team
+            </th>
+            <th scope="col" className={thClass}>
+              Shipped
+            </th>
+            <th scope="col" className={cn(thClass, "text-right")}>
+              Actions
+            </th>
           </tr>
         </thead>
-        <tbody className="divide-y">
+        <tbody>
           {projects.map((project) => (
-            <tr key={project.id} className="hover:bg-muted/30">
-              <td className="p-4">
-                <div>
-                  <p className="font-medium">{project.name}</p>
-                  <p className="text-sm text-muted-foreground line-clamp-1">
-                    {project.description}
-                  </p>
+            <tr key={project.id} className={trClass}>
+              <td className={cn(tdClass, "min-w-[260px]")}>
+                <div className="flex items-center gap-2">
+                  {project.featured && (
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-radar-accent"
+                    />
+                  )}
+                  <span className="text-[13px] font-medium text-radar-ink">
+                    {project.name}
+                  </span>
                 </div>
+                <p className="mt-0.5 mb-0 line-clamp-1 max-w-[60ch] text-[11.5px] text-radar-ink3">
+                  {project.description}
+                </p>
               </td>
-              <td className="p-4">
-                <Badge variant="secondary" className="gap-1">
-                  <Users className="h-3 w-3" />
-                  {project.team}
-                </Badge>
+              <td className={tdClass}>{project.team}</td>
+              <td className={cn(tdClass, "whitespace-nowrap")}>
+                {formatMonth(project.projectDate)}
               </td>
-              <td className="p-4 text-muted-foreground">
-                {formatDate(project.projectDate)}
-              </td>
-              <td className="p-4 text-center">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => toggleFeatured(project.id, project.featured)}
-                  title={project.featured ? "Remove from featured" : "Feature in newsletter"}
-                >
-                  <Star
-                    className={`h-4 w-4 ${
-                      project.featured ? "fill-yellow-400 text-yellow-400" : ""
-                    }`}
-                  />
-                </Button>
-              </td>
-              <td className="p-4">
-                <div className="flex items-center justify-end gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleEdit(project)}
-                    title="Edit project"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDeleteClick(project)}
-                    title="Delete project"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+              <td className={cn(tdClass, "text-right")}>
+                <div className="flex justify-end">
+                  <RowActions project={project} />
                 </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </TableShell>
   );
 
-  // Render view based on layout selection
   const renderProjectsView = () => {
-    if (projects.length === 0) {
-      return (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <p className="text-muted-foreground text-center">
-              {loading
-                ? "Loading projects..."
-                : "No projects found. Try adjusting your filters or add a new project."}
-            </p>
-            {!loading && (
-              <Button className="mt-4" onClick={openAddDialog}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Your First Project
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      );
-    }
-
     switch (layout) {
-      case "cards":
-        return renderCardsView();
       case "compact":
         return renderCompactView();
       case "table":
@@ -451,182 +423,244 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Projects" />
+    <>
+      <AppHeader />
 
-      <main className="flex-1 p-6 space-y-6">
-        {/* Header with Add Button and Layout Toggle */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-muted-foreground">
-              Manage Link&apos;s AI projects and achievements
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <LayoutToggle value={layout} onChange={setLayout} />
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={openAddDialog}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Project
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[525px]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingId ? "Edit Project" : "Add New Project"}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {editingId
-                      ? "Update the project details below."
-                      : "Fill in the details for your new project."}
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Project Name *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      placeholder="Enter project name"
-                      required
-                    />
-                  </div>
+      <RadarMain width="1240px">
+        <PageHeading
+          eyebrow="Projects"
+          title={
+            loading && projects.length === 0
+              ? "Projects"
+              : projects.length === 0
+                ? "No projects on file"
+                : `${featuredCount} of ${projects.length} in the next send`
+          }
+          subtitle="Internal work worth showing off. Featured projects are pulled into every new edition alongside the curated stories."
+          actions={
+            <>
+              <LayoutToggle value={layout} onChange={setLayout} />
+              <RadarButton variant="accent" onClick={openAddDialog}>
+                Add project
+              </RadarButton>
+            </>
+          }
+        />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description *</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({ ...formData, description: e.target.value })
-                      }
-                      placeholder="Describe what this project does"
-                      rows={3}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="team">Team *</Label>
-                      <Input
-                        id="team"
-                        value={formData.team}
-                        onChange={(e) =>
-                          setFormData({ ...formData, team: e.target.value })
-                        }
-                        placeholder="e.g., Data Science"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="projectDate">Date *</Label>
-                      <Input
-                        id="projectDate"
-                        type="date"
-                        value={formData.projectDate}
-                        onChange={(e) =>
-                          setFormData({ ...formData, projectDate: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="impact">Impact / Results</Label>
-                    <Textarea
-                      id="impact"
-                      value={formData.impact}
-                      onChange={(e) =>
-                        setFormData({ ...formData, impact: e.target.value })
-                      }
-                      rows={2}
-                      placeholder="e.g., 40% reduction in support tickets"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="imageUrl">Image URL (optional)</Label>
-                    <Input
-                      id="imageUrl"
-                      type="url"
-                      value={formData.imageUrl}
-                      onChange={(e) =>
-                        setFormData({ ...formData, imageUrl: e.target.value })
-                      }
-                      placeholder="https://..."
-                    />
-                  </div>
-
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={resetForm}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">
-                      {editingId ? "Update Project" : "Create Project"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        {/* Filters */}
         <ProjectFiltersComponent
           filters={filters}
           onFiltersChange={setFilters}
           teams={teams}
+          className="mb-5"
         />
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Project</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete &quot;{projectToDelete?.name}
-                &quot;? This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
+        {loadError && !loading && (
+          <EmptyState
+            title="Projects could not be loaded"
+            actions={
+              <RadarButton variant="accent" onClick={() => void fetchProjects()}>
+                Try again
+              </RadarButton>
+            }
+          >
+            {loadError}
+          </EmptyState>
+        )}
+
+        {loading && projects.length === 0 && !loadError && <SkeletonRows rows={4} />}
+
+        {!loading && !loadError && projects.length === 0 && (
+          <EmptyState
+            title={
+              hasActiveFilters
+                ? "No projects match those filters"
+                : "Nothing to show off yet"
+            }
+            actions={
+              hasActiveFilters ? (
+                <RadarButton
+                  variant="accent"
+                  onClick={() => setFilters(defaultProjectFilters)}
+                >
+                  Clear filters
+                </RadarButton>
+              ) : (
+                <RadarButton variant="accent" onClick={openAddDialog}>
+                  Add the first project
+                </RadarButton>
+              )
+            }
+          >
+            {hasActiveFilters
+              ? "Try a different team, or widen the date range."
+              : "Add the work your teams have shipped, mark the best of it as featured, and it will ride along with the curated stories in the next edition."}
+          </EmptyState>
+        )}
+
+        {projects.length > 0 && !loadError && (
+          <>
+            {renderProjectsView()}
+            <p className="mt-4 mb-0 text-center text-[11.5px] text-radar-ink3">
+              <Num>{projects.length}</Num>{" "}
+              {projects.length === 1 ? "project" : "projects"} shown
+              {featuredCount > 0 && (
+                <>
+                  {" "}
+                  · <Num>{featuredCount}</Num> featured
+                </>
+              )}
+            </p>
+          </>
+        )}
+      </RadarMain>
+
+      {/* Add or edit */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingId ? "Edit project" : "Add a project"}
+            </DialogTitle>
+            <DialogDescription>
+              Written as a reader outside the team would need it: what it does, who
+              built it, what changed as a result.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <RadarField label="Name" htmlFor="project-name" required>
+              <RadarInput
+                id="project-name"
+                value={formData.name}
+                onChange={(event) =>
+                  setFormData({ ...formData, name: event.target.value })
+                }
+                placeholder="Claims triage assistant"
+                required
+              />
+            </RadarField>
+
+            <RadarField
+              label="Description"
+              htmlFor="project-description"
+              required
+              hint="Two or three sentences, no internal jargon."
+            >
+              <RadarTextarea
+                id="project-description"
+                value={formData.description}
+                onChange={(event) =>
+                  setFormData({ ...formData, description: event.target.value })
+                }
+                rows={3}
+                placeholder="What it does and who it is for."
+                required
+              />
+            </RadarField>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <RadarField label="Team" htmlFor="project-team" required>
+                <RadarInput
+                  id="project-team"
+                  value={formData.team}
+                  onChange={(event) =>
+                    setFormData({ ...formData, team: event.target.value })
+                  }
+                  placeholder="Data Science"
+                  list="project-teams"
+                  required
+                />
+                <datalist id="project-teams">
+                  {teams.map((team) => (
+                    <option key={team} value={team} />
+                  ))}
+                </datalist>
+              </RadarField>
+
+              <RadarField label="Shipped on" htmlFor="project-date" required>
+                <RadarInput
+                  id="project-date"
+                  type="date"
+                  value={formData.projectDate}
+                  onChange={(event) =>
+                    setFormData({ ...formData, projectDate: event.target.value })
+                  }
+                  required
+                />
+              </RadarField>
+            </div>
+
+            <RadarField
+              label="Impact"
+              htmlFor="project-impact"
+              hint="A figure if you have one. This is the line readers remember."
+            >
+              <RadarTextarea
+                id="project-impact"
+                value={formData.impact}
+                onChange={(event) =>
+                  setFormData({ ...formData, impact: event.target.value })
+                }
+                rows={2}
+                placeholder="Cut triage time by 40%, from 12 minutes to 7."
+              />
+            </RadarField>
+
+            <RadarField label="Image URL" htmlFor="project-image">
+              <RadarInput
+                id="project-image"
+                type="url"
+                value={formData.imageUrl}
+                onChange={(event) =>
+                  setFormData({ ...formData, imageUrl: event.target.value })
+                }
+                placeholder="https://"
+              />
+            </RadarField>
+
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setDeleteDialogOpen(false)}
-              >
+              <RadarButton type="button" onClick={closeDialog} disabled={saving}>
                 Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteConfirm}>
-                Delete
-              </Button>
+              </RadarButton>
+              <RadarButton type="submit" variant="accent" disabled={saving}>
+                {saving
+                  ? "Saving…"
+                  : editingId
+                    ? "Save changes"
+                    : "Add project"}
+              </RadarButton>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-        {/* Project Views */}
-        {loading ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <p className="text-muted-foreground">Loading projects...</p>
-            </CardContent>
-          </Card>
-        ) : (
-          renderProjectsView()
-        )}
-
-        {/* Results count */}
-        {!loading && projects.length > 0 && (
-          <p className="text-sm text-muted-foreground text-center">
-            Showing {projects.length} project{projects.length !== 1 ? "s" : ""}
-          </p>
-        )}
-      </main>
-    </div>
+      {/* Delete */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this project?</DialogTitle>
+            <DialogDescription>
+              &ldquo;{deleteTarget?.name}&rdquo; will be removed from the showcase.
+              Editions already sent keep their copy of it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <RadarButton onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Keep it
+            </RadarButton>
+            <RadarButton
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+              className="border-radar-err text-radar-err hover:border-radar-err hover:brightness-110"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
