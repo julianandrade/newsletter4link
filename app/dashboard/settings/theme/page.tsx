@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import Link from "next/link";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import {
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  StatusChip,
+} from "@/components/radar/primitives";
+import { SkeletonRows } from "@/components/radar/controls";
+import { cn } from "@/lib/utils";
 
 const THEMES = [
   { id: "linkroad-dark", name: "Linkroad Dark", swatches: ["#0e1517", "#2d4449", "#397b94", "#ff7901"] },
@@ -32,7 +39,7 @@ export default function ThemeSettingsPage() {
   const [orgTheme, setOrgTheme] = useState<string>("linkroad-dark");
   const [role, setRole] = useState<string>("VIEWER");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/settings/theme")
@@ -48,96 +55,125 @@ export default function ThemeSettingsPage() {
 
   const handleSetUserTheme = async (value: string) => {
     setTheme(value);
-    setSaving(true);
+    setSaving(value);
     try {
       await fetch("/api/settings/theme", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope: "user", theme: value }),
       });
+    } catch {
+      toast.error("The theme changed here, but it could not be remembered");
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   };
 
   const handleSetOrgTheme = async (value: string) => {
-    setSaving(true);
+    setSaving(value);
     try {
-      await fetch("/api/settings/theme", {
+      const res = await fetch("/api/settings/theme", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope: "org", theme: value }),
       });
+      if (!res.ok) throw new Error();
       setOrgTheme(value);
+      toast.success("Everyone new to the organization starts on this theme");
+    } catch {
+      toast.error("Could not set the organization default");
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      <AppHeader title="Theme Gallery" />
-      <div className="flex-1 p-6 overflow-auto">
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Theme Preferences</CardTitle>
-            <CardDescription>
-              Pick your personal theme or set the organization default.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading theme settings...
-              </span>
-            ) : (
-              <>
-                <p>Organization default: <strong>{orgTheme}</strong></p>
-                <p>Your theme: <strong>{theme}</strong></p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+  const activeName = THEMES.find((item) => item.id === theme)?.name;
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {THEMES.map((item) => (
-            <Card key={item.id} className={theme === item.id ? "ring-2 ring-primary" : ""}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{item.name}</CardTitle>
-                  {orgTheme === item.id && <Badge variant="secondary">Org default</Badge>}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  {item.swatches.map((color) => (
-                    <span
-                      key={color}
-                      className="h-6 w-6 rounded-full border"
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => handleSetUserTheme(item.id)}
-                  disabled={saving}
+  return (
+    <>
+      <AppHeader />
+
+      <RadarMain width="1180px">
+        <PageHeading
+          eyebrow="Settings · theme"
+          title={activeName ? `You are on ${activeName}` : "Pick a theme"}
+          subtitle={
+            canSetOrgTheme
+              ? "Your choice is yours alone. The organization default is what a new colleague sees on their first sign-in."
+              : "Your choice is yours alone and does not affect anyone else. Only owners and admins can change the organization default."
+          }
+          actions={
+            <Link href="/dashboard/settings" className={radarButtonClass()}>
+              All settings
+            </Link>
+          }
+        />
+
+        {loading ? (
+          <SkeletonRows rows={3} />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {THEMES.map((item) => {
+              const isMine = theme === item.id;
+              const isOrgDefault = orgTheme === item.id;
+
+              return (
+                <article
+                  key={item.id}
+                  className={cn(
+                    "flex flex-col rounded-xl border bg-radar-surface p-4 shadow-radar transition-colors",
+                    isMine
+                      ? "border-radar-accent"
+                      : "border-radar-line hover:border-radar-ink3"
+                  )}
                 >
-                  Use this theme
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleSetOrgTheme(item.id)}
-                  disabled={!canSetOrgTheme || saving}
-                >
-                  Set org default
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="m-0 flex-1 text-[13.5px] font-semibold text-radar-ink">
+                      {item.name}
+                    </h2>
+                    {isMine && <StatusChip tone="ok">Yours</StatusChip>}
+                    {isOrgDefault && <StatusChip tone="info">Default</StatusChip>}
+                  </div>
+
+                  <div
+                    className="mt-3 flex overflow-hidden rounded-lg border border-radar-line2"
+                    role="img"
+                    aria-label={`${item.name} palette`}
+                  >
+                    {item.swatches.map((color) => (
+                      <span
+                        key={color}
+                        className="h-10 flex-1"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    <RadarButton
+                      size="sm"
+                      variant={isMine ? "ghost" : "accent"}
+                      onClick={() => handleSetUserTheme(item.id)}
+                      disabled={saving !== null || isMine}
+                    >
+                      {isMine ? "In use" : "Use this"}
+                    </RadarButton>
+                    {canSetOrgTheme && (
+                      <RadarButton
+                        size="sm"
+                        onClick={() => handleSetOrgTheme(item.id)}
+                        disabled={saving !== null || isOrgDefault}
+                      >
+                        {isOrgDefault ? "Is the default" : "Make it the default"}
+                      </RadarButton>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </RadarMain>
+    </>
   );
 }

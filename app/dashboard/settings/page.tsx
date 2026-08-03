@@ -1,23 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppHeader } from "@/components/app-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Image, ChevronRight, Building2, Palette } from "lucide-react";
-import { UsageCard } from "@/components/usage-card";
 import Link from "next/link";
+import { toast } from "sonner";
+import { AppHeader } from "@/components/app-header";
+import {
+  ChipGroup,
+  Num,
+  PageHeading,
+  RadarButton,
+  RadarMain,
+  SectionLabel,
+} from "@/components/radar/primitives";
+import {
+  Callout,
+  RadarField,
+  RadarInput,
+  RadarPanel,
+  RadarSelect,
+  RadarTextarea,
+  SkeletonRows,
+} from "@/components/radar/controls";
+import { UsageCard } from "@/components/usage-card";
+import { cn } from "@/lib/utils";
 
 interface Settings {
   relevanceThreshold: number;
@@ -29,23 +34,41 @@ interface Settings {
   brandVoicePrompt: string | null;
 }
 
-const AI_MODELS = [
-  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Recommended)" },
-  { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
-  { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku (Fast)" },
+type View = "curation" | "ai" | "appearance" | "plan";
+
+/**
+ * Current Claude models. Older ids stay selectable under "Earlier models" so an
+ * organization still on one can see what it is set to rather than have the
+ * select silently jump to another model.
+ */
+const AI_MODELS: { value: string; label: string }[] = [
+  { value: "claude-opus-5", label: "Claude Opus 5, most capable" },
+  { value: "claude-sonnet-5", label: "Claude Sonnet 5, recommended" },
+  { value: "claude-haiku-4-5", label: "Claude Haiku 4.5, fastest and cheapest" },
+];
+
+const LEGACY_AI_MODELS: { value: string; label: string }[] = [
+  { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (retires June 2026)" },
+  { value: "claude-opus-4-20250514", label: "Claude Opus 4 (retires June 2026)" },
+  { value: "claude-3-5-haiku-20241022", label: "Claude Haiku 3.5 (retired)" },
 ];
 
 const EMBEDDING_MODELS = [
-  { value: "text-embedding-ada-002", label: "Ada 002 (Recommended)" },
+  { value: "text-embedding-ada-002", label: "Ada 002, recommended" },
   { value: "text-embedding-3-small", label: "Embedding 3 Small" },
   { value: "text-embedding-3-large", label: "Embedding 3 Large" },
 ];
 
+const BRAND_VOICE_LIMIT = 500;
+
 export default function SettingsPage() {
+  const [view, setView] = useState<View>("curation");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -55,10 +78,14 @@ export default function SettingsPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+    setSettings((previous) => (previous ? { ...previous, [key]: value } : previous));
+    setIsDirty(true);
+  };
+
   const handleSaveSettings = async () => {
-    if (!settings) return;
+    if (!settings || isSaving) return;
     setIsSaving(true);
-    setSaveMessage(null);
 
     try {
       const response = await fetch("/api/settings", {
@@ -74,319 +101,373 @@ export default function SettingsPage() {
 
       const updated = await response.json();
       setSettings(updated);
-      setSaveMessage({ type: "success", text: "Settings saved successfully" });
+      setIsDirty(false);
+      toast.success("Settings saved");
     } catch (error) {
-      setSaveMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save settings" });
+      toast.error(
+        error instanceof Error ? error.message : "Could not save the settings"
+      );
     } finally {
       setIsSaving(false);
-      setTimeout(() => setSaveMessage(null), 3000);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Settings" />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
+  const brandVoiceLength = settings?.brandVoicePrompt?.length ?? 0;
+  const modelIsCurrent =
+    !settings?.aiModel ||
+    AI_MODELS.some((model) => model.value === settings.aiModel);
+  const modelIsKnown =
+    modelIsCurrent ||
+    LEGACY_AI_MODELS.some((model) => model.value === settings?.aiModel);
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Settings" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6">
-        <Tabs defaultValue="general" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="ai">AI Settings</TabsTrigger>
-            <TabsTrigger value="branding">Branding</TabsTrigger>
-            <TabsTrigger value="usage">Usage & Plan</TabsTrigger>
-          </TabsList>
+      <RadarMain width="980px">
+        <PageHeading
+          eyebrow="Settings"
+          title="How the engine behaves"
+          subtitle="These settings apply to the whole organization: what curation keeps, which models score and write, and how the newsletter looks."
+          actions={
+            <ChipGroup<View>
+              label="Settings sections"
+              idBase="settings-view"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "curation", label: "Curation" },
+                { value: "ai", label: "Models" },
+                { value: "appearance", label: "Appearance" },
+                { value: "plan", label: "Plan" },
+              ]}
+            />
+          }
+        />
 
-          {/* General Settings */}
-          <TabsContent value="general">
-            <Card>
-              <CardHeader>
-                <CardTitle>Curation Settings</CardTitle>
-                <CardDescription>
-                  Configure how articles are curated and filtered
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="relevanceThreshold">Relevance Threshold (0-10)</Label>
-                    <Input
-                      id="relevanceThreshold"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.5"
-                      value={settings?.relevanceThreshold ?? 6}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, relevanceThreshold: parseFloat(e.target.value) } : prev
-                        )
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Minimum score for articles to be curated (recommended: 6.0)
-                    </p>
+        {isLoading ? (
+          <SkeletonRows rows={4} />
+        ) : (
+          <>
+            {view === "curation" && (
+              <div
+                role="tabpanel"
+                id="settings-view-panel-curation"
+                aria-labelledby="settings-view-tab-curation"
+              >
+                <RadarPanel
+                  title="What curation keeps"
+                  note="Applied on every run, to every source."
+                >
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <RadarField
+                      label="Score threshold"
+                      htmlFor="relevanceThreshold"
+                      hint="Stories below this never reach the review queue. 6 is a sensible floor; raise it if the queue is noisy."
+                    >
+                      <RadarInput
+                        id="relevanceThreshold"
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        value={settings?.relevanceThreshold ?? 6}
+                        onChange={(event) =>
+                          update(
+                            "relevanceThreshold",
+                            parseFloat(event.target.value)
+                          )
+                        }
+                      />
+                    </RadarField>
+
+                    <RadarField
+                      label="Stories per edition"
+                      htmlFor="maxArticles"
+                      hint="The cap the builder pulls up to when an edition is created."
+                    >
+                      <RadarInput
+                        id="maxArticles"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={settings?.maxArticlesPerEdition ?? 10}
+                        onChange={(event) =>
+                          update(
+                            "maxArticlesPerEdition",
+                            parseInt(event.target.value, 10)
+                          )
+                        }
+                      />
+                    </RadarField>
+
+                    <RadarField
+                      label="Oldest story to collect"
+                      htmlFor="articleMaxAge"
+                      hint="In days. Anything published before this window is skipped."
+                    >
+                      <RadarInput
+                        id="articleMaxAge"
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={settings?.articleMaxAgeDays ?? 7}
+                        onChange={(event) =>
+                          update(
+                            "articleMaxAgeDays",
+                            parseInt(event.target.value, 10)
+                          )
+                        }
+                      />
+                    </RadarField>
+
+                    <RadarField
+                      label="Duplicate sensitivity"
+                      htmlFor="similarityThreshold"
+                      hint="Between 0 and 1. Higher means only near-identical stories are treated as duplicates."
+                    >
+                      <RadarInput
+                        id="similarityThreshold"
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={settings?.vectorSimilarityThreshold ?? 0.85}
+                        onChange={(event) =>
+                          update(
+                            "vectorSimilarityThreshold",
+                            parseFloat(event.target.value)
+                          )
+                        }
+                      />
+                    </RadarField>
                   </div>
+                </RadarPanel>
+              </div>
+            )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="maxArticles">Max Articles per Edition</Label>
-                    <Input
-                      id="maxArticles"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={settings?.maxArticlesPerEdition ?? 10}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, maxArticlesPerEdition: parseInt(e.target.value) } : prev
-                        )
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Maximum number of articles to include in each newsletter
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="articleMaxAge">Article Max Age (days)</Label>
-                    <Input
-                      id="articleMaxAge"
-                      type="number"
-                      min="1"
-                      max="365"
-                      value={settings?.articleMaxAgeDays ?? 7}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, articleMaxAgeDays: parseInt(e.target.value) } : prev
-                        )
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Only collect articles published within this many days
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="similarityThreshold">Similarity Threshold (0-1)</Label>
-                    <Input
-                      id="similarityThreshold"
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={settings?.vectorSimilarityThreshold ?? 0.85}
-                      onChange={(e) =>
-                        setSettings((prev) =>
-                          prev ? { ...prev, vectorSimilarityThreshold: parseFloat(e.target.value) } : prev
-                        )
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Threshold for duplicate detection (higher = stricter)
-                    </p>
-                  </div>
-                </div>
-
-                {saveMessage && (
-                  <p className={`text-sm ${saveMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                    {saveMessage.text}
-                  </p>
+            {view === "ai" && (
+              <div
+                role="tabpanel"
+                id="settings-view-panel-ai"
+                aria-labelledby="settings-view-tab-ai"
+                className="flex flex-col gap-5"
+              >
+                {!modelIsCurrent && (
+                  <Callout tone="warn" title="This organization is on an older model">
+                    {modelIsKnown
+                      ? "It still works, but the current models score more accurately for the same cost or less. Switching is safe: only new runs are affected."
+                      : `The stored model id (${settings?.aiModel}) is not one this screen knows about. Pick a current model to be sure runs keep working.`}
+                  </Callout>
                 )}
 
-                <Button onClick={handleSaveSettings} disabled={isSaving}>
-                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Settings
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* AI Settings */}
-          <TabsContent value="ai">
-            <Card>
-              <CardHeader>
-                <CardTitle>AI Configuration</CardTitle>
-                <CardDescription>
-                  Configure the AI models used for scoring and embeddings
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="aiModel">AI Model (Claude)</Label>
-                    <Select
-                      value={settings?.aiModel}
-                      onValueChange={(value) =>
-                        setSettings((prev) => (prev ? { ...prev, aiModel: value } : prev))
-                      }
+                <RadarPanel
+                  title="Models"
+                  note="Claude scores and summarises; OpenAI embeddings power duplicate detection and search."
+                >
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <RadarField
+                      label="Scoring and writing"
+                      htmlFor="aiModel"
+                      hint="Used for relevance scores, summaries and Ghost Writer."
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select AI model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AI_MODELS.map((model) => (
-                          <SelectItem key={model.value} value={model.value}>
-                            {model.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Model used for relevance scoring and summarization
-                    </p>
-                  </div>
+                      <RadarSelect
+                        id="aiModel"
+                        value={settings?.aiModel ?? ""}
+                        onChange={(event) => update("aiModel", event.target.value)}
+                      >
+                        <optgroup label="Current">
+                          {AI_MODELS.map((model) => (
+                            <option key={model.value} value={model.value}>
+                              {model.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Earlier models">
+                          {LEGACY_AI_MODELS.map((model) => (
+                            <option key={model.value} value={model.value}>
+                              {model.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {/* Keeps an unrecognised stored id visible instead of blank. */}
+                        {!modelIsKnown && settings?.aiModel && (
+                          <option value={settings.aiModel}>
+                            {settings.aiModel} (stored)
+                          </option>
+                        )}
+                      </RadarSelect>
+                    </RadarField>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="embeddingModel">Embedding Model (OpenAI)</Label>
-                    <Select
-                      value={settings?.embeddingModel}
-                      onValueChange={(value) =>
-                        setSettings((prev) => (prev ? { ...prev, embeddingModel: value } : prev))
-                      }
+                    <RadarField
+                      label="Embeddings"
+                      htmlFor="embeddingModel"
+                      hint="Changing this re-embeds new stories only; older vectors stay as they are."
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select embedding model" />
-                      </SelectTrigger>
-                      <SelectContent>
+                      <RadarSelect
+                        id="embeddingModel"
+                        value={settings?.embeddingModel ?? ""}
+                        onChange={(event) =>
+                          update("embeddingModel", event.target.value)
+                        }
+                      >
                         {EMBEDDING_MODELS.map((model) => (
-                          <SelectItem key={model.value} value={model.value}>
+                          <option key={model.value} value={model.value}>
                             {model.label}
-                          </SelectItem>
+                          </option>
                         ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Model used for generating article embeddings
-                    </p>
+                      </RadarSelect>
+                    </RadarField>
                   </div>
-                </div>
+                </RadarPanel>
 
-                <div className="space-y-2">
-                  <Label htmlFor="brandVoicePrompt">Brand Voice Prompt</Label>
-                  <Textarea
-                    id="brandVoicePrompt"
-                    rows={5}
-                    maxLength={500}
-                    value={settings?.brandVoicePrompt ?? ""}
-                    onChange={(e) =>
-                      setSettings((prev) =>
-                        prev ? { ...prev, brandVoicePrompt: e.target.value || null } : prev
-                      )
+                <RadarPanel
+                  title="Brand voice"
+                  note="The standing instruction behind every score, summary and generated edition."
+                >
+                  <RadarField
+                    label="What this newsletter is for"
+                    htmlFor="brandVoicePrompt"
+                    hint={
+                      <>
+                        Name your sector, your readers and what you do not want.{" "}
+                        <Num
+                          className={cn(
+                            brandVoiceLength > BRAND_VOICE_LIMIT - 50 &&
+                              "text-radar-warn"
+                          )}
+                        >
+                          {brandVoiceLength}
+                        </Num>{" "}
+                        of <Num>{BRAND_VOICE_LIMIT}</Num> characters.
+                      </>
                     }
-                    placeholder='Ex: "We focus on digital transformation for the financial sector. Professional but accessible tone. We value articles about practical AI applications, especially in compliance and automation. Avoid hype, focus on concrete results."'
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Define your brand&apos;s voice and focus areas. This influences how the AI scores,
-                    summarizes, and categorizes articles during curation. Max 500 characters.
-                  </p>
-                </div>
+                  >
+                    <RadarTextarea
+                      id="brandVoicePrompt"
+                      rows={5}
+                      maxLength={BRAND_VOICE_LIMIT}
+                      value={settings?.brandVoicePrompt ?? ""}
+                      onChange={(event) =>
+                        update("brandVoicePrompt", event.target.value || null)
+                      }
+                      placeholder="We advise financial-sector clients on digital transformation. Professional but plain. We want practical AI applications, especially compliance and automation, and concrete results over announcements. No hype."
+                    />
+                  </RadarField>
+                </RadarPanel>
+              </div>
+            )}
 
-                {saveMessage && (
-                  <p className={`text-sm ${saveMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                    {saveMessage.text}
-                  </p>
-                )}
+            {view === "appearance" && (
+              <div
+                role="tabpanel"
+                id="settings-view-panel-appearance"
+                aria-labelledby="settings-view-tab-appearance"
+                className="flex flex-col gap-3"
+              >
+                <SectionLabel className="mb-1">
+                  How the newsletter and the app look
+                </SectionLabel>
+                {[
+                  {
+                    href: "/dashboard/settings/branding",
+                    title: "Logo and banner",
+                    note: "The images every edition is topped with.",
+                  },
+                  {
+                    href: "/dashboard/settings/theme",
+                    title: "Theme",
+                    note: "Pick your own, or set the one everyone in the organization starts with.",
+                  },
+                  {
+                    href: "/dashboard/templates",
+                    title: "Email templates",
+                    note: "The frame each edition is poured into.",
+                  },
+                ].map((row) => (
+                  <Link
+                    key={row.href}
+                    href={row.href}
+                    className="flex items-center gap-4 rounded-xl border border-radar-line bg-radar-surface px-4 py-3.5 no-underline transition-colors hover:border-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold text-radar-ink">
+                        {row.title}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-radar-ink2">
+                        {row.note}
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="text-[14px] text-radar-ink3">
+                      ›
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
 
-                <Button onClick={handleSaveSettings} disabled={isSaving}>
-                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Settings
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
+            {view === "plan" && (
+              <div
+                role="tabpanel"
+                id="settings-view-panel-plan"
+                aria-labelledby="settings-view-tab-plan"
+                className="flex flex-col gap-5"
+              >
+                <UsageCard />
 
-          {/* Branding Settings */}
-          <TabsContent value="branding">
-            <Card>
-              <CardHeader>
-                <CardTitle>Branding</CardTitle>
-                <CardDescription>
-                  Customize the appearance of your newsletters with logos and banners
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link
-                  href="/dashboard/settings/branding"
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Image className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">Logo & Banner Settings</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Upload and manage your newsletter branding images
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                </Link>
-                <Link
-                  href="/dashboard/settings/theme"
-                  className="mt-3 flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Palette className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">Theme Gallery</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Choose a personal theme or set the org default
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                </Link>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Usage & Plan */}
-          <TabsContent value="usage" className="space-y-6">
-            <UsageCard />
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Organization</CardTitle>
-                <CardDescription>
-                  Manage your organization settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
                 <Link
                   href="/dashboard/settings/organization"
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                  className="flex items-center gap-4 rounded-xl border border-radar-line bg-radar-surface px-4 py-3.5 no-underline transition-colors hover:border-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Building2 className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">Organization Settings</h3>
-                      <p className="text-sm text-muted-foreground">
-                        View and update organization details, industry, and plan
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13.5px] font-semibold text-radar-ink">
+                      Organization
+                    </span>
+                    <span className="mt-0.5 block text-[12px] text-radar-ink2">
+                      Name, industry, sending domain and the people with access.
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="text-[14px] text-radar-ink3">
+                    ›
+                  </span>
                 </Link>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
+              </div>
+            )}
+          </>
+        )}
+      </RadarMain>
+
+      {/* One save bar for every section, so the button never hides below a fold. */}
+      {isDirty && (view === "curation" || view === "ai") && (
+        <div className="radar-enter sticky bottom-0 z-20 border-t border-radar-line bg-radar-surface px-4 py-3 shadow-radar-lg sm:px-6">
+          <div className="mx-auto flex w-full max-w-[980px] flex-wrap items-center gap-3">
+            <p className="m-0 flex-1 text-[12.5px] text-radar-ink">
+              Unsaved changes. They take effect on the next curation run.
+            </p>
+            <RadarButton
+              onClick={() => {
+                setIsDirty(false);
+                setIsLoading(true);
+                fetch("/api/settings")
+                  .then((r) => r.json())
+                  .then((data) => setSettings(data))
+                  .catch(console.error)
+                  .finally(() => setIsLoading(false));
+              }}
+              disabled={isSaving}
+            >
+              Discard
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              onClick={handleSaveSettings}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving…" : "Save settings"}
+            </RadarButton>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

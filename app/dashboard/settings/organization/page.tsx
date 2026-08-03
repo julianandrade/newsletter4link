@@ -1,31 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  Num,
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  SectionLabel,
+  StatusChip,
+} from "@/components/radar/primitives";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Building2, ArrowLeft, Globe, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
+  Callout,
+  RadarField,
+  RadarInput,
+  RadarPanel,
+  RadarSelect,
+  SkeletonRows,
+} from "@/components/radar/controls";
 import { ApiKeysCard } from "@/components/api-keys-card";
 import { hasFeature } from "@/lib/plans/features";
 import { Plan } from "@prisma/client";
+import { cn } from "@/lib/utils";
 
 interface Organization {
   id: string;
@@ -39,41 +38,35 @@ interface Organization {
 
 const INDUSTRIES = [
   { value: "TECHNOLOGY", label: "Technology" },
-  { value: "FINANCE", label: "Finance & Banking" },
+  { value: "FINANCE", label: "Finance and banking" },
   { value: "INSURANCE", label: "Insurance" },
   { value: "HEALTHCARE", label: "Healthcare" },
-  { value: "RETAIL", label: "Retail & E-commerce" },
+  { value: "RETAIL", label: "Retail and e-commerce" },
   { value: "UTILITIES", label: "Utilities" },
   { value: "MANUFACTURING", label: "Manufacturing" },
-  { value: "PROFESSIONAL_SERVICES", label: "Professional Services" },
+  { value: "PROFESSIONAL_SERVICES", label: "Professional services" },
   { value: "OTHER", label: "Other" },
 ];
 
 const PLANS = [
-  { value: "FREE", label: "Free", description: "Up to 1,000 subscribers" },
-  { value: "STARTER", label: "Starter", description: "Up to 5,000 subscribers" },
-  { value: "PROFESSIONAL", label: "Professional", description: "Up to 25,000 subscribers" },
-  { value: "ENTERPRISE", label: "Enterprise", description: "Unlimited subscribers" },
+  { value: "FREE", label: "Free", description: "up to 1,000 subscribers" },
+  { value: "STARTER", label: "Starter", description: "up to 5,000 subscribers" },
+  {
+    value: "PROFESSIONAL",
+    label: "Professional",
+    description: "up to 25,000 subscribers",
+  },
+  { value: "ENTERPRISE", label: "Enterprise", description: "no subscriber cap" },
 ];
 
 export default function OrganizationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    industry: "",
-  });
+  const [formData, setFormData] = useState({ name: "", industry: "" });
   const [customDomain, setCustomDomain] = useState("");
   const [isSavingDomain, setIsSavingDomain] = useState(false);
-  const [domainMessage, setDomainMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-  const [saveMessage, setSaveMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
     fetchOrganization();
@@ -93,16 +86,16 @@ export default function OrganizationSettingsPage() {
       setCustomDomain(data.organization.customDomain || "");
     } catch (error) {
       console.error("Failed to fetch organization:", error);
+      toast.error("Could not load the organization");
     } finally {
       setIsLoading(false);
     }
   }
 
   async function handleSave() {
-    if (!organization) return;
+    if (!organization || isSaving) return;
 
     setIsSaving(true);
-    setSaveMessage(null);
 
     try {
       const res = await fetch(`/api/organizations/${organization.id}`, {
@@ -118,30 +111,27 @@ export default function OrganizationSettingsPage() {
 
       const json = await res.json();
       setOrganization(json.data);
-      setSaveMessage({ type: "success", text: "Organization updated successfully" });
+      toast.success("Organization updated");
     } catch (error) {
-      setSaveMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Failed to save",
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Could not save the organization"
+      );
     } finally {
       setIsSaving(false);
-      setTimeout(() => setSaveMessage(null), 3000);
     }
   }
 
   async function handleSaveDomain() {
-    if (!organization) return;
+    if (!organization || isSavingDomain) return;
 
     setIsSavingDomain(true);
-    setDomainMessage(null);
 
     try {
       const res = await fetch(`/api/organizations/${organization.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customDomain: customDomain.trim() || null
+          customDomain: customDomain.trim() || null,
         }),
       });
 
@@ -152,325 +142,280 @@ export default function OrganizationSettingsPage() {
 
       const json = await res.json();
       setOrganization({ ...organization, customDomain: json.data.customDomain });
-      setDomainMessage({ type: "success", text: "Custom domain saved successfully" });
+      toast.success(
+        json.data.customDomain ? "Domain saved" : "Custom domain removed"
+      );
     } catch (error) {
-      setDomainMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Failed to save",
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Could not save the domain"
+      );
     } finally {
       setIsSavingDomain(false);
-      setTimeout(() => setDomainMessage(null), 3000);
     }
   }
 
+  const copyId = () => {
+    if (!organization) return;
+    navigator.clipboard.writeText(organization.id);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const currentPlan = PLANS.find((p) => p.value === organization?.plan);
+  const isEnterprise = organization?.plan === "ENTERPRISE";
+  const isDirty =
+    organization !== null &&
+    (formData.name !== organization.name ||
+      formData.industry !== organization.industry);
+
   if (isLoading) {
     return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Organization Settings" />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
+      <>
+        <AppHeader />
+        <RadarMain width="980px">
+          <PageHeading eyebrow="Settings · organization" title="Organization" />
+          <SkeletonRows rows={4} />
+        </RadarMain>
+      </>
     );
   }
 
-  const currentPlan = PLANS.find((p) => p.value === organization?.plan);
-
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Organization Settings" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6 space-y-6">
-        {/* Back Link */}
-        <Link
-          href="/dashboard/settings"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Settings
-        </Link>
+      <RadarMain width="980px">
+        <PageHeading
+          eyebrow="Settings · organization"
+          title={organization?.name || "Organization"}
+          subtitle={
+            <>
+              On the <strong>{currentPlan?.label || organization?.plan}</strong> plan,{" "}
+              {currentPlan?.description}. Created{" "}
+              {organization?.createdAt
+                ? new Date(organization.createdAt).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })
+                : "recently"}
+              .
+            </>
+          }
+          actions={
+            <Link href="/dashboard/settings" className={radarButtonClass()}>
+              All settings
+            </Link>
+          }
+        />
 
-        {/* Organization Details */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Organization Details</CardTitle>
-                <CardDescription>
-                  Manage your organization information
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Organization Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Your Organization"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
-                <Input
-                  id="slug"
-                  value={organization?.slug || ""}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Slug cannot be changed after creation
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="industry">Industry</Label>
-                <Select
-                  value={formData.industry}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, industry: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select industry" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INDUSTRIES.map((industry) => (
-                      <SelectItem key={industry.value} value={industry.value}>
-                        {industry.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Industry affects AI scoring prompts and recommended sources
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Created</Label>
-                <Input
-                  value={
-                    organization?.createdAt
-                      ? new Date(organization.createdAt).toLocaleDateString()
-                      : ""
-                  }
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-            </div>
-
-            {saveMessage && (
-              <p
-                className={`text-sm ${
-                  saveMessage.type === "success"
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {saveMessage.text}
-              </p>
-            )}
-
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Plan Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Plan</CardTitle>
-            <CardDescription>
-              Your subscription and feature access
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-lg">
-                    {currentPlan?.label || organization?.plan}
-                  </h3>
-                  <Badge variant="secondary">{organization?.plan}</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {currentPlan?.description}
-                </p>
-              </div>
-              <Button variant="outline" disabled>
-                Upgrade Plan
-              </Button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-              {PLANS.map((plan) => (
-                <div
-                  key={plan.value}
-                  className={`p-3 rounded-lg border text-center ${
-                    plan.value === organization?.plan
-                      ? "border-primary bg-primary/5"
-                      : "opacity-50"
-                  }`}
-                >
-                  <div className="font-medium">{plan.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {plan.description}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Custom Domain - Enterprise only */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Globe className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  Custom Domain
-                  {organization?.plan !== "ENTERPRISE" && (
-                    <Badge variant="outline" className="text-xs">
-                      <Lock className="h-3 w-3 mr-1" />
-                      Enterprise
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  Use your own domain for newsletter links and landing pages
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {organization?.plan === "ENTERPRISE" ? (
+        <div className="flex flex-col gap-5">
+          <RadarPanel
+            title="Details"
+            note="The industry shapes the scoring prompt and the sources we suggest."
+            footer={
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="customDomain">Domain</Label>
+                <span className="text-[11.5px] text-radar-ink3">
+                  {isDirty ? "Unsaved changes" : "Everything saved"}
+                </span>
+                <RadarButton
+                  variant="accent"
+                  onClick={handleSave}
+                  disabled={isSaving || !isDirty || !formData.name.trim()}
+                >
+                  {isSaving ? "Saving…" : "Save changes"}
+                </RadarButton>
+              </>
+            }
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <RadarField label="Name" htmlFor="org-name" required>
+                <RadarInput
+                  id="org-name"
+                  value={formData.name}
+                  onChange={(event) =>
+                    setFormData({ ...formData, name: event.target.value })
+                  }
+                  placeholder="Link Consulting"
+                />
+              </RadarField>
+
+              <RadarField
+                label="URL slug"
+                htmlFor="org-slug"
+                hint="Fixed at creation; it appears in invite and unsubscribe links."
+              >
+                <RadarInput
+                  id="org-slug"
+                  value={organization?.slug || ""}
+                  readOnly
+                  disabled
+                />
+              </RadarField>
+
+              <RadarField label="Industry" htmlFor="org-industry">
+                <RadarSelect
+                  id="org-industry"
+                  value={formData.industry}
+                  onChange={(event) =>
+                    setFormData({ ...formData, industry: event.target.value })
+                  }
+                >
+                  {INDUSTRIES.map((industry) => (
+                    <option key={industry.value} value={industry.value}>
+                      {industry.label}
+                    </option>
+                  ))}
+                </RadarSelect>
+              </RadarField>
+
+              <RadarField
+                label="Organization id"
+                htmlFor="org-id"
+                hint="Needed for API integrations."
+              >
+                <div className="flex gap-2">
+                  <RadarInput
+                    id="org-id"
+                    value={organization?.id || ""}
+                    readOnly
+                    className="font-num text-[12px]"
+                  />
+                  <RadarButton onClick={copyId}>
+                    {copiedId ? "Copied" : "Copy"}
+                  </RadarButton>
+                </div>
+              </RadarField>
+            </div>
+          </RadarPanel>
+
+          <RadarPanel
+            title="Plan"
+            note="Plans change what the engine will do, not just how many people it will send to."
+          >
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {PLANS.map((plan) => {
+                const active = plan.value === organization?.plan;
+
+                return (
+                  <div
+                    key={plan.value}
+                    className={cn(
+                      "rounded-lg border px-3.5 py-3",
+                      active
+                        ? "border-radar-accent bg-radar-surface2"
+                        : "border-radar-line2"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "text-[12.5px] font-semibold",
+                          active ? "text-radar-ink" : "text-radar-ink2"
+                        )}
+                      >
+                        {plan.label}
+                      </span>
+                      {active && <StatusChip tone="ok">Current</StatusChip>}
+                    </div>
+                    <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3">
+                      {plan.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 mb-0 text-[12px] text-radar-ink3">
+              Plan changes are handled by your account contact rather than in the
+              app.
+            </p>
+          </RadarPanel>
+
+          <RadarPanel
+            title="Sending domain"
+            note={
+              isEnterprise
+                ? "Links in the newsletter and the unsubscribe page use this domain instead of ours."
+                : "Available on the Enterprise plan."
+            }
+            actions={
+              !isEnterprise ? (
+                <StatusChip tone="neutral">Enterprise</StatusChip>
+              ) : undefined
+            }
+          >
+            {isEnterprise ? (
+              <div className="flex flex-col gap-4">
+                <RadarField
+                  label="Domain"
+                  htmlFor="org-domain"
+                  hint="Leave it empty to go back to the default domain."
+                >
                   <div className="flex gap-2">
-                    <Input
-                      id="customDomain"
+                    <RadarInput
+                      id="org-domain"
                       value={customDomain}
-                      onChange={(e) => setCustomDomain(e.target.value)}
+                      onChange={(event) => setCustomDomain(event.target.value)}
                       placeholder="newsletter.yourcompany.com"
                     />
-                    <Button
+                    <RadarButton
+                      variant="accent"
                       onClick={handleSaveDomain}
                       disabled={isSavingDomain}
                     >
-                      {isSavingDomain && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Save
-                    </Button>
+                      {isSavingDomain ? "Saving…" : "Save"}
+                    </RadarButton>
                   </div>
-                </div>
+                </RadarField>
 
-                {organization.customDomain && (
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertDescription>
-                      Your custom domain <strong>{organization.customDomain}</strong> is configured.
-                    </AlertDescription>
-                  </Alert>
+                {organization?.customDomain && (
+                  <Callout tone="ok" title="Domain configured">
+                    Links now point at{" "}
+                    <strong>{organization.customDomain}</strong>.
+                  </Callout>
                 )}
 
-                <div className="rounded-lg border p-4 space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                    DNS Setup Instructions
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Add the following DNS record to your domain:
-                  </p>
-                  <div className="bg-muted rounded p-3 font-mono text-sm">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <span className="text-muted-foreground">Type</span>
-                        <div>CNAME</div>
+                <div className="rounded-lg border border-radar-line2 bg-radar-surface2 p-3.5">
+                  <SectionLabel className="mb-2.5">DNS record to add</SectionLabel>
+                  <dl className="font-num m-0 grid grid-cols-3 gap-4 text-[12px]">
+                    {[
+                      ["Type", "CNAME"],
+                      ["Name", "newsletter"],
+                      ["Value", "newsletter4link.vercel.app"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-radar-ink3">
+                          {label}
+                        </dt>
+                        <dd className="m-0 mt-0.5 truncate text-radar-ink">
+                          {value}
+                        </dd>
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Name</span>
-                        <div>newsletter (or @)</div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Value</span>
-                        <div>newsletter4link.vercel.app</div>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    DNS changes may take up to 48 hours to propagate.
+                    ))}
+                  </dl>
+                  <p className="mt-2.5 mb-0 text-[11px] text-radar-ink3">
+                    DNS can take up to <Num>48</Num> hours to propagate.
                   </p>
                 </div>
-
-                {domainMessage && (
-                  <p
-                    className={`text-sm ${
-                      domainMessage.type === "success"
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {domainMessage.text}
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-6 space-y-3">
-                <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Enterprise Feature</p>
-                  <p className="text-sm text-muted-foreground">
-                    Upgrade to Enterprise to use your own custom domain for newsletters.
-                  </p>
-                </div>
-                <Button variant="outline" disabled>
-                  Upgrade to Enterprise
-                </Button>
               </div>
+            ) : (
+              <p className="m-0 text-[12.5px] text-radar-ink2 text-pretty">
+                On Enterprise, newsletter links and the unsubscribe page can run on
+                your own domain, which improves deliverability and keeps the branding
+                consistent. Speak to your account contact to enable it.
+              </p>
             )}
-          </CardContent>
-        </Card>
+          </RadarPanel>
 
-        {/* API Keys */}
-        <ApiKeysCard
-          plan={organization?.plan || "FREE"}
-          hasAccess={hasFeature((organization?.plan || "FREE") as Plan, "apiAccess")}
-        />
-
-        {/* Organization ID */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Organization ID</CardTitle>
-            <CardDescription>
-              Use this ID for API integrations
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <code className="block p-3 bg-muted rounded-lg text-sm font-mono">
-              {organization?.id}
-            </code>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <ApiKeysCard
+            plan={organization?.plan || "FREE"}
+            hasAccess={hasFeature(
+              (organization?.plan || "FREE") as Plan,
+              "apiAccess"
+            )}
+          />
+        </div>
+      </RadarMain>
+    </>
   );
 }

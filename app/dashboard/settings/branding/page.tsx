@@ -1,32 +1,50 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Loader2,
-  Upload,
-  Image as ImageIcon,
-  Trash2,
-  CheckCircle,
-  AlertCircle,
-  ArrowLeft,
-} from "lucide-react";
-import Link from "next/link";
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  SectionLabel,
+} from "@/components/radar/primitives";
+import { RadarPanel, SkeletonRows } from "@/components/radar/controls";
 
 interface BrandingSettings {
   logoUrl: string | null;
   bannerUrl: string | null;
 }
+
+type Slot = "logo" | "banner";
+
+const SLOTS: {
+  key: Slot;
+  field: keyof BrandingSettings;
+  title: string;
+  note: string;
+  size: string;
+  previewHeight: string;
+}[] = [
+  {
+    key: "logo",
+    field: "logoUrl",
+    title: "Logo",
+    note: "Sits at the top of every edition, above the first story.",
+    size: "200 by 80 pixels, PNG or WebP with a transparent background",
+    previewHeight: "max-h-20",
+  },
+  {
+    key: "banner",
+    field: "bannerUrl",
+    title: "Banner",
+    note: "Optional. A wide image behind the masthead.",
+    size: "600 by 200 pixels",
+    previewHeight: "max-h-32",
+  },
+];
 
 export default function BrandingSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -35,18 +53,12 @@ export default function BrandingSettingsPage() {
     logoUrl: null,
     bannerUrl: null,
   });
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [uploading, setUploading] = useState<Slot | null>(null);
 
-  // Upload states
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingBanner, setUploadingBanner] = useState(false);
-
-  // File input refs
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const inputRefs = {
+    logo: useRef<HTMLInputElement>(null),
+    banner: useRef<HTMLInputElement>(null),
+  };
 
   useEffect(() => {
     loadBrandingSettings();
@@ -62,16 +74,13 @@ export default function BrandingSettingsPage() {
       }
     } catch (error) {
       console.error("Error loading branding settings:", error);
-      setMessage({ type: "error", text: "Failed to load branding settings" });
+      toast.error("Could not load the branding settings");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFileUpload = async (
-    file: File,
-    type: "logo" | "banner"
-  ): Promise<string | null> => {
+  const uploadFile = async (file: File): Promise<string | null> => {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -85,65 +94,18 @@ export default function BrandingSettingsPage() {
 
       if (result.success) {
         return result.data.url;
-      } else {
-        setMessage({
-          type: "error",
-          text: result.error || "Failed to upload file",
-        });
-        return null;
       }
+      toast.error(result.error || "The upload failed");
+      return null;
     } catch (error) {
       console.error("Error uploading file:", error);
-      setMessage({ type: "error", text: "Failed to upload file" });
+      toast.error("The upload failed");
       return null;
-    }
-  };
-
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingLogo(true);
-    setMessage(null);
-
-    const url = await handleFileUpload(file, "logo");
-    if (url) {
-      setSettings((prev) => ({ ...prev, logoUrl: url }));
-      // Auto-save after upload
-      await saveSettings({ ...settings, logoUrl: url });
-    }
-
-    setUploadingLogo(false);
-    // Reset file input
-    if (logoInputRef.current) {
-      logoInputRef.current.value = "";
-    }
-  };
-
-  const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingBanner(true);
-    setMessage(null);
-
-    const url = await handleFileUpload(file, "banner");
-    if (url) {
-      setSettings((prev) => ({ ...prev, bannerUrl: url }));
-      // Auto-save after upload
-      await saveSettings({ ...settings, bannerUrl: url });
-    }
-
-    setUploadingBanner(false);
-    // Reset file input
-    if (bannerInputRef.current) {
-      bannerInputRef.current.value = "";
     }
   };
 
   const saveSettings = async (settingsToSave: BrandingSettings) => {
     setIsSaving(true);
-    setMessage(null);
 
     try {
       const response = await fetch("/api/settings/branding", {
@@ -156,272 +118,148 @@ export default function BrandingSettingsPage() {
 
       if (result.success) {
         setSettings(result.data);
-        setMessage({ type: "success", text: "Branding settings saved" });
+        toast.success("Branding saved");
       } else {
-        setMessage({
-          type: "error",
-          text: result.error || "Failed to save settings",
-        });
+        toast.error(result.error || "Could not save the branding");
       }
     } catch (error) {
       console.error("Error saving branding settings:", error);
-      setMessage({ type: "error", text: "Failed to save settings" });
+      toast.error("Could not save the branding");
     } finally {
       setIsSaving(false);
-      // Clear success message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
     }
   };
 
-  const handleClearLogo = async () => {
-    const newSettings = { ...settings, logoUrl: null };
-    setSettings(newSettings);
-    await saveSettings(newSettings);
+  const handleChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    slot: Slot
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(slot);
+
+    const url = await uploadFile(file);
+    if (url) {
+      const field = slot === "logo" ? "logoUrl" : "bannerUrl";
+      // Save from the current settings plus this change, so the other slot is kept.
+      await saveSettings({ ...settings, [field]: url });
+    }
+
+    setUploading(null);
+    const ref = inputRefs[slot].current;
+    if (ref) ref.value = "";
   };
 
-  const handleClearBanner = async () => {
-    const newSettings = { ...settings, bannerUrl: null };
-    setSettings(newSettings);
-    await saveSettings(newSettings);
+  const handleClear = async (slot: Slot) => {
+    const field = slot === "logo" ? "logoUrl" : "bannerUrl";
+    await saveSettings({ ...settings, [field]: null });
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Branding Settings" />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Branding Settings" />
+    <>
+      <AppHeader />
 
-      <div className="flex-1 p-6">
-        {/* Back Link */}
-        <Link
-          href="/dashboard/settings"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Settings
-        </Link>
+      <RadarMain width="980px">
+        <PageHeading
+          eyebrow="Settings · branding"
+          title="What the newsletter wears"
+          subtitle="These two images travel with every send, on top of whichever template is in use."
+          actions={
+            <Link href="/dashboard/settings" className={radarButtonClass()}>
+              All settings
+            </Link>
+          }
+        />
 
-        {/* Status Message */}
-        {message && (
-          <div
-            className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
-              message.type === "success"
-                ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-            }`}
-          >
-            {message.type === "success" ? (
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-            )}
-            <p
-              className={
-                message.type === "success"
-                  ? "text-green-800 dark:text-green-200"
-                  : "text-red-800 dark:text-red-200"
-              }
-            >
-              {message.text}
-            </p>
+        {isLoading ? (
+          <SkeletonRows rows={2} />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {SLOTS.map((slot) => {
+              const url = settings[slot.field];
+              const isUploading = uploading === slot.key;
+
+              return (
+                <RadarPanel key={slot.key} title={slot.title} note={slot.note}>
+                  <div className="flex min-h-[168px] items-center justify-center rounded-xl border border-dashed border-radar-line bg-radar-surface2 p-4">
+                    {url ? (
+                      <div className="flex w-full flex-col items-center gap-3">
+                        {/* Remote CDN images, so a plain img rather than next/image. */}
+                        <img
+                          src={url}
+                          alt={`${slot.title} preview`}
+                          className={`${slot.previewHeight} max-w-full object-contain`}
+                        />
+                        <p className="m-0 max-w-full truncate text-[11px] text-radar-ink3">
+                          {url.split("/").pop()}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="m-0 text-center text-[12.5px] text-radar-ink3">
+                        No {slot.title.toLowerCase()} yet.
+                        <br />
+                        <span className="text-[11.5px]">{slot.size}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <input
+                    ref={inputRefs[slot.key]}
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => handleChange(event, slot.key)}
+                    className="hidden"
+                    id={`${slot.key}-upload`}
+                  />
+
+                  <div className="mt-4 flex gap-2">
+                    <RadarButton
+                      variant="accent"
+                      className="flex-1"
+                      disabled={isUploading || isSaving}
+                      onClick={() => inputRefs[slot.key].current?.click()}
+                    >
+                      {isUploading
+                        ? "Uploading…"
+                        : url
+                          ? `Replace the ${slot.title.toLowerCase()}`
+                          : `Upload a ${slot.title.toLowerCase()}`}
+                    </RadarButton>
+                    {url && (
+                      <RadarButton
+                        onClick={() => handleClear(slot.key)}
+                        disabled={isSaving || isUploading}
+                        className="hover:border-radar-err hover:text-radar-err"
+                      >
+                        Remove
+                      </RadarButton>
+                    )}
+                  </div>
+                </RadarPanel>
+              );
+            })}
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Logo Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5" />
-                Newsletter Logo
-              </CardTitle>
-              <CardDescription>
-                Upload a logo to display at the top of your newsletters.
-                Recommended size: 200x80px
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Logo Preview */}
-              <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center min-h-[160px] bg-muted/30">
-                {settings.logoUrl ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <img
-                      src={settings.logoUrl}
-                      alt="Logo preview"
-                      className="max-h-20 max-w-full object-contain"
-                    />
-                    <p className="text-xs text-muted-foreground truncate max-w-full">
-                      {settings.logoUrl.split("/").pop()}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <ImageIcon className="h-12 w-12" />
-                    <p className="text-sm">No logo uploaded</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Logo Actions */}
-              <div className="flex gap-2">
-                <Input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoChange}
-                  className="hidden"
-                  id="logo-upload"
-                />
-                <Label htmlFor="logo-upload" className="flex-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={uploadingLogo}
-                    onClick={() => logoInputRef.current?.click()}
-                  >
-                    {uploadingLogo ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Logo
-                      </>
-                    )}
-                  </Button>
-                </Label>
-                {settings.logoUrl && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleClearLogo}
-                    disabled={isSaving}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Banner Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5" />
-                Newsletter Banner
-              </CardTitle>
-              <CardDescription>
-                Upload a banner image for the header of your newsletters.
-                Recommended size: 600x200px
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Banner Preview */}
-              <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center min-h-[160px] bg-muted/30">
-                {settings.bannerUrl ? (
-                  <div className="flex flex-col items-center gap-4 w-full">
-                    <img
-                      src={settings.bannerUrl}
-                      alt="Banner preview"
-                      className="max-h-32 max-w-full object-contain rounded"
-                    />
-                    <p className="text-xs text-muted-foreground truncate max-w-full">
-                      {settings.bannerUrl.split("/").pop()}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <ImageIcon className="h-12 w-12" />
-                    <p className="text-sm">No banner uploaded</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Banner Actions */}
-              <div className="flex gap-2">
-                <Input
-                  ref={bannerInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBannerChange}
-                  className="hidden"
-                  id="banner-upload"
-                />
-                <Label htmlFor="banner-upload" className="flex-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={uploadingBanner}
-                    onClick={() => bannerInputRef.current?.click()}
-                  >
-                    {uploadingBanner ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Banner
-                      </>
-                    )}
-                  </Button>
-                </Label>
-                {settings.bannerUrl && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleClearBanner}
-                    disabled={isSaving}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="mt-6 rounded-xl border border-radar-line2 bg-radar-surface2 px-4 py-3.5">
+          <SectionLabel className="mb-2">Worth knowing</SectionLabel>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[12.5px] text-radar-ink2">
+            <li>
+              Uploads are optimised and served from the CDN, so a large source file
+              is fine.
+            </li>
+            <li>
+              Transparent PNG or WebP keeps the logo readable on both light and dark
+              email clients.
+            </li>
+            <li>
+              Editions already sent keep the images they were sent with; changes
+              apply from the next send.
+            </li>
+          </ul>
         </div>
-
-        {/* Usage Info */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-base">How branding is used</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-              <li>
-                <strong>Logo:</strong> Displayed at the top of each newsletter
-                email
-              </li>
-              <li>
-                <strong>Banner:</strong> Optional header image for visual impact
-              </li>
-              <li>
-                Images are automatically optimized and hosted on our CDN for
-                fast delivery
-              </li>
-              <li>
-                For best results, use PNG or WebP format with transparent
-                backgrounds for logos
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      </RadarMain>
+    </>
   );
 }

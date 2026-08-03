@@ -7,9 +7,9 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from "@/components/radar/compat";
+import { Button } from "@/components/radar/compat";
+import { Badge } from "@/components/radar/compat";
 import { Lock, Sparkles, Zap, Crown } from "lucide-react";
 import { PLAN_INFO, FEATURE_UPSELL_MESSAGES, PlanFeatures } from "@/lib/plans/features";
 
@@ -34,7 +34,7 @@ export function UpgradePrompt({ feature, currentPlan, className }: UpgradePrompt
   return (
     <Card className={className}>
       <CardHeader className="text-center">
-        <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-radar-surface2 flex items-center justify-center mb-4">
           {planIcons[upsell.requiredPlan]}
         </div>
         <CardTitle className="flex items-center justify-center gap-2">
@@ -46,12 +46,12 @@ export function UpgradePrompt({ feature, currentPlan, className }: UpgradePrompt
       <CardContent className="text-center space-y-4">
         <div className="flex items-center justify-center gap-2">
           <Badge variant="outline">{currentPlanInfo.name}</Badge>
-          <span className="text-muted-foreground">→</span>
+          <span className="text-radar-ink2">→</span>
           <Badge variant="default">{requiredPlanInfo.name}</Badge>
         </div>
 
         {requiredPlanInfo.monthlyPrice !== null && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-radar-ink2">
             Starting at ${requiredPlanInfo.monthlyPrice}/month
           </p>
         )}
@@ -60,7 +60,7 @@ export function UpgradePrompt({ feature, currentPlan, className }: UpgradePrompt
           Upgrade to {requiredPlanInfo.name}
         </Button>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-radar-ink2">
           Contact support to upgrade your plan
         </p>
       </CardContent>
