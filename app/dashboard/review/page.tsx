@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -17,19 +13,33 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Check,
-  X,
-  ExternalLink,
-  Edit2,
-  FileSearch,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-} from "lucide-react";
+  Num,
+  PageHeading,
+  RadarButton,
+  radarButtonClass,
+  RadarMain,
+  ScoreMeter,
+  SectionLabel,
+  SourceStamp,
+  Tag,
+} from "@/components/radar/primitives";
+import {
+  EmptyState,
+  RadarField,
+  RadarInput,
+  RadarTextarea,
+  SkeletonRows,
+  TableShell,
+  tableClass,
+  tdClass,
+  theadClass,
+  thClass,
+  trClass,
+} from "@/components/radar/controls";
+import { relativeTime, sourceIdentity } from "@/lib/radar/source";
 import {
   LayoutToggle,
   useLayoutPreference,
-  type LayoutType,
 } from "@/components/layout-toggle";
 import {
   ArticleFiltersComponent,
@@ -37,6 +47,7 @@ import {
   defaultArticleFilters,
   type ArticleFilters,
 } from "@/components/article-filters";
+import { cn } from "@/lib/utils";
 
 interface Article {
   id: string;
@@ -50,40 +61,10 @@ interface Article {
   status: string;
 }
 
-// Helper to extract source name from URL
-function getSourceName(url: string): string {
-  try {
-    const hostname = new URL(url).hostname;
-    return hostname.replace(/^(www\.|blog\.|news\.)/, "").split(".")[0];
-  } catch {
-    return "Unknown";
-  }
-}
-
-// Helper to format date
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-// Helper to get score badge styling
-function getScoreBadgeStyle(score: number): string {
-  if (score >= 8.0) {
-    return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
-  } else if (score >= 6.0) {
-    return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20";
-  } else {
-    return "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20";
-  }
-}
-
 export default function ReviewPage() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [filters, setFilters] = useState<ArticleFilters>(defaultArticleFilters);
   const [layout, setLayout] = useLayoutPreference("review-layout", "cards");
@@ -95,12 +76,14 @@ export default function ReviewPage() {
   const [newCategory, setNewCategory] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Expanded cards tracking
+  // Rows mid-decision, so a double click cannot fire two verdicts.
+  const [deciding, setDeciding] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const fetchArticles = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const queryString = buildArticleQueryString(filters);
       const res = await fetch(`/api/articles/pending?${queryString}`);
       const data = await res.json();
@@ -109,9 +92,14 @@ export default function ReviewPage() {
         if (data.meta?.categories) {
           setAvailableCategories(data.meta.categories);
         }
+      } else {
+        setLoadError(data.error || "The queue request failed");
       }
     } catch (error) {
       console.error("Error fetching articles:", error);
+      setLoadError(
+        error instanceof Error ? error.message : "The queue request failed"
+      );
     } finally {
       setLoading(false);
     }
@@ -121,33 +109,31 @@ export default function ReviewPage() {
     fetchArticles();
   }, [fetchArticles]);
 
-  const handleApprove = async (id: string) => {
+  const decide = async (article: Article, verdict: "approve" | "reject") => {
+    if (deciding) return;
+
+    setDeciding(article.id);
     try {
-      const res = await fetch(`/api/articles/${id}/approve`, {
+      const res = await fetch(`/api/articles/${article.id}/${verdict}`, {
         method: "POST",
       });
       const data = await res.json();
 
       if (data.success) {
-        setArticles(articles.filter((a) => a.id !== id));
+        setArticles((previous) => previous.filter((a) => a.id !== article.id));
+        toast.success(
+          verdict === "approve"
+            ? "Approved, waiting for an edition"
+            : "Rejected and out of the queue"
+        );
+      } else {
+        toast.error(data.error || `Could not ${verdict} that story`);
       }
     } catch (error) {
-      console.error("Error approving article:", error);
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    try {
-      const res = await fetch(`/api/articles/${id}/reject`, {
-        method: "POST",
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        setArticles(articles.filter((a) => a.id !== id));
-      }
-    } catch (error) {
-      console.error("Error rejecting article:", error);
+      console.error(`Error running ${verdict}:`, error);
+      toast.error(`Could not ${verdict} that story`);
+    } finally {
+      setDeciding(null);
     }
   };
 
@@ -188,10 +174,14 @@ export default function ReviewPage() {
               : a
           )
         );
+        toast.success("Story updated");
         closeEditModal();
+      } else {
+        toast.error(data.error || "Could not save those edits");
       }
     } catch (error) {
       console.error("Error updating article:", error);
+      toast.error("Could not save those edits");
     } finally {
       setSaving(false);
     }
@@ -221,324 +211,238 @@ export default function ReviewPage() {
     });
   };
 
-  // Cards View
+  const hasFilters =
+    Boolean(filters.search) ||
+    filters.categories.length > 0 ||
+    filters.scoreMin > 0 ||
+    filters.scoreMax < 10 ||
+    Boolean(filters.dateFrom) ||
+    Boolean(filters.dateTo);
+
+  /** Verdict pair, shared by all three layouts so the shortcut never moves. */
+  const Verdict = ({
+    article,
+    compact = false,
+  }: {
+    article: Article;
+    compact?: boolean;
+  }) => (
+    <div className={cn("flex items-center gap-1.5", compact && "justify-end")}>
+      <RadarButton
+        size="sm"
+        variant="ghost"
+        onClick={() => openEditModal(article)}
+      >
+        Edit
+      </RadarButton>
+      <RadarButton
+        size="sm"
+        onClick={() => decide(article, "reject")}
+        disabled={deciding === article.id}
+        className="hover:border-radar-err hover:text-radar-err"
+      >
+        Reject
+      </RadarButton>
+      <RadarButton
+        size="sm"
+        variant="accent"
+        onClick={() => decide(article, "approve")}
+        disabled={deciding === article.id}
+      >
+        {deciding === article.id ? "Saving…" : "Approve"}
+      </RadarButton>
+    </div>
+  );
+
   const renderCardsView = () => (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       {articles.map((article) => {
         const isExpanded = expandedIds.has(article.id);
+        const isLong = (article.summary?.length || 0) > 220;
 
         return (
-          <Card key={article.id} className="relative overflow-hidden">
-            <CardContent className="p-5">
-              {/* Score Badge - Top Right */}
-              <Badge
-                variant="outline"
-                className={`absolute top-4 right-4 font-semibold ${getScoreBadgeStyle(article.relevanceScore)}`}
-              >
-                {article.relevanceScore.toFixed(1)}
-              </Badge>
+          <article
+            key={article.id}
+            className="flex flex-col rounded-xl border border-radar-line bg-radar-surface p-4 shadow-radar transition-colors hover:border-radar-ink3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <SourceStamp
+                sourceUrl={article.sourceUrl}
+                publishedAt={article.publishedAt}
+              />
+              <ScoreMeter score={article.relevanceScore} className="shrink-0" />
+            </div>
 
-              {/* Title - linked to original */}
+            <h3 className="font-editorial m-0 text-[17px] font-medium leading-[1.25] tracking-[-0.01em] text-radar-ink text-balance">
               <a
                 href={article.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group block pr-14"
+                className="text-radar-ink no-underline hover:text-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
               >
-                <h3 className="font-semibold text-base leading-tight group-hover:text-primary transition-colors line-clamp-2">
-                  {article.title}
-                  <ExternalLink className="inline-block ml-1.5 h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </h3>
+                {article.title}
               </a>
+            </h3>
 
-              {/* Source + Date */}
-              <p className="text-sm text-muted-foreground mt-2">
-                <span className="capitalize">
-                  {getSourceName(article.sourceUrl)}
-                </span>
-                {article.author && (
-                  <>
-                    {" "}
-                    <span className="text-muted-foreground/50">by</span>{" "}
-                    {article.author}
-                  </>
-                )}
-                <span className="mx-2 text-muted-foreground/50">{"\u2022"}</span>
-                {formatDate(article.publishedAt)}
+            {article.author && (
+              <p className="mt-1.5 mb-0 text-[11.5px] text-radar-ink3">
+                by {article.author}
               </p>
+            )}
 
-              {/* Categories */}
-              {article.category.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {article.category.map((cat) => (
-                    <Badge
-                      key={cat}
-                      variant="secondary"
-                      className="text-xs font-normal"
-                    >
-                      {cat}
-                    </Badge>
-                  ))}
-                </div>
+            <p
+              className={cn(
+                "mt-2.5 mb-0 text-[13px] leading-[1.55] text-radar-ink2 text-pretty",
+                !isExpanded && isLong && "line-clamp-3"
               )}
+            >
+              {article.summary || "No summary was generated for this story."}
+            </p>
 
-              {/* Summary */}
-              <div className="mt-4">
-                <p
-                  className={`text-sm text-muted-foreground ${!isExpanded ? "line-clamp-3" : ""}`}
-                >
-                  {article.summary || "No summary available."}
-                </p>
-                {(article.summary?.length || 0) > 200 && (
-                  <button
-                    onClick={() => toggleExpanded(article.id)}
-                    className="text-xs text-primary hover:underline mt-1 flex items-center gap-0.5"
-                  >
-                    {isExpanded ? (
-                      <>
-                        Show less <ChevronUp className="h-3 w-3" />
-                      </>
-                    ) : (
-                      <>
-                        Show more <ChevronDown className="h-3 w-3" />
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
+            {isLong && (
+              <button
+                type="button"
+                onClick={() => toggleExpanded(article.id)}
+                aria-expanded={isExpanded}
+                className="mt-1.5 self-start text-[11.5px] text-radar-ink3 transition-colors hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+              >
+                {isExpanded ? "Show less" : "Show the full summary"}
+              </button>
+            )}
 
-              {/* Actions Row */}
-              <div className="flex items-center gap-2 mt-5 pt-4 border-t">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => openEditModal(article)}
-                  className="text-muted-foreground"
-                >
-                  <Edit2 className="w-3.5 h-3.5 mr-1.5" />
-                  Edit
-                </Button>
-                <div className="flex-1" />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleReject(article.id)}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                >
-                  <X className="w-4 h-4 mr-1" />
-                  Reject
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleApprove(article.id)}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <Check className="w-4 h-4 mr-1" />
-                  Approve
-                </Button>
+            {article.category.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {article.category.slice(0, 5).map((cat) => (
+                  <Tag key={cat}>{cat}</Tag>
+                ))}
               </div>
-            </CardContent>
-          </Card>
+            )}
+
+            {/* The source already appears in the stamp above, so the footer is
+                only the verdict. */}
+            <div className="mt-4 flex justify-end border-t border-radar-line2 pt-3.5">
+              <Verdict article={article} />
+            </div>
+          </article>
         );
       })}
     </div>
   );
 
-  // Compact Cards View
   const renderCompactView = () => (
-    <div className="space-y-2">
+    <div className="border-t border-radar-line">
       {articles.map((article) => (
-        <Card key={article.id} className="overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-4">
-              {/* Score */}
-              <Badge
-                variant="outline"
-                className={`shrink-0 font-semibold ${getScoreBadgeStyle(article.relevanceScore)}`}
+        <article
+          key={article.id}
+          className="flex flex-col gap-3 border-b border-radar-line2 py-4 transition-colors hover:bg-radar-surface2 sm:flex-row sm:items-start sm:gap-5"
+        >
+          <div className="min-w-0 flex-1">
+            <SourceStamp
+              sourceUrl={article.sourceUrl}
+              publishedAt={article.publishedAt}
+            />
+            <h3 className="font-editorial m-0 text-[15.5px] font-medium leading-[1.3] text-radar-ink text-pretty">
+              <a
+                href={article.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-radar-ink no-underline hover:text-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
               >
-                {article.relevanceScore.toFixed(1)}
-              </Badge>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    {/* Title */}
-                    <a
-                      href={article.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group"
-                    >
-                      <h3 className="font-medium text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1">
-                        {article.title}
-                        <ExternalLink className="inline-block ml-1 h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </h3>
-                    </a>
-
-                    {/* Meta */}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      <span className="capitalize">
-                        {getSourceName(article.sourceUrl)}
-                      </span>
-                      <span className="mx-1.5">{"\u2022"}</span>
-                      {formatDate(article.publishedAt)}
-                    </p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openEditModal(article)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleReject(article.id)}
-                      className="h-8 w-8 p-0 hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleApprove(article.id)}
-                      className="h-8 w-8 p-0 bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Categories + Summary */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {article.category.slice(0, 3).map((cat) => (
-                    <Badge
-                      key={cat}
-                      variant="secondary"
-                      className="text-xs font-normal"
-                    >
-                      {cat}
-                    </Badge>
-                  ))}
-                  {article.category.length > 3 && (
-                    <Badge variant="secondary" className="text-xs font-normal">
-                      +{article.category.length - 3}
-                    </Badge>
-                  )}
-                </div>
-
-                {article.summary && (
-                  <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                    {article.summary}
-                  </p>
+                {article.title}
+              </a>
+            </h3>
+            {article.summary && (
+              <p className="mt-1.5 mb-0 line-clamp-2 max-w-[80ch] text-[12.5px] text-radar-ink2 text-pretty">
+                {article.summary}
+              </p>
+            )}
+            {article.category.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {article.category.slice(0, 3).map((cat) => (
+                  <Tag key={cat}>{cat}</Tag>
+                ))}
+                {article.category.length > 3 && (
+                  <Tag>+{article.category.length - 3}</Tag>
                 )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center justify-between gap-3 sm:flex-col sm:items-end">
+            <ScoreMeter score={article.relevanceScore} />
+            <Verdict article={article} compact />
+          </div>
+        </article>
       ))}
     </div>
   );
 
-  // Table View
   const renderTableView = () => (
-    <div className="border rounded-lg overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 border-b">
-            <tr>
-              <th className="text-left font-medium px-4 py-3 w-16">Score</th>
-              <th className="text-left font-medium px-4 py-3">Title</th>
-              <th className="text-left font-medium px-4 py-3 w-32">Source</th>
-              <th className="text-left font-medium px-4 py-3 w-28">Date</th>
-              <th className="text-left font-medium px-4 py-3 w-48">Categories</th>
-              <th className="text-right font-medium px-4 py-3 w-36">Actions</th>
+    <TableShell>
+      <table className={tableClass}>
+        <caption className="sr-only">Stories waiting for review</caption>
+        <thead>
+          <tr className={theadClass}>
+            <th scope="col" className={thClass}>
+              Score
+            </th>
+            <th scope="col" className={thClass}>
+              Story
+            </th>
+            <th scope="col" className={thClass}>
+              Source
+            </th>
+            <th scope="col" className={thClass}>
+              Published
+            </th>
+            <th scope="col" className={thClass}>
+              Topics
+            </th>
+            <th scope="col" className={cn(thClass, "text-right")}>
+              Verdict
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {articles.map((article) => (
+            <tr key={article.id} className={trClass}>
+              <td className={tdClass}>
+                <ScoreMeter score={article.relevanceScore} />
+              </td>
+              <td className={cn(tdClass, "min-w-[280px]")}>
+                <a
+                  href={article.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[13px] font-medium text-radar-ink no-underline hover:text-radar-accent"
+                >
+                  {article.title}
+                </a>
+              </td>
+              <td className={cn(tdClass, "whitespace-nowrap")}>
+                {sourceIdentity(article.sourceUrl).name}
+              </td>
+              <td className={cn(tdClass, "whitespace-nowrap")}>
+                {relativeTime(article.publishedAt)}
+              </td>
+              <td className={tdClass}>
+                <div className="flex flex-wrap gap-1.5">
+                  {article.category.slice(0, 2).map((cat) => (
+                    <Tag key={cat}>{cat}</Tag>
+                  ))}
+                  {article.category.length > 2 && (
+                    <Tag>+{article.category.length - 2}</Tag>
+                  )}
+                </div>
+              </td>
+              <td className={cn(tdClass, "text-right")}>
+                <Verdict article={article} compact />
+              </td>
             </tr>
-          </thead>
-          <tbody className="divide-y">
-            {articles.map((article) => (
-              <tr key={article.id} className="hover:bg-muted/30">
-                <td className="px-4 py-3">
-                  <Badge
-                    variant="outline"
-                    className={`font-semibold ${getScoreBadgeStyle(article.relevanceScore)}`}
-                  >
-                    {article.relevanceScore.toFixed(1)}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <a
-                    href={article.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group hover:text-primary transition-colors line-clamp-2"
-                  >
-                    {article.title}
-                    <ExternalLink className="inline-block ml-1 h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </a>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground capitalize">
-                  {getSourceName(article.sourceUrl)}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                  {formatDate(article.publishedAt)}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {article.category.slice(0, 2).map((cat) => (
-                      <Badge
-                        key={cat}
-                        variant="secondary"
-                        className="text-xs font-normal"
-                      >
-                        {cat}
-                      </Badge>
-                    ))}
-                    {article.category.length > 2 && (
-                      <Badge variant="secondary" className="text-xs font-normal">
-                        +{article.category.length - 2}
-                      </Badge>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openEditModal(article)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleReject(article.id)}
-                      className="h-8 w-8 p-0 hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleApprove(article.id)}
-                      className="h-8 w-8 p-0 bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          ))}
+        </tbody>
+      </table>
+    </TableShell>
   );
 
   const renderContent = () => {
@@ -552,179 +456,212 @@ export default function ReviewPage() {
     }
   };
 
-  if (loading && articles.length === 0) {
-    return (
-      <div className="flex flex-col flex-1">
-        <AppHeader title="Review Articles" />
-        <main className="flex-1 p-6">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const topScore = articles.reduce(
+    (max, article) => Math.max(max, article.relevanceScore ?? 0),
+    0
+  );
 
   return (
-    <div className="flex flex-col flex-1">
-      <AppHeader title="Review Articles" />
+    <>
+      <AppHeader />
 
-      <main className="flex-1 p-6 space-y-6">
-        {/* Header with count badge and layout toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">Pending Review</h2>
-            <Badge variant="secondary" className="text-sm">
-              {articles.length} article{articles.length !== 1 ? "s" : ""}
-            </Badge>
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          </div>
-          <LayoutToggle value={layout} onChange={setLayout} />
-        </div>
+      <RadarMain width="1240px">
+        <PageHeading
+          eyebrow="Review queue"
+          title={
+            loading && articles.length === 0
+              ? "Review queue"
+              : articles.length === 0
+                ? "The queue is clear"
+                : `${articles.length} ${articles.length === 1 ? "story" : "stories"} waiting on you`
+          }
+          subtitle={
+            articles.length > 0 ? (
+              <>
+                Approving sends a story to the next edition. The best of this batch
+                scores <Num>{topScore.toFixed(1)}</Num> out of 10.
+              </>
+            ) : (
+              "Curation scores every story it collects; anything above your threshold lands here for a human verdict."
+            )
+          }
+          actions={<LayoutToggle value={layout} onChange={setLayout} />}
+        />
 
-        {/* Filters */}
         <ArticleFiltersComponent
           filters={filters}
           onChange={setFilters}
           availableCategories={availableCategories}
+          className="mb-5"
         />
 
-        {articles.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="p-4 rounded-full bg-muted mb-4">
-                <FileSearch className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-medium text-lg mb-2">No articles found</h3>
-              <p className="text-muted-foreground max-w-sm mb-6">
-                {filters.search || filters.categories.length > 0
-                  ? "No articles match your current filters. Try adjusting your search criteria."
-                  : "Run the curation pipeline to fetch and score new articles from your RSS feeds."}
-              </p>
-              {filters.search || filters.categories.length > 0 ? (
-                <Button
-                  variant="outline"
+        {loadError && !loading && (
+          <EmptyState
+            title="The queue could not be loaded"
+            actions={
+              <RadarButton variant="accent" onClick={() => void fetchArticles()}>
+                Try again
+              </RadarButton>
+            }
+          >
+            {loadError}
+          </EmptyState>
+        )}
+
+        {loading && articles.length === 0 && !loadError && (
+          <SkeletonRows rows={5} />
+        )}
+
+        {!loading && !loadError && articles.length === 0 && (
+          <EmptyState
+            title={
+              hasFilters ? "Nothing matches those filters" : "Nothing to review"
+            }
+            actions={
+              hasFilters ? (
+                <RadarButton
+                  variant="accent"
                   onClick={() => setFilters(defaultArticleFilters)}
                 >
-                  Clear Filters
-                </Button>
+                  Clear filters
+                </RadarButton>
               ) : (
-                <Button
-                  onClick={() => (window.location.href = "/api/curation/collect")}
-                >
-                  Run Curation Now
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          renderContent()
+                <>
+                  <Link href="/dashboard" className={radarButtonClass("accent")}>
+                    Run curation on the feed
+                  </Link>
+                  <Link href="/dashboard/sources" className={radarButtonClass()}>
+                    Check sources
+                  </Link>
+                </>
+              )
+            }
+          >
+            {hasFilters
+              ? "Widen the score range or clear a topic, and the queue will fill back up."
+              : "Either every story has had a verdict, or curation has not run since the last one. Running it from the feed collects and scores whatever your sources have published."}
+          </EmptyState>
         )}
-      </main>
 
-      {/* Edit Modal */}
-      <Dialog open={!!editingArticle} onOpenChange={(open) => !open && closeEditModal()}>
+        {articles.length > 0 && !loadError && (
+          <>
+            {loading && (
+              <p
+                role="status"
+                className="mb-2.5 text-[11.5px] text-radar-ink3"
+                aria-live="polite"
+              >
+                Refreshing the queue…
+              </p>
+            )}
+            {renderContent()}
+          </>
+        )}
+      </RadarMain>
+
+      {/* Edit story */}
+      <Dialog
+        open={!!editingArticle}
+        onOpenChange={(open) => !open && closeEditModal()}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Article</DialogTitle>
+            <DialogTitle>Edit before approving</DialogTitle>
             <DialogDescription>
-              Edit the summary and categories for this article. Title and URL are read-only.
+              The summary and topics travel into the newsletter. The title and link
+              stay as published.
             </DialogDescription>
           </DialogHeader>
 
           {editingArticle && (
-            <div className="space-y-4">
-              {/* Read-only title */}
-              <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Title</Label>
-                <p className="text-sm font-medium">{editingArticle.title}</p>
-              </div>
-
-              {/* Read-only URL */}
-              <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Source URL</Label>
+            <div className="flex flex-col gap-4">
+              <div>
+                <SectionLabel className="mb-1.5">Story</SectionLabel>
+                <p className="m-0 text-[13px] font-medium text-radar-ink text-pretty">
+                  {editingArticle.title}
+                </p>
                 <a
                   href={editingArticle.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                  className="mt-1 block truncate text-[11.5px] text-radar-ink3 hover:text-radar-accent"
                 >
                   {editingArticle.sourceUrl}
-                  <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
 
-              {/* Editable summary */}
-              <div className="space-y-1.5">
-                <Label htmlFor="summary">Summary</Label>
-                <Textarea
-                  id="summary"
+              <RadarField
+                label="Summary"
+                htmlFor="review-summary"
+                hint="Two or three sentences on why it matters, in the newsletter's voice."
+              >
+                <RadarTextarea
+                  id="review-summary"
                   value={editedSummary}
-                  onChange={(e) => setEditedSummary(e.target.value)}
+                  onChange={(event) => setEditedSummary(event.target.value)}
                   rows={4}
-                  placeholder="Enter article summary..."
+                  placeholder="What changed, and why a reader should care."
                 />
-              </div>
+              </RadarField>
 
-              {/* Editable categories */}
-              <div className="space-y-1.5">
-                <Label>Categories</Label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {editedCategories.map((cat) => (
-                    <Badge
-                      key={cat}
-                      variant="secondary"
-                      className="gap-1 pr-1"
-                    >
-                      {cat}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
+              <div>
+                <SectionLabel className="mb-2">Topics</SectionLabel>
+                {editedCategories.length > 0 && (
+                  <div className="mb-2.5 flex flex-wrap gap-1.5">
+                    {editedCategories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
                         onClick={() => removeCategory(cat)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-radar-line2 bg-radar-surface2 px-2.5 py-0.5 text-[11px] text-radar-ink2 transition-colors hover:border-radar-err hover:text-radar-err focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
                       >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
+                        {cat}
+                        <span aria-hidden="true">×</span>
+                        <span className="sr-only">Remove topic {cat}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
-                  <Input
+                  <RadarInput
                     value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="Add category..."
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
+                    onChange={(event) => setNewCategory(event.target.value)}
+                    placeholder="Add a topic"
+                    aria-label="Add a topic"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
                         addCategory();
                       }
                     }}
                   />
-                  <Button variant="outline" onClick={addCategory} disabled={!newCategory.trim()}>
+                  <RadarButton onClick={addCategory} disabled={!newCategory.trim()}>
                     Add
-                  </Button>
+                  </RadarButton>
                 </div>
-                {/* Suggested categories from available */}
-                {availableCategories.filter(
-                  (c) => !editedCategories.includes(c)
-                ).length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs text-muted-foreground mb-1.5">Suggestions:</p>
-                    <div className="flex flex-wrap gap-1">
+
+                {availableCategories.filter((c) => !editedCategories.includes(c))
+                  .length > 0 && (
+                  <div className="mt-2.5">
+                    <p className="mt-0 mb-1.5 text-[11px] text-radar-ink3">
+                      Already used elsewhere
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
                       {availableCategories
                         .filter((c) => !editedCategories.includes(c))
                         .slice(0, 8)
                         .map((cat) => (
-                          <Badge
+                          <button
                             key={cat}
-                            variant="outline"
-                            className="cursor-pointer hover:bg-secondary"
+                            type="button"
                             onClick={() =>
                               setEditedCategories([...editedCategories, cat])
                             }
+                            className="rounded-full border border-radar-line bg-radar-surface px-2.5 py-0.5 text-[11px] text-radar-ink2 transition-colors hover:border-radar-accent hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
                           >
                             + {cat}
-                          </Badge>
+                          </button>
                         ))}
                     </div>
                   </div>
@@ -734,22 +671,15 @@ export default function ReviewPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={closeEditModal}>
+            <RadarButton onClick={closeEditModal} disabled={saving}>
               Cancel
-            </Button>
-            <Button onClick={saveEdits} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
+            </RadarButton>
+            <RadarButton variant="accent" onClick={saveEdits} disabled={saving}>
+              {saving ? "Saving…" : "Save changes"}
+            </RadarButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

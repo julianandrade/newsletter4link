@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { LayoutGrid, LayoutList, Table2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ChipGroup } from "@/components/radar/primitives";
 
 export type LayoutType = "cards" | "compact" | "table";
 
@@ -14,43 +13,41 @@ interface LayoutToggleProps {
   className?: string;
 }
 
-const layoutIcons: Record<LayoutType, React.ReactNode> = {
-  cards: <LayoutGrid className="h-4 w-4" />,
-  compact: <LayoutList className="h-4 w-4" />,
-  table: <Table2 className="h-4 w-4" />,
+const LAYOUT_ICON: Record<LayoutType, React.ReactNode> = {
+  cards: <LayoutGrid className="h-[13px] w-[13px]" strokeWidth={1.6} />,
+  compact: <LayoutList className="h-[13px] w-[13px]" strokeWidth={1.6} />,
+  table: <Table2 className="h-[13px] w-[13px]" strokeWidth={1.6} />,
 };
 
-const layoutLabels: Record<LayoutType, string> = {
+const LAYOUT_LABEL: Record<LayoutType, string> = {
   cards: "Cards",
   compact: "Compact",
   table: "Table",
 };
 
+/** Density control, sharing the segmented chip shape used across the app. */
 export function LayoutToggle({
   value,
   onChange,
   options = ["cards", "compact", "table"],
-  className,
 }: LayoutToggleProps) {
   return (
-    <div className={cn("flex items-center gap-1 p-1 bg-muted rounded-lg", className)}>
-      {options.map((layout) => (
-        <Button
-          key={layout}
-          variant={value === layout ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => onChange(layout)}
-          className={cn(
-            "h-8 px-3 gap-2",
-            value === layout && "bg-background shadow-sm"
-          )}
-          title={layoutLabels[layout]}
-        >
-          {layoutIcons[layout]}
-          <span className="hidden sm:inline">{layoutLabels[layout]}</span>
-        </Button>
-      ))}
-    </div>
+    <ChipGroup<LayoutType>
+      label="Layout"
+      kind="options"
+      value={value}
+      onChange={onChange}
+      options={options.map((layout) => ({
+        value: layout,
+        label: (
+          <span className="flex items-center gap-1.5">
+            {LAYOUT_ICON[layout]}
+            <span className="hidden sm:inline">{LAYOUT_LABEL[layout]}</span>
+            <span className="sr-only sm:hidden">{LAYOUT_LABEL[layout]}</span>
+          </span>
+        ),
+      }))}
+    />
   );
 }
 
