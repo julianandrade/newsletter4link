@@ -57,6 +57,34 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* AI Radar editorial layer. Bridges the Claude Design token set onto every
+     theme-linkroad-* variant, so the editorial surface travels with the theme. */
+  --color-radar-bg: var(--r-bg);
+  --color-radar-surface: var(--r-surface);
+  --color-radar-surface2: var(--r-surface2);
+  --color-radar-raise: var(--r-raise);
+  --color-radar-ink: var(--r-ink);
+  --color-radar-ink2: var(--r-ink2);
+  --color-radar-ink3: var(--r-ink3);
+  --color-radar-line: var(--r-line);
+  --color-radar-line2: var(--r-line2);
+  --color-radar-primary: var(--r-primary);
+  --color-radar-primary2: var(--r-primary2);
+  --color-radar-accent: var(--r-accent);
+  --color-radar-on-accent: var(--r-on-accent);
+  --color-radar-ok: var(--r-ok);
+  --color-radar-warn: var(--r-warn);
+  --color-radar-err: var(--r-err);
+  --color-radar-skel: var(--r-skel);
+  --color-radar-chart-1: var(--r-chart-1);
+  --color-radar-chart-2: var(--r-chart-2);
+
+  --font-editorial: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-num: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --shadow-radar: var(--r-shadow);
+  --shadow-radar-lg: var(--r-shadow-lg);
 }
 
 :root {
@@ -756,6 +784,172 @@ body {
   background-color: var(--navbar);
   color: var(--navbar-foreground);
   border-color: var(--navbar-border);
+}
+
+/* ==================== AI Radar editorial layer ====================
+   Semantic tokens from the Claude Design "AI Radar platform design" project.
+   Defaults derive from whichever theme-linkroad-* is active, so all 19 themes
+   keep working; the canonical light/dark pair carries the design's exact paper
+   and ink values. Brand constants (#2d4449 / #397b94 / #ff7901) never derive. */
+:root {
+  --r-bg: var(--background);
+  --r-surface: var(--card);
+  --r-surface2: var(--muted);
+  --r-raise: var(--popover);
+  --r-ink: var(--foreground);
+  --r-ink2: var(--muted-foreground);
+  --r-ink3: color-mix(in oklab, var(--foreground) 62%, var(--background));
+  --r-line: var(--border);
+  --r-line2: color-mix(in oklab, var(--border) 52%, var(--background));
+  --r-skel: color-mix(in oklab, var(--border) 72%, var(--background));
+
+  --r-primary: #2d4449;
+  --r-primary2: #397b94;
+  --r-accent: #ff7901;
+  --r-on-accent: #0e1517;
+  --r-ok: #3d7a5c;
+  --r-warn: #a5761b;
+  --r-err: #c0392b;
+
+  /* Two-series chart pair. Validated for CVD separation and chroma against the
+     light chart surface; the accent is the brand constant, so the second slot is
+     the one that moves. Charts using these always ship a legend and labels,
+     because the accent itself sits under 3:1 on paper. */
+  --r-chart-1: #ff7901;
+  --r-chart-2: #1a6fa3;
+
+  --r-shadow: 0 1px 2px rgba(14, 21, 23, 0.05);
+  --r-shadow-lg: 0 16px 40px -12px rgba(14, 21, 23, 0.22);
+}
+
+/* Canonical light: the design's warm paper ground. */
+.theme-linkroad-light,
+.theme-linkroad-light-sand,
+.theme-linkroad-mix-sand {
+  --r-bg: #fcfcfc;
+  --r-surface: #ffffff;
+  --r-surface2: #f5f4f1;
+  --r-raise: #ffffff;
+  --r-ink: #0e1517;
+  --r-ink2: #575757;
+  /* Design ships #8d9497 here (2.9:1). Darkened to clear WCAG AA on body text. */
+  --r-ink3: #676e71;
+  --r-line: #e5e2dc;
+  --r-line2: #f0eee9;
+  --r-skel: #eceae5;
+}
+
+/* Canonical dark: the design's near-black ground. */
+.dark,
+.theme-linkroad-dark,
+.theme-linkroad-print,
+.theme-linkroad-print-graphite,
+.theme-linkroad-print-carbon,
+.theme-linkroad-mix-slate,
+.theme-linkroad-mix-ocean,
+.theme-linkroad-mix-ember {
+  --r-bg: #0e1517;
+  --r-surface: #141c1e;
+  --r-surface2: #1a2325;
+  --r-raise: #1a2325;
+  --r-ink: #fcfcfc;
+  --r-ink2: #a7b0b2;
+  /* Design ships #727d80 here (4.4:1). Lightened to clear WCAG AA. */
+  --r-ink3: #7b8689;
+  --r-line: #26312f;
+  --r-line2: #1d2628;
+  --r-skel: #1e2729;
+
+  --r-primary: #8fb6bf;
+  --r-ok: #6cc39a;
+  --r-warn: #d3a350;
+  --r-err: #ff6b6b;
+
+  /* The second chart slot is re-stepped for the dark ground: the light step
+     falls under 3:1 there. Separation and chroma re-validated at this step. */
+  --r-chart-2: #2f96c4;
+
+  --r-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --r-shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* Remaining dark themes keep their own ground but need dark-legible status hues. */
+.theme-linkroad-slate,
+.theme-linkroad-ocean,
+.theme-linkroad-ember {
+  --r-primary: #8fb6bf;
+  --r-ok: #6cc39a;
+  --r-warn: #d3a350;
+  --r-err: #ff6b6b;
+  --r-chart-2: #2f96c4;
+  --r-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --r-shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+.radar-root {
+  background-color: var(--r-bg);
+  color: var(--r-ink);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.radar-root ::selection {
+  background: rgba(255, 121, 1, 0.22);
+}
+
+@keyframes radar-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes radar-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes radar-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Entrances start from a visible default so content never depends on JS or motion. */
+.radar-enter {
+  animation: radar-fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.radar-skeleton {
+  animation: radar-pulse 1.5s ease-in-out infinite;
+}
+
+.radar-panel-in {
+  animation: radar-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-enter,
+  .radar-skeleton,
+  .radar-panel-in {
+    animation: none;
+  }
 }
 
 @layer base {
