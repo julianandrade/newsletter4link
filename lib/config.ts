@@ -1,5 +1,7 @@
 // Application Configuration
 
+import { DEFAULT_AI_MODEL, DEFAULT_EMBEDDING_MODEL } from "@/lib/ai-models";
+
 export const config = {
   // Application
   app: {
@@ -18,11 +20,11 @@ export const config = {
   ai: {
     anthropic: {
       apiKey: process.env.ANTHROPIC_API_KEY!,
-      model: "claude-sonnet-4-20250514",
+      model: DEFAULT_AI_MODEL,
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY!,
-      embeddingModel: "text-embedding-ada-002",
+      embeddingModel: DEFAULT_EMBEDDING_MODEL,
     },
   },
 

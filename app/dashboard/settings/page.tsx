@@ -22,6 +22,11 @@ import {
   SkeletonRows,
 } from "@/components/radar/controls";
 import { UsageCard } from "@/components/usage-card";
+import {
+  AI_MODELS,
+  LEGACY_AI_MODELS,
+  EMBEDDING_MODELS,
+} from "@/lib/ai-models";
 import { cn } from "@/lib/utils";
 
 interface Settings {
@@ -35,31 +40,6 @@ interface Settings {
 }
 
 type View = "curation" | "ai" | "appearance" | "plan";
-
-/**
- * Current Claude models. Older ids stay selectable under "Earlier models" so an
- * organization still on one can see what it is set to rather than have the
- * select silently jump to another model.
- */
-const AI_MODELS: { value: string; label: string }[] = [
-  { value: "claude-opus-5", label: "Claude Opus 5, most capable" },
-  { value: "claude-sonnet-5", label: "Claude Sonnet 5, recommended" },
-  { value: "claude-haiku-4-5", label: "Claude Haiku 4.5, fastest and cheapest" },
-];
-
-const LEGACY_AI_MODELS: { value: string; label: string }[] = [
-  { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (retires June 2026)" },
-  { value: "claude-opus-4-20250514", label: "Claude Opus 4 (retires June 2026)" },
-  { value: "claude-3-5-haiku-20241022", label: "Claude Haiku 3.5 (retired)" },
-];
-
-const EMBEDDING_MODELS = [
-  { value: "text-embedding-ada-002", label: "Ada 002, recommended" },
-  { value: "text-embedding-3-small", label: "Embedding 3 Small" },
-  { value: "text-embedding-3-large", label: "Embedding 3 Large" },
-];
 
 const BRAND_VOICE_LIMIT = 500;
 

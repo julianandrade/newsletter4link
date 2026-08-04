@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { TenantClient } from "@/lib/db/tenant";
+import { DEFAULT_AI_MODEL, DEFAULT_EMBEDDING_MODEL } from "@/lib/ai-models";
 
 export interface AppSettings {
   relevanceThreshold: number;
@@ -25,8 +26,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   maxArticlesPerEdition: 10,
   vectorSimilarityThreshold: 0.85,
   articleMaxAgeDays: 7,
-  aiModel: "claude-sonnet-4-20250514",
-  embeddingModel: "text-embedding-ada-002",
+  aiModel: DEFAULT_AI_MODEL,
+  embeddingModel: DEFAULT_EMBEDDING_MODEL,
   brandVoicePrompt: null,
 };
 
@@ -175,20 +176,6 @@ export async function updateOrgSettings(
   };
 }
 
-/**
- * Get available AI models
- */
-export const AI_MODELS = [
-  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Recommended)" },
-  { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
-  { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku (Fast)" },
-];
-
-/**
- * Get available embedding models
- */
-export const EMBEDDING_MODELS = [
-  { value: "text-embedding-ada-002", label: "Ada 002 (Recommended)" },
-  { value: "text-embedding-3-small", label: "Embedding 3 Small" },
-  { value: "text-embedding-3-large", label: "Embedding 3 Large" },
-];
+// Re-exported from lib/ai-models so server code and the settings screen share
+// one list. Import from "@/lib/ai-models" directly in new code.
+export { AI_MODELS, LEGACY_AI_MODELS, EMBEDDING_MODELS } from "@/lib/ai-models";

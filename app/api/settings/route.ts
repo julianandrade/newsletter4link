@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext, hasRole } from "@/lib/auth/context";
 import { getOrgSettings, updateOrgSettings } from "@/lib/settings";
+import { AI_MODELS, LEGACY_AI_MODELS, EMBEDDING_MODELS } from "@/lib/ai-models";
 
 export async function GET() {
   try {
@@ -81,11 +82,21 @@ export async function PUT(request: Request) {
       updates.articleMaxAgeDays = body.articleMaxAgeDays;
     }
 
+    // Restricted to the ids the product offers: an arbitrary string here would
+    // be stored happily and then fail on every curation run.
     if (typeof body.aiModel === "string") {
+      const allowed = [...AI_MODELS, ...LEGACY_AI_MODELS].map((model) => model.value);
+      if (!allowed.includes(body.aiModel)) {
+        return NextResponse.json({ error: "Unknown aiModel" }, { status: 400 });
+      }
       updates.aiModel = body.aiModel;
     }
 
     if (typeof body.embeddingModel === "string") {
+      const allowed = EMBEDDING_MODELS.map((model) => model.value);
+      if (!allowed.includes(body.embeddingModel)) {
+        return NextResponse.json({ error: "Unknown embeddingModel" }, { status: 400 });
+      }
       updates.embeddingModel = body.embeddingModel;
     }
 
