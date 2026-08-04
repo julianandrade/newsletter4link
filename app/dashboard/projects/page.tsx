@@ -34,6 +34,12 @@ import {
   trClass,
 } from "@/components/radar/controls";
 import {
+  BulkBar,
+  SelectCheckbox,
+  useSelection,
+  type BulkAction,
+} from "@/components/radar/selection";
+import {
   LayoutToggle,
   useLayoutPreference,
 } from "@/components/layout-toggle";
@@ -242,6 +248,74 @@ export default function ProjectsPage() {
     }
   };
 
+  /** Bulk selection, in render order so shift-click ranges match the screen. */
+  const selection = useSelection(projects.map((project) => project.id));
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
+
+  const runBulk = async (
+    action: "feature" | "unfeature" | "delete",
+    ids: string[]
+  ) => {
+    setBulkBusy(action);
+    const previous = projects;
+
+    setProjects((prev) =>
+      action === "delete"
+        ? prev.filter((p) => !ids.includes(p.id))
+        : prev.map((p) =>
+            ids.includes(p.id) ? { ...p, featured: action === "feature" } : p
+          )
+    );
+
+    try {
+      const res = await fetch("/api/projects/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ids }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Bulk action failed");
+      }
+
+      const verb =
+        action === "delete"
+          ? "deleted"
+          : action === "feature"
+            ? "added to the next send"
+            : "removed from the next send";
+      toast.success(
+        `${data.affected} ${data.affected === 1 ? "project" : "projects"} ${verb}` +
+          (data.skipped > 0 ? `, ${data.skipped} skipped` : "")
+      );
+      selection.clear();
+    } catch (cause) {
+      setProjects(previous);
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not apply the change"
+      );
+    } finally {
+      setBulkBusy(null);
+      setPendingBulkDelete(null);
+    }
+  };
+
+  const bulkActions: BulkAction[] = [
+    { id: "feature", label: "Feature", onRun: (ids) => runBulk("feature", ids) },
+    {
+      id: "unfeature",
+      label: "Unfeature",
+      onRun: (ids) => runBulk("unfeature", ids),
+    },
+    {
+      id: "delete",
+      label: "Delete",
+      destructive: true,
+      onRun: (ids) => setPendingBulkDelete(ids),
+    },
+  ];
+
   const featuredCount = projects.filter((p) => p.featured).length;
 
   const hasActiveFilters =
@@ -291,6 +365,11 @@ export default function ProjectsPage() {
           )}
         >
           <div className="mb-2 flex items-center gap-2">
+            <SelectCheckbox
+              checked={selection.isSelected(project.id)}
+              onToggle={(modifiers) => selection.toggle(project.id, modifiers)}
+              label={`Select ${project.name}`}
+            />
             <Tag>{project.team}</Tag>
             <span className="text-[11px] text-radar-ink3">
               {formatMonth(project.projectDate)}
@@ -329,8 +408,19 @@ export default function ProjectsPage() {
       {projects.map((project) => (
         <div
           key={project.id}
-          className="flex flex-col gap-2.5 border-b border-radar-line2 py-3.5 transition-colors hover:bg-radar-surface2 sm:flex-row sm:items-center sm:gap-4"
+          className={cn(
+            "flex flex-col gap-2.5 border-b border-radar-line2 py-3.5 transition-colors sm:flex-row sm:items-center sm:gap-4",
+            selection.isSelected(project.id)
+              ? "bg-radar-surface2"
+              : "hover:bg-radar-surface2"
+          )}
         >
+          <SelectCheckbox
+            checked={selection.isSelected(project.id)}
+            onToggle={(modifiers) => selection.toggle(project.id, modifiers)}
+            label={`Select ${project.name}`}
+            className="shrink-0"
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               {project.featured && (
@@ -362,6 +452,20 @@ export default function ProjectsPage() {
         <caption className="sr-only">Internal projects</caption>
         <thead>
           <tr className={theadClass}>
+            <th scope="col" className={cn(thClass, "w-[36px]")}>
+              <SelectCheckbox
+                checked={selection.allSelected}
+                indeterminate={selection.partiallySelected}
+                onToggle={() =>
+                  selection.allSelected ? selection.clear() : selection.selectAll()
+                }
+                label={
+                  selection.allSelected
+                    ? "Clear selection"
+                    : `Select all ${projects.length} projects`
+                }
+              />
+            </th>
             <th scope="col" className={thClass}>
               Project
             </th>
@@ -378,7 +482,20 @@ export default function ProjectsPage() {
         </thead>
         <tbody>
           {projects.map((project) => (
-            <tr key={project.id} className={trClass}>
+            <tr
+              key={project.id}
+              className={cn(
+                trClass,
+                selection.isSelected(project.id) && "bg-radar-surface2"
+              )}
+            >
+              <td className={tdClass}>
+                <SelectCheckbox
+                  checked={selection.isSelected(project.id)}
+                  onToggle={(modifiers) => selection.toggle(project.id, modifiers)}
+                  label={`Select ${project.name}`}
+                />
+              </td>
               <td className={cn(tdClass, "min-w-[260px]")}>
                 <div className="flex items-center gap-2">
                   {project.featured && (
@@ -499,6 +616,33 @@ export default function ProjectsPage() {
 
         {projects.length > 0 && !loadError && (
           <>
+            {/* Select-all strip: the table view carries its own header checkbox. */}
+            {layout !== "table" && (
+              <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-radar-line pb-3">
+                <SelectCheckbox
+                  checked={selection.allSelected}
+                  indeterminate={selection.partiallySelected}
+                  onToggle={() =>
+                    selection.allSelected
+                      ? selection.clear()
+                      : selection.selectAll()
+                  }
+                  label={
+                    selection.allSelected
+                      ? "Clear selection"
+                      : `Select all ${projects.length} projects`
+                  }
+                />
+                <span className="text-[12.5px] text-radar-ink2">
+                  {selection.count > 0
+                    ? `${selection.count} of ${projects.length} selected`
+                    : `Select all ${projects.length}`}
+                </span>
+                <span className="ml-auto text-[11.5px] text-radar-ink3">
+                  Shift-click to select a range · Esc to clear
+                </span>
+              </div>
+            )}
             {renderProjectsView()}
             <p className="mt-4 mb-0 text-center text-[11.5px] text-radar-ink3">
               <Num>{projects.length}</Num>{" "}
@@ -510,9 +654,54 @@ export default function ProjectsPage() {
                 </>
               )}
             </p>
+
+            <BulkBar
+              selection={selection}
+              actions={bulkActions}
+              noun="project"
+              busyAction={bulkBusy}
+            />
           </>
         )}
       </RadarMain>
+
+      {/* Bulk delete confirmation. */}
+      <Dialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(open) => !open && setPendingBulkDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {pendingBulkDelete?.length}{" "}
+              {pendingBulkDelete?.length === 1 ? "project" : "projects"}?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Editions that already featured them keep
+              their copy of the text.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <RadarButton
+              variant="outline"
+              onClick={() => setPendingBulkDelete(null)}
+            >
+              Cancel
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              disabled={bulkBusy !== null}
+              onClick={() =>
+                pendingBulkDelete && runBulk("delete", pendingBulkDelete)
+              }
+            >
+              {bulkBusy === "delete"
+                ? "Deleting…"
+                : `Delete ${pendingBulkDelete?.length ?? 0}`}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add or edit */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
