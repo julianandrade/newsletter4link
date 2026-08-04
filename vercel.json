@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/weekly-proposal",
       "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/radar-collect",
+      "schedule": "0 6 * * *"
     }
   ]
 }

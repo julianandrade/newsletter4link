@@ -52,6 +52,7 @@ model Organization {
 
   @@index([slug])
   @@index([plan])
+  radarWatches RadarWatch[]
 }
 
 enum Plan {
@@ -736,4 +737,146 @@ enum JobStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+// ==================== Trend Radar (RQ-004, phase A) ====================
+
+/**
+ * An entity the radar watches: a protocol, a model, a company, a technique.
+ *
+ * Global rather than per-organization, deliberately. How often "Model Context
+ * Protocol" is mentioned on Hacker News is a fact about the world, not about a
+ * tenant, so it is counted once and read by everyone. Which entities an
+ * organization cares about is the tenant's business, and that lives in RadarWatch.
+ *
+ * This also dissolves the flaw in the original plan's schema, where signal points
+ * carried a nullable organizationId inside a unique key. Postgres treats NULLs as
+ * distinct, so that key permitted exactly the duplicates it was written to prevent.
+ * Here nothing in the key is nullable.
+ */
+model RadarEntity {
+  id   String     @id @default(cuid())
+  /** Stable, lowercase, hyphenated. The identity used in seeds and reports. */
+  slug String     @unique
+  name String
+  kind EntityKind
+
+  /**
+   * Per-source queries, validated rather than derived from the name.
+   *
+   * A name reused as a query is the failure the plan review calls make-or-break:
+   * "MCP" on Hacker News returns Minecraft Coder Pack and Microsoft Certified
+   * Professional, "Claude" is a given name, "Grok" is a verb. A wrong count does
+   * not announce itself, it becomes an acceleration.
+   *
+   * Null means this entity is not collected from that source.
+   */
+  hnQuery    String?
+  arxivQuery String?
+
+  /**
+   * Measured precision of each query, from a sampled review, and when it was
+   * measured. An entity below the threshold is deactivated rather than counted.
+   */
+  hnPrecision       Float?
+  arxivPrecision    Float?
+  precisionMeasured DateTime?
+  precisionNotes    String?
+
+  /** Off means collect nothing. Set when validation fails, or by hand. */
+  active Boolean @default(true)
+
+  signals SignalPoint[]
+  watches RadarWatch[]
+  gaps    SignalGap[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@index([kind])
+}
+
+enum EntityKind {
+  PROTOCOL
+  MODEL
+  COMPANY
+  TECHNIQUE
+  PRODUCT
+  BENCHMARK
+}
+
+/** Which organizations watch which entities. */
+model RadarWatch {
+  id String @id @default(cuid())
+
+  entity   RadarEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entityId String
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([entityId, organizationId])
+  @@index([organizationId])
+}
+
+/**
+ * One count, for one entity, from one source, on one day.
+ *
+ * `date` is midnight UTC of the day counted, so a re-run of the same day updates
+ * the row rather than adding a second one. That is what makes collection idempotent
+ * and it is why the unique key has no nullable column in it.
+ *
+ * Collection is forward-only: there is no backfill, so a gap in the series is a day
+ * the collector did not run, and `SignalGap` records why rather than leaving a
+ * missing row to be read as a zero.
+ */
+model SignalPoint {
+  id String @id @default(cuid())
+
+  entity   RadarEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entityId String
+
+  source SignalSource
+  /** Midnight UTC of the day this count covers. */
+  date   DateTime
+  count  Int
+
+  /** What was actually asked, kept so a series can be audited after a query change. */
+  query String
+
+  collectedAt DateTime @default(now())
+
+  @@unique([entityId, source, date])
+  @@index([source, date])
+  @@index([entityId, source, date])
+}
+
+enum SignalSource {
+  HN
+  ARXIV
+}
+
+/**
+ * A day the collector could not count.
+ *
+ * Without this, a failed fetch is indistinguishable from a genuine zero, and a
+ * baseline built over a week of outages reads as a week of silence. The scorer in
+ * phase B has to be able to tell the difference.
+ */
+model SignalGap {
+  id String @id @default(cuid())
+
+  entity   RadarEntity? @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entityId String?
+
+  source SignalSource
+  date   DateTime
+  reason String
+
+  createdAt DateTime @default(now())
+
+  @@index([source, date])
 }
