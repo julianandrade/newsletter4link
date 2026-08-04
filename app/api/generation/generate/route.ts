@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { generateNewsletter, GeneratedNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 
@@ -114,11 +115,17 @@ export async function POST(request: NextRequest) {
     const weekNumber = getWeekNumber(editionDate);
     const year = editionDate.getFullYear();
 
+    // RQ-002: the organization's selected model governs drafting too.
+    const { model } = await resolveAiModels(ctx.organization.id);
+
     // Generate the newsletter
     const generated = await generateNewsletter(
       articlesForPlanning,
       { week: weekNumber, year },
-      brandVoice
+      brandVoice,
+      undefined,
+      undefined,
+      model
     );
 
     // Store as a generation draft instead of writing directly to edition

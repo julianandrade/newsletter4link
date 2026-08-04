@@ -6,6 +6,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelRejected } from "@/lib/ai/model";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -31,7 +33,11 @@ export interface QueryExpansion {
 /**
  * Analyze and expand a natural language search query
  */
-export async function processQuery(query: string): Promise<QueryExpansion> {
+export async function processQuery(
+  query: string,
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
+): Promise<QueryExpansion> {
   if (useMockSearch) {
     return {
       original: query,
@@ -48,7 +54,7 @@ export async function processQuery(query: string): Promise<QueryExpansion> {
 
   try {
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 1000,
       messages: [
         {

@@ -6,6 +6,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { getCategoryGroupingPrompt } from "./prompts";
 
 const anthropic = new Anthropic({
@@ -40,7 +42,9 @@ export interface NewsletterPlan {
  * Plan the newsletter structure from approved articles
  */
 export async function planNewsletter(
-  articles: ArticleForPlanning[]
+  articles: ArticleForPlanning[],
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
 ): Promise<NewsletterPlan> {
   if (articles.length === 0) {
     throw new Error("No articles to plan newsletter from");
@@ -57,7 +61,7 @@ export async function planNewsletter(
 
   // Use AI for larger newsletters
   try {
-    return await aiPlanNewsletter(articles);
+    return await aiPlanNewsletter(articles, model);
   } catch (error) {
     console.error("AI planning failed, falling back to simple planning:", error);
     return simpleNewsletter(articles);
@@ -118,7 +122,9 @@ function simpleNewsletter(articles: ArticleForPlanning[]): NewsletterPlan {
  * AI-powered newsletter planning for larger newsletters
  */
 async function aiPlanNewsletter(
-  articles: ArticleForPlanning[]
+  articles: ArticleForPlanning[],
+  // RQ-002
+  model: string
 ): Promise<NewsletterPlan> {
   const prompt = getCategoryGroupingPrompt(
     articles.map((a) => ({
@@ -129,7 +135,7 @@ async function aiPlanNewsletter(
   );
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 1000,
     messages: [{ role: "user", content: prompt }],
   });

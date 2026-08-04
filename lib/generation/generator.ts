@@ -6,6 +6,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { BrandVoice } from "@prisma/client";
 import {
   getOpeningHookPrompt,
@@ -94,7 +96,9 @@ export async function generateNewsletter(
   edition: { week: number; year: number },
   brandVoice: BrandVoice | null,
   onProgress?: (progress: GenerationProgress) => void | Promise<void>,
-  jobId?: string
+  jobId?: string,
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
 ): Promise<GeneratedNewsletter> {
   if (useMockGeneration) {
     await onProgress?.({
@@ -150,7 +154,7 @@ export async function generateNewsletter(
     message: "Planning newsletter structure...",
   });
 
-  const plan = await planNewsletter(articles);
+  const plan = await planNewsletter(articles, model);
 
   // Stage 2: Generate opening
   await checkCancellation(jobId);
@@ -161,7 +165,7 @@ export async function generateNewsletter(
     message: "Writing opening hook...",
   });
 
-  const opening = await generateOpening(plan.heroArticle, edition, brandVoice);
+  const opening = await generateOpening(plan.heroArticle, edition, brandVoice, model);
 
   // Stage 3: Generate article summaries
   await checkCancellation(jobId);
@@ -172,15 +176,21 @@ export async function generateNewsletter(
     message: "Rewriting article summaries...",
   });
 
-  const sections = await generateSections(plan, brandVoice, async (current, total) => {
-    await checkCancellation(jobId);
-    await onProgress?.({
-      stage: "articles",
-      current,
-      total,
-      message: `Rewriting article ${current}/${total}...`,
-    });
-  }, jobId);
+  const sections = await generateSections(
+    plan,
+    brandVoice,
+    async (current, total) => {
+      await checkCancellation(jobId);
+      await onProgress?.({
+        stage: "articles",
+        current,
+        total,
+        message: `Rewriting article ${current}/${total}...`,
+      });
+    },
+    jobId,
+    model
+  );
 
   // Stage 4: Generate transitions
   await checkCancellation(jobId);
@@ -191,7 +201,7 @@ export async function generateNewsletter(
     message: "Adding transitions...",
   });
 
-  await addTransitions(sections, brandVoice, jobId);
+  await addTransitions(sections, brandVoice, jobId, model);
 
   // Stage 5: Generate closing
   await checkCancellation(jobId);
@@ -202,7 +212,7 @@ export async function generateNewsletter(
     message: "Writing closing...",
   });
 
-  const closing = await generateClosing(plan.totalArticles, brandVoice);
+  const closing = await generateClosing(plan.totalArticles, brandVoice, model);
 
   // Stage 6: Generate subject lines
   await checkCancellation(jobId);
@@ -213,7 +223,7 @@ export async function generateNewsletter(
     message: "Generating subject lines...",
   });
 
-  const subjectLines = await generateSubjectLines(plan, edition, brandVoice);
+  const subjectLines = await generateSubjectLines(plan, edition, brandVoice, model);
 
   await onProgress?.({
     stage: "complete",
@@ -238,7 +248,9 @@ export async function generateNewsletter(
 async function generateOpening(
   heroArticle: ArticleForPlanning,
   edition: { week: number; year: number },
-  brandVoice: BrandVoice | null
+  brandVoice: BrandVoice | null,
+  // RQ-002
+  model: string
 ): Promise<string> {
   const prompt = getOpeningHookPrompt(
     brandVoice,
@@ -248,7 +260,7 @@ async function generateOpening(
   );
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
   });
@@ -265,7 +277,9 @@ async function generateSections(
   plan: NewsletterPlan,
   brandVoice: BrandVoice | null,
   onArticleProgress?: (current: number, total: number) => void | Promise<void>,
-  jobId?: string
+  jobId?: string,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<GeneratedSection[]> {
   const sections: GeneratedSection[] = [];
   let articleCount = 0;
@@ -273,7 +287,7 @@ async function generateSections(
 
   // Generate hero section
   await checkCancellation(jobId);
-  const heroSummary = await generateArticleSummary(plan.heroArticle, brandVoice, true);
+  const heroSummary = await generateArticleSummary(plan.heroArticle, brandVoice, true, model);
   articleCount++;
   await onArticleProgress?.(articleCount, totalArticles);
 
@@ -296,7 +310,7 @@ async function generateSections(
 
     for (const article of section.articles) {
       await checkCancellation(jobId);
-      const summary = await generateArticleSummary(article, brandVoice, false);
+      const summary = await generateArticleSummary(article, brandVoice, false, model);
       articleCount++;
       await onArticleProgress?.(articleCount, totalArticles);
 
@@ -327,7 +341,9 @@ async function generateSections(
 async function generateArticleSummary(
   article: ArticleForPlanning,
   brandVoice: BrandVoice | null,
-  isHero: boolean
+  isHero: boolean,
+  // RQ-002
+  model: string
 ): Promise<string> {
   const prompt = getArticleSummaryPrompt(
     brandVoice,
@@ -340,7 +356,7 @@ async function generateArticleSummary(
   );
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 250,
     messages: [{ role: "user", content: prompt }],
   });
@@ -356,7 +372,9 @@ async function generateArticleSummary(
 async function addTransitions(
   sections: GeneratedSection[],
   brandVoice: BrandVoice | null,
-  jobId?: string
+  jobId?: string,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<void> {
   // Skip if only one section
   if (sections.length <= 1) return;
@@ -371,7 +389,7 @@ async function addTransitions(
     const prompt = getTransitionPrompt(brandVoice, fromSection, toSection);
 
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 100,
       messages: [{ role: "user", content: prompt }],
     });
@@ -390,7 +408,9 @@ async function addTransitions(
  */
 async function generateClosing(
   articleCount: number,
-  brandVoice: BrandVoice | null
+  brandVoice: BrandVoice | null,
+  // RQ-002
+  model: string
 ): Promise<string> {
   const prompt = getClosingPrompt(
     brandVoice,
@@ -399,7 +419,7 @@ async function generateClosing(
   );
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 200,
     messages: [{ role: "user", content: prompt }],
   });
@@ -415,7 +435,9 @@ async function generateClosing(
 async function generateSubjectLines(
   plan: NewsletterPlan,
   edition: { week: number; year: number },
-  brandVoice: BrandVoice | null
+  brandVoice: BrandVoice | null,
+  // RQ-002
+  model: string
 ): Promise<string[]> {
   const otherTopics = plan.sections
     .flatMap((s) => s.articles)
@@ -430,7 +452,7 @@ async function generateSubjectLines(
   );
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
   });
@@ -465,7 +487,9 @@ export async function regenerateSubjectLines(
   heroTitle: string,
   heroSummary: string | null,
   edition: { week: number; year: number },
-  brandVoice: BrandVoice | null
+  brandVoice: BrandVoice | null,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<string[]> {
   if (useMockGeneration) {
     return [
@@ -485,7 +509,7 @@ export async function regenerateSubjectLines(
   );
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
   });
@@ -512,7 +536,9 @@ export async function regenerateSubjectLines(
 export async function quickGenerateNewsletter(
   articles: ArticleForPlanning[],
   edition: { week: number; year: number },
-  brandVoice: BrandVoice | null
+  brandVoice: BrandVoice | null,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<GeneratedNewsletter> {
   if (useMockGeneration) {
     const plan = await planNewsletter(articles);
@@ -546,7 +572,7 @@ export async function quickGenerateNewsletter(
   const prompt = getFullNewsletterPrompt(brandVoice, articles, edition);
 
   const message = await anthropic.messages.create({
-    model: config.ai.anthropic.model,
+    model,
     max_tokens: 2000,
     messages: [{ role: "user", content: prompt }],
   });
@@ -558,8 +584,8 @@ export async function quickGenerateNewsletter(
     const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();
     const generated = JSON.parse(cleanJson);
 
-    const plan = await planNewsletter(articles);
-    const subjectLines = await generateSubjectLines(plan, edition, brandVoice);
+    const plan = await planNewsletter(articles, model);
+    const subjectLines = await generateSubjectLines(plan, edition, brandVoice, model);
 
     return {
       opening: generated.opening || "Welcome to this week's newsletter.",

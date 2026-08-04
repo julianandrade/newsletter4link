@@ -6,6 +6,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { SearchProviderResult } from "./providers/types";
 
 const anthropic = new Anthropic({
@@ -37,7 +39,9 @@ export interface ResultAnalysis {
 export async function analyzeResult(
   result: SearchProviderResult,
   originalQuery: string,
-  brandVoicePrompt?: string | null
+  brandVoicePrompt?: string | null,
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
 ): Promise<ResultAnalysis> {
   if (useMockSearch) {
     return {
@@ -55,7 +59,7 @@ export async function analyzeResult(
       : "";
 
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 500,
       messages: [
         {
@@ -152,7 +156,9 @@ export async function analyzeResults(
   results: SearchProviderResult[],
   originalQuery: string,
   brandVoicePrompt?: string | null,
-  onProgress?: AnalysisProgressCallback
+  onProgress?: AnalysisProgressCallback,
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
 ): Promise<AnalyzedResult[]> {
   if (useMockSearch) {
     return results.map((result) => ({
@@ -219,7 +225,9 @@ export async function analyzeResults(
 export async function batchAnalyzeResults(
   results: SearchProviderResult[],
   originalQuery: string,
-  brandVoicePrompt?: string | null
+  brandVoicePrompt?: string | null,
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
 ): Promise<AnalyzedResult[]> {
   if (results.length === 0) return [];
 
@@ -252,7 +260,7 @@ export async function batchAnalyzeResults(
       .join("\n\n");
 
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 2000,
       messages: [
         {

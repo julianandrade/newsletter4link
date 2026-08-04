@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { processQuery, mapTimeScopeToTimeRange } from "@/lib/search/query-processor";
 import {
   searchMultiProvider,
@@ -45,8 +46,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // RQ-002: the organization's selected model governs search too.
+    const { model } = await resolveAiModels(ctx.organization.id);
+
     // Process the query with Claude
-    const queryExpansion = await processQuery(query.trim());
+    const queryExpansion = await processQuery(query.trim(), model);
 
     // Determine which providers to use
     const providersToUse = providers?.length
@@ -74,7 +78,8 @@ export async function POST(request: Request) {
     const analyzedResults = await batchAnalyzeResults(
       searchResponse.results,
       query.trim(),
-      orgSettings?.brandVoicePrompt
+      orgSettings?.brandVoicePrompt,
+      model
     );
 
     // Filter and sort by AI score

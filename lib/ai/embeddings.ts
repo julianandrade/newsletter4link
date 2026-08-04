@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { config } from "@/lib/config";
+import { DEFAULT_EMBEDDING_MODEL } from "@/lib/ai-models";
 
 const openai = new OpenAI({
   apiKey: config.ai.openai.apiKey,
@@ -8,7 +9,11 @@ const openai = new OpenAI({
 /**
  * Generate embedding vector for text using OpenAI
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  // RQ-002: the organization's embedding model, which was stored and never used.
+  embeddingModel: string = DEFAULT_EMBEDDING_MODEL
+): Promise<number[]> {
   try {
     // Validate API key
     if (!config.ai.openai.apiKey || config.ai.openai.apiKey === 'undefined') {
@@ -22,7 +27,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     console.log(`Generating embedding for text (${truncatedText.length} chars)...`);
 
     const response = await openai.embeddings.create({
-      model: config.ai.openai.embeddingModel,
+      model: embeddingModel,
       input: truncatedText,
     });
 

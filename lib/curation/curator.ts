@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { fetchAllRSSFeeds, fetchRSSFeedsByIds } from "./rss-collector";
 import { generateEmbedding } from "@/lib/ai/embeddings";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { checkForDuplicates } from "./deduplicator";
 import {
   scoreArticleRelevance,
@@ -43,10 +44,20 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
 
   console.log("🚀 Starting curation pipeline...");
 
+  // RQ-002: this path used the fixed model and the fixed relevance threshold,
+  // so it disagreed with the streaming path on the same content.
+  const settings = await getSettings(organizationId).catch(() => null);
+  const { model, embeddingModel } = await resolveAiModels(organizationId);
+  const relevanceThreshold =
+    settings?.relevanceThreshold ?? config.curation.relevanceThreshold;
+
   try {
     // Step 1: Fetch all RSS feeds
     console.log("📡 Fetching RSS feeds...");
-    const articles = await fetchAllRSSFeeds(7, organizationId);
+    const articles = await fetchAllRSSFeeds(
+      settings?.articleMaxAgeDays ?? 7,
+      organizationId
+    );
     result.total = articles.length;
     console.log(`✓ Fetched ${articles.length} articles from RSS feeds`);
 
@@ -57,7 +68,8 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
 
         // Generate embedding
         const embedding = await generateEmbedding(
-          `${article.title}\n\n${article.content}`
+          `${article.title}\n\n${article.content}`,
+          embeddingModel
         );
 
         // Check for duplicates
@@ -77,12 +89,13 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
         const relevanceScore = await scoreArticleRelevance(
           article.title,
           article.content,
-          null // brandVoicePrompt - not available in non-streaming pipeline
+          settings?.brandVoicePrompt ?? null,
+          model
         );
         console.log(`  ⭐ Relevance score: ${relevanceScore}/10`);
 
         // Skip low-scoring articles
-        if (relevanceScore < config.curation.relevanceThreshold) {
+        if (relevanceScore < relevanceThreshold) {
           console.log(`  ✗ Score too low, skipping`);
           result.lowScore++;
 
@@ -107,13 +120,19 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
 
         // Generate summary for high-scoring articles
         console.log(`  ✍️ Generating summary...`);
-        const summary = await summarizeArticle(article.title, article.content, null);
+        const summary = await summarizeArticle(
+          article.title,
+          article.content,
+          settings?.brandVoicePrompt ?? null,
+          model
+        );
 
         // Categorize article
         const categories = await categorizeArticle(
           article.title,
           article.content,
-          null
+          settings?.brandVoicePrompt ?? null,
+          model
         );
 
         // Save to database as pending review
@@ -212,6 +231,9 @@ export async function runCurationPipelineWithStreaming(
     };
   }
 
+  // RQ-002: the organization's models, resolved once for the whole run.
+  const { model, embeddingModel } = await resolveAiModels(organizationId);
+
   const log = async (level: "info" | "warn" | "error", message: string, data?: Record<string, unknown>) => {
     if (jobId) {
       await addJobLog(jobId, level, message, data);
@@ -224,6 +246,23 @@ export async function runCurationPipelineWithStreaming(
       : "all feeds";
     onProgress({ stage: "fetch", message: `Fetching ${feedsDescription}...` });
     await log("info", `Starting curation pipeline for ${feedsDescription}`);
+
+    /**
+     * RQ-002 / Q7(a): record what this run actually used.
+     *
+     * Nothing recorded the model before, so there was no way to tell from
+     * inside the product that the setting was inert. This goes into the run's
+     * log stream rather than a column, which needs no migration and is visible
+     * on the job detail screen; a column would make it queryable across runs
+     * and is the open half of Q7.
+     */
+    await log("info", "Effective settings for this run", {
+      model,
+      embeddingModel,
+      relevanceThreshold: settings.relevanceThreshold,
+      articleMaxAgeDays: settings.articleMaxAgeDays,
+      brandVoice: settings.brandVoicePrompt ? "set" : "none",
+    });
 
     // Step 1: Fetch RSS feeds (filtered if sourceIds provided)
     const articles = sourceIds && sourceIds.length > 0
@@ -268,7 +307,8 @@ export async function runCurationPipelineWithStreaming(
 
         // Generate embedding
         const embedding = await generateEmbedding(
-          `${article.title}\n\n${article.content}`
+          `${article.title}\n\n${article.content}`,
+          embeddingModel
         );
 
         // Validate embedding
@@ -305,7 +345,8 @@ export async function runCurationPipelineWithStreaming(
         const relevanceScore = await scoreArticleRelevance(
           article.title,
           article.content,
-          settings.brandVoicePrompt
+          settings.brandVoicePrompt,
+          model
         );
 
         onProgress({
@@ -356,7 +397,12 @@ export async function runCurationPipelineWithStreaming(
           message: "Generating summary...",
         });
 
-        const summary = await summarizeArticle(article.title, article.content, settings.brandVoicePrompt);
+        const summary = await summarizeArticle(
+          article.title,
+          article.content,
+          settings.brandVoicePrompt,
+          model
+        );
 
         // Categorize article
         const categories = await categorizeArticle(
@@ -409,6 +455,15 @@ export async function runCurationPipelineWithStreaming(
         if (error instanceof CurationCancelledError) {
           throw error;
         }
+        /**
+         * RQ-002 / Q6: a refused model fails the whole run rather than being
+         * counted as one article's error. Continuing would repeat the same
+         * rejection for every remaining article and report a run that processed
+         * nothing as merely unlucky.
+         */
+        if (error instanceof UnusableModelError) {
+          throw error;
+        }
         const errorMsg = `Error processing "${article.title}": ${error instanceof Error ? error.message : "Unknown error"}`;
         onProgress({
           stage: "error",
@@ -446,7 +501,12 @@ export async function runCurationPipelineWithStreaming(
       throw error;
     }
 
-    const errorMsg = `Fatal error in curation pipeline: ${error instanceof Error ? error.message : "Unknown error"}`;
+    // RQ-002 / Q6: name the model, so the fix is obvious from the job screen
+    // rather than needing the logs read.
+    const errorMsg =
+      error instanceof UnusableModelError
+        ? `${error.message}. Choose a different model in Settings.`
+        : `Fatal error in curation pipeline: ${error instanceof Error ? error.message : "Unknown error"}`;
     onProgress({
       stage: "fatal_error",
       message: errorMsg,
@@ -479,9 +539,11 @@ export async function curateArticle(
   try {
     // Get settings for brand voice prompt
     const settings = await getSettings(organizationId);
+    // RQ-002
+    const { model, embeddingModel } = await resolveAiModels(organizationId);
 
     // Generate embedding
-    const embedding = await generateEmbedding(`${title}\n\n${content}`);
+    const embedding = await generateEmbedding(`${title}\n\n${content}`, embeddingModel);
 
     // Check for duplicates
     const duplicateCheck = await checkForDuplicates(url, embedding, organizationId);
@@ -494,15 +556,22 @@ export async function curateArticle(
     }
 
     // Score relevance
-    const relevanceScore = await scoreArticleRelevance(title, content, settings.brandVoicePrompt);
+    const relevanceScore = await scoreArticleRelevance(
+      title,
+      content,
+      settings.brandVoicePrompt,
+      model
+    );
 
     // Generate summary if score is high enough
     let summary: string | undefined;
     let categories: string[] = [];
 
-    if (relevanceScore >= config.curation.relevanceThreshold) {
-      summary = await summarizeArticle(title, content, settings.brandVoicePrompt);
-      categories = await categorizeArticle(title, content, settings.brandVoicePrompt);
+    // RQ-002: was config.curation.relevanceThreshold, three lines below a read
+    // of settings.brandVoicePrompt in the same function.
+    if (relevanceScore >= settings.relevanceThreshold) {
+      summary = await summarizeArticle(title, content, settings.brandVoicePrompt, model);
+      categories = await categorizeArticle(title, content, settings.brandVoicePrompt, model);
     }
 
     // Save to database
@@ -517,7 +586,7 @@ export async function curateArticle(
         summary,
         category: categories,
         status:
-          relevanceScore >= config.curation.relevanceThreshold
+          relevanceScore >= settings.relevanceThreshold
             ? "PENDING_REVIEW"
             : "REJECTED",
         organizationId,

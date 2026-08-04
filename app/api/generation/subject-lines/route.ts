@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { regenerateSubjectLines } from "@/lib/generation/generator";
 
 export async function POST(request: NextRequest) {
@@ -135,11 +136,15 @@ export async function POST(request: NextRequest) {
     const year = editionDate.getFullYear();
 
     // Generate new subject lines
+    // RQ-002
+    const { model } = await resolveAiModels(ctx.organization.id);
+
     const subjectLines = await regenerateSubjectLines(
       title,
       summary,
       { week: weekNumber, year },
-      brandVoice
+      brandVoice,
+      model
     );
 
     if (draft) {

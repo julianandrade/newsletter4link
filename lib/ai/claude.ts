@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelRejected } from "./model";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -12,7 +14,9 @@ const anthropic = new Anthropic({
 export async function scoreArticleRelevance(
   title: string,
   content: string,
-  brandVoicePrompt?: string | null
+  brandVoicePrompt?: string | null,
+  // RQ-002: the organization's selected model, resolved at the route boundary.
+  model: string = DEFAULT_AI_MODEL
 ): Promise<number> {
   try {
     const brandContext = brandVoicePrompt
@@ -20,7 +24,7 @@ export async function scoreArticleRelevance(
       : "";
 
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 500,
       messages: [
         {
@@ -64,6 +68,8 @@ Respond with ONLY a single number from 0-10. No explanation needed.`,
 
     return score;
   } catch (error) {
+    // RQ-002: a refused model must not read as a scoring failure.
+    rethrowIfModelRejected(error, model);
     console.error("Error scoring article:", error);
     throw new Error(
       `Failed to score article: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -77,7 +83,9 @@ Respond with ONLY a single number from 0-10. No explanation needed.`,
 export async function summarizeArticle(
   title: string,
   content: string,
-  brandVoicePrompt?: string | null
+  brandVoicePrompt?: string | null,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<string> {
   try {
     const brandContext = brandVoicePrompt
@@ -85,7 +93,7 @@ export async function summarizeArticle(
       : "";
 
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 300,
       messages: [
         {
@@ -114,6 +122,8 @@ Write only the summary, no preamble or extra text.`,
 
     return summary;
   } catch (error) {
+    // RQ-002
+    rethrowIfModelRejected(error, model);
     console.error("Error summarizing article:", error);
     throw new Error(
       `Failed to summarize article: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -127,7 +137,9 @@ Write only the summary, no preamble or extra text.`,
 export async function categorizeArticle(
   title: string,
   content: string,
-  brandVoicePrompt?: string | null
+  brandVoicePrompt?: string | null,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<string[]> {
   try {
     const brandContext = brandVoicePrompt
@@ -135,7 +147,7 @@ export async function categorizeArticle(
       : "";
 
     const message = await anthropic.messages.create({
-      model: config.ai.anthropic.model,
+      model,
       max_tokens: 200,
       messages: [
         {
@@ -178,6 +190,9 @@ Respond with ONLY the category names, separated by commas. Maximum 3 categories.
 
     return categories.length > 0 ? categories : ["AI News"];
   } catch (error) {
+    // RQ-002: everything else still degrades to a default category, but a
+    // refused model would otherwise be invisible on every article.
+    rethrowIfModelRejected(error, model);
     console.error("Error categorizing article:", error);
     return ["AI News"]; // Default category on error
   }
@@ -188,18 +203,27 @@ Respond with ONLY the category names, separated by commas. Maximum 3 categories.
  */
 export async function scoreArticlesBatch(
   articles: Array<{ title: string; content: string }>,
-  brandVoicePrompt?: string | null
+  brandVoicePrompt?: string | null,
+  // RQ-002
+  model: string = DEFAULT_AI_MODEL
 ): Promise<number[]> {
   const scores: number[] = [];
 
   for (const article of articles) {
     try {
-      const score = await scoreArticleRelevance(article.title, article.content, brandVoicePrompt);
+      const score = await scoreArticleRelevance(
+        article.title,
+        article.content,
+        brandVoicePrompt,
+        model
+      );
       scores.push(score);
 
       // Add delay to avoid rate limiting (Anthropic rate limits)
       await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error) {
+      // RQ-002: one bad model would otherwise score every article as 5.
+      rethrowIfModelRejected(error, model);
       console.error(`Error scoring article "${article.title}":`, error);
       scores.push(5); // Default score on error
     }

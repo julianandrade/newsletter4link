@@ -10,6 +10,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { createJobStream, JobCancelledError } from "@/lib/jobs";
 import { JobType } from "@prisma/client";
 import {
@@ -130,6 +131,9 @@ export async function GET(request: NextRequest) {
       const weekNumber = getWeekNumber(editionDate);
       const year = editionDate.getFullYear();
 
+      // RQ-002: the organization's selected model governs drafting too.
+      const { model } = await resolveAiModels(organizationId);
+
       // Generate newsletter with progress callback
       let newsletter: GeneratedNewsletter;
       try {
@@ -159,7 +163,8 @@ export async function GET(request: NextRequest) {
 
             await sendProgress(progress.stage, progressPercent, message);
           },
-          jobId
+          jobId,
+          model
         );
       } catch (error) {
         if (error instanceof GenerationCancelledError) {

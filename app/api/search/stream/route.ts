@@ -17,6 +17,7 @@
 
 import { NextRequest } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { createJobStream } from "@/lib/jobs";
 import { JobType } from "@prisma/client";
 import { processQuery, mapTimeScopeToTimeRange } from "@/lib/search/query-processor";
@@ -88,7 +89,10 @@ export async function GET(request: NextRequest) {
       // Step 1: Process/expand the query with Claude
       await sendProgress("query_processing", 5, "Analyzing search query...");
 
-      const queryExpansion = await processQuery(query.trim());
+      // RQ-002: the organization's selected model governs search too.
+      const { model } = await resolveAiModels(organizationId);
+
+      const queryExpansion = await processQuery(query.trim(), model);
 
       // Send query_expanded event via custom progress
       await sendProgress("query_expanded", 15, JSON.stringify({
@@ -142,7 +146,8 @@ export async function GET(request: NextRequest) {
               title: currentResult?.title || "Analyzing...",
             })
           );
-        }
+        },
+        model
       );
 
       // Filter and sort by AI score

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { processQuery } from "@/lib/search/query-processor";
 import { prisma } from "@/lib/db";
 
@@ -100,8 +101,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // RQ-002
+    const { model } = await resolveAiModels(ctx.organization.id);
+
     // Process query with Claude to get expanded version
-    const queryExpansion = await processQuery(query.trim());
+    const queryExpansion = await processQuery(query.trim(), model);
 
     // Calculate next run time based on schedule
     let nextRunAt: Date | null = null;

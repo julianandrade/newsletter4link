@@ -21,10 +21,17 @@ the product consults the organization's choice.
 
 ### D2. Does the run history reveal the problem?
 
-**Determined: no, it conceals it.** The model recorded against each curation run
-is written from the same fixed value as the work itself, so the record always
-agrees with what happened and never with what was chosen. Reading the history
-cannot surface the defect.
+**Determined: no, because there is no such history.**
+
+> **Correction.** This entry first said the run record was written from the same
+> fixed value, so the history agreed with the mistake. That was wrong, and the
+> mistake was mine: the line I read is the fallback settings object, not a job
+> record. `CurationJob` stores counts, timing, status and logs, and no model at
+> all. Nothing anywhere records which model performed a run.
+
+The consequence is the same, by a different route: the defect is invisible from
+inside the product. But the fix is larger than correcting a wrong value, which is
+why Q7 exists.
 
 ### D3. Are the neighbouring settings affected too?
 
@@ -113,16 +120,9 @@ to make consistent.
 
 ### Q5. Should past run records be corrected?
 
-Existing records name a model that may not be what performed the run. They
-cannot be corrected reliably, because what actually ran is not recorded anywhere
-else.
-
-- **(a) Leave them, and note in the release that records before this change are
-  not trustworthy on this field.** **Recommended.**
-- **(b) Backfill from the code default of the time.** Guesswork presented as
-  fact.
-
-**Answer:**
+**Answered (a), and now moot.** There is no field to correct: see the correction
+under D2. Past runs simply have no model recorded, and nothing can be inferred
+about them.
 
 ### Q6. What should happen when the provider rejects the selected model?
 
@@ -146,3 +146,27 @@ underway, though Q2 affects what the Settings screen has to say.
 
 If you would rather not spend time here: answering **(a)** to all six is
 internally consistent and is what I would build.
+
+---
+
+## Raised after the first answers
+
+### Q7. How should the model used by a run be recorded?
+
+Action 4 asked for the model that performed each run to be recorded. It was
+approved on the understanding that such a record existed and was wrong. It does
+not exist: `CurationJob` has no model field, so this is an addition rather than a
+correction, and the options differ in cost accordingly.
+
+- **(a) Write it into the run's existing log stream.** No schema change, visible
+  in the job detail screen today, and enough to confirm which model ran.
+  Not queryable across runs. **Implemented now, since it needs no decision and
+  no migration.**
+- **(b) Add a model column to the curation job.** Queryable, reportable, and
+  survives log truncation. Costs a schema change and a `prisma db push` against
+  production.
+- **(c) Both**: log it now, add the column when a reporting need appears.
+
+**Answer:**
+
+Everything else in this requirement is implemented regardless of the answer here.
