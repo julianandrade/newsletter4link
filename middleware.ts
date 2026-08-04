@@ -1,9 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAllowedEmail } from "@/lib/auth/allowed-domains";
+import { MFA_PATH, resolveMfaRequirement } from "@/lib/auth/mfa";
 
 export async function middleware(request: NextRequest) {
-  // Public routes that don't need auth
-  const publicPaths = ["/login", "/unsubscribe", "/api/unsubscribe", "/api/cron"];
+  /**
+   * Routes that never need a session at all.
+   *
+   * /login is deliberately not here. It used to be, which made the
+   * "authenticated user visiting /login goes to the dashboard" branch below
+   * unreachable: the early return fired first. Both /login and the MFA step-up
+   * page need the session read, since what to do with them depends on it.
+   */
+  const publicPaths = ["/unsubscribe", "/api/unsubscribe", "/api/cron"];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
@@ -11,6 +20,9 @@ export async function middleware(request: NextRequest) {
   if (isPublicPath) {
     return NextResponse.next();
   }
+
+  const isMfaPath = request.nextUrl.pathname.startsWith(MFA_PATH);
+  const isLoginPath = request.nextUrl.pathname === "/login";
 
   let response = NextResponse.next({
     request,
@@ -39,26 +51,76 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  /**
+   * Redirect that carries the auth cookies with it.
+   *
+   * Everything above writes cookies onto `response`: getUser refreshes expiring
+   * tokens, and signOut clears them. Returning a bare NextResponse.redirect
+   * throws those away. For signOut that is not cosmetic, it is a redirect loop:
+   * the cookie survives, the next request is authenticated again, and it lands
+   * right back here.
+   */
+  const redirectTo = (pathname: string, search = "") => {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname;
+    url.search = search;
+    const redirect = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+    return redirect;
+  };
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Redirect to login if not authenticated and accessing protected routes
-  if (
-    !user &&
-    (request.nextUrl.pathname.startsWith("/dashboard") ||
-      request.nextUrl.pathname.startsWith("/api/"))
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  const isProtectedPath =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/api/");
+
+  if (!user) {
+    // The login page is exactly where an unauthenticated visitor belongs.
+    if (isLoginPath) {
+      return response;
+    }
+    if (isProtectedPath || isMfaPath) {
+      return redirectTo("/login");
+    }
   }
 
-  // Redirect to dashboard if authenticated and accessing login
-  if (user && request.nextUrl.pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  if (user) {
+    /**
+     * Domain allowlist, enforced server-side.
+     *
+     * Supabase's signup endpoint is reachable by anyone holding the public anon
+     * key, so an address outside the allowlist can end up with a valid session
+     * no matter what the login form does. This is the check that keeps it out
+     * of the product: the session is destroyed rather than merely redirected,
+     * so a stale cookie cannot be replayed against another route.
+     */
+    if (!isAllowedEmail(user.email)) {
+      await supabase.auth.signOut();
+      return redirectTo("/login", "?error=domain_not_allowed");
+    }
+
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const requirement = resolveMfaRequirement(user, aal);
+
+    // A password account that has not completed its second factor may reach
+    // the step-up page and nothing else.
+    if (requirement.kind !== "satisfied") {
+      if (isMfaPath) {
+        return response;
+      }
+      if (isProtectedPath) {
+        return redirectTo(MFA_PATH);
+      }
+    }
+
+    // Nothing outstanding: the step-up page and /login both belong behind us.
+    if (requirement.kind === "satisfied" && (isMfaPath || isLoginPath)) {
+      return redirectTo("/dashboard");
+    }
   }
 
   return response;

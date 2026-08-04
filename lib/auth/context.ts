@@ -4,6 +4,7 @@ import { createTenantClient, TenantClient } from "@/lib/db/tenant";
 import { cookies } from "next/headers";
 import { Organization, OrgRole, OrgUser, Plan } from "@prisma/client";
 import { getPlanFeatures, hasFeature, PlanFeatures } from "@/lib/plans/features";
+import { isAllowedEmail } from "@/lib/auth/allowed-domains";
 
 const ORG_COOKIE_NAME = "selected_org_id";
 
@@ -83,6 +84,17 @@ export async function setSelectedOrgId(orgId: string): Promise<void> {
 export async function getAuthContext(): Promise<AuthContext | null> {
   const user = await getSupabaseUser();
   if (!user) return null;
+
+  // Last line of the domain allowlist. The middleware already refuses these,
+  // but a route reached outside the matcher, or a future change to it, must not
+  // become the one way in. Treated as unauthenticated rather than throwing, so
+  // callers handle it through the path they already have for no session.
+  if (!isAllowedEmail(user.email)) {
+    console.warn("Blocked request from a disallowed domain", {
+      domain: user.email?.split("@")[1] ?? "unknown",
+    });
+    return null;
+  }
 
   const organizations = await getUserOrganizations(user.id);
   const selectedOrgId = await getSelectedOrgId();

@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ALLOWED_EMAIL_DOMAINS,
+  DOMAIN_REJECTED_MESSAGE,
+  allowedDomainsLabel,
+} from "@/lib/auth/allowed-domains";
 import { Button } from "@/components/radar/compat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/radar/compat";
 import { Input } from "@/components/radar/compat";
@@ -10,8 +15,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth/hooks";
 
-export default function LoginPage() {
+/**
+ * Messages for the error codes the auth callback can hand back. Without these
+ * the page rendered nothing at all and every failure looked like a dead button.
+ */
+const CALLBACK_ERRORS: Record<string, string> = {
+  auth_failed: "Office 365 sign-in did not complete.",
+  domain_not_allowed: DOMAIN_REJECTED_MESSAGE,
+};
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signInWithAzure, signInWithPassword, signUp, loading: authLoading } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -19,6 +34,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Surface whatever the OAuth round trip came back with. Microsoft's own
+  // description is far more useful than "auth_failed", so show it when present.
+  useEffect(() => {
+    const code = searchParams.get("error");
+    if (!code) return;
+    const description = searchParams.get("error_description");
+    const known = CALLBACK_ERRORS[code];
+    setError(
+      [known ?? "Sign-in failed.", description?.replace(/\+/g, " ")]
+        .filter(Boolean)
+        .join(" ")
+    );
+  }, [searchParams]);
 
   const handleAzureLogin = async () => {
     setError(null);
@@ -42,9 +71,13 @@ export default function LoginPage() {
     if (error) {
       setError(error.message);
       setLoading(false);
-    } else {
-      router.push("/dashboard");
+      return;
     }
+
+    // Password accounts owe a second factor. A full navigation rather than a
+    // client push, so the middleware sees the new session and routes to the
+    // step-up page or the dashboard as appropriate.
+    window.location.assign("/dashboard");
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -119,7 +152,7 @@ export default function LoginPage() {
                   <Input
                     id="login-email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder={`you@${ALLOWED_EMAIL_DOMAINS[0]}`}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -151,12 +184,16 @@ export default function LoginPage() {
                   <Input
                     id="signup-email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder={`you@${ALLOWED_EMAIL_DOMAINS[0]}`}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={loading}
                   />
+                  <p className="text-xs text-radar-ink3">
+                    {allowedDomainsLabel()} addresses only. You will set up an
+                    authenticator app after signing in.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
@@ -194,5 +231,24 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * useSearchParams opts a component out of prerendering, so the form that reads
+ * the callback's error code sits behind a boundary rather than making the whole
+ * login route dynamic.
+ */
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-radar-bg p-4">
+          <p className="text-sm text-radar-ink2">Loading…</p>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
