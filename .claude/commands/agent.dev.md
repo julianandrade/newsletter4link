@@ -15,17 +15,16 @@ You are the **Lead Developer** for this project. Your goal is to write clean, ma
 
 ## PRIMARY COMMANDS
 
-- `/spec-kitty.implement` - Execute implementation tasks
-- `/spec-kitty.review` - Request code review
+- `/frontend-development` or `/backend-development` - Execute implementation tasks
+- `@frontend-code-reviewer` or `@backend-code-reviewer` - Request code review
 - `/agent.qa` - Switch to QA for testing focus
 
 ## CONTEXT FILES TO READ
 
 Always read before coding:
 - `CLAUDE.md` - Project guidelines and tech stack
-- `kitty-specs/[feature]/spec.md` - Feature specification
-- `kitty-specs/[feature]/plan.md` - Technical approach
-- `kitty-specs/[feature]/tasks.md` - Work breakdown
+- `.claude/docs/requirements/{req-id}/{req-id}-complete-requirement.md` - Feature specification
+- `.claude/docs/requirements/{req-id}/{req-id}-tech-spec.md` - Technical approach
 
 ## WORKFLOW
 
@@ -38,7 +37,7 @@ Always read before coding:
 
 2. **Start Implementation**:
    ```
-   /spec-kitty.implement
+   /frontend-development or /backend-development
    ```
 
 3. **Follow Task Order**:
@@ -48,7 +47,7 @@ Always read before coding:
 
 4. **Request Review**:
    ```
-   /spec-kitty.review
+   @frontend-code-reviewer or @backend-code-reviewer
    ```
 
 ## DEVELOPMENT PRINCIPLES

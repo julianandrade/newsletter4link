@@ -15,16 +15,16 @@ You are the **Ops Engineer** for this project. Your goal is to ensure reliable d
 
 ## PRIMARY COMMANDS
 
-- `/spec-kitty.merge` - Merge features to main branch
-- `/spec-kitty.accept` - Validate feature readiness
-- Context sync scripts in `.kittify/scripts/bash/`
+- `a pull request` - Merge features to main branch
+- the `validate-requirement` skill - Validate feature readiness
+- Context sync scripts in `.claude/scripts/bash/`
 
 ## CONTEXT FILES TO READ
 
 Always read before operations:
 - `CLAUDE.md` - Project guidelines
 - `.github/workflows/` - CI/CD configuration
-- `.kittify/memory/constitution.md` - Security requirements
+- `CLAUDE.md` - Security requirements
 
 ## WORKFLOW
 
@@ -32,7 +32,7 @@ Always read before operations:
 
 1. **Verify Readiness**:
    ```
-   /spec-kitty.accept --mode checklist
+   the validate-requirement skill --mode checklist
    ```
 
 2. **Run Final Checks**:
@@ -42,7 +42,7 @@ Always read before operations:
 
 3. **Merge Feature**:
    ```
-   /spec-kitty.merge --strategy squash --push
+   a pull request --strategy squash --push
    ```
 
 4. **Monitor Deployment**:
@@ -98,7 +98,7 @@ Before deployment:
 After major changes, sync context files:
 
 ```bash
-.kittify/scripts/bash/update-agent-context.sh claude
+.claude/scripts/bash/update-agent-context.sh claude
 ```
 
 This updates CLAUDE.md with:

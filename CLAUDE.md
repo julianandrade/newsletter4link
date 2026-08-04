@@ -62,56 +62,75 @@ newsletter4link/
 │   ├── curation/           # Content curation logic
 │   ├── email/              # Email sending utilities
 │   └── db.ts               # Prisma client
-├── prisma/schema.prisma    # Database schema
-├── emails/                 # React Email templates
-├── .claude/                # Claude Code configuration
-├── .kittify/               # Spec-kitty framework
-├── kitty-specs/            # Feature specifications
+├── prisma/
+│   ├── schema.prisma       # Database schema
+│   └── sql/                # One-off SQL, run by hand
+├── components/radar/       # AI Radar design vocabulary
+├── tests/unit/             # Vitest suites
+├── scripts/                # Maintenance and setup scripts
+├── .claude/                # AI configuration (AIDLC, from common-ai-configs)
+│   ├── agents/             # Agents by domain: backend, frontend, general, tests, security
+│   ├── commands/           # complete-development, frontend-development, backend-development
+│   ├── docs/requirements/  # Requirement artifacts per RQ, the AIDLC working set
+│   └── skills/             # Reusable skills, per flow step
 └── docs/                   # Documentation
+    ├── AIDLC.md            # The development flow this project follows
+    ├── history/            # Superseded status notes, kept for the record
+    ├── reference/          # Newsletter examples and external material
+    └── screenshots/        # UI captures
 ```
 
 ---
 
 ## Development Workflow
 
-This project uses the **spec-kitty workflow** for feature development:
+This project follows **AIDLC**, the flow defined in
+[common-ai-configs](../common-ai-configs/How-TOs/Development-flux.md). The
+configuration under `.claude/` is a copy of that repository's, so the agents,
+commands and skills are the same ones used across Linkroad projects.
 
-1. `/spec-kitty.specify` - Create feature specification
-2. `/spec-kitty.clarify` - Resolve ambiguities
-3. `/spec-kitty.plan` - Plan implementation
-4. `/spec-kitty.tasks` - Generate work packages
-5. `/spec-kitty.implement` - Execute tasks
-6. `/spec-kitty.review` - Code review
-7. `/spec-kitty.accept` - Acceptance checks
-8. `/spec-kitty.merge` - Merge feature
+Requirement artifacts live in `.claude/docs/requirements/{req-id}/`:
 
-See [docs/SDLC.md](docs/SDLC.md) for full workflow documentation.
+| Step | Who | Produces |
+|---|---|---|
+| 1. Clarify | `@product-owner` | `{req-id}-clarifications.md` |
+| 2. Specify | `@product-owner` | `{req-id}-complete-requirement.md` |
+| 3. API contract | `@api-specialist` | OpenAPI spec, when a new API surface is involved |
+| 4. Architecture | `@frontend-architect` | `{req-id}-tech-spec.md` |
+| 5. Test plan | `@test-plan` | Robot `.robot` files under the requirement's `tests/` |
+| 6. Implement | `@frontend-developer` | Code plus unit tests |
+| 7. Standardize | `@ui-ux-designer` | UI consistency against the design vocabulary |
+| 8. Tag | `@code-tagger` | `RQ-XXX` traceability tags in the code |
+| 9. Review | `@frontend-code-reviewer` | Review against the tech spec |
+
+Entry points: `/complete-development` for the requirement trunk, then
+`/frontend-development` for the track. Use `@` to route to an agent explicitly,
+otherwise Claude guesses.
+
+See [docs/AIDLC.md](docs/AIDLC.md) for how the flow maps onto this stack.
+
+**One caveat worth knowing:** the shared agent set was written for .NET and
+Angular. `backend-developer` targets .NET 8 Clean Architecture and
+`frontend-developer` targets Angular 18, neither of which applies here. This is
+a Next.js and TypeScript codebase, so treat those two agents' stack instructions
+as inapplicable and their process as the part to follow. Every other agent
+(product-owner, api-specialist, architects, code-tagger, reviewers, the test and
+security sets) is stack-agnostic.
 
 ---
 
 ## Agent Personas
 
-Switch between specialized agents for different tasks:
+Four lightweight personas predate the AIDLC adoption and are kept because they
+are quicker for small work that does not warrant a requirement folder. For
+anything with a requirement id, use the AIDLC agents above.
 
 | Command | Persona | Use Case |
 |---------|---------|----------|
 | `/agent.architect` | Systems Architect | Design, data modeling, specifications |
 | `/agent.dev` | Fullstack Developer | Implementation, debugging |
 | `/agent.qa` | QA Engineer | Testing, validation |
-| `/agent.ops` | DevOps Engineer | Infrastructure, deployments |
-
----
-
-## Key Commands
-
-### Feature Development
-- `/spec-kitty.dashboard` - View project status
-- `/spec-kitty.checklist` - Quality checklist
-- `/spec-kitty.constitution` - Non-negotiable principles
-
-### Research & Analysis
-- `/spec-kitty.analyze` - Cross-artifact consistency check
-- `/spec-kitty.research` - Technical research
+| `/agent.ops` | DevOps Engineer | Infrastructure, deployments (no AIDLC equivalent) |
 
 ---
 
@@ -125,7 +144,8 @@ Non-negotiable rules for this project:
 4. **Error Handling** - Every API route needs try/catch; every UI fetch needs loading/error states
 5. **Simplicity** - Build what's needed now; avoid premature abstraction
 
-See `.kittify/memory/constitution.md` for full principles.
+These are the project's non-negotiables. They live here rather than in a
+separate constitution file, so there is one place to look.
 
 ---
 
@@ -181,18 +201,23 @@ npx prisma studio
 
 ## Testing
 
-**Test Framework:** Jest / Vitest (to be configured)
+**Test Framework:** Vitest, configured in `vitest.config.ts`. Suites live in
+`tests/unit/` and alongside the code they cover.
 
 ```bash
-# Run all tests
-npm test
+# Run all suites
+npx vitest run
 
-# Run with coverage
-npm test -- --coverage
+# Watch one file
+npx vitest tests/unit/selection.test.tsx
 
-# Run specific test
-npm test -- path/to/test
+# Typecheck, which the suites do not replace
+npx tsc --noEmit
 ```
+
+Playwright is configured in `playwright.config.ts` for browser checks. The
+temporary `/radar-preview` route renders any dashboard screen behind a fetch
+stub, which is how UI work gets verified without a Supabase session.
 
 ---
 
@@ -258,9 +283,9 @@ npm test -- path/to/test
 
 ## Notes for Claude
 
-- When implementing features, always follow the spec-kitty workflow
-- Check `kitty-specs/` for active feature specifications
-- Use `/spec-kitty.constitution` before making architectural decisions
+- Follow the AIDLC flow above for anything with a requirement id
+- Check `.claude/docs/requirements/` for the active requirement's artifacts
+- Read the Constitutional Principles below before architectural decisions
 - Run tests before marking tasks complete
 - The UI needs design improvements - use shadcn/ui patterns and modern layouts
 - Curation timeout is a known issue - consider SSE or background jobs for fixes

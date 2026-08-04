@@ -23,7 +23,7 @@ The sync updates `CLAUDE.md` with:
 ## Execution
 
 ```bash
-.kittify/scripts/bash/update-agent-context.sh claude
+.claude/scripts/bash/update-agent-context.sh claude
 ```
 
 ## How It Works
@@ -34,7 +34,7 @@ The sync updates `CLAUDE.md` with:
    - Configuration files
 
 2. **Extracts feature information** from:
-   - kitty-specs/ directories
+   - .claude/docs/requirements/ directories
    - Recent git commits
    - Plan and spec files
 
@@ -79,6 +79,6 @@ Changes made:
 ## Integration
 
 This skill integrates with:
-- `/spec-kitty.merge` - Run after merging features
+- `a pull request` - Run after merging features
 - `/agent.ops` - Part of ops workflow
 - Session startup - Recommended to run at session start

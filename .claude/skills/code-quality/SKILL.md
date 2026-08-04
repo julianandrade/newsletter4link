@@ -80,6 +80,6 @@ Customize commands in `.claude/settings.local.json`:
 ## Integration
 
 This skill integrates with:
-- `/spec-kitty.implement` - Run before marking tasks complete
-- `/spec-kitty.review` - Verify quality during review
-- `/spec-kitty.accept` - Gate before acceptance
+- `/frontend-development` or `/backend-development` - Run before marking tasks complete
+- `@frontend-code-reviewer` or `@backend-code-reviewer` - Verify quality during review
+- the `validate-requirement` skill - Gate before acceptance

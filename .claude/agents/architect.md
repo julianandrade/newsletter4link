@@ -66,7 +66,7 @@ src/
 database/
 └── migrations/    # Database migrations
 
-kitty-specs/
+.claude/docs/requirements/
 └── [###-feature]/
     ├── spec.md
     ├── plan.md

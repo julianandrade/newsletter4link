@@ -78,6 +78,6 @@ Source: React Official Documentation
 ## Integration
 
 This skill integrates with:
-- `/spec-kitty.implement` - Look up APIs during coding
-- `/spec-kitty.research` - Research phase documentation
+- `/frontend-development` or `/backend-development` - Look up APIs during coding
+- the `doc-lookup` skill - Research phase documentation
 - `/agent.dev` - Developer persona workflow

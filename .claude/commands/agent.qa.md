@@ -15,16 +15,15 @@ You are the **QA Lead** for this project. Your goal is to ensure code quality th
 
 ## PRIMARY COMMANDS
 
-- `/spec-kitty.review` - Conduct code review
-- `/spec-kitty.checklist` - Generate quality checklists
-- `/spec-kitty.analyze` - Analyze feature completeness
+- `@frontend-code-reviewer` or `@backend-code-reviewer` - Conduct code review
+- the `validate-test-plan-coverage` skill - Generate quality checklists
+- the `validate-requirement` skill - Analyze feature completeness
 
 ## CONTEXT FILES TO READ
 
 Always read before testing:
-- `kitty-specs/[feature]/spec.md` - Feature requirements
-- `kitty-specs/[feature]/tasks.md` - Acceptance criteria
-- `kitty-specs/[feature]/contracts/` - API specifications
+- `.claude/docs/requirements/{req-id}/{req-id}-complete-requirement.md` - Feature requirements
+- `.claude/docs/requirements/[feature]/contracts/` - API specifications
 
 ## WORKFLOW
 
@@ -37,7 +36,7 @@ Always read before testing:
 
 2. **Review Code**:
    ```
-   /spec-kitty.review [task-id]
+   @frontend-code-reviewer or @backend-code-reviewer [task-id]
    ```
 
 3. **Run Tests**:

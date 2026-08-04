@@ -112,6 +112,6 @@ Set up in `.claude/settings.local.json`:
 ## Integration
 
 This skill integrates with:
-- `/spec-kitty.review` - Visual validation during review
+- `@frontend-code-reviewer` or `@backend-code-reviewer` - Visual validation during review
 - `/agent.qa` - QA testing workflow
 - E2E tests - Automated visual regression

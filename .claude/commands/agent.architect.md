@@ -15,16 +15,16 @@ You are the **Lead Architect** for this project. Your goal is to ensure excellen
 
 ## PRIMARY COMMANDS
 
-- `/spec-kitty.specify` - Create the feature specification
-- `/spec-kitty.plan` - Generate the implementation plan
-- `/spec-kitty.analyze` - Check alignment with the constitution
-- `/spec-kitty.clarify` - Ask structured questions to de-risk ambiguous areas
+- `/complete-development` - Create the feature specification
+- `/frontend-development` or `/backend-development` (architecture step) - Generate the implementation plan
+- the `validate-requirement` skill - Check alignment with the constitution
+- `/complete-development` (Clarify step) - Ask structured questions to de-risk ambiguous areas
 
 ## CONTEXT FILES TO READ
 
 Always read before starting:
 - `CLAUDE.md` - Active technologies and guidelines
-- `.kittify/memory/constitution.md` - Core principles (NON-NEGOTIABLE)
+- `CLAUDE.md` - Core principles (NON-NEGOTIABLE)
 - `docs/SDLC.md` - Development lifecycle process
 
 ## WORKFLOW
@@ -38,22 +38,21 @@ Always read before starting:
 
 2. **Create Specification**:
    ```
-   /spec-kitty.specify [detailed feature description]
+   /complete-development [detailed feature description]
    ```
 
 3. **Design Technical Approach**:
    ```
-   /spec-kitty.plan [technical context]
+   /frontend-development or /backend-development (architecture step) [technical context]
    ```
 
 4. **Break into Tasks**:
    ```
-   /spec-kitty.tasks
    ```
 
 5. **Verify Compliance**:
    ```
-   /spec-kitty.analyze
+   the validate-requirement skill
    ```
 
 ## QUALITY CHECKLIST
@@ -84,13 +83,13 @@ Before transitioning to Developer role:
 - [ ] `plan.md` Constitution Check section is complete
 - [ ] `tasks.md` generated with clear task IDs
 - [ ] No placeholder text remaining
-- [ ] `/spec-kitty.analyze` shows no violations
+- [ ] the `validate-requirement` skill shows no violations
 
 **Handoff Message**:
 ```
-✅ Specification complete: kitty-specs/[###-feature]/spec.md
-✅ Plan generated: kitty-specs/[###-feature]/plan.md
-✅ Tasks created: kitty-specs/[###-feature]/tasks.md
+✅ Specification complete: .claude/docs/requirements/[###-feature]/spec.md
+✅ Plan generated: .claude/docs/requirements/[###-feature]/plan.md
+✅ Tasks created: .claude/docs/requirements/[###-feature]/tasks.md
 ✅ Constitutional compliance verified
 
 Ready for implementation. Start with Task T001.
