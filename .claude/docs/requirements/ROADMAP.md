@@ -1,6 +1,6 @@
 # Where the work stands
 
-Updated 4 August 2026, at commit `d6318d8`. Everything below "Live" is deployed
+Updated 4 August 2026, at commit `9fbaa17`. Everything below "Live" is deployed
 and verified in production.
 
 ## Live
@@ -16,35 +16,47 @@ and verified in production.
 | Bulk rejection asks first | none | It did not, and 23 stories were lost to one click |
 | 45 verified AI feeds, importable | none | **The file exists; it has not been imported** |
 | AIDLC adopted, spec-kitty removed, repository tidied | none | `docs/AIDLC.md` records what diverges |
+| The weekly edition is one decision: automation proposes, a person sends | RQ-005 | The unattended send route is deleted, not unscheduled |
+| Scheduled routes refuse a request when no secret is configured | none | They were fail-open, and `CRON_SECRET` was unset, so an unauthenticated send-to-all was publicly callable |
+| Sending requires EDITOR, and records who approved it | RQ-005 | Membership alone used to be enough, so a VIEWER could mail everyone |
+| One ISO week helper for the whole product | RQ-005 | Replaced eight copies that filed the same week under two years at a new year |
 
 ## Waiting on a decision from you
 
 Ordered by how much they block.
 
-**RQ-004, RQ-005 and RQ-006 are all answered as of 4 August 2026.** RQ-005 is
-ready to specify and build. What remains open:
+**RQ-005 is built and live.** What remains open:
 
-1. **RQ-002 Q7.** Whether the curation job gets a model column. Costs a
+1. **RQ-004 watchlist.** Which categorized topics scope it. Recommendation:
+   Large Language Models, AI Tools, AI Research, Cloud AI, AI Regulation. Phase A
+   (collectors, forward only, no backfill) waits on this answer and nothing else.
+2. **RQ-002 Q7.** Whether the curation job gets a model column. Costs a
    `prisma db push`. The log entry already records the effective model.
-2. **RQ-006 F3.** Which publishers may be fetched for full text. That is a
+3. **RQ-006 F3.** Which publishers may be fetched for full text. That is a
    default-deny list, and choosing what goes on it is an editorial decision rather
    than a technical one.
 
+## What RQ-005 did not finish
+
+Three pieces of it are specified and not built. None of them break anything; each
+is a control that exists in the API and has no button.
+
+- **The editions screen has selection and delete only.** Archive, unarchive and
+  force delete all work over `PATCH /api/editions/bulk`, and the list accepts
+  `?archived=exclude|only|all`, but nothing in the UI reaches them.
+- **`lib/radar/pipeline.ts` was never written.** `decideRunNeeded` and
+  `readPipelineStatus` in tech spec 4.1 have no implementation.
+- **`lib/auth/roles.ts` and `components/radar/use-role.ts` are missing**, and
+  `components/proposal/use-can-edit.ts` stands in for both. The server is the
+  authority either way, so this is duplication rather than a hole.
+
 ## What I recommend, and why
 
-**Do RQ-005 before RQ-004 and RQ-006.**
+**RQ-005 is done. The order below still holds for what is left.**
 
-The reasoning is not that RQ-005 is bigger or newer. It is that you told me the
-current flow is unusable, and both other requirements build on that flow:
-
-- RQ-006 adds a per-article toggle in the edition builder, which is another
-  station in a sequence we have just agreed should be one decision. Building it
-  first means building something RQ-005 then has to undo.
-- RQ-004 adds a fourth Claude call per article and RQ-006 a fifth. Paying for AI
-  on a pipeline nobody can drive is the wrong order of spending.
-- RQ-005 is mostly consolidation: two screens that show the same data become one,
-  approving says where the work went, a proposal assembles itself. Low technical
-  risk, and it is the difference between a demo and a product.
+RQ-005 came first because you told me the flow was unusable and both other
+requirements build on that flow. That is now settled, and RQ-006's per-article
+toggle has a shape to fit into rather than one to undo.
 
 After RQ-005, do **RQ-004 up to its gate** (`RQ-004_04`, the retrospective lead
 time). That gate can kill the feature cheaply, before the scoring, the API and the
