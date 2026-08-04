@@ -1,6 +1,6 @@
 # Where the work stands
 
-Updated 4 August 2026, at commit `9fbaa17`. Everything below "Live" is deployed
+Updated 5 August 2026, at commit `edc6cd1`. Everything below "Live" is deployed
 and verified in production.
 
 ## Live
@@ -19,7 +19,12 @@ and verified in production.
 | The weekly edition is one decision: automation proposes, a person sends | RQ-005 | The unattended send route is deleted, not unscheduled |
 | Scheduled routes refuse a request when no secret is configured | none | They were fail-open, and `CRON_SECRET` was unset, so an unauthenticated send-to-all was publicly callable |
 | Sending requires EDITOR, and records who approved it | RQ-005 | Membership alone used to be enough, so a VIEWER could mail everyone |
-| One ISO week helper for the whole product | RQ-005 | Replaced eight copies that filed the same week under two years at a new year |
+| One ISO week helper for the whole product | RQ-005 | Replaced nine copies that filed the same week under two years at a new year |
+| Archive, unarchive and force delete on the editions list | RQ-005 | With the archived filter, so archiving hides something |
+| The collection status band has data | RQ-005 | It had rendered "the collector has not reported yet" since it shipped |
+| The row checkbox shows its tick | none | A single click selected the row and left the box empty, in all five lists |
+| The categoriser must choose from its own taxonomy | none | It was storing its own prose refusals as categories |
+| Radar collection, forward only, validated queries | RQ-004 | Phase A. 23 entities, 38 queries, all above the precision bar |
 
 ## Waiting on a decision from you
 
@@ -27,28 +32,22 @@ Ordered by how much they block.
 
 **RQ-005 is built and live.** What remains open:
 
-1. **RQ-004 watchlist.** Which categorized topics scope it. Recommendation:
-   Large Language Models, AI Tools, AI Research, Cloud AI, AI Regulation. Phase A
-   (collectors, forward only, no backfill) waits on this answer and nothing else.
+1. **RQ-004 phase B, and it cannot start yet.** Phase A is collecting. The
+   gate that decides whether this feature is worth building needs six weeks of
+   baseline before a score means anything and twelve before it is full, so the
+   earliest useful measurement is mid October 2026. Nothing to do until then except
+   check the collector kept running.
 2. **RQ-002 Q7.** Whether the curation job gets a model column. Costs a
    `prisma db push`. The log entry already records the effective model.
 3. **RQ-006 F3.** Which publishers may be fetched for full text. That is a
    default-deny list, and choosing what goes on it is an editorial decision rather
    than a technical one.
 
-## What RQ-005 did not finish
+## RQ-005 is finished
 
-Three pieces of it are specified and not built. None of them break anything; each
-is a control that exists in the API and has no button.
-
-- **The editions screen has selection and delete only.** Archive, unarchive and
-  force delete all work over `PATCH /api/editions/bulk`, and the list accepts
-  `?archived=exclude|only|all`, but nothing in the UI reaches them.
-- **`lib/radar/pipeline.ts` was never written.** `decideRunNeeded` and
-  `readPipelineStatus` in tech spec 4.1 have no implementation.
-- **`lib/auth/roles.ts` and `components/radar/use-role.ts` are missing**, and
-  `components/proposal/use-can-edit.ts` stands in for both. The server is the
-  authority either way, so this is duplication rather than a hole.
+All three of the pieces it was missing are built: the editions UI reaches all four
+bulk actions, `lib/radar/pipeline.ts` feeds the status band, and
+`lib/auth/roles.ts` with `components/radar/use-role.ts` replaced the stand-in.
 
 ## What I recommend, and why
 
@@ -64,6 +63,13 @@ UI are built. Finding out that the radar does not lead the media costs two
 sub-requirements instead of eight.
 
 RQ-006 last, because it carries the only risk on this list that is not technical.
+
+## Decided while you slept
+
+Everything I chose on your behalf on the night of 4 August is in
+[DECISIONS-2026-08-05.md](DECISIONS-2026-08-05.md), with what to do if you
+disagree. The two that most deserve a look: the watchlist topics, and the article
+category cleanup that is written and deliberately **not** applied.
 
 ## Loose ends, small and cheap
 
