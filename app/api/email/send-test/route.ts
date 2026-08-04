@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
-import { sendTestNewsletter, sendEmail, renderNewsletterEmail } from "@/lib/email/sender";
+import {
+  sendTestNewsletter,
+  sendEmail,
+  renderNewsletterEmail,
+  newsletterSubject,
+} from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
-import { renderTemplateById } from "@/lib/email/template-renderer";
+import {
+  renderTemplateById,
+  injectCustomBlocks,
+  type CustomBlock,
+} from "@/lib/email/template-renderer";
 
 export const dynamic = "force-dynamic";
-
-interface CustomBlock {
-  id: string;
-  type: "text" | "image";
-  content: string;
-  position: "before-articles" | "after-articles" | "before-projects" | "after-projects";
-}
 
 interface CustomData {
   articles: Array<{
@@ -155,22 +157,18 @@ export async function POST(request: Request) {
 
       result = await sendEmail(
         email,
-        `[TEST] Link AI Newsletter - Week ${week}, ${year}`,
+        `[TEST] ${newsletterSubject(emailData)}`,
         templateResult.html
       );
+    } else if (customData?.customBlocks?.length) {
+      // Built-in edition plus editor-authored blocks at the design's anchors.
+      const html = injectCustomBlocks(
+        await renderNewsletterEmail(emailData),
+        customData.customBlocks
+      );
+      result = await sendEmail(email, `[TEST] ${newsletterSubject(emailData)}`, html);
     } else {
-      // Use the default React Email component
-      // Note: If customData has customBlocks, we need to render with custom blocks support
-      if (customData?.customBlocks && customData.customBlocks.length > 0) {
-        const html = await renderNewsletterEmailWithCustomBlocks(emailData);
-        result = await sendEmail(
-          email,
-          `[TEST] Link AI Newsletter - Week ${week}, ${year}`,
-          html
-        );
-      } else {
-        result = await sendTestNewsletter(email, emailData);
-      }
+      result = await sendTestNewsletter(email, emailData);
     }
 
     if (result.success) {
@@ -208,75 +206,4 @@ function getWeekNumber(date: Date): number {
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
-/**
- * Render newsletter email HTML with custom blocks support
- */
-async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string> {
-  // For now, render the base email and inject custom blocks
-  const baseHtml = await renderNewsletterEmail(data);
-
-  if (!data.customBlocks || data.customBlocks.length === 0) {
-    return baseHtml;
-  }
-
-  // Inject custom blocks into the HTML
-  // This is a simplified approach - in production you'd want to modify the React Email component
-  let html = baseHtml;
-
-  // Group blocks by position
-  const blocksByPosition: Record<string, CustomBlock[]> = {};
-  for (const block of data.customBlocks) {
-    if (!blocksByPosition[block.position]) {
-      blocksByPosition[block.position] = [];
-    }
-    blocksByPosition[block.position].push(block);
-  }
-
-  // Render and inject blocks at each position
-  for (const [position, blocks] of Object.entries(blocksByPosition)) {
-    const blocksHtml = blocks.map(block => {
-      if (block.type === 'text') {
-        return `
-          <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6;">
-            ${block.content}
-          </div>
-        `;
-      } else if (block.type === 'image') {
-        return `
-          <div style="margin: 24px 0; text-align: center;">
-            <img src="${escapeHtml(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
-          </div>
-        `;
-      }
-      return '';
-    }).join('');
-
-    // Find and inject blocks based on position
-    // This is a simplified approach - look for section markers in the HTML
-    if (position === 'before-articles') {
-      // Inject before the articles section (look for "This Week" or similar heading)
-      html = html.replace(/(<h2[^>]*>.*This Week.*<\/h2>)/i, blocksHtml + '$1');
-    } else if (position === 'after-articles' || position === 'before-projects') {
-      // Inject between articles and projects (look for "Project Spotlight" or similar)
-      html = html.replace(/(<h2[^>]*>.*Project.*<\/h2>)/i, blocksHtml + '$1');
-    } else if (position === 'after-projects') {
-      // Inject after projects (look for footer or end of content)
-      html = html.replace(/(<div[^>]*style="[^"]*border-top[^"]*"[^>]*>)/i, blocksHtml + '$1');
-    }
-  }
-
-  return html;
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
 }

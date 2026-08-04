@@ -1,22 +1,27 @@
-import { render } from "@react-email/components";
-import NewsletterEmail from "@/emails/newsletter";
 import { prisma } from "@/lib/db";
 import { sendEmailViaProvider, getProviderSettings } from "./provider";
+import { buildEditionEmail } from "./edition-data";
+import {
+  renderEditionEmail,
+  renderEditionText,
+  type EmailTrend,
+} from "./edition-template";
 
 interface Article {
   title: string;
-  summary: string;
+  summary?: string | null;
   sourceUrl: string;
-  category: string[];
+  category?: string[];
+  relevanceScore?: number | null;
 }
 
 interface Project {
   name: string;
   description: string;
-  team: string;
-  impact?: string;
-  projectDate: string;
-  imageUrl?: string;
+  team?: string;
+  impact?: string | null;
+  projectDate?: string | Date;
+  imageUrl?: string | null;
 }
 
 interface NewsletterData {
@@ -24,6 +29,10 @@ interface NewsletterData {
   projects: Project[];
   week: number;
   year: number;
+  /** Trend radar rows; when absent the radar block is not rendered. */
+  trends?: EmailTrend[];
+  /** Shown in the footer as "from N tracked sources" when known. */
+  sourceCount?: number;
 }
 
 /**
@@ -60,27 +69,45 @@ async function getBrandingSettings(organizationId: string): Promise<{
 }
 
 /**
- * Render newsletter email to HTML
+ * Render the newsletter to HTML in the AI Radar design.
+ *
+ * Signature kept from the previous react-email implementation so the preview,
+ * test and batch routes did not have to change their data assembly.
  */
 export async function renderNewsletterEmail(
   data: NewsletterData,
   subscriberId?: string,
   organizationId?: string
 ): Promise<string> {
-  // Fetch branding settings from database
-  const branding = organizationId ? await getBrandingSettings(organizationId) : {};
+  const edition = buildEditionEmail({ ...data, subscriberId });
 
-  const html = await render(
-    NewsletterEmail({
-      ...data,
-      subscriberId,
-      previewText: `Week ${data.week}, ${data.year}: ${data.articles[0]?.title || "AI & Tech Updates"}`,
-      logoUrl: branding.logoUrl,
-      bannerUrl: branding.bannerUrl,
-    })
-  );
+  if (organizationId) {
+    const branding = await getBrandingSettings(organizationId);
+    // An organization that uploaded its own logo sees it in both colour schemes:
+    // there is only one asset, so it cannot be swapped for the dark card the way
+    // the Linkroad pair is. Uploading light-on-transparent artwork is the fix.
+    if (branding.logoUrl) {
+      edition.logoOnLight = branding.logoUrl;
+      edition.logoOnDark = branding.logoUrl;
+      edition.footerLogoOnLight = branding.logoUrl;
+      edition.footerLogoOnDark = branding.logoUrl;
+    }
+  }
 
-  return html;
+  return renderEditionEmail(edition);
+}
+
+/** Plain-text alternative for the same data. */
+export function renderNewsletterText(
+  data: NewsletterData,
+  subscriberId?: string
+): string {
+  return renderEditionText(buildEditionEmail({ ...data, subscriberId }));
+}
+
+/** The subject line the design implies, so every route agrees on it. */
+export function newsletterSubject(data: NewsletterData): string {
+  return buildEditionEmail(data).subject;
 }
 
 /**
@@ -107,7 +134,7 @@ export async function sendNewsletterToSubscriber(
     // Send email
     const result = await sendEmail(
       subscriber.email,
-      `Link AI Newsletter - Week ${data.week}, ${data.year}`,
+      newsletterSubject(data),
       html
     );
 
@@ -245,7 +272,7 @@ export async function sendTestNewsletter(
 
     const result = await sendEmail(
       email,
-      `[TEST] Link AI Newsletter - Week ${data.week}, ${data.year}`,
+      `[TEST] ${newsletterSubject(data)}`,
       html
     );
 

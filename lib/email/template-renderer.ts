@@ -1,21 +1,47 @@
+/**
+ * Rendering for database-stored email templates.
+ *
+ * The item markup used to exist in four places: here, and once in each of the
+ * preview, test-send and batch-send routes. They had drifted apart, and three of
+ * the four interpolated article summaries and project descriptions into HTML
+ * unescaped. This is now the only implementation, it renders in the AI Radar
+ * design language, and everything interpolated is escaped.
+ */
+
 import { prisma } from "@/lib/db";
 import { config } from "@/lib/config";
+import {
+  BLOCK_ANCHORS,
+  BLOCK_POSITIONS,
+  escapeHtml,
+  renderArticleItemsHtml,
+  renderProjectItemsHtml,
+  type BlockPosition,
+} from "./edition-template";
+import { publicationName } from "./edition-data";
+
+export interface CustomBlock {
+  id: string;
+  type: "text" | "image";
+  content: string;
+  position: BlockPosition;
+}
 
 interface Article {
-  id: string;
+  id?: string;
   title: string;
   summary: string | null;
   sourceUrl: string;
-  category: string[];
-  relevanceScore: number | null;
+  category?: string[];
+  relevanceScore?: number | null;
 }
 
 interface Project {
-  id: string;
+  id?: string;
   name: string;
   description: string;
-  team: string;
-  impact: string | null;
+  team?: string;
+  impact?: string | null;
   imageUrl?: string | null;
   projectDate?: Date | string;
 }
@@ -26,112 +52,154 @@ interface RenderContext {
   week: number;
   year: number;
   subscriberId?: string;
+  customBlocks?: CustomBlock[];
+}
+
+/** The shape the preview route builds; a render context without a subscriber. */
+export type TemplateData = RenderContext;
+
+export function formatProjectDate(date: Date | string | undefined): string {
+  if (!date) return "";
+  const value = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(value.getTime())) return "";
+  return value.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+function renderArticles(articles: Article[]): string {
+  return renderArticleItemsHtml(
+    articles.map((article) => ({
+      title: article.title,
+      summary: article.summary ?? "",
+      url: article.sourceUrl,
+      source: publicationName(article.sourceUrl),
+    }))
+  );
+}
+
+function renderProjects(projects: Project[]): string {
+  return renderProjectItemsHtml(
+    projects.map((project) => ({
+      name: project.name,
+      description: project.description,
+      team: [project.team, formatProjectDate(project.projectDate)]
+        .filter(Boolean)
+        .join(" · "),
+      impact: project.impact ?? null,
+    }))
+  );
 }
 
 /**
- * Get the active email template
+ * Editor-authored custom blocks. Text blocks are inserted as markup by design,
+ * since the editor produces the HTML; image blocks carry a URL, which is
+ * scheme-checked and escaped.
  */
+export function renderCustomBlocks(
+  blocks: CustomBlock[] | undefined,
+  position: BlockPosition
+): string {
+  if (!blocks?.length) return "";
+
+  return blocks
+    .filter((block) => block.position === position)
+    .map((block) => {
+      if (block.type === "text") {
+        return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;"><tr>
+  <td class="tint t-body" style="background-color:#e9eeee; border-left:3px solid #ff7901; padding:16px 20px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; color:#3c4547;">${block.content}</td>
+</tr></table>`;
+      }
+
+      let src: string | null = null;
+      try {
+        const url = new URL(block.content);
+        if (url.protocol === "http:" || url.protocol === "https:") src = url.toString();
+      } catch {
+        src = null;
+      }
+      if (!src) return "";
+
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;"><tr>
+  <td align="center"><img src="${escapeHtml(
+    src
+  )}" alt="" style="display:block; max-width:100%; height:auto; border:0;"></td>
+</tr></table>`;
+    })
+    .join("");
+}
+
+/**
+ * Place custom blocks into a rendered edition at the design's anchor points.
+ *
+ * The anchors sit between table rows, so each position gets its own row.
+ * Positions with no blocks are stripped, leaving no trace in the sent HTML.
+ * The previous implementation injected blocks by regex-matching a heading's
+ * text ("This Week", "Project"), so any wording change silently dropped them.
+ */
+export function injectCustomBlocks(
+  html: string,
+  blocks: CustomBlock[] | undefined
+): string {
+  let result = html;
+
+  for (const position of BLOCK_POSITIONS) {
+    const inner = renderCustomBlocks(blocks, position);
+    const row = inner
+      ? `<tr><td class="px" style="padding:0 40px;">${inner}</td></tr>`
+      : "";
+    result = result.split(BLOCK_ANCHORS[position]).join(row);
+  }
+
+  return result;
+}
+
+function getUnsubscribeUrl(subscriberId?: string): string {
+  const baseUrl = config.app.url.replace(/\/$/, "");
+  if (subscriberId) {
+    return `${baseUrl}/unsubscribe?id=${encodeURIComponent(subscriberId)}`;
+  }
+  return `${baseUrl}/unsubscribe`;
+}
+
+/**
+ * Substitute template variables. Custom blocks bracket the articles and
+ * projects sections at the same four positions the built-in edition uses.
+ */
+export function renderTemplate(html: string, context: RenderContext): string {
+  const { articles, projects, week, year, subscriberId, customBlocks } = context;
+
+  const values: Record<string, string> = {
+    articles:
+      renderCustomBlocks(customBlocks, "before-articles") +
+      renderArticles(articles) +
+      renderCustomBlocks(customBlocks, "after-articles"),
+    projects:
+      renderCustomBlocks(customBlocks, "before-projects") +
+      renderProjects(projects) +
+      renderCustomBlocks(customBlocks, "after-projects"),
+    week: String(week),
+    year: String(year),
+    articleCount: String(articles.length),
+    projectCount: String(projects.length),
+    unsubscribe_url: getUnsubscribeUrl(subscriberId),
+  };
+
+  // One pass with a callback, so rendered content that happens to contain a
+  // placeholder is never substituted a second time.
+  return html.replace(
+    /\{\{(articles|projects|week|year|articleCount|projectCount|unsubscribe_url)\}\}/g,
+    (match, tag: string) => values[tag] ?? match
+  );
+}
+
+/** Kept as an alias: the preview route reads better with this name. */
+export const renderTemplateWithData = renderTemplate;
+
 export async function getActiveTemplate() {
   return await prisma.emailTemplate.findFirst({
     where: { isActive: true },
   });
 }
 
-/**
- * Generate HTML for articles section
- */
-function renderArticles(articles: Article[]): string {
-  if (articles.length === 0) {
-    return "<p>No articles this week.</p>";
-  }
-
-  return articles
-    .map(
-      (article) => `
-    <div style="margin-bottom: 24px; padding: 16px; background-color: #f9fafb; border-radius: 8px;">
-      <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #111827;">
-        <a href="${article.sourceUrl}" style="color: #2563eb; text-decoration: none;">${article.title}</a>
-      </h3>
-      ${article.summary ? `<p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;">${article.summary}</p>` : ""}
-      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        ${article.category
-          .map(
-            (cat) =>
-              `<span style="display: inline-block; padding: 2px 8px; background-color: #e5e7eb; border-radius: 4px; font-size: 12px; color: #374151;">${cat}</span>`
-          )
-          .join("")}
-      </div>
-    </div>
-  `
-    )
-    .join("");
-}
-
-/**
- * Generate HTML for projects section
- */
-function renderProjects(projects: Project[]): string {
-  if (projects.length === 0) {
-    return "<p>No project updates this week.</p>";
-  }
-
-  return projects
-    .map(
-      (project) => `
-    <div style="margin-bottom: 24px; padding: 16px; background-color: #f0fdf4; border-radius: 8px; border-left: 4px solid #22c55e;">
-      ${project.imageUrl ? `<img src="${project.imageUrl}" alt="${project.name}" style="width: 100%; max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 12px; display: block;" />` : ""}
-      <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #111827;">${project.name}</h3>
-      <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;">${project.description}</p>
-      <p style="margin: 0; font-size: 12px; color: #6b7280;">Team: ${project.team}</p>
-      ${project.impact ? `<p style="margin: 8px 0 0 0; font-style: italic; color: #059669; font-size: 14px;">"${project.impact}"</p>` : ""}
-    </div>
-  `
-    )
-    .join("");
-}
-
-/**
- * Generate unsubscribe URL
- */
-function getUnsubscribeUrl(subscriberId?: string): string {
-  const baseUrl = config.app.url;
-  if (subscriberId) {
-    return `${baseUrl}/unsubscribe?id=${subscriberId}`;
-  }
-  return `${baseUrl}/unsubscribe`;
-}
-
-/**
- * Render template with variable substitution
- */
-export function renderTemplate(html: string, context: RenderContext): string {
-  const { articles, projects, week, year, subscriberId } = context;
-
-  // Replace all template variables
-  let rendered = html;
-
-  // Articles section
-  rendered = rendered.replace(/\{\{articles\}\}/g, renderArticles(articles));
-
-  // Projects section
-  rendered = rendered.replace(/\{\{projects\}\}/g, renderProjects(projects));
-
-  // Week and year
-  rendered = rendered.replace(/\{\{week\}\}/g, String(week));
-  rendered = rendered.replace(/\{\{year\}\}/g, String(year));
-
-  // Unsubscribe URL
-  rendered = rendered.replace(
-    /\{\{unsubscribe_url\}\}/g,
-    getUnsubscribeUrl(subscriberId)
-  );
-
-  return rendered;
-}
-
-/**
- * Get current week number
- */
 export function getWeekNumber(date: Date = new Date()): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -140,22 +208,14 @@ export function getWeekNumber(date: Date = new Date()): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-/**
- * Render the active template with context
- */
-export async function renderActiveTemplate(context: RenderContext): Promise<string | null> {
+export async function renderActiveTemplate(
+  context: RenderContext
+): Promise<string | null> {
   const template = await getActiveTemplate();
-
-  if (!template) {
-    return null;
-  }
-
+  if (!template) return null;
   return renderTemplate(template.html, context);
 }
 
-/**
- * Get a template by ID
- */
 export async function getTemplateById(templateId: string) {
   return await prisma.emailTemplate.findUnique({
     where: { id: templateId },
@@ -163,21 +223,17 @@ export async function getTemplateById(templateId: string) {
   });
 }
 
-/**
- * Render a specific template by ID with the given context
- */
 export async function renderTemplateById(
   templateId: string,
   context: RenderContext
 ): Promise<{ html: string; templateName: string } | null> {
   const template = await getTemplateById(templateId);
-
-  if (!template) {
-    return null;
-  }
+  if (!template) return null;
 
   return {
     html: renderTemplate(template.html, context),
     templateName: template.name,
   };
 }
+
+export { escapeHtml };

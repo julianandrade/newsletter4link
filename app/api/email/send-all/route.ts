@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
-import { sendNewsletterToAll, sendEmail, renderNewsletterEmail } from "@/lib/email/sender";
+import {
+  sendNewsletterToAll,
+  sendEmail,
+  renderNewsletterEmail,
+  newsletterSubject,
+} from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
 import { getCurrentEdition, markEditionAsSent } from "@/lib/queries";
-import { renderTemplateById } from "@/lib/email/template-renderer";
+import {
+  renderTemplateById,
+  injectCustomBlocks,
+  type CustomBlock,
+} from "@/lib/email/template-renderer";
 import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
@@ -11,13 +20,6 @@ import type { GeneratedNewsletter } from "@/lib/generation/generator";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
-
-interface CustomBlock {
-  id: string;
-  type: "text" | "image";
-  content: string;
-  position: "before-articles" | "after-articles" | "before-projects" | "after-projects";
-}
 
 interface CustomData {
   articles: Array<{
@@ -402,7 +404,10 @@ export async function POST(request: Request) {
       // Use default React Email component
       // If we have custom blocks, render with them
       if (customData?.customBlocks && customData.customBlocks.length > 0) {
-        const html = await renderNewsletterEmailWithCustomBlocks(emailData);
+        const html = injectCustomBlocks(
+          await renderNewsletterEmail(emailData as any),
+          customData.customBlocks
+        );
         result = await sendNewsletterWithTemplate(
           html,
           emailData,
@@ -478,71 +483,6 @@ function getWeekNumber(date: Date): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-/**
- * Render newsletter email HTML with custom blocks support
- */
-async function renderNewsletterEmailWithCustomBlocks(data: any): Promise<string> {
-  // For now, render the base email and inject custom blocks
-  const baseHtml = await renderNewsletterEmail(data);
-
-  if (!data.customBlocks || data.customBlocks.length === 0) {
-    return baseHtml;
-  }
-
-  // Inject custom blocks into the HTML
-  let html = baseHtml;
-
-  // Group blocks by position
-  const blocksByPosition: Record<string, CustomBlock[]> = {};
-  for (const block of data.customBlocks) {
-    if (!blocksByPosition[block.position]) {
-      blocksByPosition[block.position] = [];
-    }
-    blocksByPosition[block.position].push(block);
-  }
-
-  // Render and inject blocks at each position
-  for (const [position, blocks] of Object.entries(blocksByPosition)) {
-    const blocksHtml = blocks.map(block => {
-      if (block.type === 'text') {
-        return `
-          <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6;">
-            ${block.content}
-          </div>
-        `;
-      } else if (block.type === 'image') {
-        return `
-          <div style="margin: 24px 0; text-align: center;">
-            <img src="${escapeHtml(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
-          </div>
-        `;
-      }
-      return '';
-    }).join('');
-
-    // Find and inject blocks based on position
-    if (position === 'before-articles') {
-      html = html.replace(/(<h2[^>]*>.*This Week.*<\/h2>)/i, blocksHtml + '$1');
-    } else if (position === 'after-articles' || position === 'before-projects') {
-      html = html.replace(/(<h2[^>]*>.*Project.*<\/h2>)/i, blocksHtml + '$1');
-    } else if (position === 'after-projects') {
-      html = html.replace(/(<div[^>]*style="[^"]*border-top[^"]*"[^>]*>)/i, blocksHtml + '$1');
-    }
-  }
-
-  return html;
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-}
 
 interface EmailData {
   week: number;
@@ -610,12 +550,12 @@ async function sendNewsletterWithTemplate(
             ? await sendEmailWithProvider(
                 providerOverride,
                 subscriber.email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
+                newsletterSubject(data as any),
                 templateHtml
               )
             : await sendEmail(
                 subscriber.email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
+                newsletterSubject(data as any),
                 templateHtml
               );
 
@@ -762,12 +702,12 @@ async function sendToAdHocEmails(
             ? await sendEmailWithProvider(
                 providerOverride,
                 email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
+                newsletterSubject(data as any),
                 html
               )
             : await sendEmail(
                 email,
-                `AI Radar - Week ${data.week}, ${data.year}`,
+                newsletterSubject(data as any),
                 html
               );
 

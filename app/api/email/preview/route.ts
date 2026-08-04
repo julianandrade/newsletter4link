@@ -3,15 +3,14 @@ import { renderNewsletterEmail } from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
+import {
+  injectCustomBlocks,
+  renderTemplateWithData,
+  type CustomBlock,
+  type TemplateData,
+} from "@/lib/email/template-renderer";
 
 export const dynamic = "force-dynamic";
-
-interface CustomBlock {
-  id: string;
-  type: "text" | "image";
-  content: string;
-  position: "before-articles" | "after-articles" | "before-projects" | "after-projects";
-}
 
 interface CustomData {
   articles: Array<{
@@ -47,7 +46,7 @@ export async function POST(request: Request) {
     const { editionId, templateId, customData, draftId } = body;
     const ctx = await requireOrgContext();
 
-    let emailData: EmailDataForTemplate;
+    let emailData: TemplateData;
 
     // Use custom data if provided (from editor), otherwise fetch from database
     if (customData) {
@@ -223,8 +222,12 @@ export async function POST(request: Request) {
       html = renderTemplateWithData(template.html, emailData);
       usedTemplate = { id: template.id, name: template.name };
     } else {
-      // Use the default React Email component
-      html = await renderNewsletterEmail(emailData);
+      // The built-in AI Radar edition, with any custom blocks placed at the
+      // template's anchor points.
+      html = injectCustomBlocks(
+        await renderNewsletterEmail(emailData),
+        emailData.customBlocks
+      );
     }
 
     return NextResponse.json({
@@ -258,141 +261,4 @@ function getWeekNumber(date: Date): number {
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
-interface EmailDataForTemplate {
-  articles: Array<{
-    title: string;
-    summary: string;
-    sourceUrl: string;
-    category: string[];
-  }>;
-  projects: Array<{
-    name: string;
-    description: string;
-    team: string;
-    impact?: string;
-    projectDate: string;
-  }>;
-  week: number;
-  year: number;
-  customBlocks?: CustomBlock[];
-}
-
-/**
- * Render custom blocks HTML by position
- */
-function renderCustomBlocks(blocks: CustomBlock[] | undefined, position: CustomBlock['position']): string {
-  if (!blocks || blocks.length === 0) return '';
-
-  const positionBlocks = blocks.filter(b => b.position === position);
-  if (positionBlocks.length === 0) return '';
-
-  return positionBlocks.map(block => {
-    if (block.type === 'text') {
-      return `
-        <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6;">
-          ${block.content}
-        </div>
-      `;
-    } else if (block.type === 'image') {
-      return `
-        <div style="margin: 24px 0; text-align: center;">
-          <img src="${escapeHtml(block.content)}" alt="Custom image" style="max-width: 100%; height: auto; border-radius: 8px;" />
-        </div>
-      `;
-    }
-    return '';
-  }).join('');
-}
-
-/**
- * Replace placeholders in template HTML with actual newsletter data.
- * Supports placeholders like {{week}}, {{year}}, {{articles}}, {{projects}}.
- */
-function renderTemplateWithData(templateHtml: string, data: EmailDataForTemplate): string {
-  let html = templateHtml;
-
-  // Replace simple placeholders
-  html = html.replace(/\{\{week\}\}/g, String(data.week));
-  html = html.replace(/\{\{year\}\}/g, String(data.year));
-  html = html.replace(/\{\{articleCount\}\}/g, String(data.articles.length));
-  html = html.replace(/\{\{projectCount\}\}/g, String(data.projects.length));
-
-  // Generate custom blocks HTML for different positions
-  const beforeArticlesHtml = renderCustomBlocks(data.customBlocks, 'before-articles');
-  const afterArticlesHtml = renderCustomBlocks(data.customBlocks, 'after-articles');
-  const beforeProjectsHtml = renderCustomBlocks(data.customBlocks, 'before-projects');
-  const afterProjectsHtml = renderCustomBlocks(data.customBlocks, 'after-projects');
-
-  // Generate articles HTML
-  const articlesHtml = data.articles.map((article, index) => `
-    <div style="margin-bottom: 24px;">
-      <h3 style="color: #334155; font-size: 18px; font-weight: 600; margin: 0 0 8px; line-height: 1.4;">
-        ${index + 1}. ${escapeHtml(article.title)}
-      </h3>
-      ${article.category.length > 0 ? `
-        <div style="margin-bottom: 12px;">
-          ${article.category.map(cat => `
-            <span style="display: inline-block; background-color: #e0e7ff; color: #4338ca; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-right: 8px; margin-bottom: 8px;">
-              ${escapeHtml(cat)}
-            </span>
-          `).join('')}
-        </div>
-      ` : ''}
-      <p style="color: #64748b; font-size: 15px; line-height: 1.6; margin: 12px 0;">
-        ${article.summary}
-      </p>
-      <a href="${escapeHtml(article.sourceUrl)}" style="color: #3b82f6; font-size: 14px; font-weight: 500; text-decoration: none;">
-        Read more &rarr;
-      </a>
-    </div>
-  `).join('');
-
-  // Generate projects HTML
-  const projectsHtml = data.projects.map(project => `
-    <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-      <h3 style="color: #334155; font-size: 18px; font-weight: 600; margin: 0 0 8px; line-height: 1.4;">
-        ${escapeHtml(project.name)}
-      </h3>
-      <p style="color: #94a3b8; font-size: 14px; margin: 0 0 12px;">
-        ${escapeHtml(project.team)} &bull; ${formatProjectDate(project.projectDate)}
-      </p>
-      <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 12px;">
-        ${project.description}
-      </p>
-      ${project.impact ? `
-        <div style="background-color: #f0fdf4; padding: 12px 16px; border-radius: 6px; border-left: 3px solid #22c55e; margin-top: 12px;">
-          <p style="color: #166534; font-size: 13px; font-weight: 600; margin: 0 0 4px;">Impact:</p>
-          <p style="color: #15803d; font-size: 14px; margin: 0; line-height: 1.5;">${escapeHtml(project.impact)}</p>
-        </div>
-      ` : ''}
-    </div>
-  `).join('');
-
-  // Replace placeholders with custom blocks support
-  html = html.replace(/\{\{articles\}\}/g, beforeArticlesHtml + articlesHtml + afterArticlesHtml);
-  html = html.replace(/\{\{projects\}\}/g, beforeProjectsHtml + projectsHtml + afterProjectsHtml);
-
-  return html;
-}
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-}
-
-function formatProjectDate(date: string | Date): string {
-  try {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  } catch {
-    return '';
-  }
 }
