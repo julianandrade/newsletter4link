@@ -17,11 +17,23 @@
   The importer reads the folder name as the category, so importing this once
   categorises every feed correctly. Leave the category field in the dialog alone.
 
-  READ THIS BEFORE ENABLING THE arXiv GROUP. Those three feeds carry 260 to 565
-  items each, per day. Curation makes four Claude calls per article, so enabling
-  them multiplies the cost of every run by roughly a hundred. They are in their
-  own group so they can be imported without being switched on, and they want a
-  higher relevance threshold than the rest.
+  READ THIS BEFORE ENABLING THE AI Preprints GROUP. Those four arXiv feeds carry
+  100 to 710 items each, per day, and curation makes four Claude calls per
+  article. Switching all four on multiplies the cost of a run by roughly two
+  hundred. They are in their own group so they can be imported without being
+  enabled, and they want a much higher relevance threshold than the rest. arXiv
+  publishes Sunday to Thursday: an empty feed on Friday and Saturday is by design,
+  not a fault.
+
+  Two notes on the community entries. Anthropic publishes no RSS at all, so its
+  entry is a community mirror that has to be re-checked monthly: the failure mode
+  is silent staleness, not an error. Reddit throttles hard, and returned HTTP 429
+  on a single request for r/MachineLearning and r/ClaudeAI, so only r/LocalLLaMA
+  is included and it should be polled no more than hourly.
+
+  Corrections to the source research, all found by fetching: the MCP blog serves
+  no feed at /rss or /feed, only at /index.xml; SemiAnalysis last published 322
+  days ago and is not a live source; rss.sapo.pt/tek/ does not resolve at all.
 -->
 <opml version="2.0">
   <head>
@@ -37,6 +49,10 @@
       <outline type="rss" text="AWS Machine Learning" xmlUrl="https://aws.amazon.com/blogs/machine-learning/feed/" htmlUrl="https://aws.amazon.com/blogs/machine-learning/"/>
       <outline type="rss" text="PyTorch" xmlUrl="https://pytorch.org/blog/feed.xml" htmlUrl="https://pytorch.org/blog/"/>
       <outline type="rss" text="Together AI" xmlUrl="https://www.together.ai/blog/rss.xml" htmlUrl="https://www.together.ai/blog"/>
+      <outline type="rss" text="Azure AI" xmlUrl="https://azure.microsoft.com/en-us/blog/feed/" htmlUrl="https://azure.microsoft.com/en-us/blog/"/>
+      <outline type="rss" text="Apple Machine Learning Research" xmlUrl="https://machinelearning.apple.com/rss.xml" htmlUrl="https://machinelearning.apple.com/"/>
+      <outline type="rss" text="NVIDIA Developer" xmlUrl="https://developer.nvidia.com/blog/feed" htmlUrl="https://developer.nvidia.com/blog/"/>
+      <outline type="rss" text="Anthropic News (community mirror)" xmlUrl="https://rsshub.bestblogs.dev/anthropic/news" htmlUrl="https://www.anthropic.com/news"/>
     </outline>
     <outline text="AI Analysis">
       <outline type="rss" text="Import AI" xmlUrl="https://importai.substack.com/feed" htmlUrl="https://importai.substack.com/"/>
@@ -46,25 +62,46 @@
       <outline type="rss" text="Sebastian Raschka" xmlUrl="https://magazine.sebastianraschka.com/feed" htmlUrl="https://magazine.sebastianraschka.com/"/>
       <outline type="rss" text="One Useful Thing" xmlUrl="https://www.oneusefulthing.org/feed" htmlUrl="https://www.oneusefulthing.org/"/>
       <outline type="rss" text="AI Snake Oil" xmlUrl="https://www.aisnakeoil.com/feed" htmlUrl="https://www.aisnakeoil.com/"/>
+      <outline type="rss" text="Eugene Yan" xmlUrl="https://eugeneyan.com/rss/" htmlUrl="https://eugeneyan.com/"/>
+      <outline type="rss" text="Lil Log (Lilian Weng)" xmlUrl="https://lilianweng.github.io/index.xml" htmlUrl="https://lilianweng.github.io/"/>
+      <outline type="rss" text="ChinaTalk" xmlUrl="https://www.chinatalk.media/feed" htmlUrl="https://www.chinatalk.media/"/>
     </outline>
     <outline text="AI News">
       <outline type="rss" text="The Verge AI" xmlUrl="https://www.theverge.com/rss/ai-artificial-intelligence/index.xml" htmlUrl="https://www.theverge.com/ai-artificial-intelligence"/>
       <outline type="rss" text="Ars Technica AI" xmlUrl="https://arstechnica.com/ai/feed/" htmlUrl="https://arstechnica.com/ai/"/>
       <outline type="rss" text="Wired AI" xmlUrl="https://www.wired.com/feed/tag/ai/latest/rss" htmlUrl="https://www.wired.com/tag/ai/"/>
       <outline type="rss" text="The Register AI" xmlUrl="https://www.theregister.com/software/ai_ml/headlines.atom" htmlUrl="https://www.theregister.com/software/ai_ml/"/>
+      <outline type="rss" text="MarkTechPost" xmlUrl="https://www.marktechpost.com/feed/" htmlUrl="https://www.marktechpost.com/"/>
+      <outline type="rss" text="IEEE Spectrum" xmlUrl="https://spectrum.ieee.org/feeds/feed.rss" htmlUrl="https://spectrum.ieee.org/"/>
     </outline>
     <outline text="AI Community">
       <outline type="rss" text="Hacker News: Show HN" xmlUrl="https://hnrss.org/show" htmlUrl="https://news.ycombinator.com/show"/>
-      <outline type="rss" text="Hacker News: AI mentions" xmlUrl="https://hnrss.org/newest?q=AI" htmlUrl="https://news.ycombinator.com/"/>
+      <outline type="rss" text="Hacker News: front page over 100 points" xmlUrl="https://hnrss.org/frontpage?points=100" htmlUrl="https://news.ycombinator.com/"/>
+      <outline type="rss" text="Hacker News: LLM mentions over 50 points" xmlUrl="https://hnrss.org/newest?q=LLM+OR+GPT+OR+Claude&amp;points=50" htmlUrl="https://news.ycombinator.com/"/>
+      <outline type="rss" text="Reddit r/LocalLLaMA" xmlUrl="https://www.reddit.com/r/LocalLLaMA/.rss" htmlUrl="https://www.reddit.com/r/LocalLLaMA/"/>
     </outline>
     <outline text="AI Academic">
       <outline type="rss" text="MIT News AI" xmlUrl="https://news.mit.edu/rss/topic/artificial-intelligence2" htmlUrl="https://news.mit.edu/topic/artificial-intelligence2"/>
       <outline type="rss" text="Berkeley BAIR" xmlUrl="https://bair.berkeley.edu/blog/feed.xml" htmlUrl="https://bair.berkeley.edu/blog/"/>
     </outline>
     <outline text="AI Preprints">
-      <outline type="rss" text="arXiv cs.AI" xmlUrl="http://export.arxiv.org/rss/cs.AI" htmlUrl="https://arxiv.org/list/cs.AI/recent"/>
-      <outline type="rss" text="arXiv cs.CL" xmlUrl="http://export.arxiv.org/rss/cs.CL" htmlUrl="https://arxiv.org/list/cs.CL/recent"/>
-      <outline type="rss" text="arXiv cs.LG" xmlUrl="http://export.arxiv.org/rss/cs.LG" htmlUrl="https://arxiv.org/list/cs.LG/recent"/>
+      <outline type="rss" text="arXiv cs.AI" xmlUrl="https://rss.arxiv.org/rss/cs.AI" htmlUrl="https://arxiv.org/list/cs.AI/recent"/>
+      <outline type="rss" text="arXiv cs.CL" xmlUrl="https://rss.arxiv.org/rss/cs.CL" htmlUrl="https://arxiv.org/list/cs.CL/recent"/>
+      <outline type="rss" text="arXiv cs.LG" xmlUrl="https://rss.arxiv.org/rss/cs.LG" htmlUrl="https://arxiv.org/list/cs.LG/recent"/>
+      <outline type="rss" text="arXiv cs.SE" xmlUrl="https://rss.arxiv.org/rss/cs.SE" htmlUrl="https://arxiv.org/list/cs.SE/recent"/>
+    </outline>
+    <outline text="AI Agents">
+      <outline type="rss" text="Claude Code changelog" xmlUrl="https://raw.githubusercontent.com/anthropics/claude-code/main/feed.xml" htmlUrl="https://github.com/anthropics/claude-code"/>
+      <outline type="rss" text="Model Context Protocol" xmlUrl="https://blog.modelcontextprotocol.io/index.xml" htmlUrl="https://blog.modelcontextprotocol.io/"/>
+    </outline>
+    <outline text="AI Quantum">
+      <outline type="rss" text="Quanta: quantum computing" xmlUrl="https://www.quantamagazine.org/tag/quantum-computing/feed/" htmlUrl="https://www.quantamagazine.org/tag/quantum-computing/"/>
+      <outline type="rss" text="ScienceDaily: quantum computers" xmlUrl="https://www.sciencedaily.com/rss/computers_math/quantum_computers.xml" htmlUrl="https://www.sciencedaily.com/news/computers_math/quantum_computers/"/>
+    </outline>
+    <outline text="AI Portugal">
+      <outline type="rss" text="Pplware" xmlUrl="https://pplware.sapo.pt/feed/" htmlUrl="https://pplware.sapo.pt/"/>
+      <outline type="rss" text="Observador" xmlUrl="https://observador.pt/feed/" htmlUrl="https://observador.pt/"/>
+      <outline type="rss" text="Jornal Economico" xmlUrl="https://jornaleconomico.sapo.pt/feed" htmlUrl="https://jornaleconomico.sapo.pt/"/>
     </outline>
   </body>
 </opml>
