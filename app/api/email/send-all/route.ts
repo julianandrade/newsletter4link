@@ -15,9 +15,10 @@ import {
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
-import { requireOrgContext } from "@/lib/auth/context";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
+import { isoWeekAndYear } from "@/lib/radar/week";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -61,7 +62,14 @@ interface CustomData {
  */
 export async function POST(request: Request) {
   try {
-    const { db, organization } = await requireOrgContext();
+    const ctx = await requireOrgContext();
+    const { db, organization } = ctx;
+
+    // RQ-005 BR-011: this route mails every active subscriber, so membership alone
+    // is not enough to reach it. It previously required only that the caller belong
+    // to the organization, which let a VIEWER send the newsletter.
+    requireRole(ctx, "EDITOR");
+
     const body = await request.json();
     const { editionId, templateId, customData, subscriberIds, emails, provider, draftId } = body;
 
@@ -150,8 +158,7 @@ export async function POST(request: Request) {
 
       // Create edition if doesn't exist
       const now = new Date();
-      const week = getWeekNumber(now);
-      const year = now.getFullYear();
+      const { week, year } = isoWeekAndYear(now);
 
       // Check if edition exists for this week in this org
       edition = await db.edition.findFirst({
@@ -443,7 +450,20 @@ export async function POST(request: Request) {
 
     // Mark edition and draft as sent/used
     if (result.sent > 0) {
+      // RQ-005 BR-011: a sent edition must be able to say who approved the send
+      // and when. The columns existed and nothing wrote them, so every edition
+      // sent so far answers "unknown". Written in the same step that marks it
+      // sent, and only if it is not already set, because an approval is a fact
+      // about the first send rather than the latest one.
       await markEditionAsSent(edition.id);
+      await db.edition.updateMany({
+        where: { id: edition.id, approvedAt: null },
+        data: {
+          approvedAt: new Date(),
+          approvedByEmail: ctx.membership.email,
+          approvedById: ctx.membership.supabaseUserId,
+        },
+      });
       if (approvedDraft) {
         await db.generationDraft.update({
           where: { id: approvedDraft.id },
@@ -484,6 +504,23 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error sending newsletter:", error);
 
+    // A refused caller is 401 or 403, not 500. Every failure here used to come
+    // back as a server error carrying the thrown message, which told the client
+    // it could retry and told a log reader nothing about what actually happened.
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof Error && error.message.startsWith("Forbidden")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -494,15 +531,6 @@ export async function POST(request: Request) {
   }
 }
 
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
 
 
 interface EmailData {

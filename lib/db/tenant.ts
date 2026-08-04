@@ -693,6 +693,10 @@ export function createTenantClient(organizationId: string) {
     },
 
     // ==================== EMAIL EVENTS ====================
+    // EmailEvent has no organizationId of its own: it is scoped by the edition
+    // and the subscriber it points at. None of these methods can add an
+    // organization filter, so callers must pass ids they have already resolved
+    // through db.edition or db.subscriber.
     emailEvent: {
       findMany: <T extends Prisma.EmailEventFindManyArgs>(args?: T) =>
         prisma.emailEvent.findMany(args),
@@ -702,6 +706,17 @@ export function createTenantClient(organizationId: string) {
 
       count: <T extends Prisma.EmailEventCountArgs>(args?: T) =>
         prisma.emailEvent.count(args),
+
+      /**
+       * RQ-005 BR-013: removing an edition has to remove its delivery history in
+       * the same transaction, so force delete needs this.
+       *
+       * Cannot be organization-scoped, for the reason above. Pass edition ids
+       * that came back from db.edition.findMany, never ids straight off a
+       * request body, or this reaches another tenant's events.
+       */
+      deleteMany: <T extends Prisma.EmailEventDeleteManyArgs>(args: T) =>
+        prisma.emailEvent.deleteMany(args),
     },
 
     // ==================== RAW PRISMA ACCESS ====================

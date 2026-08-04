@@ -5,8 +5,8 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/weekly-send",
-      "schedule": "0 12 * * 0"
+      "path": "/api/cron/weekly-proposal",
+      "schedule": "30 9 * * *"
     }
   ]
 }

@@ -3,16 +3,53 @@ import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
+const ARCHIVED_MODES = ["exclude", "only", "all"] as const;
+type ArchivedMode = (typeof ARCHIVED_MODES)[number];
+
 /**
- * GET /api/editions
- * Get all editions with article/project counts, sorted by year desc, week desc (tenant-scoped)
+ * GET /api/editions?archived=exclude|only|all
+ *
+ * Get all editions with article/project counts, sorted by year desc, week desc
+ * (tenant-scoped).
+ *
+ * RQ-005 action 8: `archive` sets `archivedAt`, and until this filter existed
+ * nothing read it, so archiving an edition changed nothing anyone could see. The
+ * default is `exclude`, which is what makes archive a way of putting an old
+ * edition away rather than a flag with no effect.
+ *
+ * An unrecognized value is a 400 rather than a silent fall back to the default: a
+ * caller that asked for `only` and quietly received the live list would show
+ * exactly the rows it meant to hide.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const ctx = await requireOrgContext();
     const { db } = ctx;
 
+    const requested =
+      new URL(request.url).searchParams.get("archived") ?? "exclude";
+
+    if (!ARCHIVED_MODES.includes(requested as ArchivedMode)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `archived must be one of ${ARCHIVED_MODES.join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const archived = requested as ArchivedMode;
+
+    const where =
+      archived === "exclude"
+        ? { archivedAt: null }
+        : archived === "only"
+          ? { archivedAt: { not: null } }
+          : {};
+
     const editions = await db.edition.findMany({
+      where,
       orderBy: [
         { year: "desc" },
         { week: "desc" },
@@ -36,6 +73,10 @@ export async function GET() {
       scheduledDate: edition.scheduledDate,
       finalizedAt: edition.finalizedAt,
       sentAt: edition.sentAt,
+      archivedAt: edition.archivedAt,
+      // RQ-005 BR-011: who approved the send, so a sent edition can answer it.
+      approvedAt: edition.approvedAt,
+      approvedByEmail: edition.approvedByEmail,
       generatedContent: edition.generatedContent,
       generatedAt: edition.generatedAt,
       createdAt: edition.createdAt,

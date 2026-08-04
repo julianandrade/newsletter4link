@@ -19,22 +19,11 @@ import {
   GenerationCancelledError,
 } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
+import { isoWeekAndYear } from "@/lib/radar/week";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
 
-/**
- * Get ISO week number for a date
- */
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -128,8 +117,7 @@ export async function GET(request: NextRequest) {
 
       // Get week and year from edition
       const editionDate = edition.scheduledDate || new Date();
-      const weekNumber = getWeekNumber(editionDate);
-      const year = editionDate.getFullYear();
+      const { week: weekNumber, year } = isoWeekAndYear(editionDate);
 
       // RQ-002: the organization's selected model governs drafting too.
       const { model } = await resolveAiModels(organizationId);

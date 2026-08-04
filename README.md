@@ -9,7 +9,7 @@ Autonomous AI-powered newsletter curation and delivery system for Link Consultin
 - 🚀 **Internal Showcase**: Highlight Link's AI projects and achievements
 - 📧 **Email Delivery**: Batch sending to 1,000+ subscribers with Resend
 - 📊 **Analytics**: Track opens, clicks, and engagement metrics
-- ⏰ **Automated Scheduling**: Weekly cron jobs for collection and delivery
+- ⏰ **Automated Scheduling**: Daily cron jobs for collection and for proposing the week's edition. Delivery is never automated: a person approves the send.
 
 ## Tech Stack
 
@@ -116,7 +116,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### Content Collection
 
-1. **Automatic**: Cron job runs every 6 hours to fetch RSS feeds
+1. **Automatic**: Cron job runs daily at 09:00 UTC to fetch RSS feeds
 2. **Manual**: Visit `/api/curation/collect` to trigger manually
 
 ### Editorial Review
@@ -134,12 +134,18 @@ Open [http://localhost:3000](http://localhost:3000)
 3. Send test email to yourself
 4. Schedule or send to all subscribers
 
-### Automated Weekly Send
+### Automated Weekly Proposal
 
-- **Schedule**: Sunday 12:00 UTC
-- **Trigger**: Vercel Cron hits `/api/cron/weekly-send`
-- **Behavior**: Auto-approves top 10 articles if not manually finalized
-- **Delivery**: Batch sends to all active subscribers
+Automation proposes; only a person sends.
+
+- **Schedule**: daily, 09:30 UTC
+- **Trigger**: Vercel Cron hits `/api/cron/weekly-proposal`
+- **Behavior**: assembles the week's proposed edition and stops there
+- **Delivery**: none. Sending requires a human approval (RQ-005, BR-011)
+
+The previous `/api/cron/weekly-send` auto-finalized an edition and mailed it with
+nobody in the loop. It was deleted rather than unscheduled: a route that exists
+can be called.
 
 ## API Endpoints
 
@@ -168,7 +174,12 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### Cron (Protected)
 - `GET /api/cron/daily-collection` - Fetch RSS feeds
-- `GET /api/cron/weekly-send` - Send newsletter
+- `GET /api/cron/weekly-proposal` - Assemble the week's proposal (never sends)
+
+Both refuse every request unless `CRON_SECRET` is set on the deployment and the
+caller presents it as `Authorization: Bearer $CRON_SECRET`. Vercel sends that
+header on its own cron invocations. With the variable unset the routes return 503
+and do not run.
 
 ## Deployment
 
@@ -188,11 +199,11 @@ Configure in `vercel.json`:
   "crons": [
     {
       "path": "/api/cron/daily-collection",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/weekly-send",
-      "schedule": "0 12 * * 0"
+      "path": "/api/cron/weekly-proposal",
+      "schedule": "30 9 * * *"
     }
   ]
 }

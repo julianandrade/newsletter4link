@@ -276,6 +276,21 @@ model Edition {
   finalizedAt   DateTime?
   sentAt        DateTime?
 
+  // RQ-005 action 8, D5: archive is what happens to a sent edition. Absence of
+  // the marker is the default, visible state, so nothing has to be backfilled.
+  archivedAt DateTime?
+
+  // RQ-005 BR-011: the approval that caused the send, recorded so a sent edition
+  // can always answer who and when. Immutable once set.
+  approvedAt      DateTime?
+  approvedByEmail String?
+  approvedById    String? // Supabase user id, survives the person leaving
+
+  // RQ-005 action 1: the last time the schedule topped this proposal up. The
+  // top-up only considers articles collected after it, so an article an editor
+  // removed is never silently added back.
+  proposalRefreshedAt DateTime?
+
   // Ghost Writer generated content
   generatedContent Json? // AI-generated newsletter content
   generatedAt      DateTime?
@@ -302,9 +317,14 @@ model Edition {
   projects EditionProject[]
   drafts   GenerationDraft[]
 
+  // RQ-005 BR-013: the association that used to point at nothing. Delivery
+  // history is now either preserved with the edition or removed with it.
+  emailEvents EmailEvent[]
+
   @@unique([week, year, organizationId]) // Same week/year can exist in different orgs
   @@index([status])
   @@index([organizationId])
+  @@index([archivedAt])
 }
 
 enum EditionStatus {
@@ -405,7 +425,11 @@ model EmailEvent {
   subscriber   Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
   subscriberId String
 
+  // RQ-005 BR-013: editionId was a bare String with no relation and no cascade,
+  // so deleting an edition orphaned its delivery history instead of removing it.
+  edition   Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
   editionId String
+
   eventType EmailEventType
   timestamp DateTime       @default(now())
 

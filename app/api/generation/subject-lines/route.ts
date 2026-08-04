@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { regenerateSubjectLines } from "@/lib/generation/generator";
+import { isoWeekAndYear } from "@/lib/radar/week";
 
 export async function POST(request: NextRequest) {
   try {
@@ -132,8 +133,7 @@ export async function POST(request: NextRequest) {
           where: { id: draft.editionId, organizationId: ctx.organization.id },
         });
     const editionDate = editionForDate?.scheduledDate || new Date();
-    const weekNumber = getWeekNumber(editionDate);
-    const year = editionDate.getFullYear();
+    const { week: weekNumber, year } = isoWeekAndYear(editionDate);
 
     // Generate new subject lines
     // RQ-002
@@ -173,10 +173,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}

@@ -1,168 +1,216 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { deleteNeverSentEditions } from "@/lib/editions/lifecycle";
 import { EditionStatus, Prisma } from "@prisma/client";
 
 /**
+ * RQ-005 conflict C2: these three handlers used bare prisma with no auth call at
+ * all, so any authenticated request could read, modify or delete another
+ * organization's edition by id. They now go through requireOrgContext and the
+ * tenant client, and an edition outside the caller's organization answers 404:
+ * never 403, and never the row.
+ */
+
+const ARTICLE_FIELDS = {
+  id: true,
+  title: true,
+  sourceUrl: true,
+  author: true,
+  publishedAt: true,
+  relevanceScore: true,
+  summary: true,
+  category: true,
+  status: true,
+} as const;
+
+const PROJECT_FIELDS = {
+  id: true,
+  name: true,
+  description: true,
+  team: true,
+  projectDate: true,
+  impact: true,
+  imageUrl: true,
+  featured: true,
+} as const;
+
+const EDITION_INCLUDE = {
+  articles: {
+    include: { article: { select: ARTICLE_FIELDS } },
+    orderBy: { order: "asc" },
+  },
+  projects: {
+    include: { project: { select: PROJECT_FIELDS } },
+    orderBy: { order: "asc" },
+  },
+} satisfies Prisma.EditionInclude;
+
+type EditionWithContents = Prisma.EditionGetPayload<{
+  include: typeof EDITION_INCLUDE;
+}>;
+
+function transformEdition(edition: EditionWithContents) {
+  return {
+    id: edition.id,
+    week: edition.week,
+    year: edition.year,
+    status: edition.status,
+    finalizedAt: edition.finalizedAt,
+    sentAt: edition.sentAt,
+    createdAt: edition.createdAt,
+    updatedAt: edition.updatedAt,
+    editorDesignJson: edition.editorDesignJson,
+    templateId: edition.templateId,
+    // RQ-005 action 8 and BR-011: the archive marker and the approval record
+    // travel with the edition, so a screen never has to guess either.
+    archivedAt: edition.archivedAt,
+    approvedAt: edition.approvedAt,
+    approvedByEmail: edition.approvedByEmail,
+    // SharePoint fields
+    sharePointUrl: edition.sharePointUrl,
+    sharePointPageId: edition.sharePointPageId,
+    sharePointPublishedAt: edition.sharePointPublishedAt,
+    sharePointError: edition.sharePointError,
+    articles: edition.articles.map((ea) => ({
+      ...ea.article,
+      order: ea.order,
+    })),
+    projects: edition.projects.map((ep) => ({
+      ...ep.project,
+      order: ep.order,
+    })),
+    articleCount: edition.articles.length,
+    projectCount: edition.projects.length,
+  };
+}
+
+/**
+ * RQ-005 AC-2.10 and AC-6.7: a refusal on a sent edition says it was already
+ * sent, by whom, and when, rather than just refusing.
+ */
+function alreadySentMessage(edition: {
+  sentAt: Date | null;
+  approvedAt: Date | null;
+  approvedByEmail: string | null;
+}): string {
+  const when = edition.approvedAt ?? edition.sentAt;
+  const date = when
+    ? when.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+
+  const who = edition.approvedByEmail;
+
+  if (date && who) return `This edition was already sent on ${date} by ${who}`;
+  if (date) return `This edition was already sent on ${date}`;
+  return "This edition was already sent";
+}
+
+function errorResponse(error: unknown, fallback: string) {
+  console.error(fallback, error);
+
+  if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 401 }
+    );
+  }
+
+  if (error instanceof Error && error.message.startsWith("Forbidden")) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 403 }
+    );
+  }
+
+  return NextResponse.json({ success: false, error: fallback }, { status: 500 });
+}
+
+/**
  * GET /api/editions/:id
- * Get edition details with full article and project data
+ * Edition details with full article and project data, for this organization only.
  */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { db } = await requireOrgContext();
     const { id } = await params;
 
-    const edition = await prisma.edition.findUnique({
+    // The tenant wrapper's generic does not carry `include` through to the
+    // return type, which is why the other edition routes reach for `any` here.
+    // A cast to the payload keeps the transform typed instead.
+    const edition = (await db.edition.findFirst({
       where: { id },
-      include: {
-        articles: {
-          include: {
-            article: {
-              select: {
-                id: true,
-                title: true,
-                sourceUrl: true,
-                author: true,
-                publishedAt: true,
-                relevanceScore: true,
-                summary: true,
-                category: true,
-                status: true,
-              },
-            },
-          },
-          orderBy: { order: "asc" },
-        },
-        projects: {
-          include: {
-            project: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                team: true,
-                projectDate: true,
-                impact: true,
-                imageUrl: true,
-                featured: true,
-              },
-            },
-          },
-          orderBy: { order: "asc" },
-        },
-      },
-    });
+      include: EDITION_INCLUDE,
+    })) as EditionWithContents | null;
 
     if (!edition) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Edition not found",
-        },
+        { success: false, error: "Edition not found" },
         { status: 404 }
       );
     }
 
-    // Transform to flatten the nested structure
-    const transformedEdition = {
-      id: edition.id,
-      week: edition.week,
-      year: edition.year,
-      status: edition.status,
-      finalizedAt: edition.finalizedAt,
-      sentAt: edition.sentAt,
-      createdAt: edition.createdAt,
-      updatedAt: edition.updatedAt,
-      editorDesignJson: edition.editorDesignJson,
-      templateId: edition.templateId,
-      // SharePoint fields
-      sharePointUrl: edition.sharePointUrl,
-      sharePointPageId: edition.sharePointPageId,
-      sharePointPublishedAt: edition.sharePointPublishedAt,
-      sharePointError: edition.sharePointError,
-      articles: edition.articles.map((ea) => ({
-        ...ea.article,
-        order: ea.order,
-      })),
-      projects: edition.projects.map((ep) => ({
-        ...ep.project,
-        order: ep.order,
-      })),
-      articleCount: edition.articles.length,
-      projectCount: edition.projects.length,
-    };
-
     return NextResponse.json({
       success: true,
-      data: transformedEdition,
+      data: transformEdition(edition),
     });
   } catch (error) {
-    console.error("Error fetching edition:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, "Failed to load the edition");
   }
 }
 
 /**
  * PATCH /api/editions/:id
- * Update edition (status, articles, projects)
+ * Update the edition's status, articles, projects or design. EDITOR or above.
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
+    const { db } = ctx;
+
     const { id } = await params;
     const body = await request.json();
     const { status, articles, projects, editorDesignJson, templateId } = body;
 
-    // Check if edition exists
-    const existingEdition = await prisma.edition.findUnique({
-      where: { id },
-    });
+    const existingEdition = await db.edition.findFirst({ where: { id } });
 
     if (!existingEdition) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Edition not found",
-        },
+        { success: false, error: "Edition not found" },
         { status: 404 }
       );
     }
 
-    // Prevent modification of SENT editions
-    if (existingEdition.status === "SENT") {
+    // RQ-005 AC-6.7: a sent edition cannot be changed, and the refusal says who
+    // approved it and when. 409 rather than 400: the request is well formed, the
+    // edition's state is what refuses it.
+    if (existingEdition.sentAt || existingEdition.status === "SENT") {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Cannot modify a sent edition",
-        },
-        { status: 400 }
+        { success: false, error: alreadySentMessage(existingEdition) },
+        { status: 409 }
       );
     }
 
-    // Prepare update data
     const updateData: Prisma.EditionUpdateInput = {};
 
-    // Handle editorDesignJson and templateId updates
     if (editorDesignJson !== undefined) {
-      updateData.editorDesignJson = editorDesignJson === null
-        ? Prisma.JsonNull
-        : editorDesignJson;
+      updateData.editorDesignJson =
+        editorDesignJson === null ? Prisma.JsonNull : editorDesignJson;
     }
     if (templateId !== undefined) {
       updateData.templateId = templateId;
     }
 
-    // Handle status updates
     if (status !== undefined) {
       if (!["DRAFT", "FINALIZED", "SENT"].includes(status)) {
         return NextResponse.json(
@@ -176,264 +224,195 @@ export async function PATCH(
 
       updateData.status = status as EditionStatus;
 
-      // Set timestamps based on status transition
-      // Note: existingEdition.status is guaranteed to be DRAFT or FINALIZED here
-      // (we return early above if it's SENT)
+      // existingEdition.status is DRAFT or FINALIZED here: SENT returned above.
       if (status === "FINALIZED" && existingEdition.status === "DRAFT") {
         updateData.finalizedAt = new Date();
       } else if (status === "SENT") {
-        // Transitioning to SENT from DRAFT or FINALIZED
         updateData.sentAt = new Date();
         if (!existingEdition.finalizedAt) {
           updateData.finalizedAt = new Date();
         }
       } else if (status === "DRAFT") {
-        // Reverting to DRAFT from FINALIZED (SENT case already handled above)
         updateData.finalizedAt = null;
       }
     }
 
-    // Use transaction to handle all updates atomically
-    const updatedEdition = await prisma.$transaction(async (tx) => {
-      // Update edition basic data
+    // Article and project ids are validated tenant-scoped, before the
+    // transaction, so a cross-tenant id cannot be written into a join row.
+    let articleRows: Array<{ articleId: string; order: number }> | null = null;
+
+    if (articles !== undefined) {
+      if (!Array.isArray(articles)) {
+        return NextResponse.json(
+          { success: false, error: "Articles must be an array" },
+          { status: 400 }
+        );
+      }
+
+      const articleIds = articles.map((a: { articleId: string }) => a.articleId);
+      const found = await db.article.findMany({
+        where: { id: { in: articleIds } },
+        select: { id: true },
+      });
+      const foundIds = new Set(found.map((a) => a.id));
+      const missing = articleIds.filter((articleId: string) => !foundIds.has(articleId));
+
+      if (missing.length > 0) {
+        return NextResponse.json(
+          { success: false, error: `Articles not found: ${missing.join(", ")}` },
+          { status: 404 }
+        );
+      }
+
+      articleRows = articles.map(
+        (a: { articleId: string; order?: number }, index: number) => ({
+          articleId: a.articleId,
+          order: a.order ?? index + 1,
+        })
+      );
+    }
+
+    let projectRows: Array<{ projectId: string; order: number }> | null = null;
+
+    if (projects !== undefined) {
+      if (!Array.isArray(projects)) {
+        return NextResponse.json(
+          { success: false, error: "Projects must be an array" },
+          { status: 400 }
+        );
+      }
+
+      const projectIds = projects.map((p: { projectId: string }) => p.projectId);
+      const found = await db.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true },
+      });
+      const foundIds = new Set(found.map((p) => p.id));
+      const missing = projectIds.filter((projectId: string) => !foundIds.has(projectId));
+
+      if (missing.length > 0) {
+        return NextResponse.json(
+          { success: false, error: `Projects not found: ${missing.join(", ")}` },
+          { status: 404 }
+        );
+      }
+
+      projectRows = projects.map(
+        (p: { projectId: string; order?: number }, index: number) => ({
+          projectId: p.projectId,
+          order: p.order ?? index + 1,
+        })
+      );
+    }
+
+    const updatedEdition = await db.$raw.$transaction(async (tx) => {
       if (Object.keys(updateData).length > 0) {
         await tx.edition.update({
-          where: { id },
+          where: { id, organizationId: db.organizationId },
           data: updateData,
         });
       }
 
-      // Update articles if provided
-      if (articles !== undefined) {
-        // Validate articles array
-        if (!Array.isArray(articles)) {
-          throw new Error("Articles must be an array");
-        }
+      if (articleRows) {
+        await tx.editionArticle.deleteMany({ where: { editionId: id } });
 
-        // Remove all existing article associations
-        await tx.editionArticle.deleteMany({
-          where: { editionId: id },
-        });
-
-        // Add new article associations
-        if (articles.length > 0) {
-          // Validate all article IDs exist
-          const articleIds = articles.map((a: { articleId: string }) => a.articleId);
-          const existingArticles = await tx.article.findMany({
-            where: { id: { in: articleIds } },
-            select: { id: true },
-          });
-
-          const existingArticleIds = new Set(existingArticles.map((a) => a.id));
-          const missingArticles = articleIds.filter((id: string) => !existingArticleIds.has(id));
-
-          if (missingArticles.length > 0) {
-            throw new Error(`Articles not found: ${missingArticles.join(", ")}`);
-          }
-
+        if (articleRows.length > 0) {
           await tx.editionArticle.createMany({
-            data: articles.map((a: { articleId: string; order: number }, index: number) => ({
-              editionId: id,
-              articleId: a.articleId,
-              order: a.order ?? index + 1,
-            })),
+            data: articleRows.map((row) => ({ ...row, editionId: id })),
           });
         }
       }
 
-      // Update projects if provided
-      if (projects !== undefined) {
-        // Validate projects array
-        if (!Array.isArray(projects)) {
-          throw new Error("Projects must be an array");
-        }
+      if (projectRows) {
+        await tx.editionProject.deleteMany({ where: { editionId: id } });
 
-        // Remove all existing project associations
-        await tx.editionProject.deleteMany({
-          where: { editionId: id },
-        });
-
-        // Add new project associations
-        if (projects.length > 0) {
-          // Validate all project IDs exist
-          const projectIds = projects.map((p: { projectId: string }) => p.projectId);
-          const existingProjects = await tx.project.findMany({
-            where: { id: { in: projectIds } },
-            select: { id: true },
-          });
-
-          const existingProjectIds = new Set(existingProjects.map((p) => p.id));
-          const missingProjects = projectIds.filter((id: string) => !existingProjectIds.has(id));
-
-          if (missingProjects.length > 0) {
-            throw new Error(`Projects not found: ${missingProjects.join(", ")}`);
-          }
-
+        if (projectRows.length > 0) {
           await tx.editionProject.createMany({
-            data: projects.map((p: { projectId: string; order: number }, index: number) => ({
-              editionId: id,
-              projectId: p.projectId,
-              order: p.order ?? index + 1,
-            })),
+            data: projectRows.map((row) => ({ ...row, editionId: id })),
           });
         }
       }
 
-      // Return updated edition with all data
-      return tx.edition.findUnique({
-        where: { id },
-        include: {
-          articles: {
-            include: {
-              article: {
-                select: {
-                  id: true,
-                  title: true,
-                  sourceUrl: true,
-                  author: true,
-                  publishedAt: true,
-                  relevanceScore: true,
-                  summary: true,
-                  category: true,
-                  status: true,
-                },
-              },
-            },
-            orderBy: { order: "asc" },
-          },
-          projects: {
-            include: {
-              project: {
-                select: {
-                  id: true,
-                  name: true,
-                  description: true,
-                  team: true,
-                  projectDate: true,
-                  impact: true,
-                  imageUrl: true,
-                  featured: true,
-                },
-              },
-            },
-            orderBy: { order: "asc" },
-          },
-        },
-      });
+      return tx.edition.findUnique({ where: { id }, include: EDITION_INCLUDE });
     });
 
     if (!updatedEdition) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to update edition",
-        },
+        { success: false, error: "Failed to update edition" },
         { status: 500 }
       );
     }
 
-    // Transform response
-    const transformedEdition = {
-      id: updatedEdition.id,
-      week: updatedEdition.week,
-      year: updatedEdition.year,
-      status: updatedEdition.status,
-      finalizedAt: updatedEdition.finalizedAt,
-      sentAt: updatedEdition.sentAt,
-      createdAt: updatedEdition.createdAt,
-      updatedAt: updatedEdition.updatedAt,
-      editorDesignJson: updatedEdition.editorDesignJson,
-      templateId: updatedEdition.templateId,
-      // SharePoint fields
-      sharePointUrl: updatedEdition.sharePointUrl,
-      sharePointPageId: updatedEdition.sharePointPageId,
-      sharePointPublishedAt: updatedEdition.sharePointPublishedAt,
-      sharePointError: updatedEdition.sharePointError,
-      articles: updatedEdition.articles.map((ea) => ({
-        ...ea.article,
-        order: ea.order,
-      })),
-      projects: updatedEdition.projects.map((ep) => ({
-        ...ep.project,
-        order: ep.order,
-      })),
-      articleCount: updatedEdition.articles.length,
-      projectCount: updatedEdition.projects.length,
-    };
-
     return NextResponse.json({
       success: true,
-      data: transformedEdition,
+      data: transformEdition(updatedEdition),
       message: "Edition updated successfully",
     });
   } catch (error) {
-    console.error("Error updating edition:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, "Failed to update the edition");
   }
 }
 
 /**
  * DELETE /api/editions/:id
- * Delete edition (only if DRAFT status)
+ *
+ * RQ-005 AC-8.4 and AC-8.8: delete covers anything that was never sent,
+ * finalized drafts included, and it removes that edition's delivery events in
+ * the same transaction. This route had the hole D5 exists to close: it deleted
+ * the edition and left EmailEvent rows pointing at nothing.
+ *
+ * A sent edition is refused here. Archive keeps it, and force delete, for an
+ * OWNER, goes through PATCH /api/editions/bulk with one id.
  */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
+    const { db } = ctx;
+
     const { id } = await params;
 
-    // Check if edition exists and its status
-    const edition = await prisma.edition.findUnique({
-      where: { id },
-    });
+    const edition = await db.edition.findFirst({ where: { id } });
 
     if (!edition) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Edition not found",
-        },
+        { success: false, error: "Edition not found" },
         { status: 404 }
       );
     }
 
-    // Only allow deletion of DRAFT editions
-    if (edition.status !== "DRAFT") {
+    // Keys on sentAt rather than on status, which is conflict C4: a finalized
+    // edition that never went out has no delivery history to preserve.
+    if (edition.sentAt) {
       return NextResponse.json(
         {
           success: false,
-          error: `Cannot delete a ${edition.status.toLowerCase()} edition. Only draft editions can be deleted.`,
+          error: `${alreadySentMessage(
+            edition
+          )}, so it is archived rather than deleted. An OWNER can force delete it, which also destroys its delivery history.`,
         },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
-    // Delete the edition (cascade will handle EditionArticle and EditionProject)
-    await prisma.edition.delete({
-      where: { id },
-    });
+    const result = await deleteNeverSentEditions(db, [id]);
+
+    if (result.editions === 0) {
+      return NextResponse.json(
+        { success: false, error: "Edition not found" },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       message: "Edition deleted successfully",
+      deletedEvents: result.events,
     });
   } catch (error) {
-    console.error("Error deleting edition:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, "Failed to delete the edition");
   }
 }

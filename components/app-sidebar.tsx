@@ -29,7 +29,9 @@ interface AppSidebarProps {
 
 /** Primary destinations, in the order the design fixes. */
 const PRIMARY: { key: RadarIconName; href: string; label: string }[] = [
-  { key: "feed", href: "/dashboard", label: "Feed" },
+  // RQ-005 AC-4.4: one entry for the week's work. The Feed became the proposal,
+  // and the review queue is a view of it rather than a second destination.
+  { key: "feed", href: "/dashboard", label: "This week" },
   { key: "trends", href: "/dashboard/trends", label: "Trends" },
   { key: "search", href: "/dashboard/search", label: "Search" },
   { key: "editions", href: "/dashboard/send", label: "Editions" },
@@ -40,7 +42,9 @@ const PRIMARY: { key: RadarIconName; href: string; label: string }[] = [
 
 /** Everything else, grouped out of the primary rhythm. */
 const WORKSPACE = [
-  { href: "/dashboard/review", label: "Review queue" },
+  // "Review queue" was here, pointing at a second copy of the same list. It is
+  // gone deliberately: two entries leading to one list under two names is what
+  // RQ-005 AC-4.4 forbids. The queue lives at /dashboard?view=queue.
   { href: "/dashboard/projects", label: "Projects" },
   { href: "/dashboard/curation", label: "Curation jobs" },
   { href: "/dashboard/generate", label: "Ghost Writer" },

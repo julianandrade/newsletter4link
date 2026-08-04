@@ -16,7 +16,6 @@ import FeedPage from "@/app/dashboard/page";
 import TrendsPage from "@/app/dashboard/trends/page";
 import EditionsPage from "@/app/dashboard/send/page";
 import SearchPage from "@/app/dashboard/search/page";
-import ReviewPage from "@/app/dashboard/review/page";
 import ProjectsPage from "@/app/dashboard/projects/page";
 import CurationPage from "@/app/dashboard/curation/page";
 import SubscribersPage from "@/app/dashboard/subscribers/page";
@@ -811,6 +810,66 @@ const EDITION_DETAIL = {
   sharePointError: null,
 };
 
+/**
+ * RQ-005: this week's proposal, as `GET /api/editions/proposal` returns it.
+ *
+ * The fixture articles above are enough to make the proposal render, so nothing
+ * new is invented here beyond the counts and the pipeline status.
+ */
+const PROPOSAL_PAYLOAD = {
+  proposal: {
+    id: "e1",
+    week: 32,
+    year: 2026,
+    status: "DRAFT",
+    thin: false,
+    archivedAt: null,
+    sentAt: null,
+    approvedAt: null,
+    approvedByEmail: null,
+    articles: ARTICLES.slice(0, 5).map((article, index) => ({
+      ...article,
+      order: index + 1,
+    })),
+    projects: PROJECTS.slice(0, 2).map((project, index) => ({
+      ...project,
+      order: index + 1,
+    })),
+  },
+  counts: {
+    collected: 148,
+    rejected: 12,
+    belowThreshold: 92,
+    inProposal: 5,
+    approvedWaiting: 2,
+    pending: ARTICLES.length,
+  },
+  pipeline: {
+    running: false,
+    current: null,
+    total: null,
+    lastRun: {
+      status: "COMPLETED",
+      startedAt: iso(0, 3),
+      completedAt: iso(0, 2),
+      totalFound: 148,
+      curated: 25,
+      duplicates: 31,
+      lowScore: 92,
+      errorsCount: 0,
+    },
+    runNeeded: false,
+    runReason: "current",
+  },
+  recipients: { active: 412 },
+  assembly: {
+    assembled: true,
+    candidates: 25,
+    thin: false,
+    refreshedAt: iso(0, 1),
+  },
+};
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const json = (body: unknown) =>
@@ -979,6 +1038,23 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
         ? json({ draft: GENERATION_DRAFTS[0] })
         : json({ drafts: GENERATION_DRAFTS });
     }
+    // RQ-005: both proposal routes must precede the /api/editions/<id> branch,
+    // which would otherwise match "proposal" as an edition id.
+    if (url.includes("/api/editions/proposal/candidates")) {
+      return json({
+        success: true,
+        data: {
+          articles: APPROVED.filter((a) => !a.editionCount).map((a, index) => ({
+            ...a,
+            order: index + 1,
+          })),
+          projects: PROJECTS.slice(2).map((p, index) => ({ ...p, order: index + 1 })),
+        },
+      });
+    }
+    if (url.includes("/api/editions/proposal")) {
+      return json({ success: true, data: PROPOSAL_PAYLOAD });
+    }
     // The builder reads /api/editions/<id>; the harness has no route params, so
     // any id resolves to the same live edition.
     if (/\/api\/editions\/[^/?]+/.test(url)) {
@@ -1028,6 +1104,8 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
     if (url.includes("/api/organizations/current")) {
       return json({
         organization: { id: "o1", name: "Link Consulting", plan: "ENTERPRISE" },
+        // RQ-005: the proposal screen gates its controls on this role.
+        membership: { role: "OWNER", joinedAt: iso(300) },
       });
     }
     if (url.includes("/api/organizations")) {
@@ -1066,7 +1144,9 @@ const SCREENS = {
   editions: EditionsPage,
   builder: BuilderPage,
   search: SearchPage,
-  review: ReviewPage,
+  // RQ-005 action 4: there is no review screen any more. /dashboard/review is a
+  // redirect to the proposal screen's queue view, so the "feed" entry above is
+  // the only place that list is rendered.
   projects: ProjectsPage,
   curation: CurationPage,
   sources: SourcesPage,

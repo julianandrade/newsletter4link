@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runCurationPipeline } from "@/lib/curation/curator";
-import { config } from "@/lib/config";
+import { authorizeCron } from "@/lib/auth/cron";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -8,20 +8,14 @@ export const maxDuration = 300; // 5 minutes
 
 /**
  * GET /api/cron/daily-collection
- * Triggered by Vercel Cron every 6 hours
+ * Triggered by Vercel Cron daily at 09:00 UTC (see vercel.json)
  * Runs the content curation pipeline for all organizations
  */
 export async function GET(request: Request) {
   try {
-    // Verify cron secret (optional but recommended)
-    const authHeader = request.headers.get("authorization");
-    if (config.cron.secret) {
-      if (authHeader !== `Bearer ${config.cron.secret}`) {
-        return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401 }
-        );
-      }
+    const auth = authorizeCron(request);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     console.log("[CRON] Starting daily content collection for all organizations...");

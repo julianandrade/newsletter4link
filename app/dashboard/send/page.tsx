@@ -195,6 +195,27 @@ export default function EditionsPage() {
     setYear(y);
   }, [load]);
 
+  /**
+   * RQ-005 AC-3.2: this screen is the destination every approval points at.
+   *
+   * The link is `/dashboard/send?view=pipeline#approved-waiting`, so the view in
+   * the query decides which panel opens, and the anchor is scrolled to once the
+   * data has arrived. Without the scroll the browser would look for the anchor
+   * before the columns exist and land at the top of the page.
+   */
+  useEffect(() => {
+    const param = new URLSearchParams(window.location.search).get("view");
+    if (param === "pipeline" || param === "editions") setView(param);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || view !== "pipeline") return;
+    if (window.location.hash !== "#approved-waiting") return;
+    document
+      .getElementById("approved-waiting")
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [isLoading, view]);
+
   const createEdition = async () => {
     setCreating(true);
     setCreateError(null);
@@ -335,6 +356,14 @@ export default function EditionsPage() {
         {/* Pipeline board */}
         {!isLoading && !error && view === "pipeline" && (
           <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {/*
+              RQ-005 action 4, AC-4.1: this column no longer builds a list.
+
+              It showed the same pending-articles query as the Feed and the
+              review screen, which is three copies of one list. Exactly one route
+              renders that list now, and it is the proposal screen. The count
+              stays, because knowing how many are waiting belongs on a pipeline.
+            */}
             <PipelineColumn
               title="In review"
               dot="var(--r-warn)"
@@ -342,25 +371,24 @@ export default function EditionsPage() {
               note="awaiting an editor"
               empty="Nothing waiting on a reader."
             >
-              {pending.slice(0, 8).map((article) => (
-                <ArticleCard key={article.id} article={article} />
-              ))}
-              {pending.length > 8 && (
-                <Link
-                  href="/dashboard/review"
-                  className="rounded-xl border border-dashed border-radar-line px-3.5 py-3 text-center text-[12px] text-radar-ink3 no-underline transition-colors hover:border-radar-accent hover:text-radar-ink"
-                >
-                  {pending.length - 8} more in the review queue →
-                </Link>
-              )}
+              <Link
+                href="/dashboard?view=queue"
+                className="rounded-xl border border-dashed border-radar-line px-3.5 py-4 text-center text-[12px] text-radar-ink3 no-underline transition-colors hover:border-radar-accent hover:text-radar-ink"
+              >
+                {pending.length} {pending.length === 1 ? "story" : "stories"} in the
+                queue →
+              </Link>
             </PipelineColumn>
 
+            {/* RQ-005 AC-3.2 and AC-3.6: the destination an approval points at.
+                It exists already, so nothing is built for it. */}
             <PipelineColumn
+              anchorId="approved-waiting"
               title="Approved"
               dot="var(--r-ok)"
               count={waitingApproved.length}
               note="ready for an edition"
-              empty="Approve stories in the feed and they land here."
+              empty="Approve stories in the queue and they land here."
             >
               {waitingApproved.slice(0, 8).map((article) => (
                 <ArticleCard key={article.id} article={article} />
@@ -692,6 +720,7 @@ function PipelineColumn({
   note,
   empty,
   children,
+  anchorId,
 }: {
   title: string;
   dot: string;
@@ -699,12 +728,14 @@ function PipelineColumn({
   note: string;
   empty: string;
   children: React.ReactNode;
+  /** RQ-005 AC-3.2: link target for the approved-and-waiting destination. */
+  anchorId?: string;
 }) {
   // Count is the authority on emptiness; inspecting children is unreliable.
   const hasCards = count > 0;
 
   return (
-    <section className="flex flex-col gap-2.5">
+    <section id={anchorId} className="flex flex-col gap-2.5 scroll-mt-6">
       <div className="flex items-center gap-2 border-b border-radar-line px-0.5 pb-2.5">
         <span
           aria-hidden="true"

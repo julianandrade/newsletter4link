@@ -216,8 +216,11 @@ POST   /api/curation/collect          # Trigger RSS collection & AI curation
 
 ### Cron (Vercel only)
 ```
-GET    /api/cron/daily-collection     # Every 6 hours
-GET    /api/cron/weekly-send          # Sunday 12:00 UTC
+GET    /api/cron/daily-collection     # Daily 09:00 UTC
+GET    /api/cron/weekly-proposal      # Daily 09:30 UTC
+
+# Both require Authorization: Bearer $CRON_SECRET, and return 503 when
+# CRON_SECRET is not configured on the deployment.
 ```
 
 ### System
@@ -227,7 +230,7 @@ GET    /api/status                    # Health check & stats
 
 ## Automated Workflows
 
-### Daily Content Collection (Every 6 Hours)
+### Daily Content Collection (09:00 UTC)
 - Triggers: `/api/cron/daily-collection`
 - Actions:
   1. Fetch RSS feeds from 7 sources
@@ -237,15 +240,16 @@ GET    /api/status                    # Health check & stats
   5. Generate summaries for high-scoring articles
   6. Save as PENDING_REVIEW
 
-### Weekly Newsletter Send (Sunday 12:00 UTC)
-- Triggers: `/api/cron/weekly-send`
+### Weekly Proposal (09:30 UTC, daily)
+- Triggers: `/api/cron/weekly-proposal`
 - Actions:
-  1. Check if edition exists and is finalized
-  2. If not: Auto-finalize with top 10 approved articles
-  3. Add featured projects
-  4. Send to all active subscribers (batch of 50)
-  5. Mark edition as SENT
-  6. Log email events
+  1. Resolve the current ISO week, per `lib/radar/week.ts`
+  2. Assemble or refresh the proposed edition for each organization
+  3. Stop
+
+No schedule sends mail. `/api/cron/weekly-send` used to auto-finalize an edition
+and mail it unattended, and was deleted (RQ-005, BR-011). Sending is a human
+action taken in the product.
 
 ## Troubleshooting
 

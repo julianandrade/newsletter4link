@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { TenantClient } from "@/lib/db/tenant";
 import { ArticleStatus } from "@prisma/client";
+import { isoWeekAndYear } from "@/lib/radar/week";
 
 // ==================== Article Queries ====================
 
@@ -65,8 +66,7 @@ export async function updateArticleSummary(id: string, summary: string) {
  */
 export async function getCurrentEdition(db: TenantClient) {
   const now = new Date();
-  const week = getWeekNumber(now);
-  const year = now.getFullYear();
+  const { week, year } = isoWeekAndYear(now);
 
   let edition = await db.edition.findFirst({
     where: { week, year },
@@ -296,15 +296,3 @@ export async function unsubscribeUser(id: string) {
 
 // ==================== Utility Functions ====================
 
-/**
- * Get ISO week number
- */
-export function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}

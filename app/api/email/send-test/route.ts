@@ -13,6 +13,7 @@ import {
   type CustomBlock,
 } from "@/lib/email/template-renderer";
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
+import { isoWeekAndYear } from "@/lib/radar/week";
 
 export const dynamic = "force-dynamic";
 
@@ -124,8 +125,7 @@ export async function POST(request: Request) {
 
       // Prepare email data
       const now = new Date();
-      week = getWeekNumber(now);
-      year = now.getFullYear();
+      ({ week, year } = isoWeekAndYear(now));
 
       emailData = {
         articles: articles.map((article: any) => ({
@@ -224,12 +224,3 @@ export async function POST(request: Request) {
   }
 }
 
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}

@@ -10,6 +10,7 @@ import {
   type TemplateData,
 } from "@/lib/email/template-renderer";
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
+import { isoWeekAndYear } from "@/lib/radar/week";
 
 export const dynamic = "force-dynamic";
 
@@ -99,8 +100,7 @@ export async function POST(request: Request) {
 
         // Create temporary edition data
         const now = new Date();
-        const week = getWeekNumber(now);
-        const year = now.getFullYear();
+        const { week, year } = isoWeekAndYear(now);
 
         edition = {
           week,
@@ -274,12 +274,3 @@ export async function POST(request: Request) {
   }
 }
 
-function getWeekNumber(date: Date): number {
-  const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
