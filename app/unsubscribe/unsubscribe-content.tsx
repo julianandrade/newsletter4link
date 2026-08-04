@@ -11,17 +11,24 @@ export default function UnsubscribeContent() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const subscriberId = searchParams.get("id");
+    const token = searchParams.get("token");
 
-    if (!subscriberId) {
+    if (!token) {
       setStatus("error");
-      setMessage("Invalid unsubscribe link");
+      // Old emails linked with ?id=; those links are no longer honored
+      setMessage(
+        searchParams.get("id")
+          ? "This unsubscribe link is from an older newsletter and is no longer valid. Please use the link in a recent email or contact your administrator."
+          : "Invalid unsubscribe link"
+      );
       return;
     }
 
     // Call unsubscribe API
-    fetch(`/api/subscribers/${subscriberId}`, {
-      method: "DELETE",
+    fetch("/api/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
     })
       .then((res) => res.json())
       .then((data) => {

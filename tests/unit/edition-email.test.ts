@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildEditionEmail,
   publicationName,
@@ -18,6 +18,16 @@ import {
 import { computeTrends, type TrendInputArticle } from "@/lib/trends/compute";
 
 const APP_URL = "https://newsletter4link.vercel.app";
+
+// renderTemplate signs unsubscribe links, which needs a signing secret.
+const originalSecret = process.env.UNSUBSCRIBE_SECRET;
+beforeAll(() => {
+  process.env.UNSUBSCRIBE_SECRET = "test-secret-for-unit-tests";
+});
+afterAll(() => {
+  if (originalSecret === undefined) delete process.env.UNSUBSCRIBE_SECRET;
+  else process.env.UNSUBSCRIBE_SECRET = originalSecret;
+});
 
 function input(overrides: Partial<Parameters<typeof buildEditionEmail>[0]> = {}) {
   return buildEditionEmail({
@@ -78,11 +88,22 @@ describe("buildEditionEmail", () => {
     expect(publicationName("not a url")).toBeUndefined();
   });
 
-  it("builds absolute asset and unsubscribe URLs", () => {
+  it("builds absolute asset URLs", () => {
     const edition = input({ subscriberId: "sub_123" });
     expect(edition.logoOnLight).toBe(`${APP_URL}/email/linkroad-h-on-light.png`);
     expect(edition.logoOnDark).toBe(`${APP_URL}/email/linkroad-h-on-dark.png`);
-    expect(edition.unsubscribeUrl).toBe(`${APP_URL}/unsubscribe?id=sub_123`);
+  });
+
+  it("uses the signed unsubscribe URL it is given, and never invents one", () => {
+    const signed = `${APP_URL}/unsubscribe?token=c3ViXzEyMw.sig`;
+    expect(input({ subscriberId: "sub_123", unsubscribeUrl: signed }).unsubscribeUrl).toBe(
+      signed
+    );
+    // Given no signed URL, it must fall back to the generic page rather than
+    // leaking a raw, enumerable subscriber id into the link.
+    const unsigned = input({ subscriberId: "sub_123" });
+    expect(unsigned.unsubscribeUrl).toBe(`${APP_URL}/unsubscribe`);
+    expect(unsigned.unsubscribeUrl).not.toContain("sub_123");
   });
 
   it("tolerates a trailing slash on the app URL", () => {
@@ -122,7 +143,10 @@ describe("buildEditionEmail", () => {
 });
 
 describe("renderEditionEmail", () => {
-  const html = renderEditionEmail(input({ subscriberId: "sub_9" }));
+  const SIGNED = `${APP_URL}/unsubscribe?token=c3ViXzk.sig`;
+  const html = renderEditionEmail(
+    input({ subscriberId: "sub_9", unsubscribeUrl: SIGNED })
+  );
 
   it("opens with a doctype and carries a preheader", () => {
     expect(html.startsWith("<!DOCTYPE html>")).toBe(true);
@@ -154,8 +178,9 @@ describe("renderEditionEmail", () => {
     }
   });
 
-  it("carries the unsubscribe link", () => {
-    expect(html).toContain(`${APP_URL}/unsubscribe?id=sub_9`);
+  it("carries the signed unsubscribe link and no raw subscriber id", () => {
+    expect(html).toContain(SIGNED.replace(/&/g, "&amp;"));
+    expect(html).not.toContain("id=sub_9");
   });
 
   it("omits the trend radar when there is no trend data", () => {
@@ -249,10 +274,15 @@ describe("escaping", () => {
 
 describe("renderEditionText", () => {
   it("includes the stories, the links and the unsubscribe URL", () => {
-    const text = renderEditionText(input({ subscriberId: "sub_1" }));
+    const text = renderEditionText(
+      input({
+        subscriberId: "sub_1",
+        unsubscribeUrl: `${APP_URL}/unsubscribe?token=c3ViXzE.sig`,
+      })
+    );
     expect(text).toContain("Anthropic ships Claude Opus 5");
     expect(text).toContain("https://www.anthropic.com/news/opus-5");
-    expect(text).toContain(`${APP_URL}/unsubscribe?id=sub_1`);
+    expect(text).toContain(`${APP_URL}/unsubscribe?token=c3ViXzE.sig`);
     expect(text).not.toContain("<");
   });
 });
@@ -318,7 +348,11 @@ describe("renderTemplate", () => {
       "{{week}}|{{year}}|{{articleCount}}|{{projectCount}}|{{unsubscribe_url}}",
       context
     );
-    expect(html).toBe(`31|2026|1|1|${"http://localhost:3000"}/unsubscribe?id=sub_2`);
+    const [week, year, articleCount, projectCount, url] = html.split("|");
+    expect([week, year, articleCount, projectCount]).toEqual(["31", "2026", "1", "1"]);
+    // Signed token, not the raw subscriber id.
+    expect(url).toMatch(/\/unsubscribe\?token=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(url).not.toContain("sub_2");
   });
 
   it("escapes article markup", () => {

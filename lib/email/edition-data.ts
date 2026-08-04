@@ -34,11 +34,19 @@ export interface EditionInput {
   year: number;
   /** Computed trends for the radar block; omitted means the block is not rendered. */
   trends?: EmailTrend[];
+  /** Retained for callers that pass the whole newsletter payload through. */
   subscriberId?: string;
   /** Absolute base URL. Defaults to config.app.url. */
   appUrl?: string;
   sourceCount?: number;
   dateLabel?: string;
+  /**
+   * Pre-built, HMAC-signed unsubscribe URL. Passed in rather than built here:
+   * signing needs node crypto, and this module is reachable from client
+   * components through content-renderer. Without one, the generic unsubscribe
+   * page is linked, which is correct for previews and test sends.
+   */
+  unsubscribeUrl?: string;
 }
 
 /** The order the design lays topics out in, when the data happens to use these names. */
@@ -218,9 +226,7 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
         }
       : undefined,
     portalUrl: `${appUrl}/dashboard`,
-    unsubscribeUrl: input.subscriberId
-      ? `${appUrl}/unsubscribe?id=${encodeURIComponent(input.subscriberId)}`
-      : `${appUrl}/unsubscribe`,
+    unsubscribeUrl: input.unsubscribeUrl ?? `${appUrl}/unsubscribe`,
     logoOnLight: `${assets}/linkroad-h-on-light.png`,
     logoOnDark: `${assets}/linkroad-h-on-dark.png`,
     footerLogoOnLight: `${assets}/linkroad-v-on-light.png`,

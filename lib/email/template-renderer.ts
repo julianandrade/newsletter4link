@@ -9,7 +9,6 @@
  */
 
 import { prisma } from "@/lib/db";
-import { config } from "@/lib/config";
 import {
   BLOCK_ANCHORS,
   BLOCK_POSITIONS,
@@ -19,6 +18,7 @@ import {
   type BlockPosition,
 } from "./edition-template";
 import { publicationName } from "./edition-data";
+import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 export interface CustomBlock {
   id: string;
@@ -152,14 +152,6 @@ export function injectCustomBlocks(
   return result;
 }
 
-function getUnsubscribeUrl(subscriberId?: string): string {
-  const baseUrl = config.app.url.replace(/\/$/, "");
-  if (subscriberId) {
-    return `${baseUrl}/unsubscribe?id=${encodeURIComponent(subscriberId)}`;
-  }
-  return `${baseUrl}/unsubscribe`;
-}
-
 /**
  * Substitute template variables. Custom blocks bracket the articles and
  * projects sections at the same four positions the built-in edition uses.
@@ -180,7 +172,7 @@ export function renderTemplate(html: string, context: RenderContext): string {
     year: String(year),
     articleCount: String(articles.length),
     projectCount: String(projects.length),
-    unsubscribe_url: getUnsubscribeUrl(subscriberId),
+    unsubscribe_url: buildUnsubscribeUrl(subscriberId),
   };
 
   // One pass with a callback, so rendered content that happens to contain a

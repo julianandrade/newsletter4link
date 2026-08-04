@@ -6,6 +6,7 @@ import {
   renderEditionText,
   type EmailTrend,
 } from "./edition-template";
+import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 interface Article {
   title: string;
@@ -79,7 +80,13 @@ export async function renderNewsletterEmail(
   subscriberId?: string,
   organizationId?: string
 ): Promise<string> {
-  const edition = buildEditionEmail({ ...data, subscriberId });
+  // Signed here rather than in the mapper: signing needs node crypto, and the
+  // mapper is reachable from client components through content-renderer.
+  const edition = buildEditionEmail({
+    ...data,
+    subscriberId,
+    unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
+  });
 
   if (organizationId) {
     const branding = await getBrandingSettings(organizationId);
@@ -102,7 +109,13 @@ export function renderNewsletterText(
   data: NewsletterData,
   subscriberId?: string
 ): string {
-  return renderEditionText(buildEditionEmail({ ...data, subscriberId }));
+  return renderEditionText(
+    buildEditionEmail({
+      ...data,
+      subscriberId,
+      unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
+    })
+  );
 }
 
 /** The subject line the design implies, so every route agrees on it. */

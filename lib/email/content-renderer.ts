@@ -40,7 +40,9 @@ export interface ContentRenderContext {
   projects: Project[];
   week: number;
   year: number;
-  subscriberId?: string;
+  // Pre-built signed URL; must be generated server-side (this module is
+  // imported by client components, so it cannot sign tokens itself)
+  unsubscribeUrl?: string;
 }
 
 export function renderArticlesHtml(articles: Article[]): string {
@@ -65,22 +67,17 @@ export function renderProjectsHtml(projects: Project[]): string {
   );
 }
 
-function getUnsubscribeUrl(subscriberId?: string): string {
-  const baseUrl = config.app.url.replace(/\/$/, "");
-  if (subscriberId) {
-    return `${baseUrl}/unsubscribe?id=${encodeURIComponent(subscriberId)}`;
-  }
-  return `${baseUrl}/unsubscribe`;
-}
-
 /**
  * Replace content merge tags in HTML exported from Unlayer with real content.
+ *
+ * The unsubscribe URL arrives pre-signed from the caller: this module is
+ * imported by client components, so it cannot mint HMAC tokens itself.
  */
 export function replaceContentMergeTags(
   html: string,
   context: ContentRenderContext
 ): string {
-  const { articles, projects, week, year, subscriberId } = context;
+  const { articles, projects, week, year, unsubscribeUrl } = context;
 
   // Replacements are computed first and applied with a function callback, so
   // content that happens to contain "{{projects}}" is never re-substituted.
@@ -89,7 +86,8 @@ export function replaceContentMergeTags(
     projects: renderProjectsHtml(projects),
     week: String(week),
     year: String(year),
-    unsubscribe_url: getUnsubscribeUrl(subscriberId),
+    unsubscribe_url:
+      unsubscribeUrl || `${config.app.url.replace(/\/$/, "")}/unsubscribe`,
   };
 
   return html.replace(
