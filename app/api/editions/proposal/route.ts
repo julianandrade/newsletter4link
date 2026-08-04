@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
+import { readPipelineStatus } from "@/lib/radar/pipeline";
 import {
   ensureProposal,
   readProposal,
@@ -52,12 +53,15 @@ export async function GET() {
       await refreshProposal(db, ensured.id, now);
     }
 
-    const data = await readProposal(db, ensured.id, {
-      startsAt: week.startsAt,
-      now,
-    });
+    // AC-5.1 to AC-5.6: the collector's own state, read in the same request. The
+    // screen has one data source, so a band saying "not reported yet" would mean a
+    // second fetch, and it is what the screen showed while this was missing.
+    const [data, pipeline] = await Promise.all([
+      readProposal(db, ensured.id, { startsAt: week.startsAt, now }),
+      readPipelineStatus(db, now),
+    ]);
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: { ...data, pipeline } });
   } catch (error) {
     return errorResponse(error, "reading the proposal");
   }
@@ -81,14 +85,17 @@ export async function POST() {
     const ensured = await ensureProposal(db, week);
     const refreshed = await refreshProposal(db, ensured.id, now);
 
-    const data = await readProposal(db, ensured.id, {
-      startsAt: week.startsAt,
-      now,
-    });
+    // AC-5.1 to AC-5.6: the collector's own state, read in the same request. The
+    // screen has one data source, so a band saying "not reported yet" would mean a
+    // second fetch, and it is what the screen showed while this was missing.
+    const [data, pipeline] = await Promise.all([
+      readProposal(db, ensured.id, { startsAt: week.startsAt, now }),
+      readPipelineStatus(db, now),
+    ]);
 
     return NextResponse.json({
       success: true,
-      data,
+      data: { ...data, pipeline },
       added: refreshed.added,
       projectsAdded: refreshed.projectsAdded,
       message: describeRefresh(refreshed),
