@@ -152,6 +152,16 @@ export default function ReviewPage() {
    */
   const selection = useSelection(articles.map((article) => article.id));
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+  /**
+   * Rejecting in bulk asks first.
+   *
+   * It shipped without this, and on the first real run 23 curated stories were
+   * rejected in a single second by one click. Rejection empties the queue and
+   * there is no way back to it in the interface, so the confirmation is the only
+   * thing between a mis-click and a lost batch. Approve needs none: it moves work
+   * forward and is visible in the next edition.
+   */
+  const [pendingBulkReject, setPendingBulkReject] = useState<string[] | null>(null);
 
   const runBulkVerdict = useCallback(
     async (action: "approve" | "reject", ids: string[]) => {
@@ -203,7 +213,7 @@ export default function ReviewPage() {
       id: "reject",
       label: "Reject",
       destructive: true,
-      onRun: (ids) => runBulkVerdict("reject", ids),
+      onRun: (ids) => setPendingBulkReject(ids),
     },
   ];
 
@@ -711,6 +721,46 @@ export default function ReviewPage() {
               nounPlural="stories"
               busyAction={bulkBusy}
             />
+
+            <Dialog
+              open={pendingBulkReject !== null}
+              onOpenChange={(open) => !open && setPendingBulkReject(null)}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    Reject {pendingBulkReject?.length}{" "}
+                    {pendingBulkReject?.length === 1 ? "story" : "stories"}?
+                  </DialogTitle>
+                  <DialogDescription>
+                    They leave the queue and will not appear in any edition. There
+                    is no way to bring them back from this screen, so check the
+                    selection before confirming.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <RadarButton
+                    variant="outline"
+                    onClick={() => setPendingBulkReject(null)}
+                  >
+                    Cancel
+                  </RadarButton>
+                  <RadarButton
+                    variant="accent"
+                    disabled={bulkBusy !== null}
+                    onClick={() => {
+                      const ids = pendingBulkReject;
+                      setPendingBulkReject(null);
+                      if (ids) runBulkVerdict("reject", ids);
+                    }}
+                  >
+                    {bulkBusy === "reject"
+                      ? "Rejecting…"
+                      : `Reject ${pendingBulkReject?.length ?? 0}`}
+                  </RadarButton>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </RadarMain>

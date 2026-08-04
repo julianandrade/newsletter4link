@@ -408,7 +408,11 @@ export async function runCurationPipelineWithStreaming(
         const categories = await categorizeArticle(
           article.title,
           article.content,
-          settings.brandVoicePrompt
+          settings.brandVoicePrompt,
+          // RQ-002: this call site was missed, so categorisation silently ran on
+          // the default model while scoring and summarising used the
+          // organization's. Found by reading a real run's logs.
+          model
         );
 
         // Save to database as pending review
