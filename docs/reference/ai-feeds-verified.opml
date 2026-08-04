@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AI feeds for newsletter4link, every one fetched and checked on 4 August 2026.
+
+  Each feed here returned HTTP 200, parsed as RSS or Atom, contained at least one
+  item, and had published something within the previous 60 days. Feeds that only
+  parse are not enough: the public "awesome AI feeds" OPML lists are full of
+  sources that still serve XML from 2018.
+
+  Excluded on purpose, having been tested and found unusable: Anthropic, Mistral
+  and Meta AI publish no RSS at all (404 on every documented path); The Batch,
+  Stanford HAI, LangChain and Modal return a page with no items; SemiAnalysis
+  last published 322 days ago.
+
+  Also excluded because you already have them active: OpenAI and Google AI Blog.
+
+  The importer reads the folder name as the category, so importing this once
+  categorises every feed correctly. Leave the category field in the dialog alone.
+
+  READ THIS BEFORE ENABLING THE arXiv GROUP. Those three feeds carry 260 to 565
+  items each, per day. Curation makes four Claude calls per article, so enabling
+  them multiplies the cost of every run by roughly a hundred. They are in their
+  own group so they can be imported without being switched on, and they want a
+  higher relevance threshold than the rest.
+-->
+<opml version="2.0">
+  <head>
+    <title>AI feeds, verified 2026-08-04</title>
+  </head>
+  <body>
+    <outline text="AI Labs">
+      <outline type="rss" text="Google DeepMind" xmlUrl="https://deepmind.google/blog/rss.xml" htmlUrl="https://deepmind.google/discover/blog/"/>
+      <outline type="rss" text="Google Research" xmlUrl="https://research.google/blog/rss/" htmlUrl="https://research.google/blog/"/>
+      <outline type="rss" text="Microsoft Research" xmlUrl="https://www.microsoft.com/en-us/research/feed/" htmlUrl="https://www.microsoft.com/en-us/research/"/>
+      <outline type="rss" text="Hugging Face" xmlUrl="https://huggingface.co/blog/feed.xml" htmlUrl="https://huggingface.co/blog"/>
+      <outline type="rss" text="NVIDIA Blog" xmlUrl="https://blogs.nvidia.com/feed/" htmlUrl="https://blogs.nvidia.com/"/>
+      <outline type="rss" text="AWS Machine Learning" xmlUrl="https://aws.amazon.com/blogs/machine-learning/feed/" htmlUrl="https://aws.amazon.com/blogs/machine-learning/"/>
+      <outline type="rss" text="PyTorch" xmlUrl="https://pytorch.org/blog/feed.xml" htmlUrl="https://pytorch.org/blog/"/>
+      <outline type="rss" text="Together AI" xmlUrl="https://www.together.ai/blog/rss.xml" htmlUrl="https://www.together.ai/blog"/>
+    </outline>
+    <outline text="AI Analysis">
+      <outline type="rss" text="Import AI" xmlUrl="https://importai.substack.com/feed" htmlUrl="https://importai.substack.com/"/>
+      <outline type="rss" text="Simon Willison" xmlUrl="https://simonwillison.net/atom/everything/" htmlUrl="https://simonwillison.net/"/>
+      <outline type="rss" text="Latent Space" xmlUrl="https://www.latent.space/feed" htmlUrl="https://www.latent.space/"/>
+      <outline type="rss" text="Interconnects" xmlUrl="https://www.interconnects.ai/feed" htmlUrl="https://www.interconnects.ai/"/>
+      <outline type="rss" text="Sebastian Raschka" xmlUrl="https://magazine.sebastianraschka.com/feed" htmlUrl="https://magazine.sebastianraschka.com/"/>
+      <outline type="rss" text="One Useful Thing" xmlUrl="https://www.oneusefulthing.org/feed" htmlUrl="https://www.oneusefulthing.org/"/>
+      <outline type="rss" text="AI Snake Oil" xmlUrl="https://www.aisnakeoil.com/feed" htmlUrl="https://www.aisnakeoil.com/"/>
+    </outline>
+    <outline text="AI News">
+      <outline type="rss" text="The Verge AI" xmlUrl="https://www.theverge.com/rss/ai-artificial-intelligence/index.xml" htmlUrl="https://www.theverge.com/ai-artificial-intelligence"/>
+      <outline type="rss" text="Ars Technica AI" xmlUrl="https://arstechnica.com/ai/feed/" htmlUrl="https://arstechnica.com/ai/"/>
+      <outline type="rss" text="Wired AI" xmlUrl="https://www.wired.com/feed/tag/ai/latest/rss" htmlUrl="https://www.wired.com/tag/ai/"/>
+      <outline type="rss" text="The Register AI" xmlUrl="https://www.theregister.com/software/ai_ml/headlines.atom" htmlUrl="https://www.theregister.com/software/ai_ml/"/>
+    </outline>
+    <outline text="AI Community">
+      <outline type="rss" text="Hacker News: Show HN" xmlUrl="https://hnrss.org/show" htmlUrl="https://news.ycombinator.com/show"/>
+      <outline type="rss" text="Hacker News: AI mentions" xmlUrl="https://hnrss.org/newest?q=AI" htmlUrl="https://news.ycombinator.com/"/>
+    </outline>
+    <outline text="AI Academic">
+      <outline type="rss" text="MIT News AI" xmlUrl="https://news.mit.edu/rss/topic/artificial-intelligence2" htmlUrl="https://news.mit.edu/topic/artificial-intelligence2"/>
+      <outline type="rss" text="Berkeley BAIR" xmlUrl="https://bair.berkeley.edu/blog/feed.xml" htmlUrl="https://bair.berkeley.edu/blog/"/>
+    </outline>
+    <outline text="AI Preprints">
+      <outline type="rss" text="arXiv cs.AI" xmlUrl="http://export.arxiv.org/rss/cs.AI" htmlUrl="https://arxiv.org/list/cs.AI/recent"/>
+      <outline type="rss" text="arXiv cs.CL" xmlUrl="http://export.arxiv.org/rss/cs.CL" htmlUrl="https://arxiv.org/list/cs.CL/recent"/>
+      <outline type="rss" text="arXiv cs.LG" xmlUrl="http://export.arxiv.org/rss/cs.LG" htmlUrl="https://arxiv.org/list/cs.LG/recent"/>
+    </outline>
+  </body>
+</opml>
