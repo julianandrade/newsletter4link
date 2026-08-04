@@ -693,10 +693,6 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     <div
       className={cn(
         "space-y-6",
-        // The action bar is sticky, so it floats over content rather than
-        // reserving space. Without this the last rows sit permanently behind
-        // it and cannot be scrolled clear.
-        selection.count > 0 && "pb-24",
         className
       )}
     >

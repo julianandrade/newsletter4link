@@ -36,6 +36,12 @@ import {
   thClass,
   trClass,
 } from "@/components/radar/controls";
+import {
+  BulkBar,
+  SelectCheckbox,
+  useSelection,
+  type BulkAction,
+} from "@/components/radar/selection";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
 import {
   LayoutToggle,
@@ -136,6 +142,70 @@ export default function ReviewPage() {
       setDeciding(null);
     }
   };
+
+  /**
+   * Bulk verdicts.
+   *
+   * A queue after a collection run runs to hundreds of stories; deciding them
+   * one at a time is why queues never get cleared. Ids are passed in render
+   * order so shift-click ranges follow what is on screen.
+   */
+  const selection = useSelection(articles.map((article) => article.id));
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+
+  const runBulkVerdict = useCallback(
+    async (action: "approve" | "reject", ids: string[]) => {
+      setBulkBusy(action);
+      const previous = articles;
+
+      // Decided stories leave the queue, so drop them optimistically.
+      setArticles((prev) => prev.filter((article) => !ids.includes(article.id)));
+
+      try {
+        const res = await fetch("/api/articles/bulk", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, ids }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Could not ${action} those stories`);
+        }
+
+        toast.success(
+          `${data.affected} ${data.affected === 1 ? "story" : "stories"} ${
+            action === "approve" ? "approved" : "rejected"
+          }` + (data.skipped > 0 ? `, ${data.skipped} already decided` : "")
+        );
+
+        // Someone else may have decided some of them first.
+        if (data.skipped > 0) await fetchArticles();
+        selection.clear();
+      } catch (cause) {
+        setArticles(previous);
+        toast.error(
+          cause instanceof Error ? cause.message : `Could not ${action} those stories`
+        );
+      } finally {
+        setBulkBusy(null);
+      }
+    },
+    [articles, fetchArticles, selection]
+  );
+
+  const bulkActions: BulkAction[] = [
+    {
+      id: "approve",
+      label: "Approve",
+      onRun: (ids) => runBulkVerdict("approve", ids),
+    },
+    {
+      id: "reject",
+      label: "Reject",
+      destructive: true,
+      onRun: (ids) => runBulkVerdict("reject", ids),
+    },
+  ];
 
   const openEditModal = (article: Article) => {
     setEditingArticle(article);
@@ -263,13 +333,26 @@ export default function ReviewPage() {
         return (
           <article
             key={article.id}
-            className="flex flex-col rounded-xl border border-radar-line bg-radar-surface p-4 shadow-radar transition-colors hover:border-radar-ink3"
+            className={cn(
+              "flex flex-col rounded-xl border bg-radar-surface p-4 shadow-radar transition-colors",
+              selection.isSelected(article.id)
+                ? "border-radar-accent"
+                : "border-radar-line hover:border-radar-ink3"
+            )}
           >
             <div className="flex items-start justify-between gap-3">
-              <SourceStamp
-                sourceUrl={article.sourceUrl}
-                publishedAt={article.publishedAt}
-              />
+              <div className="flex min-w-0 items-start gap-2.5">
+                <SelectCheckbox
+                  checked={selection.isSelected(article.id)}
+                  onToggle={(modifiers) => selection.toggle(article.id, modifiers)}
+                  label={`Select ${article.title}`}
+                  className="mt-0.5"
+                />
+                <SourceStamp
+                  sourceUrl={article.sourceUrl}
+                  publishedAt={article.publishedAt}
+                />
+              </div>
               <ScoreMeter score={article.relevanceScore} className="shrink-0" />
             </div>
 
@@ -334,8 +417,19 @@ export default function ReviewPage() {
       {articles.map((article) => (
         <article
           key={article.id}
-          className="flex flex-col gap-3 border-b border-radar-line2 py-4 transition-colors hover:bg-radar-surface2 sm:flex-row sm:items-start sm:gap-5"
+          className={cn(
+            "flex flex-col gap-3 border-b border-radar-line2 py-4 transition-colors sm:flex-row sm:items-start sm:gap-5",
+            selection.isSelected(article.id)
+              ? "bg-radar-surface2"
+              : "hover:bg-radar-surface2"
+          )}
         >
+          <SelectCheckbox
+            checked={selection.isSelected(article.id)}
+            onToggle={(modifiers) => selection.toggle(article.id, modifiers)}
+            label={`Select ${article.title}`}
+            className="mt-1 shrink-0"
+          />
           <div className="min-w-0 flex-1">
             <SourceStamp
               sourceUrl={article.sourceUrl}
@@ -383,6 +477,20 @@ export default function ReviewPage() {
         <caption className="sr-only">Stories waiting for review</caption>
         <thead>
           <tr className={theadClass}>
+            <th scope="col" className={cn(thClass, "w-[36px]")}>
+              <SelectCheckbox
+                checked={selection.allSelected}
+                indeterminate={selection.partiallySelected}
+                onToggle={() =>
+                  selection.allSelected ? selection.clear() : selection.selectAll()
+                }
+                label={
+                  selection.allSelected
+                    ? "Clear selection"
+                    : `Select all ${articles.length} stories`
+                }
+              />
+            </th>
             <th scope="col" className={thClass}>
               Score
             </th>
@@ -405,7 +513,17 @@ export default function ReviewPage() {
         </thead>
         <tbody>
           {articles.map((article) => (
-            <tr key={article.id} className={trClass}>
+            <tr
+              key={article.id}
+              className={cn(trClass, selection.isSelected(article.id) && "bg-radar-surface2")}
+            >
+              <td className={tdClass}>
+                <SelectCheckbox
+                  checked={selection.isSelected(article.id)}
+                  onToggle={(modifiers) => selection.toggle(article.id, modifiers)}
+                  label={`Select ${article.title}`}
+                />
+              </td>
               <td className={tdClass}>
                 <ScoreMeter score={article.relevanceScore} />
               </td>
@@ -444,6 +562,36 @@ export default function ReviewPage() {
       </table>
     </TableShell>
   );
+
+  /**
+   * Select-all strip for the layouts that have no table header to hang it off.
+   * The table view carries its own header checkbox instead.
+   */
+  const renderSelectionBar = () =>
+    articles.length === 0 || layout === "table" ? null : (
+      <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-radar-line pb-3">
+        <SelectCheckbox
+          checked={selection.allSelected}
+          indeterminate={selection.partiallySelected}
+          onToggle={() =>
+            selection.allSelected ? selection.clear() : selection.selectAll()
+          }
+          label={
+            selection.allSelected
+              ? "Clear selection"
+              : `Select all ${articles.length} stories`
+          }
+        />
+        <span className="text-[12.5px] text-radar-ink2">
+          {selection.count > 0
+            ? `${selection.count} of ${articles.length} selected`
+            : `Select all ${articles.length}`}
+        </span>
+        <span className="ml-auto text-[11.5px] text-radar-ink3">
+          Shift-click to select a range · Esc to clear
+        </span>
+      </div>
+    );
 
   const renderContent = () => {
     switch (layout) {
@@ -554,7 +702,15 @@ export default function ReviewPage() {
                 Refreshing the queue…
               </p>
             )}
+            {renderSelectionBar()}
             {renderContent()}
+            <BulkBar
+              selection={selection}
+              actions={bulkActions}
+              noun="story"
+              nounPlural="stories"
+              busyAction={bulkBusy}
+            />
           </>
         )}
       </RadarMain>
