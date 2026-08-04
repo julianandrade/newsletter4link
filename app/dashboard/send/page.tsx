@@ -25,6 +25,12 @@ import {
   StatusChip,
   Tag,
 } from "@/components/radar/primitives";
+import {
+  BulkBar,
+  SelectCheckbox,
+  useSelection,
+  type BulkAction,
+} from "@/components/radar/selection";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -90,6 +96,62 @@ export default function EditionsPage() {
   const [approved, setApproved] = useState<PipelineArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * RQ-005 action 7: the same selection the other lists have.
+   *
+   * Sent editions are held back by the endpoint unless explicitly included:
+   * deleting one does not unsend the mail, it only removes the record that it
+   * went out.
+   */
+  const selection = useSelection(editions.map((edition) => edition.id));
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
+
+  const runBulkDelete = async (ids: string[], includeSent: boolean) => {
+    setBulkBusy("delete");
+    const previous = editions;
+    setEditions((prev) => prev.filter((edition) => !ids.includes(edition.id)));
+
+    try {
+      const res = await fetch("/api/editions/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", ids, includeSent }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Could not delete those editions");
+      }
+
+      toast.success(
+        `${data.affected} ${data.affected === 1 ? "edition" : "editions"} deleted` +
+          (data.heldBackSent > 0
+            ? `. ${data.heldBackSent} already sent and kept.`
+            : "")
+      );
+      selection.clear();
+      // The optimistic removal was wrong for anything held back.
+      if (data.heldBackSent > 0 || data.skipped > 0) await load();
+    } catch (cause) {
+      setEditions(previous);
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not delete those editions"
+      );
+    } finally {
+      setBulkBusy(null);
+      setPendingBulkDelete(null);
+    }
+  };
+
+  const bulkActions: BulkAction[] = [
+    {
+      id: "delete",
+      label: "Delete",
+      destructive: true,
+      onRun: (ids) => setPendingBulkDelete(ids),
+    },
+  ];
 
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -384,6 +446,22 @@ export default function EditionsPage() {
                     </caption>
                     <thead>
                       <tr className="border-b border-radar-line bg-radar-surface2 text-[10px] font-semibold uppercase tracking-[0.09em] text-radar-ink3">
+                        <th scope="col" className="w-[36px] px-4 py-2.5 font-semibold">
+                          <SelectCheckbox
+                            checked={selection.allSelected}
+                            indeterminate={selection.partiallySelected}
+                            onToggle={() =>
+                              selection.allSelected
+                                ? selection.clear()
+                                : selection.selectAll()
+                            }
+                            label={
+                              selection.allSelected
+                                ? "Clear selection"
+                                : `Select all ${editions.length} editions`
+                            }
+                          />
+                        </th>
                         <th scope="col" className="px-4 py-2.5 font-semibold">
                           Edition
                         </th>
@@ -405,8 +483,22 @@ export default function EditionsPage() {
                       {editions.map((edition) => (
                         <tr
                           key={edition.id}
-                          className="border-b border-radar-line2 transition-colors last:border-0 hover:bg-radar-surface2"
+                          className={cn(
+                            "border-b border-radar-line2 transition-colors last:border-0",
+                            selection.isSelected(edition.id)
+                              ? "bg-radar-surface2"
+                              : "hover:bg-radar-surface2"
+                          )}
                         >
+                          <td className="px-4 py-3">
+                            <SelectCheckbox
+                              checked={selection.isSelected(edition.id)}
+                              onToggle={(modifiers) =>
+                                selection.toggle(edition.id, modifiers)
+                              }
+                              label={`Select week ${edition.week} of ${edition.year}`}
+                            />
+                          </td>
                           <td className="px-4 py-3">
                             <Link
                               href={`/dashboard/send/${edition.id}`}
@@ -457,6 +549,14 @@ export default function EditionsPage() {
                     </tbody>
                   </table>
                 </div>
+
+                <BulkBar
+                  selection={selection}
+                  actions={bulkActions}
+                  noun="edition"
+                  busyAction={bulkBusy}
+                />
+
                 <div className="mt-3 flex items-center justify-between">
                   <SectionLabel>
                     {editions.length}{" "}
@@ -471,6 +571,45 @@ export default function EditionsPage() {
           </div>
         )}
       </RadarMain>
+
+      {/* RQ-005: bulk delete, with sent editions held back by the endpoint. */}
+      <Dialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(open) => !open && setPendingBulkDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {pendingBulkDelete?.length}{" "}
+              {pendingBulkDelete?.length === 1 ? "edition" : "editions"}?
+            </DialogTitle>
+            <DialogDescription>
+              Editions that have already been sent are kept: deleting one would
+              not unsend the mail, only remove the record that it went out. The
+              stories themselves are not deleted and return to the approved pool.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <RadarButton
+              variant="outline"
+              onClick={() => setPendingBulkDelete(null)}
+            >
+              Cancel
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              disabled={bulkBusy !== null}
+              onClick={() =>
+                pendingBulkDelete && runBulkDelete(pendingBulkDelete, false)
+              }
+            >
+              {bulkBusy === "delete"
+                ? "Deleting…"
+                : `Delete ${pendingBulkDelete?.length ?? 0}`}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>

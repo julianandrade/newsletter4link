@@ -171,6 +171,13 @@ export function createTenantClient(organizationId: string) {
           create: { ...args.create, organizationId },
         } as T),
 
+      // Scoped like updateMany, so a bulk delete cannot reach across tenants.
+      deleteMany: <T extends Prisma.EditionDeleteManyArgs>(args: T) =>
+        prisma.edition.deleteMany({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
       delete: <T extends Prisma.EditionDeleteArgs>(args: T) =>
         prisma.edition.delete(args),
 
