@@ -45,3 +45,14 @@ prisma/migrations/**/migration_lock.toml
 .playwright-mcp/
 test-results/
 playwright-report/
+
+.vercel
+.env*
+
+# Transient UI captures, organized on disk but not worth versioning
+docs/screenshots/
+.playwright-mcp/
+
+# Print-resolution brand assets: 17MB of sources the app does not serve.
+# The derived email assets in public/email/ are the ones that ship.
+public/link-linkroad logos/
