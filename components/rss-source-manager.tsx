@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/radar/compat";
+import {
+  BulkBar,
+  SelectCheckbox,
+  useSelection,
+  type BulkAction,
+} from "@/components/radar/selection";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Rss,
   Plus,
@@ -557,6 +564,121 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
     {} as Record<string, RSSSource[]>
   );
 
+  /**
+   * Bulk selection.
+   *
+   * The id list is in render order, which is what makes shift-click ranges
+   * behave: rows are grouped by category, so the flat order is the categories
+   * sorted, then each category's sources.
+   */
+  const orderedIds = useMemo(
+    () =>
+      Object.entries(sourcesByCategory)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .flatMap(([, list]) => list.map((source) => source.id)),
+    [sourcesByCategory]
+  );
+
+  const selection = useSelection(orderedIds);
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
+
+  /**
+   * One request for the whole selection rather than one per row: 434 feeds is
+   * 434 round trips otherwise. The list is updated from the reported count, so
+   * a partial success shows what actually changed instead of assuming.
+   */
+  const runBulk = useCallback(
+    async (action: "activate" | "deactivate" | "delete", ids: string[]) => {
+      setBulkBusy(action);
+      const previous = sources;
+
+      // Optimistic, with the previous list kept for rollback.
+      setSources((prev) =>
+        action === "delete"
+          ? prev.filter((source) => !ids.includes(source.id))
+          : prev.map((source) =>
+              ids.includes(source.id)
+                ? { ...source, active: action === "activate" }
+                : source
+            )
+      );
+
+      try {
+        const response = await fetch("/api/rss-sources/bulk", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, ids }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Bulk action failed");
+
+        const verb =
+          action === "delete"
+            ? "deleted"
+            : action === "activate"
+              ? "enabled"
+              : "disabled";
+        toast.success(
+          `${result.affected} ${result.affected === 1 ? "feed" : "feeds"} ${verb}` +
+            (result.skipped > 0 ? `, ${result.skipped} skipped` : "")
+        );
+
+        // Trust the server's count over the optimistic guess.
+        if (result.skipped > 0) await fetchSources();
+        selection.clear();
+      } catch (cause) {
+        setSources(previous);
+        toast.error(
+          cause instanceof Error ? cause.message : "Could not apply the change"
+        );
+      } finally {
+        setBulkBusy(null);
+        setPendingBulkDelete(null);
+      }
+    },
+    [sources, fetchSources, selection]
+  );
+
+  const bulkActions: BulkAction[] = useMemo(
+    () => [
+      {
+        id: "activate",
+        label: "Enable",
+        onRun: (ids) => runBulk("activate", ids),
+      },
+      {
+        id: "deactivate",
+        label: "Disable",
+        onRun: (ids) => runBulk("deactivate", ids),
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        destructive: true,
+        // Confirmed in a dialog: this is the one that cannot be undone.
+        onRun: (ids) => setPendingBulkDelete(ids),
+      },
+    ],
+    [runBulk]
+  );
+
+  /** Select or clear a whole category in one click. */
+  const toggleCategory = useCallback(
+    (categorySources: RSSSource[]) => {
+      const ids = categorySources.map((source) => source.id);
+      const allOn = ids.every((id) => selection.isSelected(id));
+      const next = new Set(selection.selected);
+      for (const id of ids) {
+        if (allOn) next.delete(id);
+        else next.add(id);
+      }
+      selection.selectOnly([...next]);
+    },
+    [selection]
+  );
+
   // Check if any filters are active
   const hasActiveFilters = searchQuery || categoryFilter !== "all" || statusFilter !== "all";
 
@@ -568,7 +690,16 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
   };
 
   return (
-    <div className={cn("space-y-6", className)}>
+    <div
+      className={cn(
+        "space-y-6",
+        // The action bar is sticky, so it floats over content rather than
+        // reserving space. Without this the last rows sit permanently behind
+        // it and cannot be scrolled clear.
+        selection.count > 0 && "pb-24",
+        className
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -735,6 +866,32 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
         </Card>
       )}
 
+      {/* Select-all header: the count on it is exactly what an action will hit. */}
+      {!loading && filteredSources.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-radar-line pb-3">
+          <SelectCheckbox
+            checked={selection.allSelected}
+            indeterminate={selection.partiallySelected}
+            onToggle={() =>
+              selection.allSelected ? selection.clear() : selection.selectAll()
+            }
+            label={
+              selection.allSelected
+                ? "Clear selection"
+                : `Select all ${filteredSources.length} visible feeds`
+            }
+          />
+          <span className="text-[12.5px] text-radar-ink2">
+            {selection.count > 0
+              ? `${selection.count} of ${filteredSources.length} selected`
+              : `Select all ${filteredSources.length}`}
+          </span>
+          <span className="ml-auto text-[11.5px] text-radar-ink3">
+            Shift-click to select a range · Esc to clear
+          </span>
+        </div>
+      )}
+
       {/* Sources list grouped by category */}
       {!loading && filteredSources.length > 0 && (
         <div className="space-y-6">
@@ -743,11 +900,27 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
             .map(([category, categorySources]) => (
               <Card key={category}>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <CardTitle className="text-base font-medium flex items-center gap-3">
+                    <SelectCheckbox
+                      checked={categorySources.every((s) => selection.isSelected(s.id))}
+                      indeterminate={categorySources.some((s) =>
+                        selection.isSelected(s.id)
+                      )}
+                      onToggle={() => toggleCategory(categorySources)}
+                      label={`Select all ${categorySources.length} sources in ${category}`}
+                    />
                     <Badge variant="secondary">{category}</Badge>
                     <span className="text-radar-ink2 text-sm font-normal">
                       {categorySources.length} source
                       {categorySources.length !== 1 ? "s" : ""}
+                      {(() => {
+                        const chosen = categorySources.filter((s) =>
+                          selection.isSelected(s.id)
+                        ).length;
+                        return chosen > 0 && chosen < categorySources.length
+                          ? ` · ${chosen} selected`
+                          : "";
+                      })()}
                     </span>
                   </CardTitle>
                 </CardHeader>
@@ -761,6 +934,8 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
                         testResult={
                           testResult?.id === source.id ? testResult : null
                         }
+                        isSelected={selection.isSelected(source.id)}
+                        onSelect={(modifiers) => selection.toggle(source.id, modifiers)}
                         onEdit={() => handleEdit(source)}
                         onDelete={() => handleDeleteClick(source)}
                         onToggleActive={() => handleToggleActive(source)}
@@ -773,6 +948,48 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
             ))}
         </div>
       )}
+
+      <BulkBar
+        selection={selection}
+        actions={bulkActions}
+        noun="feed"
+        busyAction={bulkBusy}
+      />
+
+      {/* Bulk delete confirmation: the one bulk action that cannot be undone. */}
+      <Dialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(open) => !open && setPendingBulkDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {pendingBulkDelete?.length}{" "}
+              {pendingBulkDelete?.length === 1 ? "feed" : "feeds"}?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Articles already collected from these feeds
+              are kept; only the feeds themselves are removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingBulkDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkBusy !== null}
+              onClick={() =>
+                pendingBulkDelete && runBulk("delete", pendingBulkDelete)
+              }
+            >
+              {bulkBusy === "delete"
+                ? "Deleting..."
+                : `Delete ${pendingBulkDelete?.length ?? 0}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Dialog */}
       <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
@@ -1095,6 +1312,8 @@ interface RSSSourceRowProps {
   source: RSSSource;
   isTesting: boolean;
   testResult: { success: boolean; message: string } | null;
+  isSelected: boolean;
+  onSelect: (modifiers: { shiftKey: boolean }) => void;
   onEdit: () => void;
   onDelete: () => void;
   onToggleActive: () => void;
@@ -1108,13 +1327,28 @@ function RSSSourceRow({
   source,
   isTesting,
   testResult,
+  isSelected,
+  onSelect,
   onEdit,
   onDelete,
   onToggleActive,
   onTest,
 }: RSSSourceRowProps) {
   return (
-    <div className="flex items-center gap-4 px-6 py-4">
+    <div
+      className={cn(
+        "flex items-center gap-4 px-6 py-4 transition-colors",
+        // A selected row is tinted, so a selection made far up a list of 434
+        // is still visible when scrolling back through it.
+        isSelected && "bg-radar-surface2"
+      )}
+    >
+      <SelectCheckbox
+        checked={isSelected}
+        onToggle={onSelect}
+        label={`Select ${source.name}`}
+      />
+
       {/* Source info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

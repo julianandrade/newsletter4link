@@ -176,9 +176,12 @@ const PROJECTS = [
   },
 ];
 
-const SOURCES = [
+const NAMED_SOURCES = [
   {
     id: "s1",
+    url: "https://s1.example.com/rss",
+    createdAt: iso(90),
+    updatedAt: iso(1),
     name: "Reuters Technology",
     category: "News wire",
     active: true,
@@ -187,6 +190,9 @@ const SOURCES = [
   },
   {
     id: "s2",
+    url: "https://s2.example.com/rss",
+    createdAt: iso(90),
+    updatedAt: iso(1),
     name: "arXiv cs.AI",
     category: "Research",
     active: true,
@@ -195,6 +201,9 @@ const SOURCES = [
   },
   {
     id: "s3",
+    url: "https://s3.example.com/rss",
+    createdAt: iso(90),
+    updatedAt: iso(1),
     name: "The Information",
     category: "Paywalled",
     active: true,
@@ -203,6 +212,9 @@ const SOURCES = [
   },
   {
     id: "s4",
+    url: "https://s4.example.com/rss",
+    createdAt: iso(90),
+    updatedAt: iso(1),
     name: "EU AI Newsroom",
     category: "Regulator",
     active: true,
@@ -210,6 +222,38 @@ const SOURCES = [
     lastError: "404 · feed moved",
   },
 ];
+
+/**
+ * The real account has 434 feeds. The bulk selection work is only meaningful at
+ * that volume, so the handful of named fixtures above are padded out to it.
+ */
+const SOURCE_CATEGORIES = [
+  "News wire",
+  "Research",
+  "Paywalled",
+  "Vendor blog",
+  "Security",
+  "Community",
+];
+
+const SOURCES = [
+  ...NAMED_SOURCES,
+  ...Array.from({ length: 434 - NAMED_SOURCES.length }, (_, index) => {
+    const n = index + 1;
+    return {
+      id: `sx${n}`,
+      name: `Feed ${String(n).padStart(3, "0")}`,
+      url: `https://feed-${n}.example.com/rss`,
+      category: SOURCE_CATEGORIES[n % SOURCE_CATEGORIES.length],
+      active: n % 3 !== 0,
+      lastFetchedAt: n % 7 === 0 ? null : iso(0, (n % 20) / 10),
+      lastError: n % 29 === 0 ? "404 Not Found" : null,
+      createdAt: iso(60),
+      updatedAt: iso(1),
+    };
+  }),
+];
+
 
 const EDITIONS = [
   {

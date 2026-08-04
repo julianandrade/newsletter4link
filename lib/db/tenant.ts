@@ -262,6 +262,14 @@ export function createTenantClient(organizationId: string) {
       delete: <T extends Prisma.RSSSourceDeleteArgs>(args: T) =>
         prisma.rSSSource.delete(args),
 
+      // Scoped like updateMany: ids from another organization simply do not
+      // match, so a bulk delete can never reach across tenants.
+      deleteMany: <T extends Prisma.RSSSourceDeleteManyArgs>(args: T) =>
+        prisma.rSSSource.deleteMany({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
       count: <T extends Prisma.RSSSourceCountArgs>(args?: T) =>
         prisma.rSSSource.count({
           ...args,
