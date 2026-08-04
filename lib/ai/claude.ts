@@ -2,6 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
 import { rethrowIfModelRejected } from "./model";
+import {
+  parseCategories,
+  promptCategoryList,
+  UNPLACED,
+} from "@/lib/ai/categories";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -153,27 +158,13 @@ export async function categorizeArticle(
         {
           role: "user",
           content: `Categorize this article into 1-3 relevant categories from this list:
-- Machine Learning
-- Natural Language Processing
-- Computer Vision
-- AI Research
-- AI Applications
-- AI Ethics
-- AI Regulation
-- Large Language Models
-- Robotics
-- Autonomous Systems
-- AI Business
-- AI Tools
-- Data Science
-- Cloud AI
-- Edge AI${brandContext}
+${promptCategoryList()}${brandContext}
 
 Title: ${title}
 
 Content: ${content.substring(0, 1000)}
 
-Respond with ONLY the category names, separated by commas. Maximum 3 categories.`,
+Respond with ONLY the category names, separated by commas, copied exactly as they appear in the list above. Maximum 3 categories. Do not invent a category, do not describe the article, and do not return anything that is not on the list. If none of them fit, reply with the single word NONE.`,
         },
       ],
     });
@@ -182,19 +173,24 @@ Respond with ONLY the category names, separated by commas. Maximum 3 categories.
       ? message.content[0].text.trim()
       : "";
 
-    const categories = categoriesText
-      .split(",")
-      .map((cat) => cat.trim())
-      .filter((cat) => cat.length > 0)
-      .slice(0, 3); // Max 3 categories
+    // Validated against the taxonomy rather than trusted. The prompt supplied a
+    // fixed list and the model was departing from it, which is how "Snapdragon 8
+    // Elite chip" became a topic on a radar meant to filter by topic.
+    const { categories, rejected } = parseCategories(categoriesText);
 
-    return categories.length > 0 ? categories : ["AI News"];
+    if (rejected.length > 0) {
+      console.warn(
+        `Categoriser returned ${rejected.length} value(s) outside the taxonomy, dropped: ${rejected.join(", ")}`
+      );
+    }
+
+    return categories.length > 0 ? categories : [UNPLACED];
   } catch (error) {
     // RQ-002: everything else still degrades to a default category, but a
     // refused model would otherwise be invisible on every article.
     rethrowIfModelRejected(error, model);
     console.error("Error categorizing article:", error);
-    return ["AI News"]; // Default category on error
+    return [UNPLACED]; // Default category on error
   }
 }
 
