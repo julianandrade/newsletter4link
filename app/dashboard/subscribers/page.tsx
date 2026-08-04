@@ -22,6 +22,12 @@ import {
 } from "@/components/radar/primitives";
 import { SearchIcon } from "@/components/radar/icons";
 import {
+  BulkBar,
+  SelectCheckbox,
+  useSelection,
+  type BulkAction,
+} from "@/components/radar/selection";
+import {
   EmptyState,
   RadarField,
   RadarInput,
@@ -260,6 +266,81 @@ export default function SubscribersPage() {
     );
   });
 
+  /**
+   * Bulk selection. Ids are in render order so shift-click ranges match the
+   * table, and the selection is pruned automatically when the search narrows.
+   */
+  const selection = useSelection(filteredSubscribers.map((s) => s.id));
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
+
+  const runBulk = async (
+    action: "activate" | "deactivate" | "delete",
+    ids: string[]
+  ) => {
+    setBulkBusy(action);
+    const previous = subscribers;
+
+    setSubscribers((prev) =>
+      action === "delete"
+        ? prev.filter((s) => !ids.includes(s.id))
+        : prev.map((s) =>
+            ids.includes(s.id) ? { ...s, active: action === "activate" } : s
+          )
+    );
+
+    try {
+      const res = await fetch("/api/subscribers/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ids }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Bulk action failed");
+      }
+
+      const verb =
+        action === "delete"
+          ? "removed"
+          : action === "activate"
+            ? "resubscribed"
+            : "unsubscribed";
+      toast.success(
+        `${data.affected} ${data.affected === 1 ? "subscriber" : "subscribers"} ${verb}` +
+          (data.skipped > 0 ? `, ${data.skipped} skipped` : "")
+      );
+      selection.clear();
+    } catch (cause) {
+      setSubscribers(previous);
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not apply the change"
+      );
+    } finally {
+      setBulkBusy(null);
+      setPendingBulkDelete(null);
+    }
+  };
+
+  const bulkActions: BulkAction[] = [
+    {
+      id: "activate",
+      label: "Resubscribe",
+      onRun: (ids) => runBulk("activate", ids),
+    },
+    {
+      id: "deactivate",
+      label: "Unsubscribe",
+      onRun: (ids) => runBulk("deactivate", ids),
+    },
+    {
+      id: "delete",
+      label: "Remove",
+      destructive: true,
+      onRun: (ids) => setPendingBulkDelete(ids),
+    },
+  ];
+
   const activeCount = subscribers.filter((s) => s.active).length;
   const inactiveCount = subscribers.filter((s) => !s.active).length;
   const languageCount = new Set(subscribers.map((s) => s.preferredLanguage)).size;
@@ -408,6 +489,22 @@ export default function SubscribersPage() {
                 <caption className="sr-only">Newsletter subscribers</caption>
                 <thead>
                   <tr className={theadClass}>
+                    <th scope="col" className={cn(thClass, "w-[36px]")}>
+                      <SelectCheckbox
+                        checked={selection.allSelected}
+                        indeterminate={selection.partiallySelected}
+                        onToggle={() =>
+                          selection.allSelected
+                            ? selection.clear()
+                            : selection.selectAll()
+                        }
+                        label={
+                          selection.allSelected
+                            ? "Clear selection"
+                            : `Select all ${filteredSubscribers.length} subscribers`
+                        }
+                      />
+                    </th>
                     <th scope="col" className={thClass}>
                       Email
                     </th>
@@ -430,7 +527,22 @@ export default function SubscribersPage() {
                 </thead>
                 <tbody>
                   {filteredSubscribers.map((subscriber) => (
-                    <tr key={subscriber.id} className={trClass}>
+                    <tr
+                      key={subscriber.id}
+                      className={cn(
+                        trClass,
+                        selection.isSelected(subscriber.id) && "bg-radar-surface2"
+                      )}
+                    >
+                      <td className={tdClass}>
+                        <SelectCheckbox
+                          checked={selection.isSelected(subscriber.id)}
+                          onToggle={(modifiers) =>
+                            selection.toggle(subscriber.id, modifiers)
+                          }
+                          label={`Select ${subscriber.email}`}
+                        />
+                      </td>
                       <td className={cn(tdClass, "text-radar-ink")}>
                         {subscriber.email}
                       </td>
@@ -480,10 +592,59 @@ export default function SubscribersPage() {
               <Num>{filteredSubscribers.length}</Num> of{" "}
               <Num>{subscribers.length}</Num> shown
               {searchQuery && ` for “${searchQuery}”`}
+              {selection.count > 0 && (
+                <> · <Num>{selection.count}</Num> selected</>
+              )}
             </p>
+
+            <BulkBar
+              selection={selection}
+              actions={bulkActions}
+              noun="subscriber"
+              busyAction={bulkBusy}
+            />
           </>
         )}
       </RadarMain>
+
+      {/* Bulk remove confirmation: deleting a subscriber loses their history. */}
+      <Dialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(open) => !open && setPendingBulkDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Remove {pendingBulkDelete?.length}{" "}
+              {pendingBulkDelete?.length === 1 ? "subscriber" : "subscribers"}?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone, and it deletes their delivery history with
+              them. To stop sending without losing the record, use Unsubscribe
+              instead.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <RadarButton
+              variant="outline"
+              onClick={() => setPendingBulkDelete(null)}
+            >
+              Cancel
+            </RadarButton>
+            <RadarButton
+              variant="accent"
+              disabled={bulkBusy !== null}
+              onClick={() =>
+                pendingBulkDelete && runBulk("delete", pendingBulkDelete)
+              }
+            >
+              {bulkBusy === "delete"
+                ? "Removing…"
+                : `Remove ${pendingBulkDelete?.length ?? 0}`}
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
