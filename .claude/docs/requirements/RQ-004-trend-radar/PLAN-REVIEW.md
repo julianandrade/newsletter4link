@@ -161,6 +161,20 @@ not work and should not ship, however elegant the pipeline. That is worth knowin
 before Phase 3, not after. This belongs in the requirement as a **go/no-go gate**,
 with a stated threshold agreed in advance.
 
+### The agreed thresholds
+
+Delegated to me on 4 August 2026, so stated here as the numbers the gate is
+measured against:
+
+| Measure | Threshold | Why this number |
+|---|---|---|
+| Median lead time | **at least 2 weeks** | The newsletter is weekly. Two weeks means at least one edition of warning before the story is everywhere, which is the whole claim. One week is indistinguishable from reading the news. |
+| False positive rate | **at most 40%** | A false positive costs an editor a glance, so tolerance can be higher than for an alert. Above roughly half, the list stops being read, and a signal nobody reads has no value however correct it is. |
+| Minimum sample | **at least 15 entities** that reached media coverage inside the window | Below that the median is an anecdote, and a gate measured on an anecdote is theatre. |
+
+If the sample is too small, the gate does not pass by default: it means the window
+is too short and the backfill must be extended before the question can be answered.
+
 ## F7. Global entities carry one organization's interests into another's radar
 
 The plan says, correctly, that entities are public data and should not be

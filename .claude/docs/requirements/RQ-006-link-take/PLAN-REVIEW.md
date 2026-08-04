@@ -130,16 +130,31 @@ costs nothing for the person who just wants to approve the edition.
 
 ## What to decide before implementing
 
-1. **Does a human read every Link Take before it reaches a subscriber?** The plan
-   says rewrites go through the existing review flow, but the existing flow reviews
-   *articles*, not rewrites, and an article approved before the rewrite existed
-   carries no approval of the rewrite. This is the question that matters most, and
-   my recommendation is that publishing generated prose under the company's name
-   requires a human to have read that prose.
-2. **Who signs off on the copyright posture?** The rules here are good engineering,
-   and this is still a publishing decision that distributes generated derivatives
-   of third-party journalism to 800 employees. That wants a named person outside
-   engineering, and it is a gate, not a footnote.
+1. **Does a human read every Link Take before it reaches a subscriber?**
+   **Answered: not necessarily.** A human may or may not read the generated prose
+   before it goes out.
+
+   Recorded consequence, because it changes what the checks in F2 are for. With no
+   guaranteed human read, the mechanical checks stop being a safety net and become
+   the only control: nothing else stands between a fabricated number and 800
+   inboxes. They therefore move from "should" to "must", they must fail closed (no
+   output rather than an unchecked one), and every generated piece must carry its
+   check result so a complaint can be answered with evidence rather than intent.
+
+2. **Who signs off on the copyright posture?** **Answered: the Link/Linkroad
+   newsletter agent.**
+
+   Recorded objection, once, so the decision is on the record rather than assumed.
+   Software cannot hold accountability. If a publisher objects to a derivative of
+   their article being circulated internally, "the agent approved it" is not an
+   answer that protects anyone, and the person who configured the agent inherits
+   the question anyway. What the agent can do is enforce and evidence: apply the
+   rules, refuse what fails them, and keep the record. What it cannot do is accept
+   the consequence.
+
+   Proceeding as decided. The design compensates where it can: fail closed, keep
+   the audit trail per F5, and make the source attribution unmissable. If a named
+   human owner is ever wanted, nothing in the build prevents adding one.
 3. **What happens when the daily cap engages?** F4.
 4. **Is EXCERPT mode worth having at all**, given F1 and F3? An alternative worth
    considering: generate only from feeds that publish full text, and show
