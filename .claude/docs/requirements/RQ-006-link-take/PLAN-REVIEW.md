@@ -155,7 +155,27 @@ costs nothing for the person who just wants to approve the edition.
    Proceeding as decided. The design compensates where it can: fail closed, keep
    the audit trail per F5, and make the source attribution unmissable. If a named
    human owner is ever wanted, nothing in the build prevents adding one.
-3. **What happens when the daily cap engages?** F4.
+3. **What happens when the daily cap engages?** **Answered: the cap comes down a
+   long way, and the overflow queues.**
+
+   300 a day was sized for a daily product. This one is weekly. An edition carries
+   perhaps eight to twelve stories, so a few dozen candidates a week is generous and
+   anything beyond that is spend with nowhere to go.
+
+   - **Eager generation: 8 per day**, about 56 a week against an edition of twelve.
+     Overflow queues rather than being dropped or silently skipped.
+   - **The queue expires, it does not accumulate.** This is the part worth stating
+     plainly: on a weekly product an item that missed its edition is worthless, so
+     the queue is re-ranked by relevance every day and anything older than one
+     edition cycle is discarded rather than carried. First in, first out would spend
+     today's budget on last week's news and build a backlog that gets generated and
+     never published, which is pure cost wearing a tidy appearance.
+   - **Generation on open is not counted against that cap.** A person asking to read
+     one specific piece is not the runaway case, and gets its own modest guard.
+
+   Quality over quantity was the instruction, and the expiring queue is what turns
+   it into behaviour: the budget always goes to the best candidates currently in
+   play, never to whatever arrived first.
 4. **Is EXCERPT mode worth having at all**, given F1 and F3? An alternative worth
    considering: generate only from feeds that publish full text, and show
    everything else as summary plus link. Fewer Link Takes, none of them invented.

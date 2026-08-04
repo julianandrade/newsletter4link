@@ -19,21 +19,16 @@ and verified in production.
 
 ## Waiting on a decision from you
 
-Ordered by how much they block. Each is a short answer, not a task.
+Ordered by how much they block.
 
-1. **RQ-005, five questions.** The flow. Does automation send or only propose;
-   what a thin week produces; whether per-article approval survives; what happens
-   to the Feed screen; whether a sent edition can be deleted.
-   → `RQ-005-edition-in-one-decision/RQ-005.md`
-2. **RQ-004, the thresholds.** What median lead time and what false positive rate
-   make the trend radar worth shipping. Without a number agreed in advance, the
-   go/no-go gate is a conversation instead of a test.
-   → `RQ-004-trend-radar/PLAN-REVIEW.md`
-3. **RQ-006, four questions.** The sharpest: does a human read every generated
-   piece before a subscriber does. Also who signs off on the copyright posture.
-   → `RQ-006-link-take/PLAN-REVIEW.md`
-4. **RQ-002 Q7.** Whether the curation job gets a model column. Costs a
+**RQ-004, RQ-005 and RQ-006 are all answered as of 4 August 2026.** RQ-005 is
+ready to specify and build. What remains open:
+
+1. **RQ-002 Q7.** Whether the curation job gets a model column. Costs a
    `prisma db push`. The log entry already records the effective model.
+2. **RQ-006 F3.** Which publishers may be fetched for full text. That is a
+   default-deny list, and choosing what goes on it is an editorial decision rather
+   than a technical one.
 
 ## What I recommend, and why
 
