@@ -1,7 +1,13 @@
 import { StrictMode } from "react";
 import { describe, expect, it } from "vitest";
-import { act, renderHook } from "@testing-library/react";
-import { useSelection } from "@/components/radar/selection";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
+import { SelectCheckbox, useSelection } from "@/components/radar/selection";
 
 const IDS = ["a", "b", "c", "d", "e", "f"];
 
@@ -155,5 +161,124 @@ describe("useSelection", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(result.current.count).toBe(0);
+  });
+});
+
+/**
+ * The rendered checkbox, not just the hook.
+ *
+ * Every test above passed while a single click left the box visually unticked in
+ * the browser: the hook was right and the DOM was not. `onClick` called
+ * preventDefault, so after React had rendered and the component had asserted state
+ * onto the node, the browser reverted the property it had optimistically set, and
+ * that revert landed last.
+ */
+describe("SelectCheckbox, as rendered", () => {
+  function List({ ids = IDS }: { ids?: string[] }) {
+    const selection = useSelection(ids);
+
+    return (
+      <div>
+        <span data-testid="count">{selection.count}</span>
+        <SelectCheckbox
+          checked={selection.allSelected}
+          indeterminate={selection.partiallySelected}
+          onToggle={() =>
+            selection.allSelected ? selection.clear() : selection.selectAll()
+          }
+          label="Select all"
+        />
+        {ids.map((id) => (
+          <SelectCheckbox
+            key={id}
+            checked={selection.isSelected(id)}
+            onToggle={(modifiers) => selection.toggle(id, modifiers)}
+            label={`Select ${id}`}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const box = (label: string) =>
+    screen.getByLabelText(label) as HTMLInputElement;
+
+  it("ticks the box it was told to tick", () => {
+    render(<List />, strict);
+
+    fireEvent.click(box("Select b"));
+
+    expect(screen.getByTestId("count").textContent).toBe("1");
+    expect(box("Select b").checked).toBe(true);
+    expect(box("Select a").checked).toBe(false);
+  });
+
+  it("unticks on a second click", () => {
+    render(<List />, strict);
+
+    fireEvent.click(box("Select b"));
+    fireEvent.click(box("Select b"));
+
+    expect(screen.getByTestId("count").textContent).toBe("0");
+    expect(box("Select b").checked).toBe(false);
+  });
+
+  it("keeps the DOM in step across several rows", () => {
+    render(<List />, strict);
+
+    fireEvent.click(box("Select a"));
+    fireEvent.click(box("Select c"));
+    fireEvent.click(box("Select a"));
+
+    expect(box("Select a").checked).toBe(false);
+    expect(box("Select c").checked).toBe(true);
+    expect(screen.getByTestId("count").textContent).toBe("1");
+  });
+
+  it("shows the mixed state on the header box, and no tick", () => {
+    render(<List />, strict);
+
+    fireEvent.click(box("Select b"));
+
+    const header = box("Select all");
+    expect(header.indeterminate).toBe(true);
+    expect(header.checked).toBe(false);
+  });
+
+  it("ticks every row from the header, and clears them all", () => {
+    render(<List />, strict);
+
+    fireEvent.click(box("Select all"));
+    for (const id of IDS) expect(box(`Select ${id}`).checked).toBe(true);
+    expect(box("Select all").indeterminate).toBe(false);
+
+    fireEvent.click(box("Select all"));
+    for (const id of IDS) expect(box(`Select ${id}`).checked).toBe(false);
+  });
+
+  it("marks a shift-clicked range in the DOM, not only in the count", () => {
+    render(<List />, strict);
+
+    fireEvent.click(box("Select b"));
+    fireEvent.click(box("Select e"), { shiftKey: true });
+
+    for (const id of ["b", "c", "d", "e"]) {
+      expect(box(`Select ${id}`).checked).toBe(true);
+    }
+    expect(box("Select a").checked).toBe(false);
+    expect(box("Select f").checked).toBe(false);
+    expect(screen.getByTestId("count").textContent).toBe("4");
+  });
+
+  it("unticks a row the filter no longer shows", () => {
+    const { rerender } = render(<List />, strict);
+
+    fireEvent.click(box("Select e"));
+    expect(box("Select e").checked).toBe(true);
+
+    // The pruning path: the row leaves the visible set, so the selection drops it.
+    rerender(<List ids={["a", "b", "c"]} />);
+
+    expect(screen.getByTestId("count").textContent).toBe("0");
   });
 });

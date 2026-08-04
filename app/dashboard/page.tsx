@@ -43,7 +43,7 @@ import {
 } from "@/components/article-filters";
 import { MachineStatus } from "@/components/proposal/machine-status";
 import { announceOutcome } from "@/components/proposal/announce";
-import { useCanEdit } from "@/components/proposal/use-can-edit";
+import { useOrgRole } from "@/components/radar/use-role";
 import { useCollectionRun } from "@/components/proposal/use-collection-run";
 import { useQueueActions } from "@/components/proposal/use-queue-actions";
 import { ProposalView } from "@/components/proposal/proposal-view";
@@ -73,7 +73,8 @@ type View = "proposal" | "queue";
 
 export default function ProposalPage() {
   const [state, dispatch] = useReducer(proposalReducer, initialProposalState);
-  const { canEdit } = useCanEdit();
+  const { atLeast } = useOrgRole();
+  const canEdit = atLeast("EDITOR");
 
   /**
    * Mirror of the current state, for the writes below.

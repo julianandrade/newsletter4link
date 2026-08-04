@@ -32,6 +32,8 @@ import {
   type BulkAction,
 } from "@/components/radar/selection";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
+import { isoWeekAndYear } from "@/lib/radar/week";
+import { useOrgRole } from "@/components/radar/use-role";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -42,6 +44,9 @@ interface Edition {
   status: "DRAFT" | "FINALIZED" | "SENT";
   finalizedAt: string | null;
   sentAt: string | null;
+  archivedAt: string | null;
+  approvedAt: string | null;
+  approvedByEmail: string | null;
   createdAt: string;
   updatedAt: string;
   articleCount: number;
@@ -63,17 +68,32 @@ interface PipelineArticle {
 
 type View = "pipeline" | "editions";
 
-function currentWeekAndYear(): { week: number; year: number } {
-  const now = new Date();
-  const temp = new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-  );
-  temp.setUTCDate(temp.getUTCDate() + 4 - (temp.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(
-    ((temp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
-  );
-  return { week, year: temp.getUTCFullYear() };
+/** RQ-005 AC-8.3: archived editions are out of the way, not gone. */
+type ArchivedFilter = "exclude" | "only" | "all";
+
+const ARCHIVED_LABEL: Record<ArchivedFilter, string> = {
+  exclude: "Live",
+  only: "Archived",
+  all: "All",
+};
+
+type EditionBulkAction = "archive" | "unarchive" | "delete" | "forceDelete";
+
+const BULK_VERB: Record<EditionBulkAction, string> = {
+  archive: "archive",
+  unarchive: "unarchive",
+  delete: "delete",
+  forceDelete: "force delete",
+};
+
+/** What a confirmation needs to state. The three counts are only read for a force
+ *  delete, where the numbers come from a dry run rather than from the selection. */
+interface PendingBulk {
+  action: EditionBulkAction;
+  ids: string[];
+  editions: number;
+  events?: number;
+  recipients?: number;
 }
 
 function formatStamp(value: string | null): string {
@@ -91,6 +111,8 @@ export default function EditionsPage() {
   const router = useRouter();
 
   const [view, setView] = useState<View>("pipeline");
+  const [archived, setArchived] = useState<ArchivedFilter>("exclude");
+  const { atLeast } = useOrgRole();
   const [editions, setEditions] = useState<Edition[]>([]);
   const [pending, setPending] = useState<PipelineArticle[]>([]);
   const [approved, setApproved] = useState<PipelineArticle[]>([]);
@@ -106,51 +128,150 @@ export default function EditionsPage() {
    */
   const selection = useSelection(editions.map((edition) => edition.id));
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
-  const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
+  const [pendingBulk, setPendingBulk] = useState<PendingBulk | null>(null);
 
-  const runBulkDelete = async (ids: string[], includeSent: boolean) => {
-    setBulkBusy("delete");
-    const previous = editions;
-    setEditions((prev) => prev.filter((edition) => !ids.includes(edition.id)));
+  /**
+   * RQ-005 actions 7 and 8: one handler for the four outcomes the endpoint
+   * supports, because they differ only in which rows they touch and what the
+   * result is called.
+   *
+   * Nothing is removed optimistically. The endpoint decides by outcome, holding
+   * back what an action cannot apply to, so guessing here and correcting after
+   * would show a row leaving and coming back (AC-7.5).
+   */
+  const runBulk = async (action: EditionBulkAction, ids: string[]) => {
+    setBulkBusy(action);
 
     try {
       const res = await fetch("/api/editions/bulk", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", ids, includeSent }),
+        body: JSON.stringify({ action, ids }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Could not delete those editions");
+        throw new Error(data.error || `Could not ${BULK_VERB[action]} those editions`);
       }
 
-      toast.success(
-        `${data.affected} ${data.affected === 1 ? "edition" : "editions"} deleted` +
-          (data.heldBackSent > 0
-            ? `. ${data.heldBackSent} already sent and kept.`
-            : "")
-      );
+      // AC-7.6: the endpoint's own sentence, which names the numbers and the
+      // reasons. Restating it here would be a second wording to keep in step.
+      toast.success(data.message);
       selection.clear();
-      // The optimistic removal was wrong for anything held back.
-      if (data.heldBackSent > 0 || data.skipped > 0) await load();
+      await load();
     } catch (cause) {
-      setEditions(previous);
       toast.error(
-        cause instanceof Error ? cause.message : "Could not delete those editions"
+        cause instanceof Error
+          ? cause.message
+          : `Could not ${BULK_VERB[action]} those editions`
       );
     } finally {
       setBulkBusy(null);
-      setPendingBulkDelete(null);
+      setPendingBulk(null);
     }
   };
 
+  /**
+   * AC-8.6: the confirmation for a force delete states numbers read at the moment
+   * of asking. A dry run is what makes them real rather than a generic warning.
+   */
+  const askForceDelete = async (ids: string[]) => {
+    setBulkBusy("forceDelete");
+
+    try {
+      const res = await fetch("/api/editions/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "forceDelete", ids, dryRun: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Could not read what that would destroy");
+      }
+
+      if (data.editions === 0) {
+        toast.error(
+          "None of those can be force deleted. Force delete is for editions that were sent."
+        );
+        return;
+      }
+
+      setPendingBulk({
+        action: "forceDelete",
+        ids,
+        editions: data.editions,
+        events: data.events,
+        recipients: data.recipients,
+      });
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error
+          ? cause.message
+          : "Could not read what that would destroy"
+      );
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  /**
+   * AC-7.4: the bar offers what the current selection can actually take.
+   *
+   * Offered when at least one selected edition qualifies, rather than only when
+   * all of them do: a mixed selection is handled by outcome, and hiding the
+   * action would make the user deselect rows to find out that (AC-7.5).
+   */
+  const selectedEditions = editions.filter((edition) =>
+    selection.isSelected(edition.id)
+  );
+  const anySent = selectedEditions.some((edition) => edition.sentAt !== null);
+  const anyUnsent = selectedEditions.some((edition) => edition.sentAt === null);
+  const anyArchived = selectedEditions.some(
+    (edition) => edition.archivedAt !== null
+  );
+  const anyLive = selectedEditions.some((edition) => edition.archivedAt === null);
+
   const bulkActions: BulkAction[] = [
-    {
-      id: "delete",
-      label: "Delete",
-      destructive: true,
-      onRun: (ids) => setPendingBulkDelete(ids),
-    },
+    ...(anySent && anyLive
+      ? [
+          {
+            id: "archive",
+            label: "Archive",
+            onRun: (ids: string[]) => runBulk("archive", ids),
+          },
+        ]
+      : []),
+    ...(anyArchived
+      ? [
+          {
+            id: "unarchive",
+            label: "Unarchive",
+            onRun: (ids: string[]) => runBulk("unarchive", ids),
+          },
+        ]
+      : []),
+    ...(anyUnsent
+      ? [
+          {
+            id: "delete",
+            label: "Delete",
+            destructive: true,
+            onRun: (ids: string[]) =>
+              setPendingBulk({ action: "delete", ids, editions: ids.length }),
+          },
+        ]
+      : []),
+    // AC-8.5: an OWNER's decision, and nobody else is offered it. The server
+    // refuses 403 regardless of what is rendered here.
+    ...(anySent && atLeast("OWNER")
+      ? [
+          {
+            id: "forceDelete",
+            label: "Force delete",
+            destructive: true,
+            onRun: (ids: string[]) => askForceDelete(ids),
+          },
+        ]
+      : []),
   ];
 
   const [showCreate, setShowCreate] = useState(false);
@@ -165,7 +286,7 @@ export default function EditionsPage() {
 
     try {
       const [editionsRes, pendingRes, approvedRes] = await Promise.all([
-        fetch("/api/editions"),
+        fetch(`/api/editions?archived=${archived}`),
         fetch("/api/articles/pending?sortBy=relevanceScore&sortOrder=desc"),
         fetch("/api/articles/approved"),
       ]);
@@ -186,11 +307,14 @@ export default function EditionsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+    // Refetched when the archived filter changes: the server decides what is
+    // visible, so the selection prunes to it rather than the client hiding rows
+    // it still holds selected (AC-7.3).
+  }, [archived]);
 
   useEffect(() => {
     void load();
-    const { week: w, year: y } = currentWeekAndYear();
+    const { week: w, year: y } = isoWeekAndYear();
     setWeek(w);
     setYear(y);
   }, [load]);
@@ -304,6 +428,18 @@ export default function EditionsPage() {
                   { value: "editions", label: `All editions · ${editions.length}` },
                 ]}
               />
+              {/* AC-8.3: archived editions are reachable, and out of the way by
+                  default. Only meaningful on the list, so only shown there. */}
+              {view === "editions" && (
+                <ChipGroup<ArchivedFilter>
+                  label="Archived"
+                  value={archived}
+                  onChange={setArchived}
+                  options={(["exclude", "only", "all"] as ArchivedFilter[]).map(
+                    (value) => ({ value, label: ARCHIVED_LABEL[value] })
+                  )}
+                />
+              )}
               {openEdition ? (
                 <Link
                   href={`/dashboard/send/${openEdition.id}`}
@@ -430,7 +566,10 @@ export default function EditionsPage() {
                     </span>
                     <span className="flex-1" />
                     {edition.sharePointUrl && (
-                      <StatusChip tone="ok">archived</StatusChip>
+                      <StatusChip tone="ok">on SharePoint</StatusChip>
+                    )}
+                    {edition.archivedAt && (
+                      <StatusChip tone="neutral">archived</StatusChip>
                     )}
                   </div>
                   <div className="font-editorial text-[15px] leading-[1.3] text-radar-ink">
@@ -546,6 +685,18 @@ export default function EditionsPage() {
                           </td>
                           <td className="px-4 py-3 text-[12.5px] text-radar-ink2">
                             {edition.sentAt ? formatStamp(edition.sentAt) : "not sent"}
+                            {/* BR-011: a sent edition can say who approved it.
+                                Older ones cannot, because nothing recorded it. */}
+                            {edition.approvedByEmail && (
+                              <div className="mt-0.5 text-[11px] text-radar-ink3">
+                                approved by {edition.approvedByEmail}
+                              </div>
+                            )}
+                            {edition.archivedAt && (
+                              <div className="mt-0.5 text-[11px] text-radar-ink3">
+                                archived {formatStamp(edition.archivedAt)}
+                              </div>
+                            )}
                             {edition.sharePointError && (
                               <div
                                 className="mt-0.5 text-[11px] text-radar-err"
@@ -600,40 +751,64 @@ export default function EditionsPage() {
         )}
       </RadarMain>
 
-      {/* RQ-005: bulk delete, with sent editions held back by the endpoint. */}
+      {/*
+        RQ-005 AC-8.1, AC-8.4, AC-8.6: one confirmation for both destructive
+        actions, worded from what the action actually destroys. A force delete
+        states the numbers a dry run just read; a delete states that the stories
+        return to the approved pool, because they do.
+      */}
       <Dialog
-        open={pendingBulkDelete !== null}
-        onOpenChange={(open) => !open && setPendingBulkDelete(null)}
+        open={pendingBulk !== null}
+        onOpenChange={(open) => !open && setPendingBulk(null)}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Delete {pendingBulkDelete?.length}{" "}
-              {pendingBulkDelete?.length === 1 ? "edition" : "editions"}?
+              {pendingBulk?.action === "forceDelete"
+                ? `Force delete ${pendingBulk.editions} sent ${
+                    pendingBulk.editions === 1 ? "edition" : "editions"
+                  }?`
+                : `Delete ${pendingBulk?.editions ?? 0} ${
+                    pendingBulk?.editions === 1 ? "edition" : "editions"
+                  }?`}
             </DialogTitle>
             <DialogDescription>
-              Editions that have already been sent are kept: deleting one would
-              not unsend the mail, only remove the record that it went out. The
-              stories themselves are not deleted and return to the approved pool.
+              {pendingBulk?.action === "forceDelete" ? (
+                <>
+                  This also destroys <Num>{pendingBulk.events ?? 0}</Num> delivery{" "}
+                  {pendingBulk.events === 1 ? "record" : "records"} for{" "}
+                  <Num>{pendingBulk.recipients ?? 0}</Num>{" "}
+                  {pendingBulk.recipients === 1 ? "recipient" : "recipients"}.
+                  Opens, clicks and bounces for those editions are gone and cannot
+                  be recovered. The mail itself was already delivered; this removes
+                  only the record of it. Archiving keeps all of it.
+                </>
+              ) : (
+                <>
+                  Editions that were already sent are kept: deleting one would not
+                  unsend the mail, only remove the record that it went out. The
+                  stories themselves are not deleted and return to the approved
+                  pool.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <RadarButton
-              variant="outline"
-              onClick={() => setPendingBulkDelete(null)}
-            >
+            <RadarButton variant="outline" onClick={() => setPendingBulk(null)}>
               Cancel
             </RadarButton>
             <RadarButton
               variant="accent"
               disabled={bulkBusy !== null}
               onClick={() =>
-                pendingBulkDelete && runBulkDelete(pendingBulkDelete, false)
+                pendingBulk && runBulk(pendingBulk.action, pendingBulk.ids)
               }
             >
-              {bulkBusy === "delete"
-                ? "Deleting…"
-                : `Delete ${pendingBulkDelete?.length ?? 0}`}
+              {bulkBusy !== null
+                ? "Working…"
+                : pendingBulk?.action === "forceDelete"
+                  ? `Force delete ${pendingBulk.editions}`
+                  : `Delete ${pendingBulk?.editions ?? 0}`}
             </RadarButton>
           </DialogFooter>
         </DialogContent>

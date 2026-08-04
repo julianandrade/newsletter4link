@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { Organization, OrgRole, OrgUser, Plan } from "@prisma/client";
 import { getPlanFeatures, hasFeature, PlanFeatures } from "@/lib/plans/features";
 import { isAllowedEmail } from "@/lib/auth/allowed-domains";
+import { hasRoleAtLeast } from "@/lib/auth/roles";
 
 const ORG_COOKIE_NAME = "selected_org_id";
 
@@ -170,12 +171,14 @@ export async function getOrgContextBySlug(slug: string): Promise<OrgContext | nu
 
 /**
  * Check if user has a specific role or higher
+ *
+ * RQ-005 tech spec 4.1.1: delegates to `lib/auth/roles.ts` so the hierarchy has
+ * one definition that a client component can also import. The previous body
+ * compared `indexOf` results directly, so an unrecognized role name on either
+ * side resolved to -1 and `-1 >= -1` returned true.
  */
 export function hasRole(userRole: OrgRole, requiredRole: OrgRole): boolean {
-  const roleHierarchy: OrgRole[] = ["VIEWER", "EDITOR", "ADMIN", "OWNER"];
-  const userRoleIndex = roleHierarchy.indexOf(userRole);
-  const requiredRoleIndex = roleHierarchy.indexOf(requiredRole);
-  return userRoleIndex >= requiredRoleIndex;
+  return hasRoleAtLeast(userRole, requiredRole);
 }
 
 /**

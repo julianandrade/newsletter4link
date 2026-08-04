@@ -273,6 +273,9 @@ const EDITIONS = [
     sharePointUrl: null,
     sharePointPublishedAt: null,
     sharePointError: null,
+    archivedAt: null,
+    approvedAt: null,
+    approvedByEmail: null,
   },
   {
     id: "e2",
@@ -288,6 +291,9 @@ const EDITIONS = [
     sharePointUrl: "https://example.sharepoint.com/week31",
     sharePointPublishedAt: iso(7),
     sharePointError: null,
+    archivedAt: null,
+    approvedAt: null,
+    approvedByEmail: null,
   },
   {
     id: "e3",
@@ -303,6 +309,45 @@ const EDITIONS = [
     sharePointUrl: null,
     sharePointPublishedAt: null,
     sharePointError: "Graph API token expired",
+  },
+  // RQ-005: a send with its approval on the record, which is what BR-011 added.
+  {
+    id: "e-approved",
+    week: 30,
+    year: 2026,
+    status: "SENT",
+    finalizedAt: iso(15),
+    sentAt: iso(14),
+    createdAt: iso(17),
+    updatedAt: iso(14),
+    articleCount: 9,
+    projectCount: 2,
+    sharePointUrl: null,
+    sharePointPublishedAt: null,
+    sharePointError: null,
+    archivedAt: null,
+    approvedAt: iso(14),
+    approvedByEmail: "julian.andrade@linkconsulting.com",
+  },
+  // RQ-005 AC-8.3: put away. Only visible under the Archived or All filter, and
+  // Unarchive is the action the bar should offer for it.
+  {
+    id: "e-archived",
+    week: 29,
+    year: 2026,
+    status: "SENT",
+    finalizedAt: iso(22),
+    sentAt: iso(21),
+    createdAt: iso(24),
+    updatedAt: iso(20),
+    articleCount: 8,
+    projectCount: 1,
+    sharePointUrl: null,
+    sharePointPublishedAt: null,
+    sharePointError: null,
+    archivedAt: iso(20),
+    approvedAt: iso(21),
+    approvedByEmail: "someone.else@linkconsulting.com",
   },
 ];
 
@@ -1061,7 +1106,16 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       return json({ success: true, data: EDITION_DETAIL });
     }
     if (url.includes("/api/editions")) {
-      return json({ success: true, data: EDITIONS, count: EDITIONS.length });
+      // RQ-005 AC-8.3: the filter is applied here too, so the harness shows the
+      // same three lists the server would and the selection prunes as it will.
+      const mode = new URL(url, "http://preview").searchParams.get("archived");
+      const rows =
+        mode === "only"
+          ? EDITIONS.filter((edition) => edition.archivedAt !== null)
+          : mode === "all"
+            ? EDITIONS
+            : EDITIONS.filter((edition) => edition.archivedAt === null);
+      return json({ success: true, data: rows, count: rows.length });
     }
     if (url.includes("/api/trends")) {
       const trends = buildTrends();
