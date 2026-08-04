@@ -590,6 +590,19 @@ const SUBSCRIBERS = [
 
 const TEMPLATES = [
   {
+    id: "builtin-ai-radar",
+    name: "AI Radar Weekly",
+    description:
+      "The built-in edition. Editorial layout with the Linkroad masthead, a TL;DR block, topic sections, the trend radar and one accent call to action. Adapts to the content: sections with nothing in them do not render.",
+    builtIn: true,
+    // A stored template holds both flags in this fixture, so the built-in holds
+    // neither. Flip t-weekly's flags to see the other state.
+    isActive: false,
+    isDefault: false,
+    createdAt: iso(0),
+    updatedAt: iso(0),
+  },
+  {
     id: "t-weekly",
     name: "Weekly brief",
     description: "The standard frame: masthead, stories, projects, sign-off.",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { builtInTemplate } from "@/lib/email/builtin-template";
 
 export async function GET() {
   try {
@@ -18,7 +19,19 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(templates);
+    /**
+     * RQ-003: the built-in edition leads the list.
+     *
+     * It is code rather than a stored row, so its flags are derived: it is the
+     * active and preselected template precisely when no stored template holds
+     * those flags. Listed first because it is the one a fresh organization uses.
+     */
+    const builtIn = builtInTemplate(
+      templates.some((template) => template.isActive),
+      templates.some((template) => template.isDefault)
+    );
+
+    return NextResponse.json([builtIn, ...templates]);
   } catch (error) {
     console.error("Error fetching templates:", error);
     return NextResponse.json(

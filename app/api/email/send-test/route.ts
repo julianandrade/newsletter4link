@@ -6,11 +6,13 @@ import {
   newsletterSubject,
 } from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 import {
   renderTemplateById,
   injectCustomBlocks,
   type CustomBlock,
 } from "@/lib/email/template-renderer";
+import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,10 @@ interface CustomData {
  */
 export async function POST(request: Request) {
   try {
+    // RQ-003: needed for a template lookup scoped to this organization. The
+    // rest of this route still reads through the untenanted client, which is a
+    // separate pre-existing problem.
+    const ctx = await requireOrgContext();
     const body = await request.json();
     const { email, editionId, templateId, customData } = body;
 
@@ -145,9 +151,29 @@ export async function POST(request: Request) {
 
     // Send test email - use custom template if specified
     let result;
-    if (templateId) {
+    /**
+     * RQ-003: honour which template is active.
+     *
+     * A send that names no template used the built-in edition unconditionally,
+     * which is why the "Use this one" switch on the Templates screen did
+     * nothing. The active stored template now wins; the built-in is used when
+     * none is active, and when the built-in is explicitly named.
+     */
+    let effectiveTemplateId: string | null = templateId ?? null;
+    if (!effectiveTemplateId) {
+      const active = await ctx.db.emailTemplate.findFirst({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      effectiveTemplateId = active?.id ?? null;
+    }
+    if (isBuiltInTemplateId(effectiveTemplateId)) {
+      effectiveTemplateId = null;
+    }
+
+    if (effectiveTemplateId) {
       // Render using the custom template
-      const templateResult = await renderTemplateById(templateId, emailData);
+      const templateResult = await renderTemplateById(effectiveTemplateId, emailData);
       if (!templateResult) {
         return NextResponse.json(
           { success: false, error: "Template not found" },

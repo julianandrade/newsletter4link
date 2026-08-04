@@ -12,6 +12,7 @@ import {
   injectCustomBlocks,
   type CustomBlock,
 } from "@/lib/email/template-renderer";
+import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { config } from "@/lib/config";
 import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSettings } from "@/lib/email/provider";
 import { requireOrgContext } from "@/lib/auth/context";
@@ -367,8 +368,28 @@ export async function POST(request: Request) {
 
     // Check if using a custom template
     let templateHtml: string | null = null;
-    if (templateId) {
-      const templateResult = await renderTemplateById(templateId, emailData);
+    /**
+     * RQ-003: honour which template is active.
+     *
+     * A send that names no template used the built-in edition unconditionally,
+     * which is why the "Use this one" switch on the Templates screen did
+     * nothing. The active stored template now wins; the built-in is used when
+     * none is active, and when the built-in is explicitly named.
+     */
+    let effectiveTemplateId: string | null = templateId ?? null;
+    if (!effectiveTemplateId) {
+      const active = await db.emailTemplate.findFirst({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      effectiveTemplateId = active?.id ?? null;
+    }
+    if (isBuiltInTemplateId(effectiveTemplateId)) {
+      effectiveTemplateId = null;
+    }
+
+    if (effectiveTemplateId) {
+      const templateResult = await renderTemplateById(effectiveTemplateId, emailData);
       if (!templateResult) {
         return NextResponse.json(
           { success: false, error: "Template not found" },

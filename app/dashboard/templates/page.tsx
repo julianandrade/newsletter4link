@@ -35,6 +35,12 @@ interface Template {
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+  /**
+   * RQ-003: the AI Radar edition. It is code rather than a stored row, so it
+   * cannot be edited in the visual builder or deleted, and its flags are
+   * derived: it is in use precisely when no stored template is.
+   */
+  builtIn?: boolean;
 }
 
 export default function TemplatesPage() {
@@ -68,7 +74,10 @@ export default function TemplatesPage() {
         body: JSON.stringify({ active: !template.isActive }),
       });
 
-      if (!response.ok) throw new Error("Failed to update template");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to update template");
+      }
 
       // Active is exclusive, so switching one on switches the rest off.
       setTemplates((prev) =>
@@ -84,7 +93,11 @@ export default function TemplatesPage() {
       );
     } catch (error) {
       console.error("Error updating template:", error);
-      toast.error("Could not change which template is in use");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not change which template is in use"
+      );
       fetchTemplates();
     } finally {
       setUpdating(null);
@@ -214,6 +227,9 @@ export default function TemplatesPage() {
                       <h2 className="m-0 text-[14.5px] font-semibold text-radar-ink">
                         {template.name}
                       </h2>
+                      {template.builtIn && (
+                        <StatusChip tone="info">Built in</StatusChip>
+                      )}
                       {template.isActive && <StatusChip tone="ok">In use</StatusChip>}
                       {template.isDefault && (
                         <StatusChip tone="warn">Preselected</StatusChip>
@@ -225,7 +241,9 @@ export default function TemplatesPage() {
                       </p>
                     )}
                     <p className="mt-2 mb-0 text-[11px] text-radar-ink3">
-                      Updated {relativeTime(template.updatedAt)}
+                      {template.builtIn
+                        ? "Ships with the app. Adapts to the content, so it cannot be edited visually."
+                        : `Updated ${relativeTime(template.updatedAt)}`}
                     </p>
                   </div>
 
@@ -233,7 +251,12 @@ export default function TemplatesPage() {
                     <RadarToggle
                       id={`active-${template.id}`}
                       checked={template.isActive}
-                      disabled={updating === template.id}
+                      disabled={
+                        updating === template.id ||
+                        // The built-in is what remains when nothing else is
+                        // active, so switching it off has no meaning.
+                        Boolean(template.builtIn && template.isActive)
+                      }
                       onChange={() => handleToggleActive(template)}
                       label="Use this one"
                       hint="Applied when a send does not name a template."
@@ -241,10 +264,14 @@ export default function TemplatesPage() {
                     <RadarToggle
                       id={`default-${template.id}`}
                       checked={template.isDefault}
-                      disabled={updating === template.id}
+                      disabled={
+                        updating === template.id ||
+                        Boolean(template.builtIn && template.isDefault)
+                      }
                       onChange={() => handleToggleDefault(template)}
                       label="Preselect in the builder"
                     />
+                    {!template.builtIn && (
                     <div className="mt-2 flex justify-end gap-1.5 border-t border-radar-line2 pt-2.5">
                       <Link
                         href={`/dashboard/templates/${template.id}`}
@@ -267,6 +294,7 @@ export default function TemplatesPage() {
                         Delete
                       </RadarButton>
                     </div>
+                    )}
                   </div>
                 </div>
               </article>

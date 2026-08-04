@@ -75,6 +75,7 @@ import { Checkbox } from "@/components/radar/compat";
 import { Input } from "@/components/radar/compat";
 import { Textarea } from "@/components/radar/compat";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 
 // Types
 interface Template {
@@ -84,6 +85,8 @@ interface Template {
   isActive: boolean;
   isDefault: boolean;
   designJson: object | null;
+  /** RQ-003: the AI Radar edition, which is code rather than a stored row. */
+  builtIn?: boolean;
 }
 
 interface Subscriber {
@@ -349,14 +352,19 @@ export default function EditionDetailPage() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
-          // Filter to only show templates with designJson (editable in Unlayer)
-          const templatesWithDesign = data.filter((t: Template) => t.designJson);
-          setTemplates(templatesWithDesign);
-          // Set default template if one exists and no template already selected
+          /**
+           * RQ-003: keep the built-in edition, which has no designJson because
+           * it is code. The Unlayer filter used to drop it, so the only way to
+           * reach it was an unnamed "Default Template" option.
+           */
+          const selectable = data.filter(
+            (t: Template) => t.designJson || t.builtIn
+          );
+          setTemplates(selectable);
           if (!selectedTemplateId) {
-            const defaultTemplate = templatesWithDesign.find((t: Template) => t.isDefault);
-            if (defaultTemplate) {
-              setSelectedTemplateId(defaultTemplate.id);
+            const preselected = selectable.find((t: Template) => t.isDefault);
+            if (preselected) {
+              setSelectedTemplateId(preselected.id);
             }
           }
         }
@@ -420,7 +428,8 @@ export default function EditionDetailPage() {
   const handleTemplateChange = useCallback(async (templateId: string) => {
     setSelectedTemplateId(templateId);
 
-    if (templateId && templateId !== "default") {
+    // The built-in edition is code: there is no Unlayer design to load.
+    if (templateId && templateId !== "default" && !isBuiltInTemplateId(templateId)) {
       // Find template and load its design
       const template = templates.find((t) => t.id === templateId);
       if (template?.designJson && editorRef.current?.isReady()) {
@@ -1460,14 +1469,14 @@ export default function EditionDetailPage() {
                   onValueChange={(value) => handleTemplateChange(value === "default" ? "" : value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Default Template" />
+                    <SelectValue placeholder="Choose a template" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">Default Template</SelectItem>
                     {templates.map((template) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
-                        {template.isDefault && " (Default)"}
+                        {template.builtIn && " (built in)"}
+                        {template.isDefault && " · preselected"}
                       </SelectItem>
                     ))}
                   </SelectContent>
