@@ -157,6 +157,22 @@ export function dayLabel(iso: string): string {
   });
 }
 
+/**
+ * "5 Aug 2026" — an absolute date, for the places a relative one is not enough.
+ *
+ * Here, next to its siblings, rather than as a private helper in whichever component
+ * needed it first. That `{ day: "numeric", month: "short", year: "numeric" }` options
+ * object is currently written out by hand in eight other files; this is the one place a
+ * ninth should not be added, and the one place the other eight can converge on.
+ */
+export function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /** Stable YYYY-MM-DD bucket key for day grouping. */
 export function dayKey(iso: string): string {
   const d = new Date(iso);

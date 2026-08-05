@@ -25,6 +25,7 @@ import GeneratePage from "@/app/dashboard/generate/page";
 import SettingsPage from "@/app/dashboard/settings/page";
 import BuilderPage from "@/app/dashboard/send/[id]/page";
 import SourcesPage from "@/app/dashboard/sources/page";
+import ArticleDetailPage from "@/app/dashboard/articles/[id]/page";
 import type { User } from "@supabase/supabase-js";
 
 const DAY = 86400000;
@@ -1148,6 +1149,27 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       });
     }
 
+    // RQ-006_03. Ahead of every other /api/articles branch, and well ahead of the
+    // catch-all at the bottom, which would answer this route with an empty array.
+    if (url.includes("/rewrite")) {
+      const method = (init?.method ?? "GET").toUpperCase();
+
+      if (method === "PATCH") {
+        return json({ success: true, data: ARTICLE_HISTORY });
+      }
+
+      if (method === "POST") {
+        return json({
+          success: true,
+          generated: true,
+          rewrite: { id: ARTICLE_REWRITE.id, title: ARTICLE_REWRITE.title },
+        });
+      }
+
+      // The state comes from the `?screen=` the harness was opened with, so each of
+      // the four is a URL rather than something to arrange by clicking.
+      return json({ success: true, data: articleStateFromUrl() });
+    }
     if (url.includes("/api/articles/approved")) {
       return json({ success: true, data: APPROVED, count: APPROVED.length });
     }
@@ -1310,6 +1332,116 @@ const FAKE_USER = {
   email: "julian.andrade@linkconsulting.com",
 } as unknown as User;
 
+/**
+ * RQ-006_03: one fixture per state of the article detail view.
+ *
+ * The screen has four, and three of them are the ones nobody would think to build by
+ * hand in a browser: an article whose Link Take went stale, one whose generation the
+ * checks refused, and one nothing has been attempted for. Each is a `?screen=` entry
+ * below, so all four can be looked at, and screenshotted, without a Supabase session
+ * and without spending a model call.
+ */
+const ARTICLE_ATTRIBUTION = {
+  publication: "reuters.com",
+  url: "https://www.reuters.com/technology/ai-act-banks",
+  publishedAt: iso(0, 2),
+  originalTitle:
+    "EU AI Act high-risk obligations bite for banks as first conformity audits begin",
+};
+
+const ARTICLE_SUMMARY =
+  "Credit-scoring and fraud models now need documented conformity assessments; supervisors in three member states have opened the first reviews. Vendors with unclear model provenance are the exposure.";
+
+const ARTICLE_REWRITE = {
+  id: "rw-preview-1",
+  title: "As primeiras auditorias ao AI Act chegam à banca, e a prova documental é o problema",
+  body: `Três supervisores europeus abriram as primeiras revisões de conformidade a modelos de scoring de crédito e de detecção de fraude, ao abrigo das obrigações de alto risco do AI Act. O que está a ser pedido não é o desempenho do modelo, é a documentação: proveniência dos dados, avaliação de conformidade assinada, e um registo de quem decidiu o quê.
+
+## Relevância para a Link
+
+Isto muda a conversa em três frentes onde já estamos. Nas modernizações de core bancário, a pergunta deixa de ser se o modelo funciona e passa a ser quem assina o dossier. Nos projectos onde integrámos modelos de fornecedor, a proveniência que ninguém documentou na altura é agora um risco do cliente, não do fornecedor. E para as equipas de dados, o registo de decisões é trabalho de engenharia, não de compliance.`,
+  language: "pt-PT",
+  inputMode: "FULL_TEXT" as const,
+  generatedAt: iso(0, 5),
+  model: "claude-haiku-4-5-20251001",
+  checkSummary:
+    "passed: 204 words, longest run shared with the source 1 words, 3 figures all supported",
+  longestSharedRun: 1,
+  wordCount: 204,
+};
+
+const ARTICLE_HISTORY = [
+  {
+    id: "rw-preview-1",
+    status: "GENERATED",
+    checksPassed: true,
+    checkSummary: ARTICLE_REWRITE.checkSummary,
+    longestSharedRun: 1,
+    wordCount: 204,
+    inputMode: "FULL_TEXT",
+    model: "claude-haiku-4-5-20251001",
+    generatedAt: iso(0, 5),
+    error: null,
+  },
+  {
+    id: "rw-preview-0",
+    status: "FAILED",
+    checksPassed: false,
+    checkSummary: "failed: unsupported-number",
+    longestSharedRun: 4,
+    wordCount: 191,
+    inputMode: "EXCERPT",
+    model: "claude-haiku-4-5-20251001",
+    generatedAt: iso(1, 5),
+    error:
+      "The checks refused it after 2 attempts: unsupported-number. not in the source: 27, 2028",
+  },
+];
+
+const ARTICLE_STATES = {
+  article: {
+    attribution: ARTICLE_ATTRIBUTION,
+    rewrite: ARTICLE_REWRITE,
+    unavailableReason: null,
+    stale: false,
+    attempted: true,
+    summary: ARTICLE_SUMMARY,
+  },
+  "article-stale": {
+    attribution: ARTICLE_ATTRIBUTION,
+    rewrite: ARTICLE_REWRITE,
+    unavailableReason: null,
+    stale: true,
+    attempted: true,
+    summary: ARTICLE_SUMMARY,
+  },
+  "article-absent": {
+    attribution: ARTICLE_ATTRIBUTION,
+    rewrite: null,
+    unavailableReason: "No Link Take has been written for this article yet.",
+    stale: false,
+    attempted: false,
+    summary: ARTICLE_SUMMARY,
+  },
+  "article-refused": {
+    attribution: ARTICLE_ATTRIBUTION,
+    rewrite: null,
+    unavailableReason:
+      "The checks refused it after 2 attempts: unsupported-number. not in the source: 27, 2028",
+    stale: false,
+    attempted: true,
+    summary: ARTICLE_SUMMARY,
+  },
+} as const;
+
+/** Which of the four the current URL is asking for. */
+function articleStateFromUrl() {
+  const param = new URLSearchParams(window.location.search).get("screen") ?? "";
+  return param in ARTICLE_STATES
+    ? ARTICLE_STATES[param as keyof typeof ARTICLE_STATES]
+    : ARTICLE_STATES.article;
+}
+
 const SCREENS = {
   feed: FeedPage,
   trends: TrendsPage,
@@ -1322,6 +1454,12 @@ const SCREENS = {
   projects: ProjectsPage,
   curation: CurationPage,
   sources: SourcesPage,
+  // RQ-006_03: the same screen four times, once per state. The fetch stub reads the
+  // `?screen=` value to decide which payload to answer with.
+  article: ArticleDetailPage,
+  "article-stale": ArticleDetailPage,
+  "article-absent": ArticleDetailPage,
+  "article-refused": ArticleDetailPage,
   subscribers: SubscribersPage,
   templates: TemplatesPage,
   analytics: AnalyticsPage,

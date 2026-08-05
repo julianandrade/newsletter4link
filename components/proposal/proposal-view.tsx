@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ArticleTitleLink } from "@/components/article/article-title-link";
 import {
   Num,
   RadarButton,
@@ -150,16 +151,10 @@ export function ProposalView({
                   <SourceStamp
                     sourceUrl={article.sourceUrl}
                     publishedAt={article.publishedAt}
+                    href={article.sourceUrl}
                   />
                   <h3 className="font-editorial m-0 text-[16px] font-medium leading-[1.3] text-radar-ink text-pretty">
-                    <a
-                      href={article.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-radar-ink no-underline hover:text-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
-                    >
-                      {article.title}
-                    </a>
+                    <ArticleTitleLink articleId={article.id} title={article.title} />
                   </h3>
                   {article.summary && (
                     <p className="mt-1.5 mb-0 line-clamp-2 text-[12.5px] text-radar-ink2 text-pretty">

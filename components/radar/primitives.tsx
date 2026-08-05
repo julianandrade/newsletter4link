@@ -271,56 +271,114 @@ export function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Source stamp: brand square, publication name, age, optional cluster count. */
+/**
+ * A link that leaves the application.
+ *
+ * One place owns `target` and `rel`, because `rel="noopener noreferrer"` is a security
+ * attribute (reverse tabnabbing, CLAUDE.md A02) and hand-typing a security attribute in
+ * a dozen files is how one of them ends up missing it.
+ */
+export function ExternalLink({
+  href,
+  children,
+  className,
+  title,
+}: {
+  href: string;
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={title}
+      className={cn(
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent",
+        className
+      )}
+    >
+      {children}
+    </a>
+  );
+}
+
+/**
+ * Source stamp: brand square, publication name, age, optional cluster count.
+ *
+ * Pass `href` to make the whole stamp the route to the publication it names. Owned here
+ * rather than by a wrapper elsewhere, for the same reason `radarButtonClass` is exported:
+ * one widget, one name, whether or not it happens to be clickable.
+ */
 export function SourceStamp({
   sourceUrl,
   publishedAt,
   clusterCount,
   sourceName,
+  href,
 }: {
   sourceUrl: string;
   /** Web results often carry no date, so the stamp drops the age rather than faking one. */
   publishedAt?: string | null;
   clusterCount?: number;
   sourceName?: string;
+  /** When set, the stamp is a link to here, usually the article on the publisher's site. */
+  href?: string;
 }) {
   const identity = sourceIdentity(sourceUrl);
   const name = sourceName || identity.name;
 
-  return (
-    <div className="mb-1.5 flex flex-wrap items-center gap-2">
-      <span
-        aria-hidden="true"
-        className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded text-[8px] font-bold"
-        style={{ background: identity.color, color: identity.onColor }}
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
+    href ? (
+      <ExternalLink
+        href={href}
+        title="Open the original article"
+        className="inline-flex no-underline"
       >
-        {(name || "?").charAt(0).toUpperCase()}
-      </span>
-      <span className="text-[11.5px] font-medium text-radar-ink2">{name}</span>
-      {publishedAt ? (
-        <>
-          <span aria-hidden="true" className="text-radar-ink3">
-            ·
-          </span>
-          <time
-            dateTime={publishedAt}
-            className="text-[11.5px] text-radar-ink3"
-            title={new Date(publishedAt).toLocaleString("en-GB")}
-          >
-            {relativeTime(publishedAt)}
-          </time>
-        </>
-      ) : null}
-      {clusterCount && clusterCount > 1 ? (
-        <span className="ml-0.5 inline-flex items-center gap-1.5 rounded-full border border-radar-line py-px pr-2 pl-1.5 text-[10.5px] text-radar-ink2">
-          <span
-            aria-hidden="true"
-            className="h-1 w-1 rounded-full bg-radar-accent"
-          />
-          covered by {clusterCount} sources
+        {children}
+      </ExternalLink>
+    ) : (
+      <>{children}</>
+    );
+
+  return (
+    <Wrapper>
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded text-[8px] font-bold"
+          style={{ background: identity.color, color: identity.onColor }}
+        >
+          {(name || "?").charAt(0).toUpperCase()}
         </span>
-      ) : null}
-    </div>
+        <span className="text-[11.5px] font-medium text-radar-ink2">{name}</span>
+        {publishedAt ? (
+          <>
+            <span aria-hidden="true" className="text-radar-ink3">
+              ·
+            </span>
+            <time
+              dateTime={publishedAt}
+              className="text-[11.5px] text-radar-ink3"
+              title={new Date(publishedAt).toLocaleString("en-GB")}
+            >
+              {relativeTime(publishedAt)}
+            </time>
+          </>
+        ) : null}
+        {clusterCount && clusterCount > 1 ? (
+          <span className="ml-0.5 inline-flex items-center gap-1.5 rounded-full border border-radar-line py-px pr-2 pl-1.5 text-[10.5px] text-radar-ink2">
+            <span
+              aria-hidden="true"
+              className="h-1 w-1 rounded-full bg-radar-accent"
+            />
+            covered by {clusterCount} sources
+          </span>
+        ) : null}
+      </div>
+    </Wrapper>
   );
 }
 

@@ -192,6 +192,54 @@ export function LoadError({
   );
 }
 
+/**
+ * A collapsed block, with its label as the thing you click.
+ *
+ * Native `details`, so it works with no JavaScript, is keyboard-operable for free, and
+ * is findable by in-page search in the browsers that look inside closed disclosures.
+ *
+ * `onFirstOpen` fires on the first click and never again, which is what a panel whose
+ * content costs a request wants: opening it pays once, and closing and reopening is
+ * free. The click rather than the `toggle` event, because the click is what a person
+ * does and it fires identically everywhere.
+ */
+export function RadarDisclosure({
+  label,
+  children,
+  onFirstOpen,
+  className,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+  onFirstOpen?: () => void;
+  className?: string;
+}) {
+  const asked = React.useRef(false);
+
+  const handleClick = () => {
+    if (asked.current) return;
+    asked.current = true;
+    onFirstOpen?.();
+  };
+
+  return (
+    <details
+      className={cn(
+        "rounded-xl border border-radar-line bg-radar-surface",
+        className
+      )}
+    >
+      <summary
+        onClick={onFirstOpen ? handleClick : undefined}
+        className="cursor-pointer px-4 py-3 text-[12.5px] text-radar-ink2 transition-colors hover:text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+      >
+        {label}
+      </summary>
+      <div className="border-t border-radar-line2 px-4 py-3.5">{children}</div>
+    </details>
+  );
+}
+
 /* --------------------------------------------------------------------- states */
 
 /**

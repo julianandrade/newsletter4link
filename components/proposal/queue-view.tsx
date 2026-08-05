@@ -24,7 +24,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ArticleTitleLink } from "@/components/article/article-title-link";
 import {
+  ExternalLink,
   Num,
   RadarButton,
   ScoreMeter,
@@ -239,20 +241,14 @@ export function QueueView({
                 <SourceStamp
                   sourceUrl={article.sourceUrl}
                   publishedAt={article.publishedAt}
+                  href={article.sourceUrl}
                 />
               </div>
               <ScoreMeter score={article.relevanceScore} className="shrink-0" />
             </div>
 
             <h3 className="font-editorial m-0 text-[17px] font-medium leading-[1.25] tracking-[-0.01em] text-radar-ink text-balance">
-              <a
-                href={article.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-radar-ink no-underline hover:text-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
-              >
-                {article.title}
-              </a>
+              <ArticleTitleLink articleId={article.id} title={article.title} />
             </h3>
 
             {article.author && (
@@ -322,16 +318,10 @@ export function QueueView({
             <SourceStamp
               sourceUrl={article.sourceUrl}
               publishedAt={article.publishedAt}
+              href={article.sourceUrl}
             />
             <h3 className="font-editorial m-0 text-[15.5px] font-medium leading-[1.3] text-radar-ink text-pretty">
-              <a
-                href={article.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-radar-ink no-underline hover:text-radar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
-              >
-                {article.title}
-              </a>
+              <ArticleTitleLink articleId={article.id} title={article.title} />
             </h3>
             {article.summary && (
               <p className="mt-1.5 mb-0 line-clamp-2 max-w-[80ch] text-[12.5px] text-radar-ink2 text-pretty">
@@ -419,17 +409,20 @@ export function QueueView({
                 <ScoreMeter score={article.relevanceScore} />
               </td>
               <td className={cn(tdClass, "min-w-[280px]")}>
-                <a
-                  href={article.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[13px] font-medium text-radar-ink no-underline hover:text-radar-accent"
-                >
-                  {article.title}
-                </a>
+                <ArticleTitleLink
+                  articleId={article.id}
+                  title={article.title}
+                  className="text-[13px] font-medium"
+                />
               </td>
               <td className={cn(tdClass, "whitespace-nowrap")}>
-                {sourceIdentity(article.sourceUrl).name}
+                {/* The column is the source, so it is the route to the source. */}
+                <ExternalLink
+                  href={article.sourceUrl}
+                  className="text-radar-ink2 no-underline hover:text-radar-accent"
+                >
+                  {sourceIdentity(article.sourceUrl).name}
+                </ExternalLink>
               </td>
               <td className={cn(tdClass, "whitespace-nowrap")}>
                 {relativeTime(article.publishedAt)}

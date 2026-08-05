@@ -83,6 +83,16 @@ export async function GET(
           ? null
           : (current.rewrite?.error ??
             "No Link Take has been written for this article yet."),
+        /**
+         * RQ-006_03: whether anything has ever been attempted, passing or not.
+         *
+         * A refused row is never returned as `rewrite`, so without this a caller cannot
+         * tell "nothing was ever written" from "something was written and refused", and
+         * the only difference between them is the wording of `unavailableReason`. A
+         * screen that branched on that sentence would break silently the day it was
+         * reworded, by offering to generate a piece that had already been refused.
+         */
+        attempted: current.rewrite !== null,
         stale: current.stale,
         // The fallback a surface must render when `rewrite` is null.
         summary: article.summary,
