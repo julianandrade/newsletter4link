@@ -9,6 +9,7 @@ import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
 import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { getCategoryGroupingPrompt } from "./prompts";
+import { messageTextOr } from "@/lib/ai/message";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -141,7 +142,7 @@ async function aiPlanNewsletter(
   });
 
   const responseText =
-    message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+    messageTextOr(message, "{}");
 
   try {
     // Clean up potential markdown formatting

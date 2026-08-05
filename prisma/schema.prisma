@@ -166,6 +166,16 @@ model OrgSettings {
   fromName     String?
   replyToEmail String?
 
+  /**
+   * RQ-006: the organization's own description, used to ground the relevance section
+   * of a rewrite. Editable in settings and never hardcoded: the plan asked for no Link
+   * specifics in code, and its own example heading broke that rule.
+   */
+  orgContextPrompt String? @db.Text
+  rewriteLanguage  String  @default("pt-PT")
+  /** The heading of the relevance section, in the organization's own words. */
+  relevanceHeading String  @default("Relevancia para a Link")
+
   updatedAt DateTime @updatedAt
 }
 
@@ -231,6 +241,15 @@ model Article {
   @@index([relevanceScore(sort: Desc)])
   @@index([publishedAt(sort: Desc)])
   @@index([organizationId])
+
+  /**
+   * RQ-006 F6: hash of the text a rewrite was generated from, set on write. STALE was
+   * a status nothing could ever assign, because nothing recorded what the article said
+   * when the rewrite was made.
+   */
+  contentHash String?
+
+  rewrites ArticleRewrite[]
 }
 
 enum ArticleStatus {
@@ -879,4 +898,72 @@ model SignalGap {
   createdAt DateTime @default(now())
 
   @@index([source, date])
+}
+
+// ==================== Link Take (RQ-006) ====================
+
+/**
+ * An original short editorial piece written from a curated article.
+ *
+ * Deliberately not `articleId @unique`. The plan had one rewrite per article, which
+ * means regeneration overwrites history, and for a feature whose main risk is
+ * copyright and fabrication the thing most wanted six months later is exactly what
+ * that destroys: what was published, generated from what input, by which model, and
+ * whether the checks passed. Old rows stay and carry `supersededAt` (review F5).
+ *
+ * The check record is not decoration. With no guarantee that a human reads a piece
+ * before it reaches a subscriber, these checks are the only control, so every row
+ * carries its result and a complaint can be answered with evidence rather than
+ * intent.
+ */
+model ArticleRewrite {
+  id String @id @default(cuid())
+
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId String
+
+  title String
+  body  String @db.Text
+
+  language  String       @default("pt-PT")
+  model     String
+  inputMode RewriteInput
+
+  status RewriteStatus @default(GENERATED)
+  error  String?
+
+  /** RQ-006 F2: the mechanical checks, and their evidence. */
+  checksPassed     Boolean
+  checkSummary     String? @db.Text
+  /** The failure list, as returned by lib/rewrite/checks.ts. */
+  checkFailures    Json?
+  /** Longest run of words shared with the source. Kept when it passes too: a low
+   *  number is the evidence that the piece is not a reproduction. */
+  longestSharedRun Int?
+  wordCount        Int?
+
+  /** What the article said when this was written, for STALE (F6). */
+  sourceHash String?
+
+  /** Set when a newer rewrite replaces this one. Nothing is deleted. */
+  supersededAt DateTime?
+
+  generatedAt DateTime @default(now())
+
+  @@index([articleId, supersededAt])
+  @@index([status])
+  @@index([generatedAt(sort: Desc)])
+}
+
+enum RewriteInput {
+  FULL_TEXT
+  EXCERPT
+}
+
+enum RewriteStatus {
+  GENERATED
+  /** The checks refused it, or generation failed. Never shown to a reader. */
+  FAILED
+  /** The article changed after this was written; regenerate on next open. */
+  STALE
 }

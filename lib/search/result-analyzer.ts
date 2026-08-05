@@ -9,6 +9,7 @@ import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
 import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { SearchProviderResult } from "./providers/types";
+import { messageTextOr } from "@/lib/ai/message";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -98,7 +99,7 @@ Respond with ONLY the JSON object.`,
     });
 
     const responseText =
-      message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+      messageTextOr(message, "{}");
 
     // Parse JSON response
     try {
@@ -289,7 +290,7 @@ Respond with ONLY the JSON array.`,
     });
 
     const responseText =
-      message.content[0].type === "text" ? message.content[0].text.trim() : "[]";
+      messageTextOr(message, "[]");
 
     try {
       const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();

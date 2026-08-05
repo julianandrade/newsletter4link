@@ -8,6 +8,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
 import { rethrowIfModelRejected } from "@/lib/ai/model";
+import { messageTextOr } from "@/lib/ai/message";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -98,7 +99,7 @@ Respond with ONLY the JSON object, no explanation.`,
     });
 
     const responseText =
-      message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+      messageTextOr(message, "{}");
 
     // Parse the JSON response
     let analysis: QueryAnalysis;

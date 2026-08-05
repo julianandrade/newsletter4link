@@ -23,6 +23,7 @@ import {
   NewsletterPlan,
 } from "./content-planner";
 import { isJobCancelled } from "@/lib/jobs";
+import { messageText, messageTextOr } from "@/lib/ai/message";
 
 /**
  * Error thrown when generation is cancelled
@@ -265,9 +266,7 @@ async function generateOpening(
     messages: [{ role: "user", content: prompt }],
   });
 
-  return message.content[0].type === "text"
-    ? message.content[0].text.trim()
-    : "Welcome to this week's newsletter.";
+  return messageTextOr(message, "Welcome to this week's newsletter.");
 }
 
 /**
@@ -361,9 +360,7 @@ async function generateArticleSummary(
     messages: [{ role: "user", content: prompt }],
   });
 
-  return message.content[0].type === "text"
-    ? message.content[0].text.trim()
-    : article.summary || "Read more about this development.";
+  return messageTextOr(message, article.summary || "Read more about this development.");
 }
 
 /**
@@ -394,10 +391,9 @@ async function addTransitions(
       messages: [{ role: "user", content: prompt }],
     });
 
-    sections[i].transition =
-      message.content[0].type === "text"
-        ? message.content[0].text.trim()
-        : undefined;
+    // Absent rather than empty: a transition is optional, and "" would render as a
+    // blank paragraph between sections.
+    sections[i].transition = messageText(message) || undefined;
 
     await delay(200);
   }
@@ -424,9 +420,7 @@ async function generateClosing(
     messages: [{ role: "user", content: prompt }],
   });
 
-  return message.content[0].type === "text"
-    ? message.content[0].text.trim()
-    : "Thanks for reading. See you next week!";
+  return messageTextOr(message, "Thanks for reading. See you next week!");
 }
 
 /**
@@ -458,7 +452,7 @@ async function generateSubjectLines(
   });
 
   const responseText =
-    message.content[0].type === "text" ? message.content[0].text.trim() : "[]";
+    messageTextOr(message, "[]");
 
   try {
     const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();
@@ -515,7 +509,7 @@ export async function regenerateSubjectLines(
   });
 
   const responseText =
-    message.content[0].type === "text" ? message.content[0].text.trim() : "[]";
+    messageTextOr(message, "[]");
 
   try {
     const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();
@@ -578,7 +572,7 @@ export async function quickGenerateNewsletter(
   });
 
   const responseText =
-    message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+    messageTextOr(message, "{}");
 
   try {
     const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();

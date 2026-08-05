@@ -7,6 +7,7 @@ import {
   promptCategoryList,
   UNPLACED,
 } from "@/lib/ai/categories";
+import { messageTextOr } from "@/lib/ai/message";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -59,9 +60,7 @@ Respond with ONLY a single number from 0-10. No explanation needed.`,
       ],
     });
 
-    const scoreText = message.content[0].type === "text"
-      ? message.content[0].text.trim()
-      : "0";
+    const scoreText = messageTextOr(message, "0");
 
     const score = parseFloat(scoreText);
 
@@ -121,9 +120,7 @@ Write only the summary, no preamble or extra text.`,
       ],
     });
 
-    const summary = message.content[0].type === "text"
-      ? message.content[0].text.trim()
-      : "";
+    const summary = messageTextOr(message, "");
 
     return summary;
   } catch (error) {
@@ -169,9 +166,7 @@ Respond with ONLY the category names, separated by commas, copied exactly as the
       ],
     });
 
-    const categoriesText = message.content[0].type === "text"
-      ? message.content[0].text.trim()
-      : "";
+    const categoriesText = messageTextOr(message, "");
 
     // Validated against the taxonomy rather than trusted. The prompt supplied a
     // fixed list and the model was departing from it, which is how "Snapdragon 8
