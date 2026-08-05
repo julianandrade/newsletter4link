@@ -475,11 +475,33 @@ enum EmailEventType {
 // ==================== RSS SOURCES ====================
 
 model RSSSource {
-  id       String  @id @default(cuid())
-  name     String
+  id   String @id @default(cuid())
+  name String
+
+  /**
+   * Where this source comes from.
+   *
+   * For an EMAIL source this holds the sender address, which is naturally unique per
+   * organization and keeps the existing unique index doing useful work. The alternative,
+   * making the column optional, would weaken a constraint that earns its place for feeds.
+   */
   url      String
   category String
   active   Boolean @default(true)
+
+  // ---- RQ-007: email newsletters as a source ----
+  type SourceType @default(RSS)
+
+  /** The newsletter's From address, the primary match key for an inbound email. */
+  senderAddress String?
+  /** The `+tag` used when subscribing, the fallback match key. */
+  inboundTag    String?
+  /** One email to many articles, or one email to one article. */
+  parseMode     ParseMode?
+  /** How often this source is expected to publish, for the silence warning. */
+  expectedCadenceDays Int?
+  /** Last time an email from this source arrived, which is the health signal. */
+  lastReceivedAt      DateTime?
 
   lastFetchedAt DateTime?
   lastError     String?
@@ -494,6 +516,20 @@ model RSSSource {
   @@unique([url, organizationId]) // Same RSS can be used by different orgs
   @@index([active])
   @@index([organizationId])
+  @@index([type, active])
+  @@index([senderAddress])
+}
+
+enum SourceType {
+  RSS
+  EMAIL
+}
+
+enum ParseMode {
+  /** One email carrying many linked articles. */
+  DIGEST
+  /** One email that is itself the article. */
+  ESSAY
 }
 
 // ==================== PLATFORM SETTINGS ====================
@@ -748,6 +784,7 @@ enum JobType {
   GENERATION
   SEARCH
   EMAIL_SEND
+  EMAIL_INGESTION
 }
 
 enum JobStatus {
@@ -966,4 +1003,68 @@ enum RewriteStatus {
   FAILED
   /** The article changed after this was written; regenerate on next open. */
   STALE
+}
+
+// ==================== Inbound email (RQ-007) ====================
+
+/**
+ * One email that arrived at the ingestion address.
+ *
+ * Deliberately not organization-scoped. An email arriving at a shared address does not
+ * belong to a tenant until a source claims it, and pretending otherwise would mean
+ * guessing. The consequence is stated rather than hidden: the unknown-senders view over
+ * these rows is platform-wide, so it is restricted to an OWNER.
+ *
+ * Rows are kept after processing, and after being ignored. Keeping the ignored ones is
+ * what makes "promote this sender to a source and process what it already sent" possible.
+ */
+model InboundEmail {
+  id String @id @default(cuid())
+
+  /** The webhook's own id for this email, and the idempotency key. A replayed delivery
+   *  and a transport retry must not produce a second row. */
+  resendEmailId String @unique
+
+  /** The original sender, preserved through the forwarding rule. */
+  from String
+  /** The address it arrived at, such as radar+tldr@example.com. */
+  to   String
+  /** The `+tag` from `to`, lowercased. Null when the address carried none. */
+  subaddressTag String?
+
+  subject    String?
+  receivedAt DateTime @default(now())
+
+  /** Sanitized. Fetched by the job rather than by the webhook, so both are null until then. */
+  html String?
+  text String?
+
+  /**
+   * Starts at CONTENT_PENDING, because the webhook stores metadata and returns.
+   *
+   * The `email.received` payload carries no body, so content needs a second call to the
+   * Receiving API. Making that call inside the webhook would add a network dependency to
+   * the one part of this system that must answer fast, and the retry loop that recovers a
+   * failed fetch has to exist either way.
+   */
+  status InboundEmailStatus @default(CONTENT_PENDING)
+  error  String?
+  /** Content fetch attempts. Three, then FAILED. */
+  retryCount  Int       @default(0)
+  processedAt DateTime?
+
+  @@index([status, receivedAt])
+  @@index([from])
+  @@index([subaddressTag])
+}
+
+enum InboundEmailStatus {
+  /** Metadata stored, content not fetched yet, or the fetch failed and will be retried. */
+  CONTENT_PENDING
+  /** Content in hand, awaiting extraction. */
+  RECEIVED
+  PROCESSED
+  /** No active EMAIL source matches the sender or the tag. Kept, so it can be promoted. */
+  IGNORED_UNKNOWN_SENDER
+  FAILED
 }

@@ -34,6 +34,9 @@ export const config = {
     resend: {
       apiKey: process.env.RESEND_API_KEY!,
       webhookSecret: process.env.RESEND_WEBHOOK_SECRET,
+      // RQ-007: the email.received webhook has its own signing secret, separate from the
+      // send-events one, because they are separate webhooks on Resend's side.
+      inboundWebhookSecret: process.env.RESEND_INBOUND_WEBHOOK_SECRET,
     },
     graph: {
       tenantId: process.env.AZURE_TENANT_ID,
@@ -54,6 +57,30 @@ export const config = {
     relevanceThreshold: 6.0, // Minimum relevance score (0-10)
     maxArticlesPerEdition: 10,
     vectorSimilarityThreshold: 0.85, // For deduplication
+  },
+
+  /**
+   * RQ-007: bounds on email ingestion.
+   *
+   * Every number here is a limit on something that could otherwise run away: a digest with
+   * two hundred links, a redirect chain that never ends, a batch that creates a thousand
+   * articles from one bad parse.
+   */
+  emailIngest: {
+    /** Most items taken from one digest. */
+    maxItemsPerDigest: 20,
+    /** Visible text and links sent to the extractor, in characters. */
+    maxInputChars: 32_000,
+    /** Redirect hops followed when resolving a tracking wrapper. */
+    maxRedirectHops: 5,
+    /** Milliseconds allowed per hop. */
+    redirectTimeoutMs: 5_000,
+    /** Articles one run may create, across all emails. */
+    maxArticlesPerRun: 200,
+    /** Content fetch attempts before an email is marked FAILED. */
+    maxContentAttempts: 3,
+    /** Stored html is capped, because a newsletter can carry half a megabyte of markup. */
+    maxHtmlBytes: 500_000,
   },
 
   // Cron
