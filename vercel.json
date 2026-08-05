@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/email-ingest",
-      "schedule": "15 */4 * * *"
+      "schedule": "30 5 * * *"
     }
   ]
 }
