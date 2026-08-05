@@ -674,6 +674,49 @@ export function createTenantClient(organizationId: string) {
         }),
     },
 
+    // ==================== ARTICLE REWRITES (RQ-006) ====================
+    /**
+     * Scoped through the article, which does carry an organizationId.
+     *
+     * Unlike emailEvent, this relation can be filtered, so it is: every read and write
+     * here is confined to this organization's articles and a caller cannot reach
+     * another tenant's rewrites even with a known id.
+     */
+    articleRewrite: {
+      findMany: <T extends Omit<Prisma.ArticleRewriteFindManyArgs, "where">>(
+        args: T & { where?: Prisma.ArticleRewriteWhereInput }
+      ) =>
+        prisma.articleRewrite.findMany({
+          ...args,
+          where: { ...args.where, article: { organizationId } },
+        } as Prisma.ArticleRewriteFindManyArgs),
+
+      findFirst: <T extends Omit<Prisma.ArticleRewriteFindFirstArgs, "where">>(
+        args: T & { where?: Prisma.ArticleRewriteWhereInput }
+      ) =>
+        prisma.articleRewrite.findFirst({
+          ...args,
+          where: { ...args.where, article: { organizationId } },
+        } as Prisma.ArticleRewriteFindFirstArgs),
+
+      count: (args?: { where?: Prisma.ArticleRewriteWhereInput }) =>
+        prisma.articleRewrite.count({
+          where: { ...args?.where, article: { organizationId } },
+        }),
+
+      create: <T extends Prisma.ArticleRewriteCreateArgs>(args: T) =>
+        prisma.articleRewrite.create(args),
+
+      updateMany: (args: {
+        where?: Prisma.ArticleRewriteWhereInput;
+        data: Prisma.ArticleRewriteUpdateManyMutationInput;
+      }) =>
+        prisma.articleRewrite.updateMany({
+          ...args,
+          where: { ...args.where, article: { organizationId } },
+        }),
+    },
+
     // ==================== EDITION ARTICLES (join table) ====================
     editionArticle: {
       createMany: <T extends Prisma.EditionArticleCreateManyArgs>(args: T) =>

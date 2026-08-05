@@ -21,7 +21,27 @@ interface RSSArticle {
  */
 const MAX_FEED_CONTENT_CHARS = 24_000;
 
+/**
+ * Most items to take from one feed.
+ *
+ * Feeds are supposed to carry a recent window. The OpenAI blog feed returns 834 items,
+ * its whole archive, while every other active feed returns between 10 and 41, and that
+ * one feed was 81% of everything collected. Scoring an archive on every run is spend on
+ * news nobody will publish.
+ */
+const MAX_ITEMS_PER_FEED = 60;
+
 const parser = new Parser({
+  /**
+   * Some publishers refuse an unidentified client. InfoQ answers 406 to the default
+   * user agent, so it was silently absent from every collection while showing as an
+   * active source.
+   */
+  headers: {
+    "User-Agent":
+      "newsletter4link/1.0 (+https://newsletter4link.vercel.app; julian.andrade@linkconsulting.com)",
+    Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+  },
   customFields: {
     item: [
       ["content:encoded", "contentEncoded"],
@@ -79,7 +99,9 @@ export async function fetchRSSFeed(
     const feed = await parser.parseURL(url);
     const articles: RSSArticle[] = [];
 
-    for (const item of feed.items) {
+    // Newest first is the order feeds publish in, so the cap keeps the recent window
+    // rather than an arbitrary slice.
+    for (const item of feed.items.slice(0, MAX_ITEMS_PER_FEED)) {
       if (!item.link || !item.title) continue;
 
       // Get content from various possible fields

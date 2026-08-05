@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { requireOrgContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,10 @@ export const dynamic = "force-dynamic";
  * Query params:
  * - search: Filter by title (optional)
  * - excludeInEdition: Exclude articles already in an edition (optional, default false)
+ *
+ * This route read the global client with no organization filter, so it returned approved
+ * articles from every organization to whichever one asked. The editions screen calls it,
+ * so one tenant's curation was on another tenant's screen. It is now tenant-scoped.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +21,17 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const excludeInEdition = searchParams.get("excludeInEdition") === "true";
 
-    const articles = await prisma.article.findMany({
+    const { db } = await requireOrgContext();
+
+    /**
+     * `db.$raw` with the filter written out, because the tenant client's generic does not
+     * carry a `select` through to the return type and this query needs `_count`. The
+     * organization filter is therefore mine to get right, and it is the first line of the
+     * where clause so it cannot be lost in an edit.
+     */
+    const articles = await db.$raw.article.findMany({
       where: {
+        organizationId: db.organizationId,
         status: "APPROVED",
         ...(search && {
           title: {
@@ -69,6 +82,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error fetching approved articles:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 401 });
+    }
 
     return NextResponse.json(
       {
