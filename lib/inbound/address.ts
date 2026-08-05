@@ -45,6 +45,29 @@ export function bareAddress(header: string): string | null {
   return parsed ? `${parsed.local}@${parsed.domain}`.toLowerCase() : null;
 }
 
+/**
+ * The display name off a From header, when it carries one.
+ *
+ * RQ-007 step 3: used only to pre-fill the name field when promoting an unknown sender.
+ * Never used for matching, for the same reason `bareAddress` exists: a newsletter changes
+ * its display name whenever its marketing team feels like it. As a suggested name it is far
+ * better than the address local part, which turns "The Rundown AI" into "News".
+ */
+export function displayName(header: string): string | null {
+  const angled = header.indexOf("<");
+  if (angled <= 0) return null;
+
+  const name = header
+    .slice(0, angled)
+    .trim()
+    // Quoted display names are legal and common: "Lenny's Newsletter" <x@y>
+    .replace(/^"(.*)"$/, "$1")
+    .trim();
+
+  // An address repeated before the angle brackets is not a name.
+  return name.length > 0 && !name.includes("@") ? name : null;
+}
+
 /** The address with any `+tag` removed, which is the mailbox it really goes to. */
 export function withoutTag(address: string): string | null {
   const bare = bareAddress(address);

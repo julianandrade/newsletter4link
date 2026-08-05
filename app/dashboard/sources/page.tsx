@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
+import { EmailSourceManager } from "@/components/email-source-manager";
 import { RSSSourceManager } from "@/components/rss-source-manager";
 import {
   Num,
@@ -19,6 +20,7 @@ interface RssSource {
   name: string;
   category: string;
   active: boolean;
+  type?: string;
   lastFetchedAt: string | null;
   lastError: string | null;
 }
@@ -35,7 +37,16 @@ export default function SourcesPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const active = useMemo(() => sources.filter((s) => s.active), [sources]);
+  // RQ-007: /api/rss-sources now returns email sources too. Counted apart, because an
+  // email source has no feed URL and never reports a fetch error, so folding it into
+  // "N feeds, all healthy" would inflate the count and vouch for health nothing measured.
+  const feeds = useMemo(() => sources.filter((s) => s.type !== "EMAIL"), [sources]);
+  const emailSources = useMemo(
+    () => sources.filter((s) => s.type === "EMAIL"),
+    [sources]
+  );
+
+  const active = useMemo(() => feeds.filter((s) => s.active), [feeds]);
   const failing = useMemo(
     () => active.filter((s) => Boolean(s.lastError)),
     [active]
@@ -64,8 +75,15 @@ export default function SourcesPage() {
           title={title}
           subtitle={
             <>
-              <Num>{sources.length}</Num> configured ·{" "}
+              <Num>{feeds.length}</Num> configured ·{" "}
               <Num>{active.length}</Num> active
+              {emailSources.length > 0 && (
+                <>
+                  {" · "}
+                  <Num>{emailSources.length}</Num> email{" "}
+                  {emailSources.length === 1 ? "source" : "sources"}
+                </>
+              )}
               {lastFetched && <> · last collected {relativeTime(lastFetched)}</>}
             </>
           }
@@ -102,6 +120,11 @@ export default function SourcesPage() {
             </div>
           </div>
         )}
+
+        <SectionLabel className="mb-3">Email newsletters</SectionLabel>
+        <div className="mb-8">
+          <EmailSourceManager />
+        </div>
 
         <SectionLabel className="mb-3">Feed management</SectionLabel>
         <RSSSourceManager />

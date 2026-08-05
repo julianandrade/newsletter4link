@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bareAddress,
+  displayName,
   sameAddress,
   subaddressTag,
   withoutTag,
@@ -104,5 +105,33 @@ describe("sameAddress", () => {
     expect(sameAddress(null, "a@x.com")).toBe(false);
     expect(sameAddress("a@x.com", null)).toBe(false);
     expect(sameAddress("nonsense", "a@x.com")).toBe(false);
+  });
+});
+
+describe("displayName", () => {
+  it("takes the name off a standard From header", () => {
+    expect(displayName("The Rundown AI <news@daily.therundown.ai>")).toBe("The Rundown AI");
+  });
+
+  it("unquotes a quoted name, which is legal and common", () => {
+    expect(displayName('"Lenny\'s Newsletter" <lenny@substack.com>')).toBe(
+      "Lenny's Newsletter"
+    );
+  });
+
+  it("returns null for a bare address, so the caller falls back", () => {
+    expect(displayName("news@tldr.tech")).toBeNull();
+  });
+
+  it("returns null when the header is only angle brackets", () => {
+    expect(displayName("<news@tldr.tech>")).toBeNull();
+  });
+
+  it("rejects an address repeated as the name, which is not a name", () => {
+    expect(displayName("news@tldr.tech <news@tldr.tech>")).toBeNull();
+  });
+
+  it("returns null for whitespace before the brackets", () => {
+    expect(displayName("   <news@tldr.tech>")).toBeNull();
   });
 });

@@ -239,6 +239,121 @@ const SOURCE_CATEGORIES = [
   "Community",
 ];
 
+/**
+ * RQ-007 step 3 fixtures. One source of each health state, so the panel can be checked
+ * without waiting for a real newsletter to go quiet.
+ */
+const EMAIL_SOURCES = [
+  {
+    id: "em1",
+    name: "TLDR AI",
+    url: "news@tldr.tech",
+    category: "AI",
+    active: true,
+    type: "EMAIL",
+    senderAddress: "news@tldr.tech",
+    inboundTag: "tldr",
+    parseMode: "DIGEST",
+    expectedCadenceDays: 1,
+    lastReceivedAt: iso(0, 4),
+    lastFetchedAt: null,
+    lastError: null,
+    createdAt: iso(40),
+    updatedAt: iso(0),
+  },
+  {
+    id: "em2",
+    name: "The Pragmatic Engineer",
+    url: "pragmaticengineer@substack.com",
+    category: "Engineering",
+    active: true,
+    type: "EMAIL",
+    senderAddress: "pragmaticengineer@substack.com",
+    inboundTag: null,
+    parseMode: "ESSAY",
+    expectedCadenceDays: 7,
+    lastReceivedAt: iso(34),
+    lastFetchedAt: null,
+    lastError: null,
+    createdAt: iso(90),
+    updatedAt: iso(34),
+  },
+  {
+    id: "em3",
+    name: "Morning Brew IT",
+    url: "itbrew@morningbrew.com",
+    category: "Industry",
+    active: true,
+    type: "EMAIL",
+    senderAddress: "itbrew@morningbrew.com",
+    inboundTag: null,
+    parseMode: "DIGEST",
+    expectedCadenceDays: 1,
+    lastReceivedAt: null,
+    lastFetchedAt: null,
+    lastError: null,
+    createdAt: iso(30),
+    updatedAt: iso(30),
+  },
+  {
+    id: "em4",
+    name: "ByteByteGo",
+    url: "bytebytego@substack.com",
+    category: "Engineering",
+    active: false,
+    type: "EMAIL",
+    senderAddress: "bytebytego@substack.com",
+    inboundTag: null,
+    parseMode: "DIGEST",
+    expectedCadenceDays: null,
+    lastReceivedAt: iso(2),
+    lastFetchedAt: null,
+    lastError: null,
+    createdAt: iso(20),
+    updatedAt: iso(2),
+  },
+];
+
+const UNKNOWN_SENDERS = [
+  {
+    sender: "news@daily.therundown.ai",
+    displayFrom: "The Rundown AI <news@daily.therundown.ai>",
+    count: 6,
+    firstSeenAt: iso(5),
+    lastSeenAt: iso(0, 2),
+    subjectSamples: [
+      "🎉 Welcome! 3 quick steps to get started",
+      "OpenAI's newest model just shipped",
+      "The agent stack everyone is copying",
+    ],
+    tags: [],
+    byStatus: { CONTENT_PENDING: 4, IGNORED_UNKNOWN_SENDER: 2 },
+    alreadyIgnored: true,
+  },
+  {
+    sender: "crew@morningbrew.com",
+    displayFrom: "Morning Brew <crew@morningbrew.com>",
+    count: 3,
+    firstSeenAt: iso(4),
+    lastSeenAt: iso(1),
+    subjectSamples: ["☕️ Caution: Morning Brew coming in hot"],
+    tags: [],
+    byStatus: { CONTENT_PENDING: 3 },
+    alreadyIgnored: false,
+  },
+  {
+    sender: "superintel@mail.beehiiv.com",
+    displayFrom: "Superintelligence <superintel@mail.beehiiv.com>",
+    count: 1,
+    firstSeenAt: iso(0, 6),
+    lastSeenAt: iso(0, 6),
+    subjectSamples: ["🌐 The Website Nobody Meant to Hack"],
+    tags: ["ai"],
+    byStatus: { CONTENT_PENDING: 1 },
+    alreadyIgnored: false,
+  },
+];
+
 const SOURCES = [
   ...NAMED_SOURCES,
   ...Array.from({ length: 434 - NAMED_SOURCES.length }, (_, index) => {
@@ -1042,8 +1157,11 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
     if (url.includes("/api/projects")) {
       return json({ success: true, data: PROJECTS, count: PROJECTS.length });
     }
+    if (url.includes("/api/inbound/unknown-senders")) {
+      return json({ groups: UNKNOWN_SENDERS, emailsExamined: 39, truncated: false });
+    }
     if (url.includes("/api/rss-sources")) {
-      return json(SOURCES);
+      return json([...EMAIL_SOURCES, ...SOURCES]);
     }
     if (url.includes("/api/curation/jobs")) {
       return json({ jobs: CURATION_JOBS, page: 1, totalPages: 2 });
