@@ -1,6 +1,9 @@
 # Where the work stands
 
-Updated 5 August 2026, at commit `edc6cd1`. Everything below "Live" is deployed
+> Resuming after a break? Read [STATUS.md](STATUS.md) first. It has the one line to
+> say to pick up, and what needs you before anything else moves.
+
+Updated 5 August 2026, at commit `a647a81`. Everything below "Live" is deployed
 and verified in production.
 
 ## Live
@@ -25,6 +28,11 @@ and verified in production.
 | The row checkbox shows its tick | none | A single click selected the row and left the box empty, in all five lists |
 | The categoriser must choose from its own taxonomy | none | It was storing its own prose refusals as categories |
 | Radar collection, forward only, validated queries | RQ-004 | Phase A. 23 entities, 38 queries, all above the precision bar |
+| Link Take: the checks, the data model, the input pipeline | RQ-006 | `_01` and `_02`, which the review called the whole risk |
+| Link Take generated on approval, after the response | RQ-006 | Approval, not ingestion: an edition carries 12 of 50 candidates |
+| Four article routes that had no authentication at all | none | Approve, reject, summary and the approved list, which leaked across tenants |
+| Webhook signatures verified, and webhooks reachable | none | Neither had ever worked: the check never ran and the route answered 307 |
+| Inbound email recorded, extracted, ingested | RQ-007 | Steps 1 and 2. Nothing fetches a third-party page |
 
 ## Waiting on a decision from you
 
@@ -63,6 +71,13 @@ UI are built. Finding out that the radar does not lead the media costs two
 sub-requirements instead of eight.
 
 RQ-006 last, because it carries the only risk on this list that is not technical.
+
+## What is left
+
+`RQ-007` step 3 (the sources UI with the EMAIL type and the unknown-senders panel),
+then `RQ-006` `_03` and `_04` (the detail view and the newsletter usage). Both are
+ordinary work: the parts carrying risk are done and tested. STATUS.md has the
+detail.
 
 ## Decided while you slept
 
