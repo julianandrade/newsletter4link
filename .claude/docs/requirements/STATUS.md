@@ -1,21 +1,66 @@
 # Where we are, and how to pick this up
 
-Written 5 August 2026 at commit `a647a81`. Everything is committed and pushed;
-production is deployed and verified. Nothing is in flight and no process is left
-running.
+Written 5 August 2026, evening, at commit `56b6243`. Everything is committed and
+pushed, and **production is deployed and healthy again** after eleven hours in
+which it was not. Nothing is in flight and no process is left running.
 
 Read this file, then [ROADMAP.md](ROADMAP.md) for the longer view and
 [DECISIONS-2026-08-05.md](DECISIONS-2026-08-05.md) for the calls made without you.
 
 ---
 
-## To resume, say this
+## Read this first: one thing blocks everything
 
-> Continua o RQ-007 passo 3 (UI de fontes com tipo EMAIL e painel de remetentes
-> desconhecidos), e depois o RQ-006 _03 e _04.
+**The production `RESEND_API_KEY` cannot read inbound email.** Resend answers
+`401` to every content fetch. All 39 inbound emails are sitting at
+`CONTENT_PENDING` with their bodies unread, and no article can be created from
+any of them until this is fixed.
 
-That is the whole of what is left in flight. The detail is below if you want to
-change the order.
+The diagnosis is confident. A `401` is an authenticated request being refused,
+not a wrong path, which returns `404`. The same key sends newsletters from
+production successfully, so it works, it is simply scoped to sending. Resend
+issues keys as **sending access** or **full access**, and reading an inbound
+email's body needs full access.
+
+**What to do, and it is the whole fix:**
+
+1. In Resend, create an API key with **full access**, or upgrade the existing one.
+2. Set `RESEND_API_KEY` to it in the Vercel project settings, production scope.
+3. Redeploy, or just wait: the 05:30 cron picks it up on its next run.
+
+**There is a deadline, and it is about two days.** `maxContentAttempts` is 3, and
+every email is now at `retryCount: 1`. The cron is daily, so two more runs mark
+all 39 `FAILED` and they stop being retried. Nothing is destroyed when that
+happens: Resend keeps its own copy of every inbound email and supports replay,
+and a `FAILED` row can be reset to `CONTENT_PENDING` by hand. It is just tidier
+to fix the key first.
+
+---
+
+## What went wrong today, and why nothing in the logs said so
+
+**RQ-007 step 2 was never deployed.** The status note written this morning said
+the ingestion job was done, with 598 tests and a clean build, and all of that was
+true locally. It had never reached production.
+
+One line in `vercel.json` did it: the cron `15 */4 * * *`. This project's Vercel
+plan does not accept a sub-daily cron schedule, and it **refuses at build time**.
+Three daily crons deployed fine; adding a fourth on a four-hourly schedule failed
+the whole build. So every deployment from `a647a81` onwards failed, and the last
+successful production deploy was `2705d8a`, RQ-007 step 1, at 09:40.
+
+No application log could have shown this, because the application was never
+reached. What found it was comparing routes: the other three cron endpoints
+answer `401` in production, `email-ingest` answered `404` with an HTML page,
+which means the route does not exist in the deployed build.
+
+The 39 emails at `CONTENT_PENDING` with `retryCount: 0` looked exactly like a job
+that had run and found nothing to do. They were a job that had never existed.
+
+**Fixed.** The schedule is now `30 5 * * *`, daily, ahead of the 06:00 radar and
+the 09:00 collection. If the Vercel plan is ever upgraded, a shorter schedule is
+one line. Worth carrying forward: a green local build says nothing about whether
+the deploy landed, and this repository now has an eleven-hour precedent for it.
 
 ---
 
@@ -31,41 +76,78 @@ change the order.
 | Link Take input pipeline, allowlist empty | 30 tests, gate proven both ways |
 | Generation on approval, after the response | 15 tests on the order of refusals |
 | Webhook signatures actually verified | Production: forged signature answers 401, was 307 |
-| Inbound email webhook recording arrivals | Production: GET 200, unsigned POST 401 |
-| Inbound extraction, unwrapping, ingestion job | 598 unit tests in total |
+| Inbound email webhook recording arrivals | **39 real emails recorded from 31 senders** |
+| Inbound extraction, unwrapping, ingestion job | 598 unit tests, but see the blocker: never yet run against a real body |
+| RQ-007 step 3, sources UI and unknown senders | 38 new tests, preview harness, one fixture per health state |
+| The ingest job runs in production at all | Triggered manually: HTTP 200 in 7.4s, reached Resend, got 401 |
 
-**598 unit tests, `tsc` clean, `next build` clean.** All four schedules are in
-`vercel.json`: daily collection 09:00, weekly proposal 09:30, radar 06:00, email
-ingest every four hours at :15.
+**635 unit tests, `tsc` clean, `next build` clean, production deploy green.**
+All four schedules are in `vercel.json`: daily collection 09:00, weekly proposal
+09:30, radar 06:00, **email ingest 05:30**.
+
+---
+
+## What was done this session
+
+**RQ-007 step 3, the sources UI.** The last blocker this file named. Creating an
+EMAIL source was impossible before, because `POST /api/rss-sources` validated
+every url with `new URL()` and an address is not a URL.
+
+- EMAIL source creation. The sender address goes in `url`, so the existing
+  `@@unique([url, organizationId])` keeps earning its place.
+- Health by silence, judged against the source's own declared cadence, at three
+  times over. A source that has never received gets a grace period from
+  `createdAt` rather than a red flag the second it is saved.
+- The unknown senders panel, OWNER only and saying why, with promote and requeue.
+
+**29 EMAIL sources created** in `link-consulting`, 15 DIGEST and 14 ESSAY, with
+estimated cadences. The test email from your Gmail and the Cloudflare
+verification were excluded. Parse modes are a judgement call per newsletter and
+each is correctable in the UI in one click.
+
+**The AIDLC config was synced** from `common-ai-configs`
+`feature/hollow-development` at `84ebab1`, two generations forward. The
+requirement/transaction rename, the artefact catalog, `hollow-development` and
+`phased-development`. See [docs/AIDLC.md](../../../docs/AIDLC.md) for the five
+places this project deliberately diverges. RQ-002 through RQ-007 keep their ids
+and their location, and all 239 code tags are untouched.
+
+---
+
+## Something you should know before judging the output
+
+**36 of the 39 emails are welcome and confirmation mail, not newsletter issues.**
+Only three are real editions:
+
+- `frontend@cooperpress.com`, "The new CSS feature devs love most but can't rely on yet"
+- `bytebytego@substack.com`, "How Big Models Teach Small Models to Be Smart"
+- `superintel@mail.beehiiv.com`, "The Website Nobody Meant to Hack"
+
+So when the ingest finally runs with a working key, it will look like it did very
+little, and that will be correct. Judge it on those three. The other 36 are
+"Thanks for subscribing", and a DIGEST extraction over one of those may well
+produce a link to a Twitter profile. Watch for that: if junk articles appear, the
+lever is the relevance threshold, not the extractor.
+
+The real test is the next few days of actual issues, now that 29 sources exist to
+claim them.
 
 ---
 
 ## What is left, in the order I would do it
 
-### 1. RQ-007 step 3: the sources UI
+### 1. Fix the Resend key, then watch one real run
 
-- EMAIL source creation on the sources screen: name, sender address, inbound tag,
-  parse mode, expected cadence. For an EMAIL source the `url` column holds the
-  sender address, which is what makes the existing unique index work.
-- Health: last received, and a warning when a source has been silent for three
-  times its expected cadence.
-- Unknown senders panel: distinct senders among `IGNORED_UNKNOWN_SENDER` rows with
-  subject samples and counts, and a promote action that pre-fills the source and
-  reprocesses that sender's held emails.
-- **The panel is OWNER only.** `InboundEmail` has no organization, deliberately,
-  because an email arriving at a shared address does not belong to a tenant until a
-  source claims it. That makes any view over those rows platform-wide, and
-  restricting it is the honest way to say so rather than pretending to an isolation
-  the shared address cannot provide.
+Covered at the top. After it, check that `contentFetched` is 39 rather than 0,
+and read what the three real editions produced.
 
 ### 2. RQ-006 _03 and _04
 
 - `_03`: the article detail view. The API is done and always returns the
   attribution block, precisely so no surface can render the prose without the
   source. What is missing is the screen.
-- `_04`: using a Link Take in the newsletter. An organization-level default with a
-  per-article override, so the toggle exists for the person who wants it and costs
-  nothing for the person who just wants to approve the edition.
+- `_04`: using a Link Take in the newsletter. An organization-level default with
+  a per-article override.
 
 ### 3. Loose ends, each small
 
@@ -74,35 +156,31 @@ ingest every four hours at :15.
   each, and the collector now takes 60 per feed.
 - `NEXT_PUBLIC_APP_URL` locally points at port 3000 while the dev server runs on
   3111, so links in locally generated emails point at the wrong port.
-- RQ-002 Q7: whether `CurationJob` gets a model column. The log entry already
-  records the effective model, so this is tidiness.
+- RQ-002 Q7: whether `CurationJob` gets a model column.
 - 428 sources sit in one category called Security. Correctly labelled, and one
   bucket that size is useless for filtering.
+- The inbound address is `radar@kroniiquau.resend.app`, Resend's generated
+  domain, and no mail arrives with a `+tag`. Matching runs on sender address
+  alone, which works, and every source was created with `inboundTag: null`. If
+  you move to `radar+tag@julianandrade.net` later, the tag becomes a useful
+  fallback for a sender that changes its From address.
 
 ---
 
-## What needs you, and nothing moves without it
+## Local environment, one gotcha
 
-**A real email.** Subscribe a newsletter to `radar+<tag>@julianandrade.net`, then
-once the sources UI exists, create the EMAIL source for it. I can then verify the
-whole path with real data. Everything up to that point is tested against fixtures
-and against the live APIs, but no actual newsletter has been through it.
+**Kaspersky intercepts `api.resend.com` on this machine** and its root CA is not
+in `~/corporate-ca-bundle.pem`, so any local call to Resend fails with
+`SELF_SIGNED_CERT_IN_CHAIN`. Anthropic, OpenAI and GitHub all pass; only Resend
+fails. `context7` fails the same way.
 
-**The Resend webhook.** The endpoint is live and the secret is configured. If the
-`email.received` webhook on Resend's side is not yet pointing at
-`/api/webhooks/resend-inbound`, it needs to be. Until then Resend still stores every
-inbound email and supports replay, so nothing is lost either way.
+This is why the content fetch could not be verified locally and had to be tested
+by triggering the production cron. If you want local verification, appending the
+Kaspersky root CA to that bundle fixes it. The file is outside the repository and
+was left alone.
 
-**The publisher allowlist stays empty**, which is my recommendation and yours as
-agreed: with the collector's 2000-character truncation removed, 44% of collected
-items already have enough text for a Link Take without fetching anybody's page.
-Nothing fetches a third-party article page today.
-
-**Email tracking should start working now.** The send-events webhook has never run,
-because the middleware redirected it to the login page for 192 days. It is
-reachable as of this commit, so opens and clicks should begin appearing. Worth
-checking the analytics screen in a few days: if it is still empty, the webhook on
-Resend's side needs its URL confirmed.
+The database is reachable locally, so querying `InboundEmail` and creating
+sources from a script both work fine.
 
 ---
 
@@ -110,20 +188,15 @@ Resend's side needs its URL confirmed.
 
 Four defects found in code nobody was looking at, each of which had shipped:
 
-- **The row checkbox never showed a tick** in any of the five lists. A single click
-  selected the row and left the box empty. `preventDefault` on the click let the
-  browser's revert land after React had rendered.
-- **Four article routes had no authentication and no organization filter**, so any
-  authenticated member of any organization could approve, reject or rewrite the
-  summary of any article by id, and `/api/articles/approved` returned every
-  organization's approved articles to whoever asked.
-- **Webhook signature verification never ran.** The header was split on the comma
-  and then searched for an element starting with `"v1,"`, which cannot match, so
-  the check sat inside a condition that was never true.
+- **The row checkbox never showed a tick** in any of the five lists.
+- **Four article routes had no authentication and no organization filter.**
+- **Webhook signature verification never ran**, because the header was split on
+  the comma and then searched for an element starting with `"v1,"`.
 - **`content[0].type === "text"` was in twenty-one places** and returns the empty
-  string when a reply opens with a thinking block. Silent: an article scored from an
-  empty reply is not an error anybody sees, it is an article that scored badly.
+  string when a reply opens with a thinking block.
 
-The pattern in all four is the same, and it is worth carrying into the remaining
-work: none of them failed loudly, and three of them were only found by looking at
-the thing rather than at the code that was supposed to do it.
+Today adds a fifth, and it is the same shape one level out: **a deploy that
+failed for eleven hours while every local signal was green.** None of these
+failed loudly. The lesson holds and now extends past the application boundary:
+check the thing itself, not the code that was supposed to do it, and not the
+build that was supposed to ship it.
