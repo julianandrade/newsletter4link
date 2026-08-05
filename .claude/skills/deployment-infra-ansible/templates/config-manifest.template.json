@@ -1,0 +1,87 @@
+﻿{
+  "manifest_version": "1.0",
+  "generated_at": "<ISO8601 timestamp, e.g. 2026-03-20T14:30:00Z>",
+  "generated_by": "infra-ansible-extractor",
+  "source": "<tfstate|terraform-plan|resource-manifest>",
+  "project": {
+    "name": "<project identifier, e.g. PROJ_26_001>",
+    "description": "<one-sentence technical description of what this Ansible project configures and deploys>",
+    "environments": ["<env1>", "<env2>"]
+  },
+  "connection": {
+    "ssh_user": "<default OS user for the VM image, e.g. debian, ubuntu, centos>",
+    "ssh_private_key_file": "<variable reference, e.g. '{{ ssh_private_key_file }}'>",
+    "jump_server": {
+      "group": "<ansible group name that is the jump/bastion host>",
+      "ssh_user": "<SSH user for the jump server — often same as ssh_user>",
+      "ansible_ssh_common_args": "<ProxyCommand template applied to non-jump groups, e.g. \"-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ssh_user }}@{{ jump_server_host }}'\">"
+    }
+  },
+  "inventory": {
+    "strategy": "dynamic",
+    "dynamic_inventory": {
+      "script_path": "inventory/dynamic_inventory.sh",
+      "terraform_project_path": "<relative path from ansible project root to the Terraform BASE directory — parent of shared/ and env subdirs (e.g. dev/, stg/, prod/), e.g. ../terraform>",
+      "output_mappings": [
+        {
+          "terraform_output_key": "<terraform output name>",
+          "ansible_group": "<target ansible group name>",
+          "host_variable": "ansible_host",
+          "notes": "<optional: why this mapping was chosen>"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "<group name>",
+      "description": "<what VMs are in this group and their role>",
+      "vars": {},
+      "children": []
+    }
+  ],
+  "playbooks": [
+    {
+      "name": "<playbook identifier>",
+      "file": "<filename, e.g. site.yml>",
+      "description": "<what this playbook does and when to run it>",
+      "targets": ["<group names this playbook applies to>"],
+      "roles": ["<role names in execution order>"],
+      "extra_vars": ["<var names expected at runtime, e.g. image_tag, target_env>"]
+    }
+  ],
+  "roles": [
+    {
+      "name": "<role name>",
+      "description": "<what this role configures or installs>",
+      "tasks_summary": ["<step 1 description>", "<step 2 description>"],
+      "handlers": ["<handler name — triggered by notify in tasks>"],
+      "defaults": {},
+      "required_vars": ["<var names that must be supplied — have no safe default>"]
+    }
+  ],
+  "variables": {
+    "global": {},
+    "group_vars": {
+      "<group_name>": {}
+    },
+    "vault_vars": ["<sensitive variable names to be stored in ansible-vault>"]
+  },
+  "ansible_cfg": {
+    "inventory": "<inventory source path relative to project root, e.g. inventory/dynamic_inventory.sh>",
+    "remote_user": "<default SSH user>",
+    "private_key_file": "<key path or variable reference>",
+    "host_key_checking": "False",
+    "ssh_args": "<additional SSH args not related to ProxyJump — leave empty if none>"
+  },
+  "extractor_notes": [
+    "<Decision or assumption made during extraction — include rationale>",
+    "<Item requiring coder attention — e.g. 'vault_db_password must be populated before first run'>",
+    "<Cross-reference — e.g. 'SSH key used at Terraform provisioning time is the same key used here'>"
+  ],
+  "sync_state": {
+    "last_synced_commit": null,
+    "last_synced_at": null,
+    "ansible_path": "{{PATH_INFRA}}/deployment/ansible"
+  }
+}

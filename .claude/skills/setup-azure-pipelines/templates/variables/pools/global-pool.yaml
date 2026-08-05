@@ -1,0 +1,51 @@
+# =============================================================
+# STARTER TEMPLATE — variables/pools/global-pool.yaml
+# Agent pool-specific configuration.
+# Copy and rename to global-{poolName}.yaml for each pool.
+# e.g. global-myapp-agents.yaml, global-ubuntu-latest.yaml
+#
+# CONFIGURE: fill in values marked with # CONFIGURE:
+# =============================================================
+
+variables:
+  # ----------------------------------------------------------
+  # Pool identity — must match the pool name in Azure DevOps
+  # ----------------------------------------------------------
+  - name: "Pool.Name"
+    value: "" # CONFIGURE: pool name, e.g. "myapp-agents" or "Default"
+
+  # For Microsoft-hosted agents set to e.g. "ubuntu-latest".
+  # For self-hosted agents leave empty.
+  - name: "Pool.Image"
+    value: ""
+
+  # Set to true for self-hosted agents, false for Microsoft-hosted.
+  - name: "Agent.SelfHosted"
+    value: true # CONFIGURE
+
+  # ----------------------------------------------------------
+  # Maven (Java projects)
+  # ----------------------------------------------------------
+  - name: "MAVEN_CACHE_FOLDER"
+    value: "/opt/maven"  # CONFIGURE: where Maven caches .m2 on this agent
+
+  - name: "MAVEN_OPTS"
+    value: "-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)"
+
+  - name: "Maven.JdkDirectory"
+    value: "/usr/lib/jvm/java-17-openjdk-amd64"  # CONFIGURE: JDK path on this agent
+
+  # ----------------------------------------------------------
+  # Node.js / npm (Angular / Node projects)
+  # ----------------------------------------------------------
+  - name: "npm_config_cache"
+    value: "$(Pipeline.Workspace)/.npm"
+
+  - name: "Node.Version"
+    value: "20"  # CONFIGURE: Node.js major version
+
+  # ----------------------------------------------------------
+  # General
+  # ----------------------------------------------------------
+  - name: "useCache"
+    value: true

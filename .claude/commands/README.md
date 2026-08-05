@@ -1,4 +1,6 @@
-# Commands - Comandos Personalizados
+﻿# Commands - Comandos Personalizados
+
+> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `env` object of `.claude/settings.json` to resolve all project variables before execution.
 
 ## Descrição
 
@@ -20,16 +22,16 @@ Cada comando é um arquivo Markdown que descreve:
 - **Como invocar** o comando (sintaxe)
 - **Parâmetros** necessários
 - **Comportamento** esperado
-- **Pré-requisitos** e dependências
+- **Pré-Transações** e dependências
 - **Exemplos** de uso
 
 ## Comandos Disponíveis
 
 Este projeto possui os seguintes comandos personalizados disponíveis:
 
-### `/complete-development` — tronco (requisito → contrato API)
+### `/complete-development` — tronco (Transação → contrato API)
 
-**Descrição**: Valida o requisito, clarifica, especifica, arquitetura de solução (3a–3c) e gera o contrato **OpenAPI (4api)**.
+**Descrição**: Valida o Transação, clarifica, especifica, arquitetura de solução (3a–3c) e gera o contrato **OpenAPI (4api)**.
 
 **Funcionalidade**: Tronco comum até o contrato de API; **não** executa arquitetura de implementação (4a), código nem testes. Ao terminar, o utilizador deve usar `/frontend-development` e/ou `/backend-development`.
 
@@ -38,7 +40,7 @@ Este projeto possui os seguintes comandos personalizados disponíveis:
 /complete-development <requisite-id>
 ```
 
-**Quando usar**: Início do trabalho num requisito, até o contrato API estar definido.
+**Quando usar**: Início do trabalho num Transação, até o contrato API estar definido.
 
 ---
 
@@ -46,11 +48,11 @@ Este projeto possui os seguintes comandos personalizados disponíveis:
 
 **Descrição**: Arquitetura frontend (4a), revisão de segurança da arquitetura (4b), UI/UX (4c), baseline opcional, **plano de testes + Robot + testes unitários**, implementação, loop (unitário + build + **E2E/flow** + segurança de código), rastreabilidade, documentação e segurança contextual.
 
-**Pré-requisitos**: Tronco completo até **4api**; scope frontend no `{req-id}-technical-solution-requirement.md`.
+**Pré-Transações**: Tronco completo até **4api**; scope frontend no `{tx-id}-technical-solution-transaction.md`.
 
 **Uso**:
 ```
-/frontend-development <requisite-id> [--no-security] [--no-tests]
+/frontend-development <requisite-id>
 ```
 
 **Quando usar**: Implementação e testes **funcionais/E2E** da parte UI.
@@ -61,11 +63,11 @@ Este projeto possui os seguintes comandos personalizados disponíveis:
 
 **Descrição**: Arquitetura backend (4a), revisão de segurança (4b), baseline opcional, **apenas testes unitários (5d)** — sem plano Robot/funcional — implementação, loop (**7a → 7a2 → 7c**, sem 7b), rastreabilidade, documentação e segurança contextual.
 
-**Pré-requisitos**: Tronco completo até **4api**; scope backend no `{req-id}-technical-solution-requirement.md`.
+**Pré-Transações**: Tronco completo até **4api**; scope backend no `{tx-id}-technical-solution-transaction.md`.
 
 **Uso**:
 ```
-/backend-development <requisite-id> [--no-security] [--no-tests]
+/backend-development <requisite-id>
 ```
 
 **Quando usar**: Implementação da API/serviços alinhados ao OpenAPI.
@@ -82,7 +84,7 @@ Para criar um novo comando personalizado:
    - Seção "Uso" com sintaxe
    - Seção "Parâmetros" detalhando cada parâmetro
    - Seção "Comportamento" explicando o que acontece
-   - Seção "Pré-requisitos" listando dependências
+   - Seção "Pré-Transações" listando dependências
    - Seção "Exemplos" com casos de uso práticos
    - Seção "Tratamento de Erros" para casos de falha
 
@@ -113,7 +115,7 @@ Os comandos podem ser usados por agentes durante seu trabalho:
 - **Agentes**: `.claude/agents/` - Agentes especializados que podem usar comandos, organizados em subpastas:
   - `backend/`, `frontend/`, `general/`, `tests/`, `security/` (com subpastas: `code/`, `supply-chain/`, `architecture/`, `infra-cloud/`, `runtime/`)
 - **Skills**: `.claude/skills/` - Conhecimento técnico usado pelos comandos
-- **Documentação**: `.claude/docs/` - Documentação de projetos e sistemas
+- **Documentação**: `{{PATH_DOCS}}/` - Documentação de projetos e sistemas
 - **Hooks**: `.claude/hooks/` - Scripts de automação relacionados
 
 ## Notas Importantes

@@ -1,0 +1,29 @@
+# Terraform local files and directories
+.terraform/
+.terraform.lock.hcl
+
+# State files — never commit state to version control
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Variable files that may contain secrets
+*.tfvars
+!terraform.tfvars.example
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Override files — used for local overrides, not for team sharing
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Sensitive plan output (may contain secrets in plaintext)
+*.tfplan
+
+# OS-generated files
+.DS_Store
+Thumbs.db

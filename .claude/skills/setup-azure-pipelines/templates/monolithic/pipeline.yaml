@@ -1,0 +1,208 @@
+# CONFIGURE: Replace all {placeholder} tokens before using.
+# One self-contained pipeline file per repository — all stages inline.
+
+trigger:
+  branches:
+    include:
+      - {branch_1}
+      - {branch_2}
+
+# CONFIGURE: Only present if PR validation pipeline was requested
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+variables:
+  - group: {project_name}-shared
+  - group: {project_name}-{primary_env}   # CONFIGURE: one entry per environment
+  - name: imageRepository
+    value: '{registry_url}/{image_name}'
+  - name: dockerfilePath
+    value: 'Dockerfile'
+  - name: tag
+    value: '$(Build.BuildId)'
+
+stages:
+- stage: CI
+  displayName: 'Build and Test'
+  jobs:
+  - job: Build
+    displayName: 'Build, Test, and Push'
+    pool:
+      name: {agent_pool_name}
+    steps:
+
+    # CONFIGURE: Adjust tool installer to match tech stack (NodeTool, JavaToolInstaller, etc.)
+    - task: NodeTool@0
+      displayName: 'Use Node.js $(nodeVersion)'
+      inputs:
+        versionSpec: '$(nodeVersion)'
+
+    - task: Cache@2
+      displayName: 'Cache node_modules'
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        restoreKeys: |
+          npm | "$(Agent.OS)"
+        path: node_modules
+
+    - script: npm ci
+      displayName: 'Install dependencies (npm ci)'
+
+    # CONFIGURE: Remove if lint: no was requested
+    - script: npm run lint
+      displayName: 'Lint'
+      condition: succeeded()
+
+    - script: npm run build -- --configuration production
+      displayName: 'Build'
+      condition: succeeded()
+
+    - script: npm run test -- --reporters=junit --browsers=ChromeHeadless
+      displayName: 'Unit tests'
+      condition: succeeded()
+
+    - task: PublishTestResults@2
+      displayName: 'Publish test results'
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results/*.xml'
+        failTaskOnFailedTests: true
+
+    - task: Docker@2
+      displayName: 'Docker build'
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      inputs:
+        command: build
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: {registry_service_connection_name}
+        tags: |
+          $(tag)
+          latest
+
+    - task: Docker@2
+      displayName: 'Docker push'
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      inputs:
+        command: push
+        repository: $(imageRepository)
+        containerRegistry: {registry_service_connection_name}
+        tags: |
+          $(tag)
+          latest
+
+    - bash: |
+        echo "$(imageRepository):$(tag)" > $(Build.ArtifactStagingDirectory)/image-tag.txt
+      displayName: 'Write image tag to artifact'
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish image tag artifact'
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/image-tag.txt'
+        artifact: 'image-tag'
+        publishLocation: 'pipeline'
+
+# CONFIGURE: Repeat the CD stage block below for each environment
+- stage: Deploy_{ENV}
+  displayName: 'Deploy to {ENV}'
+  dependsOn: CI
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  variables:
+    - group: {project_name}-{env}
+
+  jobs:
+  - deployment: Deploy
+    displayName: 'Ansible deploy to {ENV}'
+    pool:
+      name: {agent_pool_name}
+    environment: {ENV}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download image tag artifact'
+            inputs:
+              artifact: 'image-tag'
+              path: '$(Pipeline.Workspace)/image-tag'
+
+          - bash: |
+              IMAGE_TAG=$(cat $(Pipeline.Workspace)/image-tag/image-tag.txt)
+              echo "##vso[task.setvariable variable=deployImageTag]$IMAGE_TAG"
+            displayName: 'Read image tag'
+
+          - task: DownloadSecureFile@1
+            name: sshKey
+            displayName: 'Download SSH deploy key'
+            inputs:
+              secureFile: '$(sshSecureFileName)'
+
+          - bash: chmod 600 $(sshKey.secureFilePath)
+            displayName: 'Set SSH key permissions'
+
+          # CONFIGURE: Remove if Ansible is pre-installed on the agent pool
+          - bash: pip install --quiet ansible
+            displayName: 'Install Ansible'
+
+          - bash: |
+              ansible-playbook {playbook_path} \
+                -i inventory/dynamic_inventory.sh \
+                --private-key $(sshKey.secureFilePath) \
+                --extra-vars "image_tag=$(deployImageTag) target_env={env_group_name}"
+            displayName: 'Deploy with Ansible'
+            condition: succeeded()
+
+          - bash: |
+              set -e
+              for i in $(seq 1 6); do
+                echo "Health check attempt $i/6..."
+                SSH_OUTPUT=$(ssh -i $(sshKey.secureFilePath) \
+                  -o StrictHostKeyChecking=accept-new \
+                  -o ProxyCommand="ssh -W %h:%p -i $(sshKey.secureFilePath) {jump_user}@{jump_server_address}" \
+                  {app_user}@{app_host_{env}} \
+                  "curl -s -o /dev/null -w '%{http_code}' http://localhost:$(App.HealthPort)$(App.HealthPath)")
+                SSH_RC=$?
+                if [ $SSH_RC -eq 0 ] && [ "$SSH_OUTPUT" -eq 200 ]; then
+                  echo "Health check passed"
+                  exit 0
+                fi
+                echo "HTTP $SSH_OUTPUT (SSH exit $SSH_RC) — retrying in 10s..."
+                sleep 10
+              done
+              echo "Health check failed"
+              exit 1
+            displayName: 'Health check'
+            condition: succeeded()
+
+          - bash: |
+              az pipelines variable-group variable update \
+                --group-id $(variableGroupId_{env}) \
+                --name "last_good_{env}_tag" \
+                --value "$(deployImageTag)" \
+                --org $(System.TeamFoundationCollectionUri) \
+                --project $(System.TeamProject)
+            displayName: 'Update last_good_{env}_tag on success'
+            condition: succeeded()
+            env:
+              AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+
+          - bash: |
+              ROLLBACK_TAG=$(SafeLastGoodTag)
+              if [ -z "$ROLLBACK_TAG" ]; then
+                echo "No previous good tag — skipping rollback"
+                exit 1
+              fi
+              echo "Rolling back to: $ROLLBACK_TAG"
+              ansible-playbook {playbook_path} \
+                -i inventory/dynamic_inventory.sh \
+                --private-key $(sshKey.secureFilePath) \
+                --extra-vars "image_tag=$ROLLBACK_TAG target_env={env_group_name}"
+            displayName: 'Rollback to last_good_{env}_tag on failure'
+            condition: failed()

@@ -1,0 +1,42 @@
+variables:
+  - name: "Registry.Location"
+    value: "europe-southwest1-docker.pkg.dev"
+
+  - name: "Registry.Project"
+    value: "ama-proj-01"
+
+  - name: "Registry.Repository.Docker"
+    value: "docker"
+
+  - name: "Registry.Repository.Docker.Namespace"
+    value: "$(Registry.Project)/$(Registry.Repository.Docker)"
+
+  - name: "Registry.Repository.Docker.Namespace.Full"
+    value: "$(Registry.Location)/$(Registry.Repository.Docker.Namespace)"
+
+  - name: "App.Docker.BaseImage.Java"
+    value: "eclipse-temurin:17-jre-alpine"
+
+  - name: "App.Docker.BaseImage.Node"
+    value: "node:20-alpine"
+
+  - name: "App.Docker.Nginx"
+    value: "nginx:1.25-alpine"
+
+  - name: "API.Port.Container.Default"
+    value: "8080"
+
+  - name: "Global.HealthCheckPath"
+    value: "/actuator/health"
+
+  - name: "Jump.Server.Address"
+    value: "jumpserver.appmod.internal"
+
+  - name: "Jump.Server.User"
+    value: "azureuser"
+
+  - name: "Ansible.Playbook.Path"
+    value: "$(Build.SourcesDirectory)/infra/deployment/ansible/deploy.yml"
+
+  - name: "Ansible.Inventory.Source"
+    value: "$(Build.SourcesDirectory)/infra/deployment/ansible/inventory/hosts.yml"

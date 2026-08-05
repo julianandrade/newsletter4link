@@ -1,0 +1,79 @@
+# =============================================================
+# STARTER TEMPLATE — variables/global.yaml
+# Global variables shared by ALL repos and ALL environments.
+# Loaded at the pipeline level in main-pipeline.yaml.
+#
+# CONFIGURE: fill in the values marked with # CONFIGURE:
+# =============================================================
+
+variables:
+  # ----------------------------------------------------------
+  # Container Registry
+  # ----------------------------------------------------------
+  - name: "Registry.Location"
+    value: "" # CONFIGURE: e.g. "europe-southwest1-docker.pkg.dev" or "myregistry.azurecr.io"
+
+  - name: "Registry.Project"
+    value: "" # CONFIGURE: e.g. "my-gcp-project" or "myorg"
+
+  - name: "Registry.Repository.Docker"
+    value: "docker"
+
+  - name: "Registry.Repository.Docker.Namespace"
+    value: "$(Registry.Project)/$(Registry.Repository.Docker)"
+
+  - name: "Registry.Repository.Docker.Namespace.Full"
+    value: "$(Registry.Location)/$(Registry.Repository.Docker.Namespace)"
+
+  # ----------------------------------------------------------
+  # Docker base image version pins
+  # Pin versions here so all pipelines build from the same base.
+  # Update here to upgrade all pipelines simultaneously.
+  # ----------------------------------------------------------
+  - name: "App.Docker.BaseImage.Java"
+    value: "eclipse-temurin:17-jre-alpine"
+
+  - name: "App.Docker.BaseImage.Node"
+    value: "node:20-alpine"
+
+  - name: "App.Docker.Nginx"
+    value: "nginx:1.25-alpine"
+
+  # ----------------------------------------------------------
+  # API defaults
+  # ----------------------------------------------------------
+  - name: "API.Port.Container.Default"
+    value: "8080"
+
+  - name: "Global.HealthCheckPath"
+    value: "/actuator/health"
+
+  # ----------------------------------------------------------
+  # Organisation identity
+  # Used as a prefix in Environment.Name (see global-env.yaml).
+  # ----------------------------------------------------------
+  - name: "Global.Organization"
+    value: "" # CONFIGURE: short org/project prefix, e.g. "appmod", "myproject"
+
+  # ----------------------------------------------------------
+  # Jump / bastion server and SSH user for app VMs
+  # ----------------------------------------------------------
+  - name: "Jump.Server.Address"
+    value: "" # CONFIGURE: hostname or IP of the jump/bastion server
+
+  - name: "Jump.Server.User"
+    value: "" # CONFIGURE: SSH user on the jump server (e.g. "ubuntu", "azureuser")
+
+  # SSH user for app VMs (usually the same as Jump.Server.User, but can differ).
+  # Used in health check: ssh $(SSH.User)@$(App.Host)
+  - name: "SSH.User"
+    value: "" # CONFIGURE: SSH user on app VMs (e.g. "ubuntu", "debian")
+
+  # ----------------------------------------------------------
+  # Ansible
+  # ----------------------------------------------------------
+  - name: "Ansible.Playbook.Path"
+    value: "" # CONFIGURE: e.g. "{{PATH_INFRA}}/deployment/ansible/deploy.yml"
+
+  - name: "Ansible.Inventory.Source"
+    value: "" # CONFIGURE: e.g. "{{PATH_INFRA}}/deployment/ansible/inventory/hosts.yml"

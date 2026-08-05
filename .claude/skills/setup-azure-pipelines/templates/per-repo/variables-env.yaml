@@ -1,0 +1,61 @@
+# =============================================================
+# STARTER TEMPLATE — per-repo/variables-env.yaml
+# Per-repo per-environment variables — one file per environment.
+# Copy and rename to variables-{env}.yaml (e.g. variables-dev.yaml).
+#
+# THIS FILE BELONGS IN: {repo-name}/Pipelines/Variables/variables-{env}.yaml
+# It must be committed to the {repo-name} app repository.
+#
+# CONFIGURE: items marked with # CONFIGURE:
+# =============================================================
+
+# =============================================================
+# THIS FILE BELONGS IN: # CONFIGURE: {repo-name}/Pipelines/Variables/variables-{env}.yaml
+# =============================================================
+
+variables:
+  # ----------------------------------------------------------
+  # Agent pool for this repo in this environment.
+  # Must match a pools/global-{poolName}.yaml template file.
+  # ----------------------------------------------------------
+  - name: "Pool.Name"
+    value: "" # CONFIGURE: pool name (e.g. "myapp-agents", "ubuntu-latest")
+
+  # For Microsoft-hosted agents set to e.g. "ubuntu-latest".
+  # For self-hosted agents leave empty.
+  - name: "Pool.Image"
+    value: ""
+
+  # ----------------------------------------------------------
+  # Health check — used by the nested SSH health check in the
+  # sub-pipeline after Ansible deploys the container.
+  #
+  # Do NOT combine these into a single App.HealthEndpoint URL.
+  # App.Host is resolved at runtime (Terraform output or set in
+  # global-{env}.yaml). Combining them bakes in an IP that
+  # changes on re-provision, and causes 'command not found'
+  # errors in bash if the variable is undefined at template-
+  # expansion time ($(App.HealthEndpoint) is interpreted as a
+  # command substitution by bash).
+  # ----------------------------------------------------------
+  - name: "App.HealthPort"
+    value: "" # CONFIGURE: port the app listens on (e.g. "8080" for Spring Boot, "80" for nginx)
+
+  - name: "App.HealthPath"
+    value: "" # CONFIGURE: health check path (e.g. "/actuator/health", "/", "/api/health")
+
+  # ----------------------------------------------------------
+  # Angular build configuration — only relevant for angular tech stack.
+  # Maps to `ng build --configuration {value}`.
+  # Remove for non-Angular repos.
+  # ----------------------------------------------------------
+  - name: "App.Angular.Config"
+    value: "" # CONFIGURE: e.g. "production", "staging". Remove if not Angular.
+
+  # ----------------------------------------------------------
+  # SSH Secure File — name of the SSH key file in Azure DevOps
+  # Library → Secure Files for this environment.
+  # References a secret in Secrets-{env} variable group.
+  # ----------------------------------------------------------
+  - name: "SSH.SecureFileName"
+    value: "$(SSH.SecureFileName.# CONFIGURE: env)"  # e.g. $(SSH.SecureFileName.dev)

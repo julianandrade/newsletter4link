@@ -1,9 +1,9 @@
----
+﻿---
 name: generate-technical-design-summary
 description: Generate a Technical Design Summary document from an existing Technical Design (TD) Markdown file. Produces three artefacts — a Markdown summary (.md), an Excalidraw architecture diagram (.excalidraw + .png), and a formatted Word document (.docx) using a provided .docx as the style template. Use when asked to "generate a summary of the technical design", "create a TD summary", "summarise the technical design", or "gerar resumo do design técnico".
 ---
 
-> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `.claude/config/variables.md` to resolve all project variables before execution.
+> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `env` object of `.claude/settings.json` to resolve all project variables before execution.
 
 # Generate Technical Design Summary
 
@@ -307,7 +307,7 @@ Translate each Excalidraw element type to its SVG equivalent:
 
 Define SVG `<defs>` with `<marker>` arrowheads for each arrow color.
 
-#### 4.2 Node/npm Requirements
+#### 4.2 Node/npm Transactions
 
 - `playwright` package must be installed locally (`npm install playwright` in the working dir, or globally).
 - Chromium browser must be available (`npx playwright install chromium` if missing).

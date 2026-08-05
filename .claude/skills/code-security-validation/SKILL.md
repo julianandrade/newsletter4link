@@ -1,12 +1,14 @@
----
+﻿---
 name: code-security-validation
-description: Run code security checks (static-analysis-enforcer, code-security-auditor). Produce Security Findings Report when Critical/High. Use when executing step 7c in frontend-development or backend-development, or when asked to security audit code. Skip if --no-security.
+description: Run code security checks (static-analysis-enforcer, code-security-auditor). Produce Security Findings Report when Critical/High. Use when executing step 7c in frontend-development or backend-development, or when asked to security audit code. Skip if features.security is false in settings.json.
 preferred_agent: code-security-auditor
 ---
 
+> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `env` object of `.claude/settings.json` to resolve all project variables before execution.
+
 # Code Security Validation
 
-Use this skill when you need to **validate feature code for security**: static analysis and manual-assisted review. This corresponds to **step 7c** in **`/frontend-development`** or **`/backend-development`**, inside each track’s validation loop (**frontend**: **7a** ↔ **7a2** ↔ **7b** ↔ **7c**; **backend**: **7a** ↔ **7a2** ↔ **7c** — no **7b**). **Skip** when `--no-security` is set.
+Use this skill when you need to **validate feature code for security**: static analysis and manual-assisted review. This corresponds to **step 7c** in **`/frontend-development`** or **`/backend-development`**, inside each track’s validation loop (**frontend**: **7a** ↔ **7a2** ↔ **7b** ↔ **7c**; **backend**: **7a** ↔ **7a2** ↔ **7c** — no **7b**). **Skip** when `features.security` is `false` in `settings.json`.
 
 ## Where Used
 
@@ -17,7 +19,7 @@ Use this skill when you need to **validate feature code for security**: static a
 
 | Context | How to run |
 |---------|------------|
-| **Direct** (manual) | Invoke with req-id and changed files/branch. Prefer launching **static-analysis-enforcer** then **code-security-auditor** (`.claude/agents/security/code/`). If unavailable, main agent executes the procedure. |
+| **Direct** (manual) | Invoke with tx-id and changed files/branch. Prefer launching **static-analysis-enforcer** then **code-security-auditor** (`.claude/agents/security/code/`). If unavailable, main agent executes the procedure. |
 | **In flow** | Step 7c invokes static-analysis-enforcer and code-security-auditor; agents follow this skill. |
 
 ## Purpose
@@ -36,7 +38,7 @@ Use this skill when you need to **validate feature code for security**: static a
 
 - **Feature code**: Changed files/branch from Developer.
 - **Tech-spec**: For context on sensitive endpoints/data.
-- **Requirement folder**: For report paths.
+- **Transaction folder**: For report paths.
 
 ## Process
 
@@ -59,7 +61,7 @@ Use this skill when you need to **validate feature code for security**: static a
 
 - **Status**: has_critical_or_high
 - **Source**: static-analysis-enforcer and/or code-security-auditor
-- **Requirement**: {req-id}
+- **Transaction**: {tx-id}
 
 ### Critical / High findings
 
@@ -78,7 +80,7 @@ Use this skill when you need to **validate feature code for security**: static a
 Re-invoke **developer** with this report. After fixes and commit, re-run active steps: **7a** (unit), **7a2** (build), **7b** (E2E) on **frontend** when applicable, then **7c** (code security).
 ```
 
-**Report location**: `.claude/docs/requirements/{req-id}/tests/` or include in response.
+**Report location**: `{{PATH_DOCS}}/4-implementation/development/{tx-id}/tests/` or include in response.
 
 ## Agent Sequence
 

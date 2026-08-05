@@ -1,0 +1,133 @@
+# =============================================================
+# STARTER TEMPLATE — main-pipeline.yaml
+# This file lives in the infra repo under:
+#   setup/azure/pipelines/templates/main-pipeline.yaml
+#
+# Every app repo extends this template via build-pipeline.yaml.
+# Do NOT modify the extends: targets in app repos — change this
+# file instead and all pipelines inherit the change automatically.
+# =============================================================
+
+parameters:
+  # Passed by build-pipeline-validation.yaml to run without deploying.
+  - name: ExecutionType
+    default: ""
+
+  # One entry per environment. Each app repo's build-pipeline.yaml can
+  # override this list to add customer-specific environments.
+  - name: environments
+    type: object
+    default:
+      - branch: develop
+        env: dev
+        poolName: # CONFIGURE: agent pool name (must match pools/global-{poolName}.yaml)
+        poolImage: ""   # empty = self-hosted; e.g. "ubuntu-latest" for Microsoft-hosted
+        deployModule: true
+        executionType: "Deploy"
+      - branch: main
+        env: prod
+        poolName: # CONFIGURE: agent pool name
+        poolImage: ""
+        deployModule: true
+        executionType: "Deploy"
+      # Validation entry — used by build-pipeline-validation.yaml.
+      # The branch value is irrelevant here (trigger: none in that file).
+      - branch: feature
+        env: dev
+        poolName: # CONFIGURE: agent pool name
+        poolImage: ""
+        deployModule: false
+        executionType: "Validation"
+
+# Pipeline-level variables — loaded once, available at compile time.
+# App.Tech, App.GroupName, App.Name etc. come from the per-repo variables.yaml.
+variables:
+  - template: variables/global.yaml
+  - template: /Pipelines/Variables/variables.yaml@self
+  - group: Common
+
+stages:
+- "${{ each item in parameters.environments }}":
+  - stage: Deploy_${{ item.branch }}
+    displayName: "Deploy to ${{ item.env }} (${{ item.branch }})"
+    condition:
+      or(
+        and(
+          contains(variables['Build.SourceBranch'], '${{ item.branch }}'),
+          ne('${{ parameters.ExecutionType }}', 'Validation')
+        ),
+        eq('${{ parameters.ExecutionType }}', '${{ item.executionType }}')
+      )
+
+    # Stage-level variables: env config + per-repo env overrides + secrets.
+    variables:
+      - template: variables/global-${{ item.env }}.yaml
+      - template: /Pipelines/Variables/variables-${{ item.env }}.yaml@self
+      - template: variables/pools/global-${{ item.poolName }}.yaml
+      - group: Secrets-${{ item.env }}
+
+    pool:
+      name: ${{ item.poolName }}
+      ${{ if item.poolImage }}:
+        vmImage: ${{ item.poolImage }}
+
+    jobs:
+      # -------------------------------------------------------
+      # BUILD JOB — compile, test, push Docker image, deploy
+      # -------------------------------------------------------
+      - job: Build_${{ item.branch }}
+        displayName: "Build & Deploy"
+        continueOnError: false
+        workspace:
+          clean: all
+
+        steps:
+          - checkout: self
+            clean: true
+            fetchDepth: 1
+            fetchTags: false
+
+          # Make deployModule available as a runtime variable so steps
+          # can gate on it with condition: eq(variables.deployModule,'true').
+          - script: |
+              echo "##vso[task.setvariable variable=deployModule;]${{ item.deployModule }}"
+            displayName: "Set deployModule variable"
+
+          # ----- Maven microservice -----
+          - "${{ if and(eq(variables['App.Tech'], 'maven'), eq(variables['App.GroupName'], 'ms')) }}":
+              - template: sub/sub-pipeline-maven-ms.yaml
+
+          # ----- Angular web frontend -----
+          - "${{ if and(eq(variables['App.Tech'], 'angular'), eq(variables['App.GroupName'], 'web')) }}":
+              - template: sub/sub-pipeline-angular-web.yaml
+
+          # ----- Additional tech stacks -----
+          # Follow the same pattern to add more stacks:
+          #   "${{ if and(eq(variables['App.Tech'], 'dotnet'), eq(variables['App.GroupName'], 'ms')) }}":
+          #       - template: sub/sub-pipeline-dotnet-ms.yaml
+          #   "${{ if and(eq(variables['App.Tech'], 'node'), eq(variables['App.GroupName'], 'ms')) }}":
+          #       - template: sub/sub-pipeline-node-ms.yaml
+          # Create the corresponding sub-pipeline files before uncommenting.
+
+          # ----- Infrastructure component (no source build, Docker pull+run) -----
+          - "${{ if eq(variables['App.Tech'], 'docker') }}":
+              - template: sub/sub-pipeline-docker-infra.yaml
+
+      # -------------------------------------------------------
+      # VERIFY JOB — smoke + integration tests post-deployment
+      # -------------------------------------------------------
+      - job: Verify_${{ item.branch }}
+        displayName: "Verify"
+        continueOnError: false
+        dependsOn: Build_${{ item.branch }}
+        condition: and(succeeded(), eq('${{ item.deployModule }}', 'true'))
+
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          # ----- Maven microservice verify -----
+          - "${{ if and(eq(variables['App.Tech'], 'maven'), eq(variables['App.GroupName'], 'ms')) }}":
+              - template: sub/sub-pipeline-maven-ms-verify.yaml
+                parameters:
+                  Environment: "${{ item.env }}"

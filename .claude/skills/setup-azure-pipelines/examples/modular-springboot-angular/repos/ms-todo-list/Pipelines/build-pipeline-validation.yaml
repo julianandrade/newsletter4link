@@ -1,0 +1,21 @@
+# =============================================================
+# THIS FILE BELONGS IN: ms-todo-list/Pipelines/build-pipeline-validation.yaml
+# Commit to the ms-todo-list repository.
+# Triggered by branch policies on PRs — never by a push trigger.
+# =============================================================
+
+trigger: none
+
+name: $(Build.DefinitionName)_$(SourceBranchName)_Validation_$(Date:yyyyMMdd)$(Rev:.r)
+
+resources:
+  repositories:
+    - repository: infra
+      type: git
+      name: AppMod/infra
+      ref: 'refs/heads/main'
+
+extends:
+  template: 'setup/azure/pipelines/templates/main-pipeline.yaml@infra'
+  parameters:
+    ExecutionType: Validation

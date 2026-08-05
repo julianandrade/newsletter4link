@@ -1,12 +1,12 @@
----
+﻿---
 name: add-code-traceability
-description: Add requirement traceability tags (RQ-XXX, BR-*) to generated code. Use when executing step 8 in frontend-development or backend-development, or when asked to add requirement tags to code.
+description: Add Transaction traceability tags (TX-XXX, BR-*) to generated code. Use when executing step 8 in frontend-development or backend-development, or when asked to add Transaction tags to code.
 preferred_agent: code-tagger
 ---
 
 # Add Code Traceability
 
-Use this skill when you need to **add requirement traceability tags** (req-id and BR IDs) to newly created code. This corresponds to **step 8** in **`/frontend-development`** or **`/backend-development`**, after all tests and code security pass (or after step **6** if step **7** is skipped).
+Use this skill when you need to **add Transaction traceability tags** (tx-id and BR IDs) to newly created code. This corresponds to **step 8** in **`/frontend-development`** or **`/backend-development`**, after all tests and code security pass (or after step **6** if step **7** is skipped).
 
 ## Where Used
 
@@ -17,42 +17,42 @@ Use this skill when you need to **add requirement traceability tags** (req-id an
 
 | Context | How to run |
 |---------|------------|
-| **Direct** (manual) | Invoke with req-id and branch/commit context. Prefer launching **code-tagger** (`.claude/agents/general/code-tagger.md`) with this skill's context. If unavailable, main agent executes the procedure. |
+| **Direct** (manual) | Invoke with tx-id and branch/commit context. Prefer launching **code-tagger** (`.claude/agents/general/code-tagger.md`) with this skill's context. If unavailable, main agent executes the procedure. |
 | **In flow** | Each track command: step **8** invokes code-tagger; agent follows this skill. |
 
 ## Purpose
 
-- **Traceability**: Tag code blocks with RQ-XXX-{feature-name} and BR-XXXX, BR-YYYY.
+- **Traceability**: Tag code blocks with TX-XXX-{feature-name} and BR-XXXX, BR-YYYY.
 - **Git diff**: Identify new code via diff against develop branch.
 - **Language patterns**: C#, TypeScript, YAML, etc. use appropriate comment syntax.
 
 ## When to Use
 
 - Executing **step 8** in **frontend-development** or **backend-development**, after loop **7** completes successfully.
-- When asked to add requirement tags, tag code for traceability, or add RQ/BR comments.
+- When asked to add Transaction tags, tag code for traceability, or add TX/BR comments.
 
 ## Inputs
 
 - **Feature branch**: Branch with implemented code.
-- **Requirement folder/spec**: To extract req-id-name and BR IDs from specification.
+- **Transaction folder/spec**: To extract tx-id-name and BR IDs from specification.
 - **Git state**: develop branch for diff comparison.
 
 ## Process
 
 1. **Check branch**: `git branch --show-current`.
 2. **Git diff**: `git diff develop...{feature-branch}` to identify new code.
-3. **Extract req-id-name**: From branch name (e.g. RQ-001-feature-name) or specification directory.
-4. **Extract BR IDs**: From `{req-id}-complete-requirement.md` or tech-spec.
+3. **Extract tx-id-name**: From branch name (e.g. TX-001-feature-name) or specification directory.
+4. **Extract BR IDs**: From `{tx-id}-complete-transaction.md` or tech-spec.
 5. **Add tags**: Wrap multi-line blocks with BEGIN/END; inline for single-line. Follow language patterns:
-   - C#: `// RQ-XXX-{feature-name} [BR-XXXX, BR-YYYY] BEGIN/END`
-   - TypeScript: `// RQ-XXX-{feature-name} [BR-XXXX, BR-YYYY] BEGIN/END`
-   - YAML: `# RQ-XXX-{feature-name} [BR-XXXX, BR-YYYY] BEGIN/END`
+   - C#: `// TX-XXX-{feature-name} [BR-XXXX, BR-YYYY] BEGIN/END`
+   - TypeScript: `// TX-XXX-{feature-name} [BR-XXXX, BR-YYYY] BEGIN/END`
+   - YAML: `# TX-XXX-{feature-name} [BR-XXXX, BR-YYYY] BEGIN/END`
 6. **Exclude**: obj/, bin/, node_modules/, dist/, generated files.
 7. **Never**: Modify logic, remove existing tags, change formatting unnecessarily.
 
 ## Outputs
 
-- **Tagged code**: All new code blocks have RQ and BR comment tags.
+- **Tagged code**: All new code blocks have TX and BR comment tags.
 - **No logic changes**: Only comment annotations added.
 
 ## Reference

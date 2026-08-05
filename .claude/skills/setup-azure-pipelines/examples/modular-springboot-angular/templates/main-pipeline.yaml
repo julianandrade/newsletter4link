@@ -1,0 +1,394 @@
+# =============================================================
+# main-pipeline.yaml -- Central orchestration template.
+# Lives in the infra repo at:
+#   setup/azure/pipelines/templates/main-pipeline.yaml
+#
+# Every app repo extends this template via build-pipeline.yaml.
+# Do NOT modify the extends: targets in app repos -- change this
+# file instead and all pipelines inherit the change automatically.
+#
+# Architecture:
+#   CI stage  -- build, test, Docker push, publish artifact
+#   CD stages -- per-environment Ansible deployment with rollback
+#
+# This architecture is appropriate when:
+#   - Terraform manages the infrastructure and provides dynamic IPs via outputs
+#   - VMs are in private subnets (SSH-only access, HTTP ports blocked from outside)
+#   - Multiple app components deploy to the same VMs (requires coordinated rollback)
+#   - Microsoft-hosted agents (fresh environment per run, no pre-installed Ansible)
+#
+# For simpler setups (static IPs, self-hosted agents with Ansible pre-installed,
+# single component per VM), use the starter template at:
+#   setup/azure/pipelines/templates/main-pipeline.yaml
+# =============================================================
+
+parameters:
+  # ---------------------------------------------------------------
+  # Component identity -- passed by each repo's build-pipeline.yaml
+  # ---------------------------------------------------------------
+  - name: component
+    type: string
+    # "BACKEND" or "FRONTEND"
+
+  - name: imageTagVar
+    type: string
+    # Ansible extra-var name for this component's image tag
+    # e.g. "backend_image_tag" or "frontend_image_tag"
+
+  - name: otherImageTagVar
+    type: string
+    # Ansible extra-var name for the OTHER component's image tag
+    # e.g. "frontend_image_tag" or "backend_image_tag"
+
+  - name: lastGoodVar
+    type: string
+    # Variable group key for this component's last good tag
+    # e.g. "LAST_GOOD_BACKEND_TAG" or "LAST_GOOD_FRONTEND_TAG"
+
+  - name: otherLastGoodVar
+    type: string
+    # Variable group key for the OTHER component's last good tag
+    # e.g. "LAST_GOOD_FRONTEND_TAG" or "LAST_GOOD_BACKEND_TAG"
+
+  # ---------------------------------------------------------------
+  # Environments -- override from build-pipeline.yaml if needed
+  # ---------------------------------------------------------------
+  - name: environments
+    type: object
+    default:
+      - env: dev
+        poolImage: "ubuntu-latest"
+        ansibleLimit: "app_dev,nginx_dev"
+        azureEnvironment: "AppMod-dev"
+        secretsGroup: "Secrets-dev"
+        needsProdKey: false
+        varGroupIdVar: "VAR_GROUP_DEV_ID"
+        appIpOutputKey: "dev_app01_private_ip"
+      - env: prod
+        poolImage: "ubuntu-latest"
+        ansibleLimit: "app_prod,nginx_prod"
+        azureEnvironment: "AppMod-prod"
+        secretsGroup: "Secrets-prod"
+        needsProdKey: true
+        varGroupIdVar: "VAR_GROUP_PROD_ID"
+        appIpOutputKey: "prd_app01_private_ip"
+
+# Pipeline-level variables -- loaded once, available at compile time.
+# App.Tech, App.GroupName, App.Name come from the per-repo variables.yaml.
+# Pool variables (MAVEN_CACHE_FOLDER, Node.Version, etc.) come from global-ubuntu-latest.yaml.
+variables:
+  - template: variables/global.yaml
+  - template: variables/pools/global-ubuntu-latest.yaml
+  - template: /Pipelines/Variables/variables.yaml@self
+  - group: Common
+
+stages:
+  # =============================================================
+  # CI Stage -- Build, Test, Docker Push
+  # =============================================================
+  - stage: CI
+    displayName: "CI -- Build, Test, Push"
+    pool:
+      vmImage: "ubuntu-latest"
+
+    jobs:
+      - job: Build
+        displayName: "Build, Test & Push"
+        workspace:
+          clean: all
+
+        steps:
+          - checkout: self
+            clean: true
+            fetchDepth: 1
+            fetchTags: false
+
+          # --- Compute short Git SHA for image tagging ---
+          - bash: |
+              SHORT_SHA=$(echo "$(Build.SourceVersion)" | cut -c1-8)
+              echo "##vso[task.setvariable variable=IMAGE_TAG]$SHORT_SHA"
+              echo "Image tag: $SHORT_SHA"
+            displayName: "Compute short SHA image tag"
+
+          # ----- Maven microservice (Spring Boot) -----
+          - ${{ if and(eq(variables['App.Tech'], 'maven'), eq(variables['App.GroupName'], 'ms')) }}:
+              - template: sub/sub-pipeline-maven-ms.yaml
+
+          # ----- Angular web frontend -----
+          - ${{ if and(eq(variables['App.Tech'], 'angular'), eq(variables['App.GroupName'], 'web')) }}:
+              - template: sub/sub-pipeline-angular-web.yaml
+
+          # --- Docker build ---
+          - task: Docker@2
+            displayName: "Docker build"
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+            inputs:
+              command: build
+              repository: $(App.Docker.Repository)
+              dockerfile: $(App.Docker.File)
+              containerRegistry: gcp-artifact-registry
+              tags: |
+                $(IMAGE_TAG)
+                latest
+
+          # --- Docker push ---
+          - task: Docker@2
+            displayName: "Docker push"
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+            inputs:
+              command: push
+              repository: $(App.Docker.Repository)
+              containerRegistry: gcp-artifact-registry
+              tags: |
+                $(IMAGE_TAG)
+                latest
+
+          # --- Publish image tag artifact ---
+          # Artifact is the handoff between CI and CD stages.
+          # Avoids re-computing the SHA in every CD stage.
+          - bash: |
+              echo "$(IMAGE_TAG)" > $(Build.ArtifactStagingDirectory)/image-tag.txt
+            displayName: "Write image tag to artifact"
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish image tag artifact"
+            condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/image-tag.txt"
+              artifact: "image-tag"
+              publishLocation: "pipeline"
+
+  # =============================================================
+  # CD Stages -- Per-environment Ansible deployment
+  # =============================================================
+  - ${{ each item in parameters.environments }}:
+    - stage: Deploy_${{ item.env }}
+      displayName: "CD -- Deploy to ${{ upper(item.env) }}"
+      ${{ if eq(item.env, 'dev') }}:
+        dependsOn: CI
+      ${{ if eq(item.env, 'prod') }}:
+        dependsOn: Deploy_dev
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+      variables:
+        - template: variables/global-${{ item.env }}.yaml
+        - template: /Pipelines/Variables/variables-${{ item.env }}.yaml@self
+        - group: ${{ item.secretsGroup }}
+        # Safe defaults for LAST_GOOD_* — coalesce returns '' if the variable is not yet
+        # defined in the variable group (first-ever deployment). Without this, ADO passes
+        # the literal "$(LAST_GOOD_X_TAG)" to bash, which treats $(…) as a command
+        # substitution and fails with "command not found".
+        - name: SafeOtherTag
+          value: $[ coalesce(variables['${{ parameters.otherLastGoodVar }}'], '') ]
+        - name: SafeThisTag
+          value: $[ coalesce(variables['${{ parameters.lastGoodVar }}'], '') ]
+
+      jobs:
+        - deployment: Deploy
+          displayName: "Ansible deploy to ${{ upper(item.env) }}"
+          pool:
+            vmImage: ${{ item.poolImage }}
+          environment: ${{ item.azureEnvironment }}
+          strategy:
+            runOnce:
+              deploy:
+                steps:
+                  # --- Checkout infra repo for Ansible playbooks ---
+                  - checkout: git://AppMod/infra
+                    path: infra
+                    persistCredentials: false
+                    displayName: "Checkout infra repo"
+
+                  # --- Download image tag from CI ---
+                  - task: DownloadPipelineArtifact@2
+                    displayName: "Download image tag artifact"
+                    inputs:
+                      artifact: "image-tag"
+                      path: "$(Pipeline.Workspace)/image-tag"
+
+                  - bash: |
+                      IMAGE_TAG=$(cat $(Pipeline.Workspace)/image-tag/image-tag.txt)
+                      echo "##vso[task.setvariable variable=IMAGE_TAG]$IMAGE_TAG"
+                      echo "Deploying ${{ parameters.component }} tag: $IMAGE_TAG"
+                    displayName: "Read image tag"
+
+                  # --- Install Ansible ---
+                  - bash: pip3 install --quiet ansible
+                    displayName: "Install Ansible"
+
+                  # --- Install Terraform CLI ---
+                  # Use direct binary download — the HashiCorp APT repository requires a GPG
+                  # key import that is unreliable on Microsoft-hosted agents and may fail with
+                  # NO_PUBKEY. The releases.hashicorp.com endpoint is always available.
+                  - bash: |
+                      if ! command -v terraform &>/dev/null; then
+                        TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                          | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                        curl -fsSL \
+                          "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                          -o /tmp/terraform.zip
+                        sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                        rm /tmp/terraform.zip
+                      fi
+                      terraform version
+                    displayName: "Install Terraform CLI"
+
+                  # --- Terraform init (required for dynamic inventory) ---
+                  # dynamic_inventory.sh calls `terraform output -json` at runtime.
+                  # On a fresh agent the remote backend is not initialised yet.
+                  # GCP_SA_KEY_JSON must be set in the Secrets-{env} variable group
+                  # (service account key with read access to the Terraform state bucket).
+                  - bash: |
+                      terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform \
+                        init -input=false -reconfigure
+                    displayName: "Terraform init (for dynamic inventory)"
+                    condition: succeeded()
+                    env:
+                      GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+
+                  # --- Extract infrastructure IPs from Terraform state ---
+                  # Sets pipeline variables so no IPs are hardcoded anywhere.
+                  - bash: |
+                      TF_DIR=$(Pipeline.Workspace)/infra/deployment/terraform
+                      JUMP_IP=$(terraform -chdir=$TF_DIR output -raw jump_server_ip)
+                      APP_IP=$(terraform -chdir=$TF_DIR output -raw ${{ item.appIpOutputKey }})
+                      echo "##vso[task.setvariable variable=Jump.Server.Address]$JUMP_IP"
+                      echo "##vso[task.setvariable variable=App.Host]$APP_IP"
+                      echo "Jump server: $JUMP_IP  |  App host: $APP_IP"
+                    displayName: "Extract IPs from Terraform state"
+                    condition: succeeded()
+                    env:
+                      GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+
+                  # --- SSH key setup: DEV key (always needed) ---
+                  # The DEV key is always needed — even in PROD — because the jump server
+                  # is in the DEV subnet and uses the same key across environments.
+                  - task: DownloadSecureFile@1
+                    name: sshKeyDev
+                    displayName: "Download DEV SSH key"
+                    inputs:
+                      secureFile: "$(SSH_SECURE_FILE_DEV)"
+
+                  - bash: chmod 600 $(sshKeyDev.secureFilePath)
+                    displayName: "Set DEV SSH key permissions"
+
+                  # --- SSH key setup: PROD key (only for prod stage) ---
+                  - ${{ if eq(item.needsProdKey, true) }}:
+                    - task: DownloadSecureFile@1
+                      name: sshKeyProd
+                      displayName: "Download PROD SSH key"
+                      inputs:
+                        secureFile: "$(SSH_SECURE_FILE_PROD)"
+
+                    - bash: chmod 600 $(sshKeyProd.secureFilePath)
+                      displayName: "Set PROD SSH key permissions"
+
+                  # --- Run ansible-playbook ---
+                  # SSH ProxyCommand is configured in Ansible group_vars --
+                  # no --ssh-common-args needed from the pipeline.
+                  # The prod key path defaults to the dev key path for dev stage
+                  # (Ansible group_vars handles the actual key routing).
+                  - bash: |
+                      cd $(Pipeline.Workspace)/infra/deployment/ansible
+
+                      # Resolve prod key path: use actual prod key if available, else dev key
+                      PROD_KEY_PATH="${PROD_KEY_OVERRIDE:-$(sshKeyDev.secureFilePath)}"
+
+                      ansible-playbook deploy.yml \
+                        -i inventory/dynamic_inventory.sh \
+                        --limit "${{ item.ansibleLimit }}" \
+                        --extra-vars "${{ parameters.imageTagVar }}=$(IMAGE_TAG) ${{ parameters.otherImageTagVar }}=$(SafeOtherTag)" \
+                        --extra-vars "ssh_private_key_file_dev=$(sshKeyDev.secureFilePath) ssh_private_key_file_prod=$PROD_KEY_PATH"
+                    displayName: "Deploy to ${{ upper(item.env) }} with Ansible"
+                    condition: succeeded()
+                    env:
+                      GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+                      ${{ if eq(item.needsProdKey, true) }}:
+                        PROD_KEY_OVERRIDE: $(sshKeyProd.secureFilePath)
+
+                  # --- Health check via nested SSH through jump server ---
+                  # App VMs are on private IPs, not reachable from the pipeline agent.
+                  # The PROD app subnet only allows SSH (22) from the jump server —
+                  # HTTP ports 8080/4200 are blocked by firewall rules.
+                  # Fix: SSH → jump server → app VM (ProxyCommand), then curl localhost.
+                  # APP_KEY_OVERRIDE is set to the PROD key for the prod stage only.
+                  #
+                  # SSH_RC separates SSH exit code from curl's stdout to avoid the
+                  # "000000" double-output bug when SSH exits non-zero.
+                  - bash: |
+                      set -e
+                      MAX_RETRIES=6
+                      RETRY_INTERVAL=10
+                      APP_KEY="${APP_KEY_OVERRIDE:-$(sshKeyDev.secureFilePath)}"
+
+                      for i in $(seq 1 $MAX_RETRIES); do
+                        echo "Health check attempt $i/$MAX_RETRIES: localhost:$(App.HealthPort)$(App.HealthPath) on $(App.Host)"
+                        HTTP_STATUS=$(ssh \
+                          -i "$APP_KEY" \
+                          -o StrictHostKeyChecking=accept-new \
+                          -o IdentitiesOnly=yes \
+                          -o ProxyCommand="ssh -i $(sshKeyDev.secureFilePath) -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -W %h:%p $(Jump.Server.User)@$(Jump.Server.Address)" \
+                          debian@$(App.Host) \
+                          "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 'http://localhost:$(App.HealthPort)$(App.HealthPath)'" \
+                          2>/dev/null)
+                        SSH_RC=$?
+                        [ $SSH_RC -ne 0 ] && HTTP_STATUS="000"
+                        if [ "$HTTP_STATUS" = "200" ]; then
+                          echo "Health check passed (HTTP $HTTP_STATUS)"
+                          exit 0
+                        fi
+                        echo "HTTP $HTTP_STATUS -- retrying in ${RETRY_INTERVAL}s..."
+                        sleep $RETRY_INTERVAL
+                      done
+
+                      echo "Health check failed after $MAX_RETRIES attempts"
+                      exit 1
+                    displayName: "Health check (${{ upper(item.env) }})"
+                    condition: succeeded()
+                    env:
+                      ${{ if eq(item.needsProdKey, true) }}:
+                        APP_KEY_OVERRIDE: $(sshKeyProd.secureFilePath)
+
+                  # --- On success: update LAST_GOOD tag for this component ---
+                  # Stored in an Azure DevOps variable group so that the rollback step
+                  # and the other component's pipeline can read it.
+                  - bash: |
+                      az pipelines variable-group variable update \
+                        --group-id $(${{ item.varGroupIdVar }}) \
+                        --name "${{ parameters.lastGoodVar }}" \
+                        --value "$(IMAGE_TAG)" \
+                        --org "$(System.CollectionUri)" \
+                        --project "$(System.TeamProject)"
+                    displayName: "Update ${{ parameters.lastGoodVar }} (${{ upper(item.env) }})"
+                    condition: succeeded()
+                    env:
+                      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+
+                  # --- On failure: rollback to last known good ---
+                  # Runs only when a previous step failed. Uses the last successful tag
+                  # stored in the variable group. If no previous good tag exists (first run),
+                  # skips rollback rather than deploying an empty/invalid tag.
+                  - bash: |
+                      ROLLBACK_TAG="$(SafeThisTag)"
+                      if [ -z "$ROLLBACK_TAG" ]; then
+                        echo "No previous good ${{ parameters.component }} tag found -- skipping rollback"
+                        exit 1
+                      fi
+                      echo "Rolling back ${{ parameters.component }} to: $ROLLBACK_TAG"
+
+                      cd $(Pipeline.Workspace)/infra/deployment/ansible
+
+                      PROD_KEY_PATH="${PROD_KEY_OVERRIDE:-$(sshKeyDev.secureFilePath)}"
+
+                      ansible-playbook deploy.yml \
+                        -i inventory/dynamic_inventory.sh \
+                        --limit "${{ item.ansibleLimit }}" \
+                        --extra-vars "${{ parameters.imageTagVar }}=$ROLLBACK_TAG ${{ parameters.otherImageTagVar }}=$(SafeOtherTag)" \
+                        --extra-vars "ssh_private_key_file_dev=$(sshKeyDev.secureFilePath) ssh_private_key_file_prod=$PROD_KEY_PATH"
+                    displayName: "Rollback ${{ parameters.component }} (${{ upper(item.env) }})"
+                    condition: failed()
+                    env:
+                      GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+                      ${{ if eq(item.needsProdKey, true) }}:
+                        PROD_KEY_OVERRIDE: $(sshKeyProd.secureFilePath)

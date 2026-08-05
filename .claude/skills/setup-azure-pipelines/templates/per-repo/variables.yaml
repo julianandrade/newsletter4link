@@ -1,0 +1,46 @@
+# =============================================================
+# STARTER TEMPLATE — per-repo/variables.yaml
+# App identity variables — constant across all environments.
+# Tells main-pipeline.yaml which sub-pipeline template to use.
+#
+# THIS FILE BELONGS IN: {repo-name}/Pipelines/Variables/variables.yaml
+# It must be committed to the {repo-name} app repository.
+#
+# CONFIGURE: items marked with # CONFIGURE:
+# =============================================================
+
+# =============================================================
+# THIS FILE BELONGS IN: # CONFIGURE: {repo-name}/Pipelines/Variables/variables.yaml
+# =============================================================
+
+variables:
+  # Which sub-pipeline template to use (see main-pipeline.yaml conditionals).
+  # App.GroupName: ms | web | lib | infra
+  - name: "App.GroupName"
+    value: "" # CONFIGURE: e.g. "ms", "web", "lib", "infra"
+
+  # App.Tech: maven | angular | dotnet | node | docker
+  - name: "App.Tech"
+    value: "" # CONFIGURE: e.g. "maven", "angular", "docker"
+
+  # App.Type: manager | portal | screen | service | gateway | etc.
+  - name: "App.Type"
+    value: "" # CONFIGURE: e.g. "manager", "portal", "service"
+
+  # App.Module: short functional name of this repository.
+  - name: "App.Module"
+    value: "" # CONFIGURE: e.g. "todo", "identity", "device"
+
+  # Constructed from the above — usually no change needed.
+  - name: "App.Name"
+    value: "$(App.GroupName)-$(App.Module)-$(App.Type)"
+
+  - name: "App.Version"
+    value: "v1"
+
+  # Default to the global API port; override here if this app uses a different port.
+  - name: "API.Port.Container"
+    value: "$(API.Port.Container.Default)"
+
+  - name: "API.Port.Public"
+    value: "" # CONFIGURE: public-facing port exposed by the app's Docker container

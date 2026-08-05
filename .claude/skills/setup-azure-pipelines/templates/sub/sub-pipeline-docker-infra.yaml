@@ -1,0 +1,78 @@
+# =============================================================
+# STARTER TEMPLATE — sub/sub-pipeline-docker-infra.yaml
+# Infrastructure component — no source build.
+# Pulls a pinned image version from a public/private registry and
+# deploys it via Ansible (Docker pull + run on the target VM).
+#
+# Root key MUST be "steps:" — included in main-pipeline.yaml's Build job.
+#
+# Runtime variables expected:
+#   $(App.Docker.Image)       — full image reference with tag, from variables.yaml
+#                               e.g. "nginx:1.25-alpine" or "mongo:7.0"
+#   $(App.Name)               — component name, from variables.yaml
+#   $(Environment.Name)       — from global-{env}.yaml
+#   $(Ansible.Playbook.Path)  — from global.yaml
+#   $(Ansible.Inventory.Source) — from global.yaml
+#   $(Ansible.Target.Group)   — from global-{env}.yaml
+#   $(Jump.Server.Address)    — from global.yaml
+#   $(Jump.Server.User)       — from global.yaml
+#   $(SSH.SecureFileName)     — from Secrets-{env}
+# =============================================================
+
+steps:
+  # ----------------------------------------------------------
+  # Token replacement — substitute pipeline variables into config
+  # files (e.g. nginx.conf, mongod.conf) before deploying.
+  # Adjust the targetFiles glob to match your config file location.
+  # Skipped when deployModule=false (Validation runs).
+  # ----------------------------------------------------------
+  - task: replacetokens@5
+    displayName: "Replace variables in config files"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      targetFiles: "infra/$(App.Name)/**/*.conf\ninfra/$(App.Name)/**/*.env"
+      encoding: "auto"
+      tokenPattern: "azpipelines"
+      writeBOM: true
+      actionOnMissing: "warn"
+      keepToken: false
+      actionOnNoFiles: "continue"
+      enableTransforms: false
+      enableRecursion: true
+
+  # ----------------------------------------------------------
+  # SSH setup — download key, set permissions
+  # StrictHostKeyChecking=accept-new in the Ansible ProxyCommand (group_vars)
+  # makes ssh-keyscan redundant — do not add it.
+  # ----------------------------------------------------------
+  - task: DownloadSecureFile@1
+    name: sshKey
+    displayName: "Download SSH deploy key"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      secureFile: "$(SSH.SecureFileName)"
+
+  - bash: chmod 600 $(sshKey.secureFilePath)
+    displayName: "Set SSH key permissions"
+    condition: eq(variables.deployModule, 'true')
+
+  # ----------------------------------------------------------
+  # Ansible deploy — pull image and (re)start container
+  # ProxyCommand is defined in Ansible group_vars (ansible_ssh_common_args)
+  # for infra component groups — do NOT pass --ssh-common-args here, it would
+  # override group_vars. Pass the key path as an extra-var so the
+  # group_vars ProxyCommand template can reference it.
+  # ----------------------------------------------------------
+  - bash: |
+      set -euo pipefail
+      ansible-playbook "$(Ansible.Playbook.Path)" \
+        -i "$(Ansible.Inventory.Source)" \
+        --private-key "$(sshKey.secureFilePath)" \
+        --extra-vars "component=$(App.Name) docker_image=$(App.Docker.Image)" \
+        --extra-vars "target_group=$(Ansible.Target.Group) environment=$(Environment.Name)" \
+        --extra-vars "ssh_private_key_file=$(sshKey.secureFilePath)"
+    displayName: "Deploy infra component with Ansible"
+    condition: eq(variables.deployModule, 'true')
+
+  - task: PostBuildCleanup@3
+    displayName: "Clean agent directories"

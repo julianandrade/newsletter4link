@@ -1,41 +1,46 @@
-# Backend Development (architecture → unit TDD → build + security)
+﻿# Backend Development (architecture → unit TDD → build + security)
 
-Run the **backend track** for the requirement in `$ARGUMENTS`: architect the API implementation surface, optional baseline, **unit tests only (no functional/Robot test plan)**, **backend-developer** implementation, validation loop (**unit + build + code security** — **no** step 7b E2E/Robot/flow), traceability, documentation, and contextual security.
+> **Variable Resolution:** Read `.claude/settings.json` before execution. Resolve `{{VARIABLE_NAME}}` placeholders from `env`. Read `features` to determine which steps are active:
+> - `features.test` (`true`/`false`) — when `false`, skip test steps (5d, 7a, 7a2, 9).
+> - `features.security` (`true`/`false`) — when `false`, skip security steps (4b, 7c, 10).
+> - `features.confirm` (`true`/`false`) — when `true`, stop after each completed step and wait for human confirmation before proceeding to the next step.
 
-**Prerequisites**: Complete the **complete-development** trunk through **4api** (OpenAPI contract must exist). `{req-id}-technical-solution-requirement.md` must include **backend scope**. If there is no backend scope, stop and tell the user to use **`/frontend-development`** only.
+Run the **backend track** for the Transaction in `$ARGUMENTS`: architect the API implementation surface, **unit tests only (no functional/Robot test plan)**, **backend-developer** implementation, validation loop (**unit + build + code security** — **no** step 7b E2E/Robot/flow), traceability, documentation, and contextual security.
+
+**Prerequisites**: Complete the **complete-development** trunk through **4api** (OpenAPI contract must exist). `{tx-id}-technical-solution-transaction.md` must include **backend scope**. If there is no backend scope, stop and tell the user to use **`/frontend-development`** only. A baseline must already exist for **every** backend project in scope (project folder, config files, dependency manifest). If any project is missing its baseline, stop and tell the user to run **`/generate-baseline`** for each missing project before continuing — there may be more than one.
 
 **Functional tests** (test-plan 5, 5b, Robot 5c, E2E/flow **7b**) belong to **`/frontend-development`** only — do **not** run them in this command.
 
 ## Parameters
 
-Interpret `$ARGUMENTS` as a token list (space-separated). The **first token** is the requirement ID; optional flags follow.
+Interpret `$ARGUMENTS` as a token list (space-separated). The **first token** is the Transaction ID.
 
 - **requisite-id** (required).
-- **--no-security** (optional): skip 4b, 7c, 10, and contextual security agents.
-- **--no-tests** (optional): skip 5d, 7a, 7a2, 9 documentation-update (same spirit as the historical monolithic command: no unit/build validation loop).
 
-Flags can be combined. Token order after `requisite-id` is irrelevant.
+Feature keys come from `features` in `.claude/settings.json`:
+- `features.security: false` — skip 4b, 7c, 10, and contextual security agents.
+- `features.test: false` — skip 5d, 7a, 7a2, 9 documentation-update.
 
-- **Path convention**: `.claude/docs/requirements/{req-id}/` — `{req-id}` equals the first argument.
+- **Path convention**: `{{PATH_DOCS}}/4-implementation/development/{tx-id}/` — `{tx-id}` equals the first argument.
 
 ## Resume and idempotency
 
-1. Read `.claude/docs/requirements/{req-id}/progress.md`.
+1. Read `{{PATH_DOCS}}/4-implementation/development/{tx-id}/progress.md`.
 2. Confirm OpenAPI exists and technical-solution assigns backend scope.
 3. Continue from the first incomplete **backend track** step.
 4. When updating `progress.md`, **merge** into **Notes** without deleting trunk history.
 
-## Document & Clear (required after each step)
+## Document & Compact (required after each step)
 
-After **each** of: 4a, 4b, 4d, 5d, 6, each iteration of 7, 8, 9, 10 — apply **Document & Clear**. Skip documenting **4d** when it does not run.
+After **each** of: 4a, 4b, 4d (if ran), 5d, 6, each iteration of 7, 8, 9, 10 — apply **Document & Compact**.
 
-**Progress file**: `.claude/docs/requirements/{req-id}/progress.md`
+**Progress file**: `{{PATH_DOCS}}/4-implementation/development/{tx-id}/progress.md`
 
-### How to execute Document & Clear
+### How to execute Document & Compact
 
-1. **Document**: update with **Requirement**, **Completed step** (optional prefix `Backend track:`), **Current state**, **Next step**, **Context**, **Notes** (append).
-2. **Clear**: ask for **`/clear`**.
-3. **Continue**: *"Read `.claude/docs/requirements/{req-id}/progress.md` and continue **backend-development** from the next indicated step."*
+1. **Document**: update with **Transaction**, **Completed step** (optional prefix `Backend track:`), **Current state**, **Next step**, **Context**, **Notes** (append).
+2. **Compact**: ask the user to run **`/compact`**.
+3. **Continue**: *"Read `{{PATH_DOCS}}/4-implementation/development/{tx-id}/progress.md` and continue **backend-development** from the next indicated step."*
 
 **Exceptions**: not mid–loop-7.
 
@@ -47,6 +52,20 @@ After **each** of: 4a, 4b, 4d, 5d, 6, each iteration of 7, 8, 9, 10 — apply **
 - Pending: ...
 ```
 
+## Confirmation Gate (`features.confirm`)
+
+When `features.confirm` is `true`, apply a **confirmation gate** after every completed step (4a, 4b, 4d, 5d, 6, each loop-7 iteration, 8, 9, 10) — including steps that also trigger Document & Compact. After completing a step, stop and output:
+
+```
+**Step [X] complete** — [one-line summary of what was produced]
+Next: **[Y]** — [one-line description of the next step]
+Reply with anything to continue, or with instructions to redirect.
+```
+
+Wait for any user reply before proceeding. Do not continue autonomously. This gate does not update `progress.md` and does not request `/compact` — it is a lightweight checkpoint within the same session. Document & Compact rules still apply independently.
+
+If `features.confirm` is `false`: no confirmation gate; proceed through steps without pausing.
+
 ## Step 0 — Git prerequisite (always runs first)
 
 1. Run `git status`.
@@ -57,76 +76,72 @@ After **each** of: 4a, 4b, 4d, 5d, 6, each iteration of 7, 8, 9, 10 — apply **
      git add .
      git commit -m "chore: initial commit of existing files"
      ```
-2. Ensure feature branch exists for this requirement:
-   - If current branch is already `{req-id}`: continue.
-   - Otherwise: `git checkout -b {req-id}` (or `git checkout {req-id}` if branch already exists).
+2. Ensure feature branch exists for this Transaction:
+   - If current branch is already `{tx-id}`: continue.
+   - Otherwise: `git checkout -b {tx-id}` (or `git checkout {tx-id}` if branch already exists).
 
-Document & Clear does **not** apply to Step 0.
+Document & Compact does **not** apply to Step 0.
 
 ## Flow order
 
 4a. **Architect (backend only)**  
-   **architect-requirement** → **backend-architect** (`.claude/agents/backend/backend-architect.md`) only → `{req-id}-backend-tech-spec.md`. Inputs: complete requirement, technical-solution requirement, **OpenAPI** from trunk.
+   **architect-transaction** → **backend-architect** (`.claude/agents/backend/backend-architect.md`) only → `{tx-id}-backend-tech-spec.md`. Inputs: complete Transaction, technical-solution Transaction, **OpenAPI** from trunk.
 
 4b. **Architecture security review (backend tech-spec)**  
-   **Skip if** `--no-security`.  
-   **architecture-security-review** + **security-architect**. Scope: `{req-id}-backend-tech-spec.md`, `{req-id}-complete-requirement.md`.
+   **Skip if** `features.security` is `false`.  
+   **architecture-security-review** + **security-architect**. Scope: `{tx-id}-backend-tech-spec.md`, `{tx-id}-complete-transaction.md`.
 
 **Synchronization before unit TDD / Developer**  
-   Order: **4a → 4b** (if security) **→ 4d (if greenfield)** → **5d** or **6**. If `--no-security`: **4a → 4d**.
+   Order: **4a → 4b** (if `features.security`) **→ 4d** (if migrations) → **5d** or **6**. If `features.security` is `false`: **4a → 4d**.
 
-4d. **Generate baseline (greenfield only)**  
-   **Skip** for brownfield when the backend project matches the tech-spec.  
-   **generate-baseline** for the **backend** app only. Document & Clear after 4d when it ran.
-
-4e. **Schema / Migrations (blocking when needed)**  
-   Read `{req-id}-backend-tech-spec.md` Critical issues section. If any migration items are listed:
+4d. **Schema / Migrations (blocking when needed)**  
+   Read `{tx-id}-backend-tech-spec.md` Critical issues section. If any migration items are listed:
    - Run each migration/schema command exactly as specified in the Critical issues section.
    - Verify database reflects expected schema before proceeding.
    - On failure: **stop and report** — do not proceed to implementation.
-   - If no migration critical issues listed: skip 4e silently.
+   - If no migration critical issues listed: skip 4d silently.
 
-   Document & Clear after 4e when it ran (skip documenting when it did not run).
+   Document & Compact after 4d when it ran (skip documenting when it did not run).
 
 **No steps 5, 5b, or 5c** on this track.
 
-5d. **Unit tests (TDD — Red)** (**skip if** `--no-tests`)  
+5d. **Unit tests (TDD — Red)** (**skip if** `features.test` is `false`)  
    **unit-test-validation** (TDD) + **unit-test-generator** → backend unit tests only; must **fail** (Red) before step 6.
 
 6. **Developer (backend)**  
    **backend-developer** (`.claude/agents/backend/backend-developer.md` or project equivalent).
 
-   - **With tests:** `{req-id}-backend-tech-spec.md` + failing unit tests from **5d**.
-   - **With `--no-tests`:** tech-spec only after sync point (4a/4b/4d).
+   - **With tests:** `{tx-id}-backend-tech-spec.md` + failing unit tests from **5d**.
+   - **With `features.test: false`:** tech-spec only after sync point (4a/4b/4d).
 
    After implementation, run **`/simplify`** on changed backend code (mandatory for step 6 completion).
 
    **Mandatory commit after step 6**: Once `/simplify` completes:
    ```bash
    git add .
-   git commit -m "feat: implement {req-id} backend - initial implementation"
+   git commit -m "feat: implement {tx-id} backend - initial implementation"
    ```
    Step 7 does not begin until this commit exists.
 
 7. **Developer ↔ Unit + Build + Code Security loop** (max **5** iterations)  
    **There is no 7b** (no flow-test, robot-tester, or UI E2E in this command).
 
-   - If **`--no-tests`**: skip **7a** and **7a2**; run **7c** only unless **`--no-security`** too → then skip all of step 7.
-   - If **`--no-security`**: run **7a** and **7a2** only (no **7c**).
-   - If **both** flags: skip step 7 entirely (go to 8 after step 6).
+   - If `features.test` is `false`: skip **7a** and **7a2**; run **7c** only unless `features.security` is also `false` → then skip all of step 7.
+   - If `features.security` is `false`: run **7a** and **7a2** only (no **7c**).
+   - If both `features.test` and `features.security` are `false`: skip step 7 entirely (go to 8 after step 6).
 
-   - **7a. Unit tests** (**skip if** `--no-tests`): **unit-test-validation** validation mode; **Test Failure Report** on failure; re-invoke **backend-developer**.
-   - **7a2. Build** (**skip if** `--no-tests`): backend build (e.g. `dotnet build`). **Build Failure Report** on failure.
-   - **7c. Code security** (**skip if** `--no-security`): **code-security-validation**; **Security Findings Report** for Critical/High.
+   - **7a. Unit tests** (**skip if** `features.test` is `false`): **unit-test-validation** validation mode; **Test Failure Report** on failure; re-invoke **backend-developer**.
+   - **7a2. Build** (**skip if** `features.test` is `false`): backend build (e.g. `dotnet build`). **Build Failure Report** on failure.
+   - **7c. Code security** (**skip if** `features.security` is `false`): **code-security-validation**; **Security Findings Report** for Critical/High.
 
    After fixes: re-run active substeps in order (**7a → 7a2 → 7c** as enabled).
 
    **Mandatory commit after loop 7**: When all active substeps pass:
    ```bash
    git add .
-   git commit -m "fix: {req-id} backend - post-validation fixes"
+   git commit -m "fix: {tx-id} backend - post-validation fixes"
    ```
-   Skip only if loop 7 was skipped entirely (both `--no-tests` and `--no-security`).
+   Skip only if loop 7 was skipped entirely (both `features.test` and `features.security` are `false`).
 
 8. **Code-tagger**  
    **add-code-traceability** + **code-tagger** — scope: **backend** changes.
@@ -134,15 +149,15 @@ Document & Clear does **not** apply to Step 0.
    **Mandatory commit after step 8**:
    ```bash
    git add .
-   git commit -m "chore: {req-id} backend - add traceability tags"
+   git commit -m "chore: {tx-id} backend - add traceability tags"
    ```
 
 9. **Documentation update**  
-   **Skip if** `--no-tests`.  
-   **update-requirement-documentation** + **req-checker**. Prefer **partial** updates (README, API) when full app verification is out of scope.
+   **Skip if** `features.test` is `false`.  
+   **update-transaction-documentation** + **tx-checker**. Prefer **partial** updates (README, API) when full app verification is out of scope.
 
 10. **Contextual security**  
-    **Skip if** `--no-security`.  
+    **Skip if** `features.security` is `false`.  
     **contextual-security-review** when scope warrants.
 
 ## Report formats
@@ -154,7 +169,7 @@ Document & Clear does **not** apply to Step 0.
 
 - **Status**: has_critical_or_high
 - **Source**: static-analysis-enforcer and/or code-security-auditor (and others if applicable)
-- **Requirement**: {req-id}
+- **Transaction**: {tx-id}
 
 ### Critical / High findings
 
@@ -170,7 +185,7 @@ Document & Clear does **not** apply to Step 0.
 
 ### Recommendation
 
-Re-invoke **backend-developer** with this report. After fixes and commit, re-run **7a**, **7a2**, and **7c** — omit sub-steps deactivated by `--no-tests` or `--no-security`.
+Re-invoke **backend-developer** with this report. After fixes and commit, re-run **7a**, **7a2**, and **7c** — omit sub-steps skipped because `features.test` or `features.security` is `false`.
 ```
 
 ### Build Failure Report
@@ -180,7 +195,7 @@ Re-invoke **backend-developer** with this report. After fixes and commit, re-run
 
 - **Status**: build_failed
 - **Source**: build (step 7a2) — [technology/command used]
-- **Requirement**: {req-id}
+- **Transaction**: {tx-id}
 
 ### Build errors
 
@@ -202,7 +217,7 @@ Use **unit-test-validation** / **unit-test-generator** guidance for **Test Failu
 
 ## Context management
 
-Document & Clear between steps; **`/compact`** only between steps (~70%); never mid-sub-agent.
+Document & Compact between steps; **`/compact`** only between steps (~70%); never mid-sub-agent.
 
 ## End-of-command
 
@@ -211,21 +226,23 @@ Per-step commits (after step 6, loop 7, step 8) must already exist. End-of-comma
 1. Stage and commit any remaining unstaged files (specs, reports, progress.md, step 9 outputs):
    ```bash
    git add .
-   git commit -m "chore: {req-id} backend - finalize specs, docs, and reports"
+   git commit -m "chore: {tx-id} backend - finalize specs, docs, and reports"
    ```
    Skip if nothing unstaged.
-2. Push: `git push -u origin {req-id}`.
+2. Push: `git push -u origin {tx-id}`.
 3. Open PR targeting integration branch (`develop` or as configured).
 4. Remove junk/scratch files before pushing.
 
 ## Usage
 
 ```
-/backend-development <requisite-id> [--no-security] [--no-tests]
+/backend-development <requisite-id>
 ```
 
-**Resume after /clear**: *"Read `.claude/docs/requirements/{req-id}/progress.md` and continue **backend-development** from the next indicated step."*
+Feature keys (`features.security`, `features.test`) are read from `.claude/settings.json`.
+
+**Resume after /compact**: *"Read `{{PATH_DOCS}}/4-implementation/development/{tx-id}/progress.md` and continue **backend-development** from the next indicated step."*
 
 ## Flow summary
 
-**Step 0** (git init + branch) → **4a** → **4b** (if security) → **4d** (if greenfield) → **4e** (if migrations) → **5d** (if tests) → **6** (+ `/simplify` + commit) → **loop 7** (7a, 7a2, **no 7b**, 7c) + commit → **8** + commit → **9** (if tests) → **10** (if security) → push + PR.
+**Step 0** (git init + branch) → **4a** → **4b** (if `features.security`) → **4d** (if migrations) → **5d** (if `features.test`) → **6** (+ `/simplify` + commit) → **loop 7** (7a, 7a2, **no 7b**, 7c) + commit → **8** + commit → **9** (if `features.test`) → **10** (if `features.security`) → push + PR.

@@ -1,449 +1,818 @@
 ---
 name: angular
-description: Angular 18+ development guidelines, patterns, and best practices. Use when working with Angular frontend projects, building components, implementing state management with NgRx, setting up authentication, or configuring Angular applications. Includes PrimeNG component library usage, testing with Jest and Playwright, and design system integration.
+description: Modern Angular (v20+) expert with deep knowledge of Signals, Standalone Components, Zoneless applications, SSR/Hydration, and reactive patterns.
+risk: safe
+source: self
+date_added: '2026-02-27'
 ---
 
-# Angular Speciality - <your-project-name> Project
+# Angular Expert
 
-This file contains all Angular-specific configurations, patterns, and conventions for the **<your-project-name>** frontend system.
+Master modern Angular development with Signals, Standalone Components, Zoneless applications, SSR/Hydration, and the latest reactive patterns.
 
-## Technology Stack
+## When to Use This Skill
 
-- **Angular**: 18+ (standalone components, signals)
-- **Angular Material**: Custom theme, typography, and animations
-- **PrimeNG**: Preferred component library for UI components (https://primeng.org/)
-- **Angular CDK**: Advanced UI patterns
-- **Angular PWA**: Progressive Web App capabilities
-- **Angular Service Worker**: Offline functionality
+- Building new Angular applications (v20+)
+- Implementing Signals-based reactive patterns
+- Creating Standalone Components and migrating from NgModules
+- Configuring Zoneless Angular applications
+- Implementing SSR, prerendering, and hydration
+- Optimizing Angular performance
+- Adopting modern Angular patterns and best practices
 
-## State Management
+## Do Not Use This Skill When
 
-- **NgRx Store**: Centralized state management
-- **NgRx Effects**: Side effects handling
-- **NgRx Entity**: Normalized state
-- **NgRx Router Store**: Router state sync
-- **NgRx Store DevTools**: Debugging
+- Migrating from AngularJS (1.x) → use `angular-migration` skill
+- Working with legacy Angular apps that cannot upgrade
+- General TypeScript issues → use `typescript-expert` skill
 
-## Authentication & Security
+## Instructions
 
-- **angular-oauth2-oidc**: OAuth2/OIDC with PKCE flow
-- Token interceptor for API authentication
-- Auth guard for route protection
-- Auth service for authentication orchestration
+1. Assess the Angular version and project structure
+2. Apply modern patterns (Signals, Standalone, Zoneless)
+3. Implement with proper typing and reactivity
+4. Validate with build and tests
 
-## Testing Infrastructure
+## Safety
 
-- **Jest**: Unit testing with jest-preset-angular
-- **Testing Library Angular**: Component testing
-- **Playwright**: E2E testing with multiple browser support
-- Test coverage configuration
+- Always test changes in development before production
+- Gradual migration for existing apps (don't big-bang refactor)
+- Keep backward compatibility during transitions
 
-## Development Tools
+---
 
-- **ESLint**: Code quality with Angular-specific rules
-- **TypeScript**: Strict mode
-- **Module path aliases**: @app, @core, @shared, @features
+## Angular Version Timeline
 
-## Angular 18+ Best Practices
+| Version        | Release | Key Features                                           |
+| -------------- | ------- | ------------------------------------------------------ |
+| **Angular 20** | Q2 2025 | Signals stable, Zoneless stable, Incremental hydration |
+| **Angular 21** | Q4 2025 | Signals-first default, Enhanced SSR                    |
+| **Angular 22** | Q2 2026 | Signal Forms, Selectorless components                  |
 
-- Use standalone components by default for maximum modularity
-- Implement smart/container and presentational component patterns appropriately
-- Leverage Angular signals for reactive state management
-- Design components with single responsibility and clear interfaces
-- Apply composition over inheritance principles
-- Consider lazy loading and code splitting for optimal bundle sizes
-- Utilize control flow syntax (@if, @for, @switch) over structural directives
-- Implement proper dependency injection with inject() function and providedIn
-- Use defer blocks for optimized loading strategies
-- Leverage computed signals and effects appropriately
-- Apply proper change detection strategies (OnPush where beneficial)
-- Use the modern HttpClient with functional interceptors
+---
 
-## UI Component Libraries
+## 1. Signals: The New Reactive Primitive
 
-- **PrimeNG is the preferred component library** for building Angular UI components: https://primeng.org/
-- Follow PrimeNG documentation and patterns when implementing components
-- Leverage PrimeNG's comprehensive component suite for consistent UI/UX across the application
-- Import only the specific PrimeNG modules needed to optimize bundle size
+Signals are Angular's fine-grained reactivity system, replacing zone.js-based change detection.
 
-## Code Quality Standards
+### Core Concepts
 
-- Write self-documenting code with clear naming conventions
-- Add JSDoc comments for public APIs and complex logic
-- Implement proper TypeScript types - avoid 'any'
-- Use strict TypeScript configuration
-- Follow consistent code formatting and linting rules
-- Apply SOLID principles to component and service design
+```typescript
+import { signal, computed, effect } from "@angular/core";
 
-## Naming Conventions
+// Writable signal
+const count = signal(0);
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Components | `XxxComponent` | `NormativosListComponent` |
-| Services | `XxxService` | `NormativoService` |
-| Guards | `XxxGuard` | `AuthGuard` |
-| Interceptors | `XxxInterceptor` | `TokenInterceptor` |
-| Store (NgRx) | `featureKey`, action triads `load/success/failure` | `normativos`, `loadNormativos` |
-| Selectors | `selectXxx` | `selectNormativosList` |
+// Read value
+console.log(count()); // 0
 
-## User Experience Focus
+// Update value
+count.set(5); // Direct set
+count.update((v) => v + 1); // Functional update
 
-- Implement proper loading states and skeleton screens
-- Provide meaningful error messages and error boundaries
-- Ensure keyboard navigation and screen reader support (WCAG 2.1 AA minimum)
-- Design responsive layouts that work across devices
-- Optimize for Core Web Vitals (LCP, FID, CLS)
-- Implement proper form validation with clear user feedback
+// Computed (derived) signal
+const doubled = computed(() => count() * 2);
 
-## Testing Strategy
-
-- Write unit tests for components, services, and pipes
-- Test user interactions and edge cases
-- Use TestBed for component integration tests
-- Mock dependencies appropriately with spies/mocks compatible with the chosen test runner
-- Aim for meaningful test coverage, not just high percentages
-
-## Performance Optimization
-
-- Use OnPush change detection where appropriate
-- Implement virtual scrolling for large lists (CDK)
-- Optimize images and assets
-- Minimize bundle size through tree-shaking and lazy loading
-- Profile and optimize expensive operations
-- Use trackBy functions in *ngFor loops
-
-## Accessibility (REQUIRED)
-
-- MUST target WCAG 2.1 AA compliance minimum
-- MUST support full keyboard navigation
-- MUST provide visible focus indicators
-- MUST use semantic HTML and proper ARIA attributes
-- MUST ensure sufficient color contrast ratios
-
-## Error Handling & UX (REQUIRED)
-
-- MUST implement global `ErrorHandler` for unexpected errors
-- MUST use HTTP interceptor with retry logic for transient failures
-- MUST provide user feedback via snackbars/toasts for actions
-- MUST include 404 and 500 error pages
-- MUST handle loading states consistently
-- **CRITICAL: Backend Error Propagation**: When the backend returns an error response, the frontend MUST display the exact error message from the backend to the user without modification. Extract the error message from the HTTP error response and display it directly to the user.
-
-## Performance (REQUIRED)
-
-- MUST use OnPush change detection strategy where beneficial
-- MUST implement `trackBy` functions for all `*ngFor` loops
-- MUST use `cdk-virtual-scroll` for large lists (>100 items)
-- MUST configure route preloading strategies
-- MUST enforce build size budgets
-
-## Security (REQUIRED)
-
-- MUST avoid inline scripts and styles
-- MUST sanitize user input properly
-- MUST implement Content Security Policy headers
-- MUST validate all external data
-- MUST use HTTPS for all API communications
-
-## Testing Requirements (REQUIRED)
-
-- MUST write unit tests using Jest and Testing Library
-- MUST write E2E tests using Playwright
-- MUST use `data-testid` attributes for E2E selectors
-- MUST achieve minimum 70% code coverage for business logic
-- MUST test critical user flows with E2E tests
-
-## Design System & Branding (REQUIRED)
-
-### Design System - <your-project-name> Project
-
-**CRITICAL**: All <your-project-name> frontend projects MUST comply with the official **Design System**. The design system assets define the complete visual language for the <your-project-name> application.
-
-**Design System Assets Location**: `./design-system/Design System.zip` (reference)
-
-**Required Assets**:
-- **Colors** (`Color.png`): Color palette, primary/secondary colors, semantic colors, gradients
-- **Typography** (`Typography.png`): Font families, sizes, weights, line heights, text styles
-- **Layout** (`Layout.png`): Grid system, spacing scale, container widths, breakpoints
-- **Style** (`Style.png`): Visual principles, shadows, borders, radius, elevation
-- **Icons** (`Icons/` folder):
-  - `Design System.svg`: Icon system documentation
-  - `Icons.png`: Complete icon library reference
-- **Logo** (`Logo/` folder):
-  - `Logo.png`: Primary logo asset
-  - `Property 1=Positive.svg`: Logo positive variant (light backgrounds)
-  - `Property 1=Negative.svg`: Logo negative variant (dark backgrounds)
-
-**Implementation Requirements**:
-- **MUST** extract color palette from `Color.png` and implement as CSS custom properties
-- **MUST** configure Angular Material theme to match Design System colors
-- **MUST** implement typography system from `Typography.png` (font families, sizes, weights)
-- **MUST** follow layout guidelines from `Layout.png` (grid, spacing, containers)
-- **MUST** use Design System icons from `Icons/` folder
-- **MUST** use appropriate logo variant from `Logo/` folder based on background
-- **MUST** follow style guidelines from `Style.png` for shadows, borders, and visual effects
-- **MUST** ensure all UI components comply with design system specifications
-
-## Project Bootstrap & Setup
-
-### Prerequisites
-
-- Node 20+, pnpm 9 via corepack, Angular CLI (see version above)
-- TypeScript strict mode enabled
-- ESLint configured for code quality
-
-### Bootstrap Commands (Windows PowerShell)
-
-```powershell
-# pnpm via corepack
-corepack enable
-corepack prepare pnpm@9 --activate
-
-# Create Angular app
-pnpm dlx @angular/cli@latest new <projectName> `
-  --routing --standalone --style=scss --package-manager=pnpm
-cd <projectName>
-
-# Angular Material (custom theme, typography, animations) - REQUIRED
-pnpm ng add @angular/material@latest --theme custom --typography true --animations true
-
-# PrimeNG - REQUIRED (preferred component library for Angular components: https://primeng.org/)
-pnpm add primeng primeicons
-
-# PWA - REQUIRED
-pnpm ng add @angular/pwa@latest
-
-# ESLint - REQUIRED
-pnpm ng add @angular-eslint/schematics@latest
-
-# Jest + Testing Library - REQUIRED
-pnpm add -D jest jest-preset-angular ts-jest @types/jest @testing-library/angular @testing-library/jest-dom
-
-# Playwright (E2E) - REQUIRED
-pnpm add -D @playwright/test
-pnpm exec playwright install
-
-# NgRx Complete Suite - REQUIRED
-pnpm ng add @ngrx/store@latest
-pnpm add @ngrx/effects@latest @ngrx/entity@latest @ngrx/router-store@latest @ngrx/store-devtools@latest
-
-# OAuth2/OIDC (PKCE) - REQUIRED
-pnpm add angular-oauth2-oidc
+// Effect (side effects)
+effect(() => {
+  console.log(`Count changed to: ${count()}`);
+});
 ```
 
-### Required package.json Scripts
+### Signal-Based Inputs and Outputs
 
-```json
-{
-  "scripts": {
-    "start": "ng serve",
-    "build": "ng build",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui",
-    "e2e:report": "playwright show-report",
-    "lint": "ng lint"
+```typescript
+import { Component, input, output, model } from "@angular/core";
+
+@Component({
+  selector: "app-user-card",
+  standalone: true,
+  template: `
+    <div class="card">
+      <h3>{{ name() }}</h3>
+      <span>{{ role() }}</span>
+      <button (click)="select.emit(id())">Select</button>
+    </div>
+  `,
+})
+export class UserCardComponent {
+  // Signal inputs (read-only)
+  id = input.required<string>();
+  name = input.required<string>();
+  role = input<string>("User"); // With default
+
+  // Output
+  select = output<string>();
+
+  // Two-way binding (model)
+  isSelected = model(false);
+}
+
+// Usage:
+// <app-user-card [id]="'123'" [name]="'John'" [(isSelected)]="selected" />
+```
+
+### Signal Queries (ViewChild/ContentChild)
+
+```typescript
+import {
+  Component,
+  viewChild,
+  viewChildren,
+  contentChild,
+} from "@angular/core";
+
+@Component({
+  selector: "app-container",
+  standalone: true,
+  template: `
+    <input #searchInput />
+    <app-item *ngFor="let item of items()" />
+  `,
+})
+export class ContainerComponent {
+  // Signal-based queries
+  searchInput = viewChild<ElementRef>("searchInput");
+  items = viewChildren(ItemComponent);
+  projectedContent = contentChild(HeaderDirective);
+
+  focusSearch() {
+    this.searchInput()?.nativeElement.focus();
   }
 }
 ```
 
-### Required Folder Structure
+### When to Use Signals vs RxJS
 
-```
-<projectName>/
-├── src/
-│   ├── app/
-│   │   ├── core/                    [REQUIRED]
-│   │   │   ├── auth/                [REQUIRED]
-│   │   │   │   ├── auth.service.ts
-│   │   │   │   ├── auth.guard.ts
-│   │   │   │   └── token.interceptor.ts
-│   │   │   ├── api/                 [REQUIRED]
-│   │   │   │   └── api.service.ts
-│   │   │   └── config/              [REQUIRED]
-│   │   │       ├── app-config.service.ts
-│   │   │       └── (loaded in app.config.ts)
-│   │   ├── shared/                  [REQUIRED]
-│   │   │   ├── components/
-│   │   │   ├── directives/
-│   │   │   ├── pipes/
-│   │   │   └── models/
-│   │   ├── features/                [REQUIRED]
-│   │   │   ├── dashboard/
-│   │   │   ├── normativos/
-│   │   │   │   ├── models/
-│   │   │   │   └── services/
-│   │   │   ├── matrizes/
-│   │   │   └── tabelas/
-│   │   ├── layout/                  [REQUIRED]
-│   │   ├── app.component.ts
-│   │   ├── app.config.ts            [REQUIRED with specific providers]
-│   │   └── app.routes.ts
-│   └── (assets/ or public/)         [REQUIRED]
-│       └── config.json              [REQUIRED]
-├── e2e/                             [REQUIRED]
-│   └── (Playwright tests)
-├── jest.config.ts                   [REQUIRED]
-├── setup-jest.ts                    [REQUIRED]
-├── playwright.config.ts             [REQUIRED]
-├── eslint.config.js                 [REQUIRED]
-├── tsconfig.json                    [REQUIRED with strict mode]
-├── ngsw-config.json                 [REQUIRED for PWA]
-└── package.json
-```
+| Use Case                | Signals         | RxJS                             |
+| ----------------------- | --------------- | -------------------------------- |
+| Local component state   | ✅ Preferred    | Overkill                         |
+| Derived/computed values | ✅ `computed()` | `combineLatest` works            |
+| Side effects            | ✅ `effect()`   | `tap` operator                   |
+| HTTP requests           | ❌              | ✅ HttpClient returns Observable |
+| Event streams           | ❌              | ✅ `fromEvent`, operators        |
+| Complex async flows     | ❌              | ✅ `switchMap`, `mergeMap`       |
 
-### Required app.config.ts Configuration
+---
 
-The app.config.ts MUST include ALL of these providers:
+## 2. Standalone Components
+
+Standalone components are self-contained and don't require NgModule declarations.
+
+### Creating Standalone Components
 
 ```typescript
-import { ApplicationConfig, provideZoneChangeDetection, isDevMode, APP_INITIALIZER } from '@angular/core';
-import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
-import { provideAnimations } from '@angular/platform-browser/animations';
-import { provideServiceWorker } from '@angular/service-worker';
-import { provideStore } from '@ngrx/store';
-import { provideEffects } from '@ngrx/effects';
-import { provideStoreDevtools } from '@ngrx/store-devtools';
-import { AppConfigService } from './core/config/app-config.service';
+import { Component } from "@angular/core";
+import { CommonModule } from "@angular/common";
+import { RouterLink } from "@angular/router";
 
-export function initializeApp(appConfig: AppConfigService) {
-  return () => appConfig.loadConfig();
+@Component({
+  selector: "app-header",
+  standalone: true,
+  imports: [CommonModule, RouterLink], // Direct imports
+  template: `
+    <header>
+      <a routerLink="/">Home</a>
+      <a routerLink="/about">About</a>
+    </header>
+  `,
+})
+export class HeaderComponent {}
+```
+
+### Bootstrapping Without NgModule
+
+```typescript
+// main.ts
+import { bootstrapApplication } from "@angular/platform-browser";
+import { provideRouter } from "@angular/router";
+import { provideHttpClient } from "@angular/common/http";
+import { AppComponent } from "./app/app.component";
+import { routes } from "./app/app.routes";
+
+bootstrapApplication(AppComponent, {
+  providers: [provideRouter(routes), provideHttpClient()],
+});
+```
+
+### Lazy Loading Standalone Components
+
+```typescript
+// app.routes.ts
+import { Routes } from "@angular/router";
+
+export const routes: Routes = [
+  {
+    path: "dashboard",
+    loadComponent: () =>
+      import("./dashboard/dashboard.component").then(
+        (m) => m.DashboardComponent,
+      ),
+  },
+  {
+    path: "admin",
+    loadChildren: () =>
+      import("./admin/admin.routes").then((m) => m.ADMIN_ROUTES),
+  },
+];
+```
+
+---
+
+## 3. Zoneless Angular
+
+Zoneless applications don't use zone.js, improving performance and debugging.
+
+### Enabling Zoneless Mode
+
+```typescript
+// main.ts
+import { bootstrapApplication } from "@angular/platform-browser";
+import { provideZonelessChangeDetection } from "@angular/core";
+import { AppComponent } from "./app/app.component";
+
+bootstrapApplication(AppComponent, {
+  providers: [provideZonelessChangeDetection()],
+});
+```
+
+### Zoneless Component Patterns
+
+```typescript
+import { Component, signal, ChangeDetectionStrategy } from "@angular/core";
+
+@Component({
+  selector: "app-counter",
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div>Count: {{ count() }}</div>
+    <button (click)="increment()">+</button>
+  `,
+})
+export class CounterComponent {
+  count = signal(0);
+
+  increment() {
+    this.count.update((v) => v + 1);
+    // No zone.js needed - Signal triggers change detection
+  }
 }
+```
+
+### Key Zoneless Benefits
+
+- **Performance**: No zone.js patches on async APIs
+- **Debugging**: Clean stack traces without zone wrappers
+- **Bundle size**: Smaller without zone.js (~15KB savings)
+- **Interoperability**: Better with Web Components and micro-frontends
+
+---
+
+## 4. Server-Side Rendering & Hydration
+
+### SSR Setup with Angular CLI
+
+```bash
+ng add @angular/ssr
+```
+
+### Hydration Configuration
+
+```typescript
+// app.config.ts
+import { ApplicationConfig } from "@angular/core";
+import {
+  provideClientHydration,
+  withEventReplay,
+} from "@angular/platform-browser";
 
 export const appConfig: ApplicationConfig = {
-  providers: [
-    provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes),
-    provideHttpClient(withInterceptorsFromDi()),
-    provideAnimations(),
-    provideServiceWorker('ngsw-worker.js', {
-      enabled: !isDevMode(),
-      registrationStrategy: 'registerWhenStable:30000'
-    }),
-    provideStore(),
-    provideEffects(),
-    provideStoreDevtools({ maxAge: 25, logOnly: !isDevMode() }),
-    {
-      provide: APP_INITIALIZER,
-      useFactory: initializeApp,
-      deps: [AppConfigService],
-      multi: true
-    }
-  ]
+  providers: [provideClientHydration(withEventReplay())],
 };
 ```
 
-### Runtime Configuration
+### Incremental Hydration (v20+)
 
-- MUST provide `config.json` in public/ or assets/ with `apiUrl`, `auth.authority`, etc.
-- MUST load configuration at bootstrap with `APP_INITIALIZER` in `app.config.ts`
-- MUST expose configuration via `AppConfigService`
+```typescript
+import { Component } from "@angular/core";
 
-### NgRx Conventions (REQUIRED)
+@Component({
+  selector: "app-page",
+  standalone: true,
+  template: `
+    <app-hero />
 
-- MUST use feature stores with proper module isolation
-- MUST use `EntityAdapter` for normalized collections
-- MUST implement memoized selectors for derived state
-- MUST handle side effects with NgRx Effects
-- MUST follow action triads pattern: `load/success/failure`
-- Consider using `correlationId` for request idempotency
+    @defer (hydrate on viewport) {
+      <app-comments />
+    }
 
-### Theming & UI (REQUIRED)
+    @defer (hydrate on interaction) {
+      <app-chat-widget />
+    }
+  `,
+})
+export class PageComponent {}
+```
 
-- MUST use Angular Material with custom theme configuration
-- MUST use PrimeNG as the preferred component library for Angular components: https://primeng.org/
-- MUST support dark mode toggle functionality
-- MUST use CSS variables for theming (colors, spacing, typography)
-- MUST ensure responsive layout across all screen sizes
-- MUST maintain consistent design system
+### Hydration Triggers
 
-### Playwright E2E Testing Policy
+| Trigger          | When to Use                             |
+| ---------------- | --------------------------------------- |
+| `on idle`        | Low-priority, hydrate when browser idle |
+| `on viewport`    | Hydrate when element enters viewport    |
+| `on interaction` | Hydrate on first user interaction       |
+| `on hover`       | Hydrate when user hovers                |
+| `on timer(ms)`   | Hydrate after specified delay           |
 
-- For every new feature, user flow, or regression fix, add or update Playwright E2E tests in the `e2e` suite
-- Prefer resilient selectors using `data-testid` attributes; avoid brittle text/XPath selectors
-- Cover at minimum:
-  - Happy path for core user flow
-  - Validation and error states relevant to the change
-  - Authorization/visibility behavior if applicable
-- Keep E2E fast and deterministic: isolate state, mock external calls at the network layer when needed, and reset data between tests
+---
 
-Example test skeleton:
-```ts
-// e2e/specs/normativos-list.spec.ts
-import { test, expect } from '@playwright/test';
+## 5. Modern Routing Patterns
 
-test.describe('Normativos - Listagem', () => {
-  test('deve listar e filtrar normativos', async ({ page }) => {
-    await page.goto('/');
-    await page.getByTestId('menu-normativos').click();
-    await expect(page.getByTestId('normativos-title')).toBeVisible();
+### Functional Route Guards
 
-    await page.getByTestId('filter-referencia').fill('DL');
-    await page.getByTestId('apply-filters').click();
+```typescript
+// auth.guard.ts
+import { inject } from "@angular/core";
+import { Router, CanActivateFn } from "@angular/router";
+import { AuthService } from "./auth.service";
 
-    await expect(page.getByTestId('grid-row')).toHaveCountGreaterThan(0);
+export const authGuard: CanActivateFn = (route, state) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  if (auth.isAuthenticated()) {
+    return true;
+  }
+
+  return router.createUrlTree(["/login"], {
+    queryParams: { returnUrl: state.url },
+  });
+};
+
+// Usage in routes
+export const routes: Routes = [
+  {
+    path: "dashboard",
+    loadComponent: () => import("./dashboard.component"),
+    canActivate: [authGuard],
+  },
+];
+```
+
+### Route-Level Data Resolvers
+
+```typescript
+import { inject } from '@angular/core';
+import { ResolveFn } from '@angular/router';
+import { UserService } from './user.service';
+import { User } from './user.model';
+
+export const userResolver: ResolveFn<User> = (route) => {
+  const userService = inject(UserService);
+  return userService.getUser(route.paramMap.get('id')!);
+};
+
+// In routes
+{
+  path: 'user/:id',
+  loadComponent: () => import('./user.component'),
+  resolve: { user: userResolver }
+}
+
+// In component
+export class UserComponent {
+  private route = inject(ActivatedRoute);
+  user = toSignal(this.route.data.pipe(map(d => d['user'])));
+}
+```
+
+---
+
+## 6. Dependency Injection Patterns
+
+### Modern inject() Function
+
+```typescript
+import { Component, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { UserService } from './user.service';
+
+@Component({...})
+export class UserComponent {
+  // Modern inject() - no constructor needed
+  private http = inject(HttpClient);
+  private userService = inject(UserService);
+
+  // Works in any injection context
+  users = toSignal(this.userService.getUsers());
+}
+```
+
+### Injection Tokens for Configuration
+
+```typescript
+import { InjectionToken, inject } from "@angular/core";
+
+// Define token
+export const API_BASE_URL = new InjectionToken<string>("API_BASE_URL");
+
+// Provide in config
+bootstrapApplication(AppComponent, {
+  providers: [{ provide: API_BASE_URL, useValue: "https://api.example.com" }],
+});
+
+// Inject in service
+@Injectable({ providedIn: "root" })
+export class ApiService {
+  private baseUrl = inject(API_BASE_URL);
+
+  get(endpoint: string) {
+    return this.http.get(`${this.baseUrl}/${endpoint}`);
+  }
+}
+```
+
+---
+
+## 7. Component Composition & Reusability
+
+### Content Projection (Slots)
+
+```typescript
+@Component({
+  selector: 'app-card',
+  template: `
+    <div class="card">
+      <div class="header">
+        <!-- Select by attribute -->
+        <ng-content select="[card-header]"></ng-content>
+      </div>
+      <div class="body">
+        <!-- Default slot -->
+        <ng-content></ng-content>
+      </div>
+    </div>
+  `
+})
+export class CardComponent {}
+
+// Usage
+<app-card>
+  <h3 card-header>Title</h3>
+  <p>Body content</p>
+</app-card>
+```
+
+### Host Directives (Composition)
+
+```typescript
+// Reusable behaviors without inheritance
+@Directive({
+  standalone: true,
+  selector: '[appTooltip]',
+  inputs: ['tooltip'] // Signal input alias
+})
+export class TooltipDirective { ... }
+
+@Component({
+  selector: 'app-button',
+  standalone: true,
+  hostDirectives: [
+    {
+      directive: TooltipDirective,
+      inputs: ['tooltip: title'] // Map input
+    }
+  ],
+  template: `<ng-content />`
+})
+export class ButtonComponent {}
+```
+
+---
+
+## 8. State Management Patterns
+
+### Signal-Based State Service
+
+```typescript
+import { Injectable, signal, computed } from "@angular/core";
+
+interface AppState {
+  user: User | null;
+  theme: "light" | "dark";
+  notifications: Notification[];
+}
+
+@Injectable({ providedIn: "root" })
+export class StateService {
+  // Private writable signals
+  private _user = signal<User | null>(null);
+  private _theme = signal<"light" | "dark">("light");
+  private _notifications = signal<Notification[]>([]);
+
+  // Public read-only computed
+  readonly user = computed(() => this._user());
+  readonly theme = computed(() => this._theme());
+  readonly notifications = computed(() => this._notifications());
+  readonly unreadCount = computed(
+    () => this._notifications().filter((n) => !n.read).length,
+  );
+
+  // Actions
+  setUser(user: User | null) {
+    this._user.set(user);
+  }
+
+  toggleTheme() {
+    this._theme.update((t) => (t === "light" ? "dark" : "light"));
+  }
+
+  addNotification(notification: Notification) {
+    this._notifications.update((n) => [...n, notification]);
+  }
+}
+```
+
+### Component Store Pattern with Signals
+
+```typescript
+import { Injectable, signal, computed, inject } from "@angular/core";
+import { HttpClient } from "@angular/common/http";
+import { toSignal } from "@angular/core/rxjs-interop";
+
+@Injectable()
+export class ProductStore {
+  private http = inject(HttpClient);
+
+  // State
+  private _products = signal<Product[]>([]);
+  private _loading = signal(false);
+  private _filter = signal("");
+
+  // Selectors
+  readonly products = computed(() => this._products());
+  readonly loading = computed(() => this._loading());
+  readonly filteredProducts = computed(() => {
+    const filter = this._filter().toLowerCase();
+    return this._products().filter((p) =>
+      p.name.toLowerCase().includes(filter),
+    );
+  });
+
+  // Actions
+  loadProducts() {
+    this._loading.set(true);
+    this.http.get<Product[]>("/api/products").subscribe({
+      next: (products) => {
+        this._products.set(products);
+        this._loading.set(false);
+      },
+      error: () => this._loading.set(false),
+    });
+  }
+
+  setFilter(filter: string) {
+    this._filter.set(filter);
+  }
+}
+```
+
+---
+
+## 9. Forms with Signals (Coming in v22+)
+
+### Current Reactive Forms
+
+```typescript
+import { Component, inject } from "@angular/core";
+import { FormBuilder, Validators, ReactiveFormsModule } from "@angular/forms";
+
+@Component({
+  selector: "app-user-form",
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <input formControlName="name" placeholder="Name" />
+      <input formControlName="email" type="email" placeholder="Email" />
+      <button [disabled]="form.invalid">Submit</button>
+    </form>
+  `,
+})
+export class UserFormComponent {
+  private fb = inject(FormBuilder);
+
+  form = this.fb.group({
+    name: ["", Validators.required],
+    email: ["", [Validators.required, Validators.email]],
+  });
+
+  onSubmit() {
+    if (this.form.valid) {
+      console.log(this.form.value);
+    }
+  }
+}
+```
+
+### Signal-Aware Form Patterns (Preview)
+
+```typescript
+// Future Signal Forms API (experimental)
+import { Component, signal } from '@angular/core';
+
+@Component({...})
+export class SignalFormComponent {
+  name = signal('');
+  email = signal('');
+
+  // Computed validation
+  isValid = computed(() =>
+    this.name().length > 0 &&
+    this.email().includes('@')
+  );
+
+  submit() {
+    if (this.isValid()) {
+      console.log({ name: this.name(), email: this.email() });
+    }
+  }
+}
+```
+
+---
+
+## 10. Performance Optimization
+
+### Change Detection Strategies
+
+```typescript
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  // Only checks when:
+  // 1. Input signal/reference changes
+  // 2. Event handler runs
+  // 3. Async pipe emits
+  // 4. Signal value changes
+})
+```
+
+### Defer Blocks for Lazy Loading
+
+```typescript
+@Component({
+  template: `
+    <!-- Immediate loading -->
+    <app-header />
+
+    <!-- Lazy load when visible -->
+    @defer (on viewport) {
+      <app-heavy-chart />
+    } @placeholder {
+      <div class="skeleton" />
+    } @loading (minimum 200ms) {
+      <app-spinner />
+    } @error {
+      <p>Failed to load chart</p>
+    }
+  `
+})
+```
+
+### NgOptimizedImage
+
+```typescript
+import { NgOptimizedImage } from '@angular/common';
+
+@Component({
+  imports: [NgOptimizedImage],
+  template: `
+    <img
+      ngSrc="hero.jpg"
+      width="800"
+      height="600"
+      priority
+    />
+
+    <img
+      ngSrc="thumbnail.jpg"
+      width="200"
+      height="150"
+      loading="lazy"
+      placeholder="blur"
+    />
+  `
+})
+```
+
+---
+
+## 11. Testing Modern Angular
+
+### Testing Signal Components
+
+```typescript
+import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { CounterComponent } from "./counter.component";
+
+describe("CounterComponent", () => {
+  let component: CounterComponent;
+  let fixture: ComponentFixture<CounterComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [CounterComponent], // Standalone import
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(CounterComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it("should increment count", () => {
+    expect(component.count()).toBe(0);
+
+    component.increment();
+
+    expect(component.count()).toBe(1);
+  });
+
+  it("should update DOM on signal change", () => {
+    component.count.set(5);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement.querySelector(".count");
+    expect(el.textContent).toContain("5");
   });
 });
 ```
 
-Recommended selectors in templates:
-```html
-<h1 data-testid="normativos-title">Normativos</h1>
-<input data-testid="filter-referencia" />
-<button data-testid="apply-filters">Pesquisar</button>
-<tr *ngFor="let row of rows; trackBy: trackById" data-testid="grid-row"></tr>
+### Testing with Signal Inputs
+
+```typescript
+import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { ComponentRef } from "@angular/core";
+import { UserCardComponent } from "./user-card.component";
+
+describe("UserCardComponent", () => {
+  let fixture: ComponentFixture<UserCardComponent>;
+  let componentRef: ComponentRef<UserCardComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [UserCardComponent],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(UserCardComponent);
+    componentRef = fixture.componentRef;
+
+    // Set signal inputs via setInput
+    componentRef.setInput("id", "123");
+    componentRef.setInput("name", "John Doe");
+
+    fixture.detectChanges();
+  });
+
+  it("should display user name", () => {
+    const el = fixture.nativeElement.querySelector("h3");
+    expect(el.textContent).toContain("John Doe");
+  });
+});
 ```
 
-## <your-project-name> Technical Context
+---
 
-### Domain Concepts
-The <your-project-name> system manages regulatory and legal norms with the following core concepts:
+## Best Practices Summary
 
-**Core Entities**:
-- **Normativos**: Regulatory documents (Laws, Decrees, Resolutions)
-- **Matrizes**: Thematic matrices that group related normativos
-- **Categorias**: Classification categories for organizing content
-- **Temas**: Themes within categories for finer granularity
-- **Obrigações**: Obligations derived from normativos and matrices
-- **Entidades**: Issuing entities/organizations
-- **Tipos de Normativo**: Types of regulatory documents
+| Pattern              | ✅ Do                          | ❌ Don't                        |
+| -------------------- | ------------------------------ | ------------------------------- |
+| **State**            | Use Signals for local state    | Overuse RxJS for simple state   |
+| **Components**       | Standalone with direct imports | Bloated SharedModules           |
+| **Change Detection** | OnPush + Signals               | Default CD everywhere           |
+| **Lazy Loading**     | `@defer` and `loadComponent`   | Eager load everything           |
+| **DI**               | `inject()` function            | Constructor injection (verbose) |
+| **Inputs**           | `input()` signal function      | `@Input()` decorator (legacy)   |
+| **Zoneless**         | Enable for new projects        | Force on legacy without testing |
 
-**Key Features**:
-- Search and filter normativos by multiple criteria
-- Characterize normativos (assign categories, themes, obligations)
-- Manage matrices and their relationships
-- Track obligations and their normative sources
-- Support versioning and soft delete (I_REG_ATIV)
+---
 
-### Backend API Integration
-- **Base URL**: Configured via runtime `config.json` (`apiUrl`)
-- **API Version**: `/api/v1/`
-- **Authentication**: OAuth2/OIDC with PKCE flow (JWT Bearer tokens)
-- **Error Format**: Standardized ErrorResponseDto from backend
-- **Pagination**: Standard format (page, pageSize, totalCount, hasNext, hasPrevious)
+## Resources
 
-### Required Configuration Keys (`assets/public/config.json`)
-```json
-{
-  "apiUrl": "http://localhost:5000/api/v1",
-  "auth": {
-    "authority": "https://auth-server.example.com",
-    "clientId": "<your-project-name>-frontend",
-    "scope": "openid profile email <your-project-name>-api",
-    "responseType": "code",
-    "redirectUri": "http://localhost:4200/auth/callback",
-    "postLogoutRedirectUri": "http://localhost:4200",
-    "usePkce": true
-  }
-}
-```
+- [Angular.dev Documentation](https://angular.dev)
+- [Angular Signals Guide](https://angular.dev/guide/signals)
+- [Angular SSR Guide](https://angular.dev/guide/ssr)
+- [Angular Update Guide](https://angular.dev/update-guide)
+- [Angular Blog](https://blog.angular.dev)
 
-### Project File References
-- **Technical Context Document**: `/documentation/docs/<your-project-name> - Contexto técnico - en-us.md`
-- **OpenAPI Specifications**: `/api/<your-project-name>-rest-api.yaml` and domain-specific files
-- **Business Requirements**: `/documentation/specs/{req-id-name}/req.md`
-- **Frontend Technical Specs**: `.claude/docs/requirements/{req-id-name}/{req-id}-frontend-tech-spec.md`
-- **Backend Technical Specs**: `.claude/docs/requirements/{req-id-name}/{req-id}-backend-tech-spec.md`
+---
+
+## Common Troubleshooting
+
+| Issue                          | Solution                                            |
+| ------------------------------ | --------------------------------------------------- |
+| Signal not updating UI         | Ensure `OnPush` + call signal as function `count()` |
+| Hydration mismatch             | Check server/client content consistency             |
+| Circular dependency            | Use `inject()` with `forwardRef`                    |
+| Zoneless not detecting changes | Trigger via signal updates, not mutations           |
+| SSR fetch fails                | Use `TransferState` or `withFetch()`                |

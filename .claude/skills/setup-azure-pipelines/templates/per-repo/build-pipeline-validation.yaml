@@ -1,0 +1,32 @@
+# =============================================================
+# STARTER TEMPLATE — per-repo/build-pipeline-validation.yaml
+# PR validation entry-point — build + test only, no deploy.
+#
+# THIS FILE BELONGS IN: {repo-name}/Pipelines/build-pipeline-validation.yaml
+# It must be committed to the {repo-name} app repository.
+# Triggered only by branch policies on PRs (trigger: none).
+#
+# CONFIGURE: items marked with # CONFIGURE:
+# =============================================================
+
+# =============================================================
+# THIS FILE BELONGS IN: # CONFIGURE: {repo-name}/Pipelines/build-pipeline-validation.yaml
+# Commit this file to the {repo-name} repository.
+# Generated here for convenience — do not run it from this path.
+# =============================================================
+
+trigger: none
+
+name: $(Build.DefinitionName)_$(SourceBranchName)_Validation_$(Date:yyyyMMdd)$(Rev:.r)
+
+resources:
+  repositories:
+    - repository: # CONFIGURE: template repo name (e.g. infra)
+      type: git
+      name: # CONFIGURE: {AzureDevOps-project}/{template-repo} (e.g. AppMod/infra)
+      ref: 'refs/heads/main'  # CONFIGURE: template branch (e.g. main, develop)
+
+extends:
+  template: 'setup/azure/pipelines/templates/main-pipeline.yaml@# CONFIGURE: template-repo-name'
+  parameters:
+    ExecutionType: Validation

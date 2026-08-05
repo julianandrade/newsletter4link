@@ -70,11 +70,20 @@ newsletter4link/
 ├── scripts/                # Maintenance and setup scripts
 ├── .claude/                # AI configuration (AIDLC, from common-ai-configs)
 │   ├── agents/             # Agents by domain: backend, frontend, general, tests, security
-│   ├── commands/           # complete-development, frontend-development, backend-development
-│   ├── docs/requirements/  # Requirement artifacts per RQ, the AIDLC working set
+│   ├── commands/           # complete-development, hollow-development, phased-development, tracks
+│   ├── docs/requirements/  # RQ-002..RQ-007, the six live requirements, legacy source shape
+│   ├── features.json       # The four AIDLC feature flags, see docs/AIDLC.md
+│   ├── rules/              # Cloud-provider rules, read before infra work
 │   └── skills/             # Reusable skills, per flow step
-└── docs/                   # Documentation
-    ├── AIDLC.md            # The development flow this project follows
+└── docs/                   # PATH_DOCS, the AIDLC document root
+    ├── 0-work/             # Never read, never write, no exceptions
+    ├── 1-analysis/
+    │   └── artefacts/      # BI BR DE EV NTI SCR TX, the read-only catalog
+    ├── 3-design/
+    │   └── technical-documentation/stack.md   # Authoritative on how code is built here
+    ├── 4-implementation/
+    │   └── development/    # Per-transaction working folders for new TX/NTI work
+    ├── AIDLC.md            # The development flow, and where this project diverges
     ├── history/            # Superseded status notes, kept for the record
     ├── reference/          # Newsletter examples and external material
     └── screenshots/        # UI captures
@@ -86,36 +95,70 @@ newsletter4link/
 
 This project follows **AIDLC**, the flow defined in
 [common-ai-configs](../common-ai-configs/How-TOs/Development-flux.md). The
-configuration under `.claude/` is a copy of that repository's, so the agents,
-commands and skills are the same ones used across Linkroad projects.
+configuration under `.claude/` is a copy of that repository's
+`feature/hollow-development` branch, synced 5 August 2026 at commit `84ebab1`, so
+the agents, commands and skills are the same ones used across Linkroad projects.
 
-Requirement artifacts live in `.claude/docs/requirements/{req-id}/`:
+**Read [docs/AIDLC.md](docs/AIDLC.md) before running any flow.** It records the
+five places this project deliberately diverges from the shared configuration.
+Those divergences are decisions, not drift, and two of them will send you to the
+wrong path if you skip it.
+
+### Two speeds
+
+| Situation | Use |
+|---|---|
+| One artefact, working code fast, no paper trail | `/hollow-development <artefact-id>` |
+| The whole catalog, no human in the loop | `/phased-development` |
+| A transaction needing clarification, architecture, an API contract and traceability | `/complete-development <tx-id>` then `/frontend-development` |
+| A transaction that must be split | `/complete-development-tree` |
+
+The full-rigor track, per step:
 
 | Step | Who | Produces |
 |---|---|---|
-| 1. Clarify | `@product-owner` | `{req-id}-clarifications.md` |
-| 2. Specify | `@product-owner` | `{req-id}-complete-requirement.md` |
-| 3. API contract | `@api-specialist` | OpenAPI spec, when a new API surface is involved |
-| 4. Architecture | `@frontend-architect` | `{req-id}-tech-spec.md` |
-| 5. Test plan | `@test-plan` | Robot `.robot` files under the requirement's `tests/` |
+| 0. Validate | `@product-owner` | Reference-integrity check, or a split recommendation |
+| 1. Clarify | `@product-owner` | `{tx-id}-clarifications.md`, or nothing when the catalog leaves no gaps |
+| 3. Specify | `@product-owner` | `{tx-id}-complete-transaction.md` |
+| 3c. Technical solution | `@solution-architect` | `{tx-id}-technical-solution-transaction.md` |
+| 4api. API contract | `@api-specialist` | OpenAPI spec, when a new API surface is involved |
+| 4a. Architecture | `@frontend-architect` | `{tx-id}-frontend-tech-spec.md` |
+| 5. Test plan | `@test-plan` | Robot `.robot` files under the working folder's `tests/` |
 | 6. Implement | `@frontend-developer` | Code plus unit tests |
 | 7. Standardize | `@ui-ux-designer` | UI consistency against the design vocabulary |
-| 8. Tag | `@code-tagger` | `RQ-XXX` traceability tags in the code |
+| 8. Tag | `@code-tagger` | Traceability tags in the code |
 | 9. Review | `@frontend-code-reviewer` | Review against the tech spec |
 
-Entry points: `/complete-development` for the requirement trunk, then
-`/frontend-development` for the track. Use `@` to route to an agent explicitly,
-otherwise Claude guesses.
+Use `@` to route to an agent explicitly, otherwise Claude guesses.
 
-See [docs/AIDLC.md](docs/AIDLC.md) for how the flow maps onto this stack.
+### Where the artifacts live
 
-**One caveat worth knowing:** the shared agent set was written for .NET and
-Angular. `backend-developer` targets .NET 8 Clean Architecture and
-`frontend-developer` targets Angular 18, neither of which applies here. This is
-a Next.js and TypeScript codebase, so treat those two agents' stack instructions
-as inapplicable and their process as the part to follow. Every other agent
-(product-owner, api-specialist, architects, code-tagger, reviewers, the test and
-security sets) is stack-agnostic.
+- **New work** uses the artefact catalog at `docs/1-analysis/artefacts/{BI,BR,DE,EV,NTI,SCR,TX}/`,
+  which is **read-only** to every flow, and writes to `docs/4-implementation/development/{tx-id}/`.
+  The catalog is scaffolded but empty.
+- **RQ-002 through RQ-007 stay at `.claude/docs/requirements/{req-id}/`** with their
+  239 `RQ-XXX` code tags untouched. They take the legacy free-prose branch, which the
+  flow selects automatically because no `RQ-XXX` matches a catalog file. When a flow
+  asks for the working folder of an `RQ-XXX`, read `.claude/docs/requirements/{req-id}/`.
+- **Feature flags** (`clarifications`, `security`, `test`, `confirm`) are in
+  `.claude/features.json`, not `settings.json`, which rejects the key. `{{VARIABLE}}`
+  placeholders still resolve from `env` in `settings.json`.
+- **`docs/0-work/`** is never read, written, listed or referenced. No exceptions.
+
+### Two caveats worth knowing
+
+**The shared agents assume a stack this project does not have.**
+`backend-developer` targets .NET 8 Clean Architecture and `frontend-developer`
+targets Angular 18. Follow their process, ignore their stack instructions. The new
+`.claude/skills/frontend/react/SKILL.md` does apply and governs generated frontend
+code. Every other agent (product-owner, api-specialist, architects, code-tagger,
+reviewers, the test and security sets) is stack-agnostic.
+
+**`/hollow-development` is not TDD and cannot ask questions.** Implementation and
+tests are produced in the same pass, and any gap, an unresolved reference, an
+ambiguous contract, a contradiction with `docs/3-design/technical-documentation/stack.md`,
+is a hard stop rather than a clarification round. Use `/complete-development` when
+the work needs a conversation.
 
 ---
 

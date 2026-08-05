@@ -1,0 +1,108 @@
+steps:
+  - task: Cache@2
+    displayName: "Cache Maven local repo"
+    condition: eq(variables.useCache, true)
+    inputs:
+      key: 'maven | "$(Agent.OS)" | **/pom.xml'
+      restoreKeys: |
+        maven | "$(Agent.OS)"
+        maven
+      path: $(MAVEN_CACHE_FOLDER)
+
+  - task: Maven@4
+    displayName: "Maven — build & test"
+    continueOnError: false
+    inputs:
+      mavenPomFile: "pom.xml"
+      goals: "clean deploy"
+      options: "$(MAVEN_OPTS)"
+      javaHomeOption: "path"
+      jdkDirectory: "$(Maven.JdkDirectory)"
+      publishJUnitResults: true
+      testResultsFiles: "**/target/surefire-reports/TEST-*.xml"
+
+  - task: PublishTestResults@2
+    displayName: "Publish unit test results"
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: "JUnit"
+      testResultsFiles: "**/target/surefire-reports/TEST-*.xml"
+      mergeTestResults: true
+      failTaskOnFailedTests: true
+      testRunTitle: "$(App.Name)-$(Environment.Name)-Unit-$(Build.BuildId)"
+
+  - task: PublishCodeCoverageResults@1
+    displayName: "Publish code coverage (JaCoCo)"
+    condition: succeededOrFailed()
+    inputs:
+      codeCoverageTool: "JaCoCo"
+      summaryFileLocation: "**/target/site/jacoco/jacoco.xml"
+
+  - task: Bash@3
+    displayName: "Docker — build & push"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+        docker login "$(Registry.Location)" \
+          --username "$(Registry.User)" \
+          --password "$(Registry.Password)"
+
+        docker build -f Dockerfile \
+          --build-arg BASE_IMAGE="$(App.Docker.BaseImage.Java)" \
+          -t "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Build.BuildId)" \
+          -t "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Environment.Name)" \
+          .
+
+        docker push "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Build.BuildId)"
+        docker push "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Environment.Name)"
+
+  - task: DownloadSecureFile@1
+    name: sshKey
+    displayName: "Download SSH deploy key"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      secureFile: "$(SSH.SecureFileName)"
+
+  - bash: chmod 600 $(sshKey.secureFilePath)
+    displayName: "Set SSH key permissions"
+    condition: eq(variables.deployModule, 'true')
+
+  - bash: |
+      mkdir -p ~/.ssh
+      ssh-keyscan -H "$(Jump.Server.Address)" >> ~/.ssh/known_hosts
+    displayName: "Add jump server to known_hosts"
+    condition: eq(variables.deployModule, 'true')
+
+  - bash: |
+      set -euo pipefail
+      ansible-playbook "$(Ansible.Playbook.Path)" \
+        -i "$(Ansible.Inventory.Source)" \
+        --private-key "$(sshKey.secureFilePath)" \
+        --extra-vars "image_tag=$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Build.BuildId)" \
+        --extra-vars "app_name=$(App.Name) target_group=$(Ansible.Target.Group) environment=$(Environment.Name)" \
+        --ssh-common-args="-o StrictHostKeyChecking=accept-new -o ProxyCommand='ssh -W %h:%p -i $(sshKey.secureFilePath) -o StrictHostKeyChecking=accept-new $(Jump.Server.User)@$(Jump.Server.Address)'"
+    displayName: "Deploy with Ansible"
+    condition: eq(variables.deployModule, 'true')
+
+  - bash: |
+      set -e
+      for i in $(seq 1 6); do
+        echo "Health check attempt $i/6..."
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          --connect-timeout 5 --max-time 15 \
+          "$(App.HealthEndpoint)")
+        if [ "$STATUS" -eq 200 ]; then
+          echo "Health check passed"
+          exit 0
+        fi
+        echo "HTTP $STATUS — retrying in 10s..."
+        sleep 10
+      done
+      exit 1
+    displayName: "Health check"
+    condition: eq(variables.deployModule, 'true')
+
+  - task: PostBuildCleanup@3
+    displayName: "Clean agent directories"

@@ -1,0 +1,21 @@
+# =============================================================
+# THIS FILE BELONGS IN: web-todo-list/Pipelines/Variables/variables-dev.yaml
+# =============================================================
+
+variables:
+  - name: "Pool.Name"
+    value: "appmod-agents"
+
+  - name: "Pool.Image"
+    value: ""
+
+  # App.Host is set at pipeline runtime from Terraform output — do NOT hardcode IPs here.
+  # These two variables combine with the dynamic App.Host to form the health check target.
+  - name: "App.HealthPort"
+    value: "4200"
+
+  - name: "App.HealthPath"
+    value: "/"
+
+  - name: "App.Angular.Config"
+    value: "development"

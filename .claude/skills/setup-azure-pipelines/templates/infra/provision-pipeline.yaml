@@ -1,0 +1,201 @@
+# =============================================================
+# STARTER TEMPLATE — repos/infra/Pipelines/provision-pipeline.yaml
+#
+# THIS FILE IS A STARTER TEMPLATE — adapt it; do not commit as-is.
+# Remove all # CONFIGURE: comments from the final generated file.
+#
+# Provisions all infrastructure VMs after terraform apply.
+# Sets up: OS packages, Docker, databases, reverse proxies.
+# Does NOT deploy app containers (app pipelines handle that).
+#
+# Run this after the relevant terraform-{env}-pipeline.yaml completes successfully.
+# After this pipeline completes, trigger the app CI/CD pipelines.
+#
+# Trigger   : manual only
+# Parameter : targetEnv = {first-env} | ... | all
+# =============================================================
+
+trigger: none
+pr: none
+
+parameters:
+  - name: targetEnv
+    displayName: "Target environment"
+    type: string
+    default: # CONFIGURE: default to your first/lowest environment (e.g. dev)
+    values:
+      # CONFIGURE: one entry per environment, plus "all"
+      - dev
+      - prod
+      - all
+
+variables:
+  - template: ../../../templates/variables/global.yaml
+  - group: Common
+
+stages:
+  # =============================================================
+  # CONFIGURE: one stage block per environment.
+  # Copy and adapt the block below for each additional environment.
+  # All stages use dependsOn: [] so they run in parallel for "all".
+  # =============================================================
+
+  # ----- DEV -----
+  - stage: Provision_Dev
+    displayName: "Provision DEV VMs"
+    dependsOn: []
+    condition: in('${{ parameters.targetEnv }}', 'dev', 'all')
+
+    variables:
+      - template: ../../../templates/variables/global-dev.yaml
+      - group: Secrets-dev  # CONFIGURE: dev secrets group name
+
+    jobs:
+      - deployment: Provision
+        displayName: "Provision DEV infrastructure"
+        pool:
+          vmImage: ubuntu-latest  # CONFIGURE: or pool name
+        environment: # CONFIGURE: Azure DevOps environment for DEV (e.g. AppMod-dev)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  path: infra
+                  persistCredentials: false
+                  displayName: "Checkout infra repo"
+
+                - bash: pip3 install --quiet ansible
+                  displayName: "Install Ansible"
+
+                - bash: |
+                    if ! command -v terraform &>/dev/null; then
+                      TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                        | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                      curl -fsSL \
+                        "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                        -o /tmp/terraform.zip
+                      sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                      rm /tmp/terraform.zip
+                    fi
+                    terraform version
+                  displayName: "Install Terraform CLI"
+
+                # Required so dynamic_inventory.sh can call `terraform output -json`.
+                # CONFIGURE: replace 'dev' with this stage's environment directory name.
+                # Target the env-specific module — VM IPs are in the env module state, not shared/.
+                - bash: |
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/dev \
+                      init -input=false -reconfigure
+                  displayName: "Terraform init (for dynamic inventory)"
+                  env:
+                    # CONFIGURE: backend credential env var
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+
+                - task: DownloadSecureFile@1
+                  name: sshKeyDev
+                  displayName: "Download DEV SSH key"
+                  inputs:
+                    secureFile: "$(SSH_SECURE_FILE_DEV)"
+
+                - bash: chmod 600 $(sshKeyDev.secureFilePath)
+                  displayName: "Set DEV SSH key permissions"
+
+                # CONFIGURE:
+                # - playbook path: relative to the ansible working directory
+                # - --limit: "jump,{group_prefix}_dev" — add all host groups for this env
+                # - --skip-tags: tags that deploy app containers (keep infra-only)
+                # - extra-vars: adjust key variable names to match your group_vars
+                - bash: |
+                    cd $(Pipeline.Workspace)/infra/deployment/ansible
+
+                    ansible-playbook # CONFIGURE: provisioning playbook path \
+                      -i inventory/dynamic_inventory.sh \
+                      --limit "jump,# CONFIGURE: group_prefix_dev" \
+                      --skip-tags # CONFIGURE: app deploy tags \
+                      --extra-vars "ssh_private_key_file_dev=$(sshKeyDev.secureFilePath) \
+                                    ssh_private_key_file_prod=$(sshKeyDev.secureFilePath)"
+                  displayName: "Provision DEV VMs with Ansible"
+                  env:
+                    # CONFIGURE: backend credential env var (same as init step)
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+
+  # ----- PROD -----
+  - stage: Provision_Prod
+    displayName: "Provision PROD VMs"
+    dependsOn: []
+    condition: in('${{ parameters.targetEnv }}', 'prod', 'all')
+
+    variables:
+      - template: ../../../templates/variables/global-prod.yaml
+      - group: Secrets-prod  # CONFIGURE: prod secrets group name
+
+    jobs:
+      - deployment: Provision
+        displayName: "Provision PROD infrastructure"
+        pool:
+          vmImage: ubuntu-latest  # CONFIGURE: or pool name
+        environment: # CONFIGURE: Azure DevOps environment for PROD (e.g. AppMod-prod)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  path: infra
+                  persistCredentials: false
+                  displayName: "Checkout infra repo"
+
+                - bash: pip3 install --quiet ansible
+                  displayName: "Install Ansible"
+
+                - bash: |
+                    if ! command -v terraform &>/dev/null; then
+                      TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                        | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                      curl -fsSL \
+                        "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                        -o /tmp/terraform.zip
+                      sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                      rm /tmp/terraform.zip
+                    fi
+                    terraform version
+                  displayName: "Install Terraform CLI"
+
+                # CONFIGURE: replace 'prod' with this stage's environment directory name.
+                - bash: |
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/prod \
+                      init -input=false -reconfigure
+                  displayName: "Terraform init (for dynamic inventory)"
+                  env:
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+
+                - task: DownloadSecureFile@1
+                  name: sshKeyDev
+                  displayName: "Download DEV SSH key"
+                  inputs:
+                    secureFile: "$(SSH_SECURE_FILE_DEV)"
+
+                - bash: chmod 600 $(sshKeyDev.secureFilePath)
+                  displayName: "Set DEV SSH key permissions"
+
+                - task: DownloadSecureFile@1
+                  name: sshKeyProd
+                  displayName: "Download PROD SSH key"
+                  inputs:
+                    secureFile: "$(SSH_SECURE_FILE_PROD)"
+
+                - bash: chmod 600 $(sshKeyProd.secureFilePath)
+                  displayName: "Set PROD SSH key permissions"
+
+                - bash: |
+                    cd $(Pipeline.Workspace)/infra/deployment/ansible
+
+                    ansible-playbook # CONFIGURE: provisioning playbook path \
+                      -i inventory/dynamic_inventory.sh \
+                      --limit "jump,# CONFIGURE: group_prefix_prod" \
+                      --skip-tags # CONFIGURE: app deploy tags \
+                      --extra-vars "ssh_private_key_file_dev=$(sshKeyDev.secureFilePath) \
+                                    ssh_private_key_file_prod=$(sshKeyProd.secureFilePath)"
+                  displayName: "Provision PROD VMs with Ansible"
+                  env:
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)

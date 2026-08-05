@@ -1,0 +1,91 @@
+﻿{
+  "manifest_version": "1.0",
+  "generated_at": "<ISO8601 timestamp, e.g. 2026-03-20T14:30:00Z>",
+  "generated_by": "infra-terraform-extractor",
+  "source_document": "<relative path to the infrastructure design markdown file>",
+  "project": {
+    "name": "<project identifier, e.g. PROJ_26_001>",
+    "description": "<one-sentence technical description of the infrastructure>",
+    "environments": ["<env1>", "<env2>"]
+  },
+  "providers": [
+    {
+      "name": "<aws|gcp|azure|alicloud|oci|ibm|tencentcloud|ovh|kamatera|etc>",
+      "regions": ["<region1>"],
+      "alias": "<optional: omit if single-provider single-region>"
+    }
+  ],
+  "backend": {
+    "type": "auto",
+    "_type_note": "auto = select based on primary provider. Explicit values: gcs, s3, azurerm, ibm-cos, oci, terraform-cloud, http, local (local = no remote state).",
+    "config": {
+      "_note": "Optional overrides for placeholder values in the backend template. Only set values that differ from the defaults derived from project.name and providers. Example: { \"bucket\": \"my-custom-bucket\", \"prefix\": \"custom/path\" }"
+    }
+  },
+  "networking": {
+    "vpcs": [],
+    "subnets": [],
+    "routing_tables": [],
+    "internet_gateways": [],
+    "nat_gateways": [],
+    "security_groups": [],
+    "peering_connections": [],
+    "endpoints": []
+  },
+  "compute": {
+    "instances": [],
+    "auto_scaling_groups": [],
+    "load_balancers": [],
+    "serverless_functions": [],
+    "container_clusters": []
+  },
+  "storage": {
+    "object_storage": [],
+    "block_storage": [
+      {
+        "_template_note": "REMOVE THIS ENTRY — replace with actual disks. Each disk resource gets its own entry. Attachment resources must include device_name so the OS device path is deterministic.",
+        "_attachment_example": {
+          "id": "<logical_id>_attachment",
+          "type": "<provider disk attachment resource, e.g. google_compute_attached_disk / aws_volume_attachment>",
+          "config": {
+            "disk": "<disk_resource_id>",
+            "instance": "<instance_resource_id>",
+            "mode": "READ_WRITE",
+            "device_name": "<disk_name — must match the disk resource name. Determines the stable OS path: GCP=/dev/disk/by-id/google-{device_name}, AWS=the device_name argument>"
+          },
+          "dependencies": ["<disk_resource_id>", "<instance_resource_id>"],
+          "environment_scope": ["<env>"]
+        }
+      }
+    ],
+    "file_storage": []
+  },
+  "databases": {
+    "relational": [],
+    "nosql": [],
+    "cache": []
+  },
+  "iam": {
+    "roles": [],
+    "policies": [],
+    "service_accounts": []
+  },
+  "dns_and_cdn": {
+    "dns_zones": [],
+    "cdn_distributions": []
+  },
+  "monitoring": {
+    "alarms": [],
+    "log_groups": [],
+    "dashboards": []
+  },
+  "external_dependencies": [],
+  "variables": {},
+  "tags": {},
+  "extractor_notes": [],
+  "sync_state": {
+    "last_synced_commit": null,
+    "last_synced_at": null,
+    "terraform_path": "{{PATH_INFRA}}/deployment/terraform"
+  }
+}

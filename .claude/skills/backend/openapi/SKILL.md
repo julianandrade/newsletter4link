@@ -1,4 +1,4 @@
----
+﻿---
 name: openapi
 description: OpenAPI 3.0.3 specification guidelines, YAML structure, and API design patterns. Use when creating or updating OpenAPI specifications, designing REST APIs, defining request/response schemas, or documenting API endpoints. Includes modular file organization, common schema patterns, security schemes, and database schema integration.
 ---
@@ -43,11 +43,11 @@ This file contains all OpenAPI-specific configurations, patterns, and convention
 
 ## OpenAPI Specification Guidelines
 
-- Include all endpoints defined in the business requirements
-- Define request/response schemas matching business requirements
+- Include all endpoints defined in the business Transactions
+- Define request/response schemas matching business Transactions
 - Document all query parameters (pagination, filtering, sorting)
-- Specify authentication requirements (JWT Bearer token) in main file security section
-- Include authorization requirements (roles/permissions) in endpoint security when specified
+- Specify authentication Transactions (JWT Bearer token) in main file security section
+- Include authorization Transactions (roles/permissions) in endpoint security when specified
 - Document error responses with proper status codes using ErrorResponseDto
 - Use reusable components from common.yaml for common schemas
 - Include examples for request/response bodies
@@ -89,7 +89,7 @@ This file contains all OpenAPI-specific configurations, patterns, and convention
 
 ## Database Schema Integration
 
-- When business requirements reference database entities, inspect the actual database schema
+- When business Transactions reference database entities, inspect the actual database schema
 - Map OpenAPI schema fields to existing database columns accurately
 - Use correct data types matching database schema (string maxLength from VARCHAR size, integer formats from INT/BIGINT)
 - Mark fields as required based on database NOT NULL constraints
@@ -170,4 +170,4 @@ NormativoDto:
 - **Common Schemas**: `/api/common.yaml`
 - **Domain Files**: `/api/{domain-name}.yaml`
 - **Technical Context**: `/documentation/docs/<your-project-name> - Contexto técnico - en-us.md`
-- **Business Requirements**: `/documentation/specs/{req-id-name}/req.md`
+- **Business Transactions**: `{{PATH_DOCS}}/4-implementation/development/{tx-id-name}/req.md`

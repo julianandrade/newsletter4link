@@ -1,0 +1,145 @@
+# =============================================================
+# EXAMPLE — repos/infra/Pipelines/terraform-shared-pipeline.yaml
+# Project    : AppMod (LC-Production)
+# Module     : shared  (deployment/terraform/shared/)
+# Backend    : GCS — bucket ama-proj-01-tfstate, prefix deployment/shared
+# Provider   : google ~> 6.0
+# Secrets    : Secrets-infra variable group
+# Env gate   : AppMod-infra-shared (manual approval required for apply)
+#
+# THIS FILE LIVES IN THE infra REPOSITORY at:
+#   setup/azure/pipelines/repos/infra/Pipelines/terraform-shared-pipeline.yaml
+#
+# NOTE: This is the shared module pipeline. Shared resources (VPC, IAM, DNS, etc.)
+# must be applied before any environment module, which references shared outputs
+# via terraform_remote_state.
+# =============================================================
+
+trigger: none
+pr: none
+
+variables:
+  - template: ../../../templates/variables/global.yaml
+  - group: Common
+  - group: Secrets-infra
+
+stages:
+  # =============================================================
+  # Stage 1 — Plan
+  # =============================================================
+  - stage: Plan
+    displayName: "Terraform Plan (shared)"
+    jobs:
+      - job: Plan
+        displayName: "terraform init + plan"
+        pool:
+          vmImage: ubuntu-latest
+        workspace:
+          clean: all
+
+        steps:
+          - checkout: self
+            path: infra
+            persistCredentials: false
+            displayName: "Checkout infra repo"
+
+          - bash: |
+              if ! command -v terraform &>/dev/null; then
+                TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                  | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                curl -fsSL \
+                  "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                  -o /tmp/terraform.zip
+                sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                rm /tmp/terraform.zip
+              fi
+              terraform version
+            displayName: "Install Terraform CLI"
+
+          - bash: |
+              terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/shared \
+                init -input=false -reconfigure
+            displayName: "terraform init"
+            env:
+              GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+
+          - bash: |
+              terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/shared \
+                plan -input=false -out=$(Pipeline.Workspace)/tfplan-shared
+            displayName: "terraform plan"
+            env:
+              GOOGLE_CREDENTIALS:                $(GCP_SA_KEY_JSON)
+              TF_VAR_ssh_public_key_dev:         $(TF_VAR_SSH_PUBLIC_KEY_DEV)
+              TF_VAR_ssh_public_key_prod:        $(TF_VAR_SSH_PUBLIC_KEY_PROD)
+              TF_VAR_cicd_service_account_email: $(TF_VAR_CICD_SA_EMAIL)
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish tfplan artifact"
+            inputs:
+              targetPath: "$(Pipeline.Workspace)/tfplan-shared"
+              artifact: "tfplan-shared"
+              publishLocation: "pipeline"
+
+  # =============================================================
+  # Stage 2 — Apply (requires manual approval on AppMod-infra-shared)
+  # =============================================================
+  - stage: Apply
+    displayName: "Terraform Apply (shared)"
+    dependsOn: Plan
+    condition: succeeded()
+
+    jobs:
+      - deployment: Apply
+        displayName: "terraform apply"
+        pool:
+          vmImage: ubuntu-latest
+        environment: AppMod-infra-shared
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  path: infra
+                  persistCredentials: false
+                  displayName: "Checkout infra repo"
+
+                - bash: |
+                    if ! command -v terraform &>/dev/null; then
+                      TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                        | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                      curl -fsSL \
+                        "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                        -o /tmp/terraform.zip
+                      sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                      rm /tmp/terraform.zip
+                    fi
+                    terraform version
+                  displayName: "Install Terraform CLI"
+
+                - bash: |
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/shared \
+                      init -input=false -reconfigure
+                  displayName: "terraform init"
+                  env:
+                    GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: "Download tfplan artifact"
+                  inputs:
+                    artifact: "tfplan-shared"
+                    path: "$(Pipeline.Workspace)/tfplan-artifact"
+
+                - bash: |
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/shared \
+                      apply -input=false $(Pipeline.Workspace)/tfplan-artifact/tfplan-shared
+                  displayName: "terraform apply"
+                  env:
+                    GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+
+                - bash: |
+                    echo "=== Terraform outputs (shared) ==="
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/shared output
+                  displayName: "Show terraform outputs"
+                  condition: succeeded()
+                  env:
+                    GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)

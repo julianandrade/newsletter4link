@@ -1,0 +1,93 @@
+# =============================================================
+# STARTER TEMPLATE — sub/sub-pipeline-maven-ms-verify.yaml
+# Post-deployment smoke + integration tests for a Maven microservice.
+#
+# This is a parameterized steps template.
+# Root keys are "parameters:" and "steps:".
+# Included in main-pipeline.yaml's Verify job via:
+#   template: sub/sub-pipeline-maven-ms-verify.yaml
+#   parameters:
+#     Environment: "${{ item.env }}"
+# =============================================================
+
+parameters:
+  - name: Environment
+    default: "dev"
+
+  # CONFIGURE: path to your Postman collection JSON file,
+  # relative to the app repository root.
+  - name: postmanCollection
+    default: "src/main/resources/tests/collection.postman_collection.json"
+
+steps:
+  # ----------------------------------------------------------
+  # SSH setup — re-download key (each job gets a clean workspace)
+  # ----------------------------------------------------------
+  - task: DownloadSecureFile@1
+    name: sshKey
+    displayName: "Download SSH deploy key"
+    inputs:
+      secureFile: "$(SSH.SecureFileName)"
+
+  - bash: chmod 600 $(sshKey.secureFilePath)
+    displayName: "Set SSH key permissions"
+
+  # ----------------------------------------------------------
+  # Wait for the container to be ready via nested SSH.
+  # App VMs are in private subnets — direct curl from the pipeline
+  # agent fails because firewall rules only allow SSH (22) from
+  # the jump server to app VMs, not HTTP on application ports.
+  # Pattern: pipeline agent → jump server → app VM → curl localhost.
+  #
+  # SSH_RC separates SSH exit code from curl stdout to avoid the
+  # "000000" double-output bug when SSH exits non-zero.
+  # ----------------------------------------------------------
+  - bash: |
+      set -e
+      MAX_RETRIES=10
+      RETRY_INTERVAL=10
+
+      for i in $(seq 1 $MAX_RETRIES); do
+        echo "Health check attempt $i/$MAX_RETRIES: localhost:$(App.HealthPort)$(App.HealthPath) on $(App.Host)"
+        HTTP_STATUS=$(ssh \
+          -i "$(sshKey.secureFilePath)" \
+          -o StrictHostKeyChecking=accept-new \
+          -o IdentitiesOnly=yes \
+          -o ProxyCommand="ssh -i $(sshKey.secureFilePath) -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -W %h:%p $(Jump.Server.User)@$(Jump.Server.Address)" \
+          $(SSH.User)@$(App.Host) \
+          "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 'http://localhost:$(App.HealthPort)$(App.HealthPath)'" \
+          2>/dev/null)
+        SSH_RC=$?
+        [ $SSH_RC -ne 0 ] && HTTP_STATUS="000"
+        if [ "$HTTP_STATUS" = "200" ]; then
+          echo "Health check passed (HTTP $HTTP_STATUS)"
+          break
+        fi
+        echo "HTTP $HTTP_STATUS — waiting ${RETRY_INTERVAL}s (attempt $i/$MAX_RETRIES)..."
+        sleep $RETRY_INTERVAL
+      done
+
+      [ "$HTTP_STATUS" != "200" ] && echo "Service did not become ready" && exit 1
+    displayName: "Wait for service health"
+
+  # Run integration/CRUD tests via Newman (Postman CLI runner).
+  # Adjust the collection path and environment file to match your project.
+  - script: |
+      newman run "${{ parameters.postmanCollection }}" \
+        --folder "CRUD" \
+        --environment "common-configs/Postman/Environments/${{ parameters.Environment }}.postman_environment.json" \
+        --reporters "cli,junit" \
+        --reporter-junit-export "Report-${{ parameters.Environment }}.xml" \
+        --suppress-exit-code
+    displayName: "Run CRUD integration tests"
+    condition: eq(variables.deployModule, 'true')
+
+  - task: PublishTestResults@2
+    displayName: "Publish integration test results"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      testResultsFormat: "JUnit"
+      testResultsFiles: "Report-${{ parameters.Environment }}.xml"
+      mergeTestResults: true
+      failTaskOnFailedTests: true
+      testRunTitle: "$(App.Name)-${{ parameters.Environment }}-Verify-$(Build.BuildId)"

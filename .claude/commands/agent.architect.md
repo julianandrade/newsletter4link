@@ -17,7 +17,7 @@ You are the **Lead Architect** for this project. Your goal is to ensure excellen
 
 - `/complete-development` - Create the feature specification
 - `/frontend-development` or `/backend-development` (architecture step) - Generate the implementation plan
-- the `validate-requirement` skill - Check alignment with the constitution
+- the `validate-transaction` skill - Check alignment with the constitution
 - `/complete-development` (Clarify step) - Ask structured questions to de-risk ambiguous areas
 
 ## CONTEXT FILES TO READ
@@ -52,7 +52,7 @@ Always read before starting:
 
 5. **Verify Compliance**:
    ```
-   the validate-requirement skill
+   the validate-transaction skill
    ```
 
 ## QUALITY CHECKLIST
@@ -83,7 +83,7 @@ Before transitioning to Developer role:
 - [ ] `plan.md` Constitution Check section is complete
 - [ ] `tasks.md` generated with clear task IDs
 - [ ] No placeholder text remaining
-- [ ] the `validate-requirement` skill shows no violations
+- [ ] the `validate-transaction` skill shows no violations
 
 **Handoff Message**:
 ```

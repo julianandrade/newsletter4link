@@ -1,0 +1,9 @@
+{
+  "_note": "The AIDLC commands and skills read these flags as `features` (see the Variable Resolution header in .claude/commands/*.md). In common-ai-configs they live in .claude/settings.json, but Claude Code's settings schema rejects a top-level `features` key and reverts the whole file, so this project keeps them here. Read this file wherever a command or skill says to read `features` from .claude/settings.json. Everything else, the `{{VARIABLE_NAME}}` placeholders, still resolves from `env` in .claude/settings.json as documented.",
+  "features": {
+    "clarifications": true,
+    "security": true,
+    "test": true,
+    "confirm": false
+  }
+}

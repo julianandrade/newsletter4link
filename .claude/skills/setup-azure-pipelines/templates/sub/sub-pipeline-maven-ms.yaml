@@ -1,0 +1,183 @@
+# =============================================================
+# STARTER TEMPLATE — sub/sub-pipeline-maven-ms.yaml
+# Java / Maven Spring Boot microservice — build, test, push, deploy.
+#
+# Root key MUST be "steps:" — no stages, jobs, trigger, or resources.
+# Included via "template:" inside main-pipeline.yaml's Build job.
+#
+# Runtime variables expected (from variable templates):
+#   $(Registry.Repository.Docker.Namespace.Full)  — full registry path
+#   $(Registry.User)        — registry username       (from Secrets-{env})
+#   $(Registry.Password)    — registry password       (from Secrets-{env})
+#   $(App.Name)             — e.g. "ms-todo-manager"  (from variables.yaml)
+#   $(Environment.Name)     — e.g. "myorg_dev"        (from global-{env}.yaml)
+#   $(App.Host)             — app VM IP/hostname       (from global-{env}.yaml or Terraform output)
+#   $(App.HealthPort)       — port the app listens on  (from variables-{env}.yaml)
+#   $(App.HealthPath)       — health check path        (from variables-{env}.yaml)
+#   $(Jump.Server.Address)  — jump server hostname    (from global.yaml)
+#   $(Jump.Server.User)     — jump server SSH user    (from global.yaml)
+#   $(SSH.User)             — app VM SSH user         (from global.yaml or global-{env}.yaml)
+#   $(Ansible.Playbook.Path)— playbook path           (from global.yaml)
+#   $(Ansible.Inventory.Source) — inventory path      (from global.yaml)
+#   $(Ansible.Target.Group) — inventory group         (from global-{env}.yaml)
+#   $(SSH.SecureFileName)   — secure file name        (from Secrets-{env})
+#   $(MAVEN_CACHE_FOLDER)   — Maven .m2 path          (from pools/global-{pool}.yaml)
+#   $(MAVEN_OPTS)           — Maven opts              (from pools/global-{pool}.yaml)
+#   $(Maven.JdkDirectory)   — JDK path                (from pools/global-{pool}.yaml)
+#
+# DESIGN NOTES:
+# - App.Host: if your VMs use Terraform dynamic inventory, set this at runtime from
+#   `terraform output`; otherwise define it as a static value in global-{env}.yaml.
+# - ProxyCommand for SSH tunnelling goes in Ansible group_vars (ansible_ssh_common_args),
+#   NOT in --ssh-common-args on the command line. The pipeline passes the key path as
+#   an extra-var (ssh_private_key_file) so that group_vars can reference it.
+# - Health check uses nested SSH (pipeline → jump server → app VM → curl localhost)
+#   because firewall rules typically allow SSH (22) from the jump server to app VMs
+#   but block direct HTTP access on application ports from the pipeline agent.
+# =============================================================
+
+steps:
+  # ----------------------------------------------------------
+  # Maven dependency cache
+  # ----------------------------------------------------------
+  - task: Cache@2
+    displayName: "Cache Maven local repo"
+    condition: eq(variables.useCache, true)
+    inputs:
+      key: 'maven | "$(Agent.OS)" | **/pom.xml'
+      restoreKeys: |
+        maven | "$(Agent.OS)"
+        maven
+      path: $(MAVEN_CACHE_FOLDER)
+
+  # ----------------------------------------------------------
+  # Build, test, publish to internal Maven registry
+  # ----------------------------------------------------------
+  - task: Maven@4
+    displayName: "Maven — build & test"
+    continueOnError: false
+    inputs:
+      mavenPomFile: "pom.xml"
+      goals: "clean deploy"
+      options: "$(MAVEN_OPTS)"
+      javaHomeOption: "path"
+      jdkDirectory: "$(Maven.JdkDirectory)"
+      publishJUnitResults: true
+      testResultsFiles: "**/target/surefire-reports/TEST-*.xml"
+
+  - task: PublishTestResults@2
+    displayName: "Publish unit test results"
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: "JUnit"
+      testResultsFiles: "**/target/surefire-reports/TEST-*.xml"
+      mergeTestResults: true
+      failTaskOnFailedTests: true
+      testRunTitle: "$(App.Name)-$(Environment.Name)-Unit-$(Build.BuildId)"
+
+  - task: PublishCodeCoverageResults@1
+    displayName: "Publish code coverage (JaCoCo)"
+    condition: succeededOrFailed()
+    inputs:
+      codeCoverageTool: "JaCoCo"
+      summaryFileLocation: "**/target/site/jacoco/jacoco.xml"
+
+  # ----------------------------------------------------------
+  # Docker — build and push (skipped when deployModule=false)
+  # ----------------------------------------------------------
+  - task: Bash@3
+    displayName: "Docker — build & push"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+        docker login "$(Registry.Location)" \
+          --username "$(Registry.User)" \
+          --password "$(Registry.Password)"
+
+        docker build -f Dockerfile \
+          --build-arg BASE_IMAGE="$(App.Docker.BaseImage.Java)" \
+          -t "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Build.BuildId)" \
+          -t "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Environment.Name)" \
+          .
+
+        docker push "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Build.BuildId)"
+        docker push "$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Environment.Name)"
+
+  # ----------------------------------------------------------
+  # SSH setup — download key, set permissions
+  # StrictHostKeyChecking=accept-new in the SSH commands below makes
+  # ssh-keyscan redundant — do not add it.
+  # ----------------------------------------------------------
+  - task: DownloadSecureFile@1
+    name: sshKey
+    displayName: "Download SSH deploy key"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      secureFile: "$(SSH.SecureFileName)"
+
+  - bash: chmod 600 $(sshKey.secureFilePath)
+    displayName: "Set SSH key permissions"
+    condition: eq(variables.deployModule, 'true')
+
+  # ----------------------------------------------------------
+  # Ansible deploy
+  # ProxyCommand is defined in Ansible group_vars (ansible_ssh_common_args)
+  # for the app/nginx groups — do NOT pass --ssh-common-args here, it would
+  # override group_vars. Instead, pass the key path as an extra-var so the
+  # group_vars ProxyCommand template can reference it.
+  # ----------------------------------------------------------
+  - bash: |
+      set -euo pipefail
+      ansible-playbook "$(Ansible.Playbook.Path)" \
+        -i "$(Ansible.Inventory.Source)" \
+        --private-key "$(sshKey.secureFilePath)" \
+        --extra-vars "image_tag=$(Registry.Repository.Docker.Namespace.Full)/$(App.Name):$(Build.BuildId)" \
+        --extra-vars "app_name=$(App.Name) target_group=$(Ansible.Target.Group) environment=$(Environment.Name)" \
+        --extra-vars "ssh_private_key_file=$(sshKey.secureFilePath)"
+    displayName: "Deploy with Ansible"
+    condition: eq(variables.deployModule, 'true')
+
+  # ----------------------------------------------------------
+  # Health check via nested SSH through the jump server.
+  # App VMs are in private subnets — firewall rules allow SSH (22)
+  # from the jump server but block direct HTTP on app ports.
+  # Pattern: pipeline agent → jump server (ProxyCommand) → app VM → curl localhost.
+  #
+  # SSH_RC separates SSH exit code from curl's stdout to avoid the
+  # "000000" double-output bug when SSH exits non-zero (both curl's
+  # "000" and a fallback echo would otherwise be captured).
+  # ----------------------------------------------------------
+  - bash: |
+      set -e
+      MAX_RETRIES=6
+      RETRY_INTERVAL=10
+
+      for i in $(seq 1 $MAX_RETRIES); do
+        echo "Health check attempt $i/$MAX_RETRIES: localhost:$(App.HealthPort)$(App.HealthPath) on $(App.Host)"
+        HTTP_STATUS=$(ssh \
+          -i "$(sshKey.secureFilePath)" \
+          -o StrictHostKeyChecking=accept-new \
+          -o IdentitiesOnly=yes \
+          -o ProxyCommand="ssh -i $(sshKey.secureFilePath) -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -W %h:%p $(Jump.Server.User)@$(Jump.Server.Address)" \
+          $(SSH.User)@$(App.Host) \
+          "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 'http://localhost:$(App.HealthPort)$(App.HealthPath)'" \
+          2>/dev/null)
+        SSH_RC=$?
+        [ $SSH_RC -ne 0 ] && HTTP_STATUS="000"
+        if [ "$HTTP_STATUS" = "200" ]; then
+          echo "Health check passed (HTTP $HTTP_STATUS)"
+          exit 0
+        fi
+        echo "HTTP $HTTP_STATUS -- retrying in ${RETRY_INTERVAL}s..."
+        sleep $RETRY_INTERVAL
+      done
+
+      echo "Health check failed after $MAX_RETRIES attempts"
+      exit 1
+    displayName: "Health check"
+    condition: eq(variables.deployModule, 'true')
+
+  - task: PostBuildCleanup@3
+    displayName: "Clean agent directories"

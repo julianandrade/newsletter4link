@@ -1,0 +1,56 @@
+# =============================================================
+# STARTER TEMPLATE — variables/global-env.yaml
+# Per-environment infrastructure variables shared by all repos.
+# Copy and rename to global-{env}.yaml for each environment.
+# e.g. global-dev.yaml, global-prod.yaml
+#
+# CONFIGURE: fill in values marked with # CONFIGURE:
+# =============================================================
+
+variables:
+  # ----------------------------------------------------------
+  # Environment identity
+  # ----------------------------------------------------------
+  - name: "Environment.ID"
+    value: "" # CONFIGURE: short env ID, e.g. "dev", "stg", "prod"
+
+  - name: "Environment.Name"
+    value: "$(Global.Organization)_$(Environment.ID)"  # constructed — usually no change needed
+
+  # ----------------------------------------------------------
+  # Registry — env-specific project/namespace (if it differs per env)
+  # Leave blank to inherit Registry.Project from global.yaml
+  # ----------------------------------------------------------
+  - name: "Registry.Project.Env"
+    value: "" # CONFIGURE or remove if same registry project for all envs
+
+  # ----------------------------------------------------------
+  # Database
+  # ----------------------------------------------------------
+  - name: "Database.Host"
+    value: "" # CONFIGURE: DB host for this environment
+
+  - name: "Database.Port"
+    value: "5432" # CONFIGURE: adjust for your DB engine
+
+  # ----------------------------------------------------------
+  # App VM host — used by the pipeline health check to reach the app VM.
+  #
+  # How to set this:
+  #   Option A (static infrastructure): set to the IP or hostname of the app VM.
+  #   Option B (Terraform dynamic inventory): leave empty here. Add a pipeline step
+  #     that calls `terraform output -raw <output_key>` and sets the variable at
+  #     runtime with `echo "##vso[task.setvariable variable=App.Host]$IP"`.
+  #     This avoids hardcoding IPs that change when infrastructure is re-provisioned.
+  #
+  # Never hardcode a private IP if Terraform manages your infrastructure.
+  # ----------------------------------------------------------
+  - name: "App.Host"
+    value: "" # CONFIGURE (Option A) or leave empty and set at runtime (Option B)
+
+  # ----------------------------------------------------------
+  # Deployment target
+  # Passed as extra-vars to ansible-playbook.
+  # ----------------------------------------------------------
+  - name: "Ansible.Target.Group"
+    value: "" # CONFIGURE: Ansible inventory group name for this env, e.g. "app_dev"

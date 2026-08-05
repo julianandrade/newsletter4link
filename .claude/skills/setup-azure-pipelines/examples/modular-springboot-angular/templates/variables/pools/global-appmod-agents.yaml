@@ -1,0 +1,27 @@
+variables:
+  - name: "Pool.Name"
+    value: "appmod-agents"
+
+  - name: "Pool.Image"
+    value: ""
+
+  - name: "Agent.SelfHosted"
+    value: true
+
+  - name: "MAVEN_CACHE_FOLDER"
+    value: "/opt/maven"
+
+  - name: "MAVEN_OPTS"
+    value: "-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)"
+
+  - name: "Maven.JdkDirectory"
+    value: "/usr/lib/jvm/java-17-openjdk-amd64"
+
+  - name: "npm_config_cache"
+    value: "$(Pipeline.Workspace)/.npm"
+
+  - name: "Node.Version"
+    value: "20"
+
+  - name: "useCache"
+    value: true

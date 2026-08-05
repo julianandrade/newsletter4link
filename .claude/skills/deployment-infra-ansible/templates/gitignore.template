@@ -1,0 +1,47 @@
+# Ansible vault password files — never commit these
+.vault_pass
+.vault_password
+*.vault_pass
+*.vault_password
+
+# Ansible retry files (generated on failed playbook runs)
+*.retry
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variable files
+.env
+.env.*
+
+# SSH private keys — never commit keys to version control
+*.pem
+*.key
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+
+# macOS metadata
+.DS_Store
+
+# Windows metadata
+Thumbs.db
+desktop.ini
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Terraform state (if terraform project is nested here — belt-and-suspenders)
+*.tfstate
+*.tfstate.*
+.terraform/

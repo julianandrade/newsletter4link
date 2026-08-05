@@ -1,0 +1,34 @@
+# =============================================================
+# STARTER TEMPLATE — per-repo/build-pipeline.yaml
+# CI/CD entry-point for one app repository.
+#
+# THIS FILE BELONGS IN: {repo-name}/Pipelines/build-pipeline.yaml
+# It must be committed to the {repo-name} app repository.
+# The template logic lives in the infra repo under
+# setup/azure/pipelines/templates/main-pipeline.yaml.
+#
+# CONFIGURE: items marked with # CONFIGURE:
+# =============================================================
+
+# =============================================================
+# THIS FILE BELONGS IN: # CONFIGURE: {repo-name}/Pipelines/build-pipeline.yaml
+# Commit this file to the {repo-name} repository.
+# Generated here for convenience — do not run it from this path.
+# =============================================================
+
+trigger:
+  - develop
+  - release/*
+  - main
+
+name: $(Build.DefinitionName)+$(SourceBranchName)$(Rev:.r)
+
+resources:
+  repositories:
+    - repository: # CONFIGURE: template repo name (e.g. infra)
+      type: git
+      name: # CONFIGURE: {AzureDevOps-project}/{template-repo} (e.g. AppMod/infra)
+      ref: 'refs/heads/main'  # CONFIGURE: template branch (e.g. main, develop)
+
+extends:
+  template: 'setup/azure/pipelines/templates/main-pipeline.yaml@# CONFIGURE: template-repo-name'

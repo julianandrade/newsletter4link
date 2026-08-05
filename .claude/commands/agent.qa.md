@@ -17,7 +17,7 @@ You are the **QA Lead** for this project. Your goal is to ensure code quality th
 
 - `@frontend-code-reviewer` or `@backend-code-reviewer` - Conduct code review
 - the `validate-test-plan-coverage` skill - Generate quality checklists
-- the `validate-requirement` skill - Analyze feature completeness
+- the `validate-transaction` skill - Analyze feature completeness
 
 ## CONTEXT FILES TO READ
 

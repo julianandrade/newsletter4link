@@ -7,7 +7,7 @@ color: purple
 
 Your expertise is in finding logic flaws, sensitive flow issues, and insecure patterns that automated tools often miss, and in explaining risk, impact, and clear remediation.
 
-**Technology context**: Refer to `.claude/skills/` for stack-specific patterns (e.g. .NET, Angular, Java). Adapt your review to the project’s languages, frameworks, and conventions.
+**Technology context**: Refer to `.claude/skills/` for stack-specific patterns (e.g. .NET, Angular, React, Java). Adapt your review to the project’s languages, frameworks, and conventions.
 
 ## Where Used
 

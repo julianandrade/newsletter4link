@@ -1,0 +1,171 @@
+# =============================================================
+# STARTER TEMPLATE — repos/infra/Pipelines/terraform-<MODULE_NAME>-pipeline.yaml
+#
+# THIS FILE IS A STARTER TEMPLATE — adapt it; do not commit as-is.
+# Remove all # CONFIGURE: comments from the final generated file.
+#
+# IMPORTANT: Instantiate this template ONCE PER ROOT MODULE DIRECTORY.
+# Root modules: shared/ (always) + one per environment (dev/, staging/, prod/, …)
+#
+# Generate one pipeline file per module:
+#   terraform-shared-pipeline.yaml   → targets deployment/terraform/shared/
+#   terraform-{env}-pipeline.yaml    → targets deployment/terraform/{env}/
+#
+# Apply shared first — environment modules reference shared outputs via
+# terraform_remote_state and will fail if shared has not been applied yet.
+#
+# MODULE_NAME : <shared | dev | staging | prod>  — fill in when adapting
+# MODULE_DIR  : <shared | dev | staging | prod>  — fill in when adapting (matches MODULE_NAME in most cases)
+#
+# Trigger    : manual only
+# Secrets    : {terraform-secrets-group} variable group
+# Environment: {infra-environment}-<MODULE_NAME>  (approval gate for apply)
+# =============================================================
+
+trigger: none
+pr: none
+
+variables:
+  # CONFIGURE: adjust relative path if this file is not at
+  # repos/infra/Pipelines/ within the infra repository.
+  # Path depth: repos/infra/Pipelines/ → ../../../ → pipelines root → templates/
+  - template: ../../../templates/variables/global.yaml
+  - group: Common
+  - group: # CONFIGURE: terraform secrets group name (e.g. Secrets-infra)
+
+stages:
+  # =============================================================
+  # Stage 1 — Plan (no approval gate)
+  # =============================================================
+  - stage: Plan
+    displayName: "Terraform Plan (<MODULE_NAME>)"
+    jobs:
+      - job: Plan
+        displayName: "terraform init + plan"
+        pool:
+          vmImage: ubuntu-latest  # CONFIGURE: or pool name if self-hosted
+        workspace:
+          clean: all
+
+        steps:
+          - checkout: self
+            path: infra
+            persistCredentials: false
+            displayName: "Checkout infra repo"
+
+          # Install Terraform CLI (skipped if already present on self-hosted agents)
+          - bash: |
+              if ! command -v terraform &>/dev/null; then
+                TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                  | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                curl -fsSL \
+                  "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                  -o /tmp/terraform.zip
+                sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                rm /tmp/terraform.zip
+              fi
+              terraform version
+            displayName: "Install Terraform CLI"
+
+          # CONFIGURE: set the correct backend credential env var for your provider.
+          # GCS backend  → GOOGLE_CREDENTIALS: $(GCP_SA_KEY_JSON)
+          # S3 backend   → AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+          #                AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+          # azurerm      → ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID
+          - bash: |
+              terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/<MODULE_DIR> \
+                init -input=false -reconfigure
+            displayName: "terraform init"
+            env:
+              # CONFIGURE: replace with your backend credential variable(s)
+              BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+
+          # CONFIGURE: add TF_VAR_* env vars for each sensitive variable in variables.tf.
+          # Derive the list from variables marked sensitive = true in variables.tf.
+          - bash: |
+              terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/<MODULE_DIR> \
+                plan -input=false -out=$(Pipeline.Workspace)/tfplan-<MODULE_NAME>
+            displayName: "terraform plan"
+            env:
+              # CONFIGURE: replace with your backend credential variable(s)
+              BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+              # CONFIGURE: one TF_VAR_* entry per sensitive input variable
+              # TF_VAR_ssh_public_key_dev:  $(TF_VAR_SSH_PUBLIC_KEY_DEV)
+              # TF_VAR_ssh_public_key_prod: $(TF_VAR_SSH_PUBLIC_KEY_PROD)
+              # TF_VAR_example_secret:      $(TF_VAR_EXAMPLE_SECRET)
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish tfplan artifact"
+            inputs:
+              targetPath: "$(Pipeline.Workspace)/tfplan-<MODULE_NAME>"
+              artifact: "tfplan-<MODULE_NAME>"
+              publishLocation: "pipeline"
+
+  # =============================================================
+  # Stage 2 — Apply (manual approval required on {infra-environment}-<MODULE_NAME>)
+  # =============================================================
+  - stage: Apply
+    displayName: "Terraform Apply (<MODULE_NAME>)"
+    dependsOn: Plan
+    condition: succeeded()
+
+    jobs:
+      - deployment: Apply
+        displayName: "terraform apply"
+        pool:
+          vmImage: ubuntu-latest  # CONFIGURE: match Plan stage pool
+        environment: # CONFIGURE: {infra-environment}-<MODULE_NAME> (e.g. AppMod-infra-shared)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  path: infra
+                  persistCredentials: false
+                  displayName: "Checkout infra repo"
+
+                - bash: |
+                    if ! command -v terraform &>/dev/null; then
+                      TF_VERSION=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/terraform/latest \
+                        | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
+                      curl -fsSL \
+                        "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" \
+                        -o /tmp/terraform.zip
+                      sudo unzip -o /tmp/terraform.zip -d /usr/local/bin terraform
+                      rm /tmp/terraform.zip
+                    fi
+                    terraform version
+                  displayName: "Install Terraform CLI"
+
+                # Re-initialise on this agent — backend connection is not
+                # preserved across agents or between pipeline stages.
+                - bash: |
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/<MODULE_DIR> \
+                      init -input=false -reconfigure
+                  displayName: "terraform init"
+                  env:
+                    # CONFIGURE: same credential var(s) as Plan stage
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: "Download tfplan artifact"
+                  inputs:
+                    artifact: "tfplan-<MODULE_NAME>"
+                    path: "$(Pipeline.Workspace)/tfplan-artifact"
+
+                - bash: |
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/<MODULE_DIR> \
+                      apply -input=false $(Pipeline.Workspace)/tfplan-artifact/tfplan-<MODULE_NAME>
+                  displayName: "terraform apply"
+                  env:
+                    # CONFIGURE: same credential var(s) as Plan stage
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)
+
+                - bash: |
+                    echo "=== Terraform outputs ==="
+                    terraform -chdir=$(Pipeline.Workspace)/infra/deployment/terraform/<MODULE_DIR> output
+                  displayName: "Show terraform outputs"
+                  condition: succeeded()
+                  env:
+                    # CONFIGURE: same credential var(s) as Plan stage
+                    BACKEND_CREDENTIAL_VAR: $(BACKEND_CREDENTIAL_VAR)

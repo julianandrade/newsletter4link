@@ -1,0 +1,727 @@
+﻿{
+  "manifest_version": "1.0",
+  "generated_at": "2026-03-20T10:00:00Z",
+  "generated_by": "infra-terraform-extractor",
+  "source_document": "docs/3-design/infrastructure/infrastructure-design.md",
+  "project": {
+    "name": "WEBAPP_26_001",
+    "description": "Three-tier web application on AWS: public ALB, Auto Scaling EC2 app layer, RDS PostgreSQL database layer — staging and production environments in eu-west-1",
+    "environments": ["staging", "prod"]
+  },
+  "providers": [
+    {
+      "name": "aws",
+      "regions": ["eu-west-1"],
+      "alias": null
+    }
+  ],
+  "backend": {
+    "type": "auto",
+    "config": {}
+  },
+  "networking": {
+    "vpcs": [
+      {
+        "id": "vpc_staging",
+        "type": "aws_vpc",
+        "config": {
+          "cidr_block": "10.10.0.0/16",
+          "enable_dns_hostnames": true,
+          "enable_dns_support": true,
+          "tags": { "Name": "webapp-staging-vpc" }
+        },
+        "dependencies": [],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "vpc_prod",
+        "type": "aws_vpc",
+        "config": {
+          "cidr_block": "10.20.0.0/16",
+          "enable_dns_hostnames": true,
+          "enable_dns_support": true,
+          "tags": { "Name": "webapp-prod-vpc" }
+        },
+        "dependencies": [],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "subnets": [
+      {
+        "id": "subnet_staging_public_a",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.10.1.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": true,
+          "tags": { "Name": "webapp-staging-public-a", "tier": "public" }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "subnet_staging_public_b",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.10.2.0/24",
+          "availability_zone": "eu-west-1b",
+          "map_public_ip_on_launch": true,
+          "tags": { "Name": "webapp-staging-public-b", "tier": "public" }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "subnet_staging_private_a",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.10.11.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-staging-private-a", "tier": "app" }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "subnet_staging_private_b",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.10.12.0/24",
+          "availability_zone": "eu-west-1b",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-staging-private-b", "tier": "app" }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "subnet_staging_db_a",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.10.21.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-staging-db-a", "tier": "database" }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "subnet_staging_db_b",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.10.22.0/24",
+          "availability_zone": "eu-west-1b",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-staging-db-b", "tier": "database" }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "subnet_prod_public_a",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.20.1.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": true,
+          "tags": { "Name": "webapp-prod-public-a", "tier": "public" }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "subnet_prod_public_b",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.20.2.0/24",
+          "availability_zone": "eu-west-1b",
+          "map_public_ip_on_launch": true,
+          "tags": { "Name": "webapp-prod-public-b", "tier": "public" }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "subnet_prod_private_a",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.20.11.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-prod-private-a", "tier": "app" }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "subnet_prod_private_b",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.20.12.0/24",
+          "availability_zone": "eu-west-1b",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-prod-private-b", "tier": "app" }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "subnet_prod_db_a",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.20.21.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-prod-db-a", "tier": "database" }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "subnet_prod_db_b",
+        "type": "aws_subnet",
+        "config": {
+          "cidr_block": "10.20.22.0/24",
+          "availability_zone": "eu-west-1b",
+          "map_public_ip_on_launch": false,
+          "tags": { "Name": "webapp-prod-db-b", "tier": "database" }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "internet_gateways": [
+      {
+        "id": "igw_staging",
+        "type": "aws_internet_gateway",
+        "config": { "tags": { "Name": "webapp-staging-igw" } },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "igw_prod",
+        "type": "aws_internet_gateway",
+        "config": { "tags": { "Name": "webapp-prod-igw" } },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "nat_gateways": [
+      {
+        "id": "nat_staging",
+        "type": "aws_nat_gateway",
+        "config": {
+          "subnet_id": "subnet_staging_public_a",
+          "allocation_type": "eip",
+          "tags": { "Name": "webapp-staging-nat" }
+        },
+        "dependencies": ["subnet_staging_public_a", "igw_staging"],
+        "environment_scope": ["staging"],
+        "_note": "Single NAT gateway for staging — cost optimisation. No HA required in staging."
+      },
+      {
+        "id": "nat_prod_a",
+        "type": "aws_nat_gateway",
+        "config": {
+          "subnet_id": "subnet_prod_public_a",
+          "allocation_type": "eip",
+          "tags": { "Name": "webapp-prod-nat-a" }
+        },
+        "dependencies": ["subnet_prod_public_a", "igw_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "nat_prod_b",
+        "type": "aws_nat_gateway",
+        "config": {
+          "subnet_id": "subnet_prod_public_b",
+          "allocation_type": "eip",
+          "tags": { "Name": "webapp-prod-nat-b" }
+        },
+        "dependencies": ["subnet_prod_public_b", "igw_prod"],
+        "environment_scope": ["prod"],
+        "_note": "Two NAT gateways in prod (one per AZ) for high availability."
+      }
+    ],
+    "security_groups": [
+      {
+        "id": "sg_alb_staging",
+        "type": "aws_security_group",
+        "config": {
+          "name": "webapp-staging-alb-sg",
+          "ingress": [
+            { "from_port": 80, "to_port": 80, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"] },
+            { "from_port": 443, "to_port": 443, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"] }
+          ],
+          "egress": [
+            { "from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"] }
+          ]
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "sg_app_staging",
+        "type": "aws_security_group",
+        "config": {
+          "name": "webapp-staging-app-sg",
+          "ingress": [
+            { "from_port": 8080, "to_port": 8080, "protocol": "tcp", "source_security_group_id": "sg_alb_staging" }
+          ],
+          "egress": [
+            { "from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"] }
+          ]
+        },
+        "dependencies": ["vpc_staging", "sg_alb_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "sg_db_staging",
+        "type": "aws_security_group",
+        "config": {
+          "name": "webapp-staging-db-sg",
+          "ingress": [
+            { "from_port": 5432, "to_port": 5432, "protocol": "tcp", "source_security_group_id": "sg_app_staging" }
+          ],
+          "egress": []
+        },
+        "dependencies": ["vpc_staging", "sg_app_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "sg_alb_prod",
+        "type": "aws_security_group",
+        "config": {
+          "name": "webapp-prod-alb-sg",
+          "ingress": [
+            { "from_port": 443, "to_port": 443, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"] }
+          ],
+          "egress": [
+            { "from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"] }
+          ],
+          "_note": "HTTP (port 80) not included in prod — all traffic must use HTTPS."
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "sg_app_prod",
+        "type": "aws_security_group",
+        "config": {
+          "name": "webapp-prod-app-sg",
+          "ingress": [
+            { "from_port": 8080, "to_port": 8080, "protocol": "tcp", "source_security_group_id": "sg_alb_prod" }
+          ],
+          "egress": [
+            { "from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"] }
+          ]
+        },
+        "dependencies": ["vpc_prod", "sg_alb_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "sg_db_prod",
+        "type": "aws_security_group",
+        "config": {
+          "name": "webapp-prod-db-sg",
+          "ingress": [
+            { "from_port": 5432, "to_port": 5432, "protocol": "tcp", "source_security_group_id": "sg_app_prod" }
+          ],
+          "egress": []
+        },
+        "dependencies": ["vpc_prod", "sg_app_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "routing_tables": [],
+    "peering_connections": [],
+    "endpoints": []
+  },
+  "compute": {
+    "instances": [],
+    "auto_scaling_groups": [
+      {
+        "id": "asg_staging",
+        "type": "aws_autoscaling_group",
+        "config": {
+          "min_size": 1,
+          "max_size": 2,
+          "desired_capacity": 1,
+          "instance_type": "t3.small",
+          "ami": "<latest Amazon Linux 2023 AMI — use aws_ami data source>",
+          "subnets": ["subnet_staging_private_a", "subnet_staging_private_b"],
+          "health_check_type": "ELB",
+          "target_group": "tg_staging",
+          "iam_instance_profile": "instance_profile_app",
+          "user_data_script": "install and start application service"
+        },
+        "dependencies": ["subnet_staging_private_a", "subnet_staging_private_b", "sg_app_staging", "tg_staging", "instance_profile_app"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "asg_prod",
+        "type": "aws_autoscaling_group",
+        "config": {
+          "min_size": 2,
+          "max_size": 6,
+          "desired_capacity": 2,
+          "instance_type": "t3.medium",
+          "ami": "<latest Amazon Linux 2023 AMI — use aws_ami data source>",
+          "subnets": ["subnet_prod_private_a", "subnet_prod_private_b"],
+          "health_check_type": "ELB",
+          "target_group": "tg_prod",
+          "iam_instance_profile": "instance_profile_app",
+          "user_data_script": "install and start application service"
+        },
+        "dependencies": ["subnet_prod_private_a", "subnet_prod_private_b", "sg_app_prod", "tg_prod", "instance_profile_app"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "load_balancers": [
+      {
+        "id": "alb_staging",
+        "type": "aws_lb",
+        "config": {
+          "name": "webapp-staging-alb",
+          "internal": false,
+          "load_balancer_type": "application",
+          "subnets": ["subnet_staging_public_a", "subnet_staging_public_b"],
+          "security_groups": ["sg_alb_staging"],
+          "listeners": [
+            { "port": 80, "protocol": "HTTP", "action": "redirect to 443" },
+            { "port": 443, "protocol": "HTTPS", "action": "forward to tg_staging", "certificate_arn": "<ACM certificate ARN — variable>" }
+          ]
+        },
+        "dependencies": ["subnet_staging_public_a", "subnet_staging_public_b", "sg_alb_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "alb_prod",
+        "type": "aws_lb",
+        "config": {
+          "name": "webapp-prod-alb",
+          "internal": false,
+          "load_balancer_type": "application",
+          "subnets": ["subnet_prod_public_a", "subnet_prod_public_b"],
+          "security_groups": ["sg_alb_prod"],
+          "listeners": [
+            { "port": 443, "protocol": "HTTPS", "action": "forward to tg_prod", "certificate_arn": "<ACM certificate ARN — variable>" }
+          ],
+          "access_logs": { "bucket": "s3_logs_prod", "enabled": true }
+        },
+        "dependencies": ["subnet_prod_public_a", "subnet_prod_public_b", "sg_alb_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "tg_staging",
+        "type": "aws_lb_target_group",
+        "config": {
+          "name": "webapp-staging-tg",
+          "port": 8080,
+          "protocol": "HTTP",
+          "vpc_id": "vpc_staging",
+          "health_check": { "path": "/health", "healthy_threshold": 2, "unhealthy_threshold": 3 }
+        },
+        "dependencies": ["vpc_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "tg_prod",
+        "type": "aws_lb_target_group",
+        "config": {
+          "name": "webapp-prod-tg",
+          "port": 8080,
+          "protocol": "HTTP",
+          "vpc_id": "vpc_prod",
+          "health_check": { "path": "/health", "healthy_threshold": 2, "unhealthy_threshold": 3 }
+        },
+        "dependencies": ["vpc_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "serverless_functions": [],
+    "container_clusters": []
+  },
+  "storage": {
+    "object_storage": [
+      {
+        "id": "s3_assets_staging",
+        "type": "aws_s3_bucket",
+        "config": {
+          "bucket": "webapp-staging-assets",
+          "versioning": false,
+          "server_side_encryption": "AES256",
+          "block_public_access": true
+        },
+        "dependencies": [],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "s3_assets_prod",
+        "type": "aws_s3_bucket",
+        "config": {
+          "bucket": "webapp-prod-assets",
+          "versioning": true,
+          "server_side_encryption": "AES256",
+          "block_public_access": true
+        },
+        "dependencies": [],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "s3_logs_prod",
+        "type": "aws_s3_bucket",
+        "config": {
+          "bucket": "webapp-prod-alb-logs",
+          "versioning": false,
+          "server_side_encryption": "AES256",
+          "block_public_access": true,
+          "lifecycle_rule": { "expiration_days": 90 }
+        },
+        "dependencies": [],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "block_storage": [],
+    "file_storage": []
+  },
+  "databases": {
+    "relational": [
+      {
+        "id": "rds_staging",
+        "type": "aws_db_instance",
+        "config": {
+          "identifier": "webapp-staging-postgres",
+          "engine": "postgres",
+          "engine_version": "15.4",
+          "instance_class": "db.t3.micro",
+          "allocated_storage": 20,
+          "storage_type": "gp3",
+          "multi_az": false,
+          "db_subnet_group": ["subnet_staging_db_a", "subnet_staging_db_b"],
+          "vpc_security_group_ids": ["sg_db_staging"],
+          "backup_retention_period": 3,
+          "deletion_protection": false,
+          "db_name": "webapp",
+          "username": "<variable: db_username>",
+          "password": "<variable: db_password — sensitive>"
+        },
+        "dependencies": ["subnet_staging_db_a", "subnet_staging_db_b", "sg_db_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "rds_prod",
+        "type": "aws_db_instance",
+        "config": {
+          "identifier": "webapp-prod-postgres",
+          "engine": "postgres",
+          "engine_version": "15.4",
+          "instance_class": "db.t3.medium",
+          "allocated_storage": 100,
+          "storage_type": "gp3",
+          "multi_az": true,
+          "db_subnet_group": ["subnet_prod_db_a", "subnet_prod_db_b"],
+          "vpc_security_group_ids": ["sg_db_prod"],
+          "backup_retention_period": 14,
+          "deletion_protection": true,
+          "performance_insights_enabled": true,
+          "db_name": "webapp",
+          "username": "<variable: db_username>",
+          "password": "<variable: db_password — sensitive>"
+        },
+        "dependencies": ["subnet_prod_db_a", "subnet_prod_db_b", "sg_db_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "nosql": [],
+    "cache": []
+  },
+  "iam": {
+    "roles": [
+      {
+        "id": "role_app_ec2",
+        "type": "aws_iam_role",
+        "config": {
+          "name": "webapp-app-ec2-role",
+          "assume_role_policy": "ec2.amazonaws.com",
+          "managed_policies": [
+            "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+          ],
+          "inline_policies": [
+            {
+              "name": "webapp-s3-read",
+              "actions": ["s3:GetObject", "s3:ListBucket"],
+              "resources": ["s3_assets_staging", "s3_assets_prod"]
+            }
+          ]
+        },
+        "dependencies": [],
+        "environment_scope": "all"
+      }
+    ],
+    "policies": [],
+    "service_accounts": [
+      {
+        "id": "instance_profile_app",
+        "type": "aws_iam_instance_profile",
+        "config": { "name": "webapp-app-instance-profile", "role": "role_app_ec2" },
+        "dependencies": ["role_app_ec2"],
+        "environment_scope": "all"
+      }
+    ]
+  },
+  "dns_and_cdn": {
+    "dns_zones": [
+      {
+        "id": "route53_zone",
+        "type": "aws_route53_zone",
+        "config": {
+          "name": "example.com",
+          "comment": "Managed by Terraform"
+        },
+        "dependencies": [],
+        "environment_scope": "all",
+        "_note": "Zone already exists — use data source aws_route53_zone instead of creating a new one."
+      },
+      {
+        "id": "dns_record_staging",
+        "type": "aws_route53_record",
+        "config": {
+          "zone_id": "route53_zone",
+          "name": "staging.example.com",
+          "type": "A",
+          "alias": { "target": "alb_staging" }
+        },
+        "dependencies": ["route53_zone", "alb_staging"],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "dns_record_prod",
+        "type": "aws_route53_record",
+        "config": {
+          "zone_id": "route53_zone",
+          "name": "app.example.com",
+          "type": "A",
+          "alias": { "target": "alb_prod" }
+        },
+        "dependencies": ["route53_zone", "alb_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "cdn_distributions": []
+  },
+  "monitoring": {
+    "alarms": [
+      {
+        "id": "alarm_asg_cpu_prod",
+        "type": "aws_cloudwatch_metric_alarm",
+        "config": {
+          "alarm_name": "webapp-prod-asg-high-cpu",
+          "metric_name": "CPUUtilization",
+          "namespace": "AWS/EC2",
+          "statistic": "Average",
+          "period": 300,
+          "threshold": 75,
+          "comparison_operator": "GreaterThanThreshold",
+          "evaluation_periods": 2,
+          "alarm_actions": ["<SNS topic ARN — variable>"]
+        },
+        "dependencies": ["asg_prod"],
+        "environment_scope": ["prod"]
+      },
+      {
+        "id": "alarm_rds_cpu_prod",
+        "type": "aws_cloudwatch_metric_alarm",
+        "config": {
+          "alarm_name": "webapp-prod-rds-high-cpu",
+          "metric_name": "CPUUtilization",
+          "namespace": "AWS/RDS",
+          "statistic": "Average",
+          "period": 300,
+          "threshold": 80,
+          "comparison_operator": "GreaterThanThreshold",
+          "evaluation_periods": 2,
+          "alarm_actions": ["<SNS topic ARN — variable>"]
+        },
+        "dependencies": ["rds_prod"],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "log_groups": [
+      {
+        "id": "log_group_app_staging",
+        "type": "aws_cloudwatch_log_group",
+        "config": {
+          "name": "/webapp/staging/app",
+          "retention_in_days": 14
+        },
+        "dependencies": [],
+        "environment_scope": ["staging"]
+      },
+      {
+        "id": "log_group_app_prod",
+        "type": "aws_cloudwatch_log_group",
+        "config": {
+          "name": "/webapp/prod/app",
+          "retention_in_days": 90
+        },
+        "dependencies": [],
+        "environment_scope": ["prod"]
+      }
+    ],
+    "dashboards": []
+  },
+  "external_dependencies": [
+    {
+      "id": "acm_cert_staging",
+      "description": "ACM certificate for staging.example.com — must be validated before apply",
+      "why_external": "Certificate was provisioned manually and DNS validation record already exists",
+      "known_identifiers": { "note": "ARN provided via variable: acm_certificate_arn_staging" }
+    },
+    {
+      "id": "acm_cert_prod",
+      "description": "ACM certificate for app.example.com — must be validated before apply",
+      "why_external": "Certificate was provisioned manually and DNS validation record already exists",
+      "known_identifiers": { "note": "ARN provided via variable: acm_certificate_arn_prod" }
+    },
+    {
+      "id": "route53_zone_existing",
+      "description": "Route53 hosted zone for example.com — already exists, reference via data source",
+      "why_external": "Zone pre-dates this project and is shared with other services",
+      "known_identifiers": { "zone_name": "example.com" }
+    }
+  ],
+  "variables": {
+    "aws_region": { "type": "string", "default": "eu-west-1", "description": "AWS region for all resources" },
+    "db_username": { "type": "string", "sensitive": false, "description": "Master username for RDS instances" },
+    "db_password": { "type": "string", "sensitive": true, "description": "Master password for RDS instances — do not commit" },
+    "acm_certificate_arn_staging": { "type": "string", "sensitive": false, "description": "ARN of the ACM certificate for staging ALB HTTPS listener" },
+    "acm_certificate_arn_prod": { "type": "string", "sensitive": false, "description": "ARN of the ACM certificate for prod ALB HTTPS listener" },
+    "sns_topic_arn_prod": { "type": "string", "sensitive": false, "description": "ARN of the SNS topic for prod CloudWatch alarm notifications" }
+  },
+  "tags": {
+    "project": "WEBAPP_26_001",
+    "managed-by": "terraform",
+    "owner": "infrastructure-team"
+  },
+  "extractor_notes": [
+    "Directory layout: shared/ receives role_app_ec2, instance_profile_app, route53_zone (environment_scope: all). staging/ receives all staging-scoped resources. prod/ receives all prod-scoped resources.",
+    "Backend: design document does not specify a state store — backend.type set to 'auto'. Coder will derive S3 backend from provider (aws) with bucket=webapp-26-001-tfstate, separate state keys per directory: webapp-26-001/shared/terraform.tfstate, webapp-26-001/staging/terraform.tfstate, webapp-26-001/prod/terraform.tfstate.",
+    "Staging uses a single NAT gateway (cost optimisation). Prod uses one NAT gateway per AZ for HA.",
+    "RDS in staging is single-AZ with 3-day backup retention. Prod is Multi-AZ with 14-day retention and deletion protection enabled.",
+    "The Route53 hosted zone for example.com pre-exists — coder must use a data source (aws_route53_zone) rather than creating a new resource.",
+    "ACM certificates for both environments are pre-provisioned externally. Their ARNs must be supplied as input variables before apply.",
+    "ALB access logs are enabled in prod only. The log bucket (s3_logs_prod) must grant the AWS ELB service account s3:PutObject permission — coder must add the appropriate bucket policy.",
+    "HTTP (port 80) listener is present on staging ALB for convenience (redirects to 443). It is intentionally absent on the prod ALB.",
+    "ASG launch templates should use the latest Amazon Linux 2023 AMI retrieved via an aws_ami data source — do not hardcode AMI IDs.",
+    "SNS topic for CloudWatch alarms in prod is external (pre-existing). Its ARN is supplied via variable sns_topic_arn_prod.",
+    "S3 versioning is disabled in staging and enabled in prod — intentional per design document."
+  ],
+  "sync_state": {
+    "last_synced_commit": "a4f2b8d1c9e3f701234567890abcdef123456ab",
+    "last_synced_at": "2026-03-20T11:45:00Z",
+    "terraform_path": "{{PATH_INFRA}}/deployment/terraform"
+  }
+}

@@ -1,12 +1,14 @@
----
+﻿---
 name: e2e-flow-validation
 description: Run E2E and flow tests (flow-test, robot-tester). Produce E2E/Flow Failure Report and re-invoke developer when failures occur. Use when executing step 7b in frontend-development or when asked to run E2E, flow, or robot tests.
 preferred_agent: flow-test
 ---
 
+> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `env` object of `.claude/settings.json` to resolve all project variables before execution.
+
 # E2E / Flow Validation
 
-Use this skill when you need to **run E2E and flow tests** for the feature: flow-test (Playwright) and robot-tester (.robot files). This corresponds to **step 7b** in **`/frontend-development`**, inside the loop (**7a** ↔ **7a2** ↔ **7b** ↔ **7c**). **`/backend-development`** does **not** run step **7b**. **Skip** when `--no-tests` is set. **Prerequisites**: unit tests (**7a**) and build (**7a2**) must pass first.
+Use this skill when you need to **run E2E and flow tests** for the feature: flow-test (Playwright) and robot-tester (.robot files). This corresponds to **step 7b** in **`/frontend-development`**, inside the loop (**7a** ↔ **7a2** ↔ **7b** ↔ **7c**). **`/backend-development`** does **not** run step **7b**. **Skip** when `features.test` is `false` in `settings.json`. **Prerequisites**: unit tests (**7a**) and build (**7a2**) must pass first.
 
 ## Where Used
 
@@ -17,14 +19,14 @@ Use this skill when you need to **run E2E and flow tests** for the feature: flow
 
 | Context | How to run |
 |---------|------------|
-| **Direct** (manual) | Invoke with req-id and flow/TestPlan paths. Prefer launching **flow-test** (`.claude/agents/tests/flow-test.md`) and **robot-tester** (`.claude/agents/tests/robot-tester.md`) as needed. If unavailable, main agent executes the procedure. |
+| **Direct** (manual) | Invoke with tx-id and flow/TestPlan paths. Prefer launching **flow-test** (`.claude/agents/tests/flow-test.md`) and **robot-tester** (`.claude/agents/tests/robot-tester.md`) as needed. If unavailable, main agent executes the procedure. |
 | **In flow** | Step 7b invokes flow-test and robot-tester; agents follow this skill. |
 
 ## Purpose
 
 - **Flow tests**: Test screen-to-screen navigation with Playwright MCP.
 - **Robot tests**: Execute `.robot` files in TestPlan/ against the app.
-- **Layout validation** (when frontend scope exists): Verify that the implemented layout matches the "Layout & Design Guidance" (or "UI/UX Constraints") section in `{req-id}-frontend-tech-spec.md`. Layout non-compliance is a failure and follows the same report/re-invoke flow.
+- **Layout validation** (when frontend scope exists): Verify that the implemented layout matches the "Layout & Design Guidance" (or "UI/UX Constraints") section in `{tx-id}-frontend-tech-spec.md`. Layout non-compliance is a failure and follows the same report/re-invoke flow.
 - **Report failures**: Produce E2E/Flow Failure Report when any test fails (including layout non-compliance).
 - **Re-invoke developer**: Developer fixes; then re-run 7a (unit), 7a2 (build), then 7b.
 
@@ -36,14 +38,16 @@ Use this skill when you need to **run E2E and flow tests** for the feature: flow
 ## Inputs
 
 - **Flow documentation**: Screen catalog or flow docs.
-- **TestPlan/**: **`.robot`** files in `.claude/docs/requirements/{req-id-name}/tests/TestPlan/` (primary from step 5); **`.feature`** only if legacy files exist.
+- **TestPlan/**: **`.robot`** files in `{{PATH_DOCS}}/4-implementation/development/{tx-id-name}/tests/TestPlan/` (primary from step 5); **`.feature`** only if legacy files exist.
 - **Application URL**: For running tests.
-- **`{req-id-name}`**: Full requirement folder name under `.claude/docs/requirements/` (e.g. `RQ-001-criar-tarefa`); use in all report paths (same placeholder as flow-test, robot-tester, flow-test-logger).
+- **`{tx-id-name}`**: Full Transaction folder name under `{{PATH_DOCS}}/4-implementation/development/` (e.g. `TX-001-criar-tarefa`); use in all report paths (same placeholder as flow-test, robot-tester, flow-test-logger).
 
 ## Process
 
+> **Headful mode**: All browser-based tests (Playwright MCP and Robot Framework) run in **headed (non-headless) mode** — the browser window must be visible during execution.
+
 1. **Run flow-test**: Test navigation flows (screen → screen) with Playwright MCP per flow docs. Generate pass/fail report.
-2. **Validate layout** (when frontend scope and `{req-id}-frontend-tech-spec.md` has Layout & Design Guidance): Compare implemented screens with the layout specified in `{req-id}-frontend-tech-spec.md`. Non-compliance = failure.
+2. **Validate layout** (when frontend scope and `{tx-id}-frontend-tech-spec.md` has Layout & Design Guidance): Compare implemented screens with the layout specified in `{tx-id}-frontend-tech-spec.md`. Non-compliance = failure.
 3. **Run robot-tester** (if `.robot` exist in TestPlan/): Execute `.robot` test cases; report per case (PASS/FAIL).
 4. **On failure** (flow, layout, or Robot):
    - (Optional) Use **flow-test-logger** to investigate root cause; attach to E2E report.
@@ -59,11 +63,11 @@ Use this skill when you need to **run E2E and flow tests** for the feature: flow
 
 - **Status**: has_failures
 - **Source**: flow-test and/or robot-tester
-- **Requirement**: {req-id}
+- **Transaction**: {tx-id}
 
 ### Failed scenarios / flows
 
-Include flow failures, Robot test failures, and **layout non-compliance** (layout does not match `{req-id}-frontend-tech-spec.md`).
+Include flow failures, Robot test failures, and **layout non-compliance** (layout does not match `{tx-id}-frontend-tech-spec.md`).
 
 | Scenario or flow name | Screen / step failed | Error message | Screenshot (path) |
 |----------------------|----------------------|---------------|-------------------|
@@ -79,7 +83,7 @@ Include flow failures, Robot test failures, and **layout non-compliance** (layou
 Re-invoke **developer** with this report. After fixes and commit, re-run **unit tests first** (7a), then **build** (7a2), then flow-test and robot-tester (7b).
 ```
 
-**Report location**: `.claude/docs/requirements/{req-id-name}/tests/flows/` or `.claude/docs/requirements/{req-id-name}/tests/robot-reports/` (requirement docs and test artifacts—**not** under application source folders such as `src/`).
+**Report location**: `{{PATH_DOCS}}/4-implementation/development/{tx-id-name}/tests/flows/` or `{{PATH_DOCS}}/4-implementation/development/{tx-id-name}/tests/robot-reports/` (Transaction docs and test artifacts—**not** under application source folders such as `src/`).
 
 ## Order Rule
 

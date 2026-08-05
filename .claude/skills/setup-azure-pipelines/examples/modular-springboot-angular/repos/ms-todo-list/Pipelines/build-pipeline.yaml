@@ -1,0 +1,21 @@
+# =============================================================
+# THIS FILE BELONGS IN: ms-todo-list/Pipelines/build-pipeline.yaml
+# Commit to the ms-todo-list repository.
+# =============================================================
+
+trigger:
+  - develop
+  - release/*
+  - main
+
+name: $(Build.DefinitionName)+$(SourceBranchName)$(Rev:.r)
+
+resources:
+  repositories:
+    - repository: infra
+      type: git
+      name: AppMod/infra
+      ref: 'refs/heads/main'
+
+extends:
+  template: 'setup/azure/pipelines/templates/main-pipeline.yaml@infra'

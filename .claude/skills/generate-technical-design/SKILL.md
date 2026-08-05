@@ -1,13 +1,13 @@
----
+﻿---
 name: generate-technical-design
 description: Generate a Technical Design document in Markdown from a Functional Design Document (FDD) — same section outline as the Technical Design Template (Overview, Background, Terminology, Goals, Design, System Architecture, Data Models, integrations, NFRs, test plan, risks, etc.). Use when asked to create a technical design, TDD, design doc, TD from a functional design document, or "gerar documento de design técnico" from an FDD.
 ---
 
-> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `.claude/config/variables.md` to resolve all project variables before execution.
+> **Variable Resolution:** This file uses `{{VARIABLE_NAME}}` placeholders. Read `env` object of `.claude/settings.json` to resolve all project variables before execution.
 
 # Generate Technical Design
 
-Use this skill to produce a **single Markdown Technical Design (TD)** whose **outline matches the Technical Design Template** (Notion-style index: context, goals, design, architecture, data, events, operations, quality, delivery, risk). The **primary source** is a **Functional Design Document (FDD)**: Markdown (or equivalent) with typical areas such as document control, system overview, glossary, roles, requirement catalog, transactions, integrations, business rules, and screens. The **path** is always the one the user provides; there is no fixed repository filename.
+Use this skill to produce a **single Markdown Technical Design (TD)** whose **outline matches the Technical Design Template** (Notion-style index: context, goals, design, architecture, data, events, operations, quality, delivery, risk). The **primary source** is a **Functional Design Document (FDD)**: Markdown (or equivalent) with typical areas such as document control, system overview, glossary, roles, Transaction catalog, transactions, integrations, business rules, and screens. The **path** is always the one the user provides; there is no fixed repository filename.
 
 ## When to Use This Skill
 
@@ -86,7 +86,7 @@ Under each heading, write content derived from the FDD mapping below. Subsection
 
 ## Functional Design Document → Technical Design mapping
 
-Use this table to **source** each section. When the FDD uses identifiers (RQ-, TX-, BR-, NTI-, SCR-, FEAT-, EV-, NFR-), **preserve them** in parentheses or a reference column where useful.
+Use this table to **source** each section. When the FDD uses identifiers (TX-, TX-, BR-, NTI-, SCR-, FEAT-, EV-, NFR-), **preserve them** in parentheses or a reference column where useful.
 
 | FDD area (typical headings) | TD section(s) | Guidance |
 |----------------------------|---------------|----------|
@@ -94,9 +94,9 @@ Use this table to **source** each section. When the FDD uses identifiers (RQ-, T
 | *Scope and Objective*, *System Overview* | Overview, Background, Goals, Non-goals | Overview = short executive summary. Background = context, legacy vs target, dependencies. Goals = in-scope outcomes; Non-goals = explicit out-of-scope from FDD tables. |
 | *Glossary* | Terminology | Reuse definitions; do not invent new terms without `[TBD]`. |
 | *Business Roles* | Stakeholders | Map roles to consumers/operators of the system; note auth boundaries (e.g. supervisor). |
-| *Features*, *Requirement Catalog*, *Functional Requirements* | Goals, Design, Test Plan | Goals tie to measurable outcomes; Design summarizes capability areas; Test Plan lists traceability to RQ/TX/NTI acceptance. |
+| *Features*, *Transaction Catalog*, *Functional Transactions* | Goals, Design, Test Plan | Goals tie to measurable outcomes; Design summarizes capability areas; Test Plan lists traceability to TX/NTI acceptance. |
 | *Transaction Specifications* (TX), *Non-Transactional* (NTI), *Screens* (SCR) | Design, System Architecture | Describe flows, components, and boundaries; sequence at a high level. |
-| *Business Rules* (BR), cross-cutting RQ/NFR | Design, Error Handling, Best Practices | Centralize validation and messaging expectations. |
+| *Business Rules* (BR), cross-cutting TX-/NTI-/NFR | Design, Error Handling, Best Practices | Centralize validation and messaging expectations. **When the FDD describes LOV or search modals opened from inline-edit rows (e.g. grid rows with auto-commit on blur), the Design section MUST include an explicit focus contract: the row must not commit while the modal is open, focus must stay in the modal until dismissed, and a focus trap is required on the modal component.** |
 | *Integration Interfaces*, external dependencies, APIs | System Architecture, Resource Considerations, Rate Limits, Staging | Document upstream/downstream systems; capacity and limits if stated or `[TBD]`. |
 | Events catalog (EV-*), Kafka/async mentions | Event System | If the FDD is message-driven or lists events, specify topics/contracts at high level; else state "not applicable" or `[TBD]`. |
 | Persistence, tables (e.g. TDOT*, TRF*), entities | Data Models | Present **logical** model for the **target** solution; note legacy table names as mapping from Oracle/legacy when the FDD cites them. |
@@ -111,7 +111,7 @@ Use this table to **source** each section. When the FDD uses identifiers (RQ-, T
 
 ## Quality rules
 
-1. **Traceability**: When a statement comes from the FDD, attach the relevant **RQ-, TX-, BR-, NTI-, SCR-, FEAT-** (and **EV-, NFR-** when present) in the same bullet or in a parenthetical.
+1. **Traceability**: When a statement comes from the FDD, attach the relevant **TX-, TX-, BR-, NTI-, SCR-, FEAT-** (and **EV-, NFR-** when present) in the same bullet or in a parenthetical.
 2. **No fabrication**: Anything not supported by the FDD or user-supplied complementary docs must be labeled **`[TBD]`** or moved to **Open Issues** with a specific question — never present guesses as facts.
 3. **Legacy vs target**: When the FDD contrasts Oracle Forms / legacy with React + .NET (or other target), keep that distinction in **Background**, **System Architecture**, and **Data Models** (mapping tables).
 4. **Terminology**: Use the FDD glossary terms consistently; do not redefine established terms differently without flagging a conflict in Open Issues.
@@ -119,11 +119,11 @@ Use this table to **source** each section. When the FDD uses identifiers (RQ-, T
 
 ## Process
 
-1. **Resolve variables**: Read `.claude/config/variables.md` for `{{CLAUDE_DOC_PATH}}` if the user stores docs there; still honor explicit FDD paths outside that tree.
+1. **Resolve variables**: Read `.claude/settings.json` for `{{PATH_DOCS}}` if the user stores docs there; still honor explicit FDD paths outside that tree.
 2. **Read the FDD** (and optional complementary docs) completely enough to extract scope, glossary, roles, catalog, transactions, integrations, and NFRs.
 3. **Draft Document control & provenance** from FDD metadata and source path.
 4. **Fill sections in outline order**, using the mapping table; for each section, scan the FDD for the relevant subsections and tables.
-5. **Build Test Plan** from RQ/TX/NTI acceptance language where it exists; mark gaps.
+5. **Build Test Plan** from TX/NTI acceptance language where it exists; mark gaps.
 6. **Consolidate Open Issues** from all `[TBD]` items and explicit FDD "to be confirmed" notes.
 7. **Review** for traceability IDs and consistent terminology.
 8. **Write** the Markdown file to the **default or user-specified output path**.
@@ -131,4 +131,4 @@ Use this table to **source** each section. When the FDD uses identifiers (RQ-, T
 ## Reference
 
 - Expected shape: metadata, glossary, RQ catalog, transaction specs, integrations — always at the **path the user provides** (no fixed filename).
-- Peer procedural skills: `architect-requirement` (per-requirement tech spec), `generate-mockup` (visuals from requirements).
+- Peer procedural skills: `architect-transaction` (per-Transaction tech spec), `generate-mockup` (visuals from Transactions).

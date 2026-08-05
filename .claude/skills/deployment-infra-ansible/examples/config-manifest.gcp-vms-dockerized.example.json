@@ -1,0 +1,441 @@
+﻿{
+  "manifest_version": "1.0",
+  "generated_at": "2026-03-20T10:00:00Z",
+  "generated_by": "infra-ansible-extractor",
+  "source": "terraform-plan",
+  "project": {
+    "name": "PROJ_26_001",
+    "description": "GCP VM deployment — jump server + NGINX reverse proxy + Spring Boot backend + Angular frontend + PostgreSQL, across DEV and PROD environments, all VMs in private subnets, containerised workloads via Docker",
+    "environments": ["dev", "prod"]
+  },
+  "connection": {
+    "ssh_user": "debian",
+    "ssh_private_key_file": "{{ ssh_private_key_file }}",
+    "jump_server": {
+      "group": "jump",
+      "ssh_user": "debian",
+      "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+    }
+  },
+  "inventory": {
+    "strategy": "dynamic",
+    "dynamic_inventory": {
+      "script_path": "inventory/dynamic_inventory.sh",
+      "terraform_project_path": "../terraform",
+      "output_mappings": [
+        {
+          "terraform_output_key": "jump_server_ip",
+          "ansible_group": "jump",
+          "host_variable": "ansible_host",
+          "notes": "Jump server is in the public subnet and has an external IP. Direct SSH — no ProxyJump."
+        },
+        {
+          "terraform_output_key": "nginx_dev_ip",
+          "ansible_group": "nginx_dev",
+          "host_variable": "ansible_host",
+          "notes": "Single NGINX VM in the DEV private subnet."
+        },
+        {
+          "terraform_output_key": "nginx_prod_ip",
+          "ansible_group": "nginx_prod",
+          "host_variable": "ansible_host",
+          "notes": "Single NGINX VM in the PROD private subnet. Add more entries if multiple NGINX nodes exist."
+        },
+        {
+          "terraform_output_key": "app_dev_ip",
+          "ansible_group": "app_dev",
+          "host_variable": "ansible_host",
+          "notes": "Single app VM (backend + frontend containers) in the DEV private subnet."
+        },
+        {
+          "terraform_output_key": "app_prod_ip",
+          "ansible_group": "app_prod",
+          "host_variable": "ansible_host",
+          "notes": "Single app VM (backend + frontend containers) in the PROD private subnet."
+        },
+        {
+          "terraform_output_key": "db_dev_ip",
+          "ansible_group": "db_dev",
+          "host_variable": "ansible_host",
+          "notes": "Single PostgreSQL VM in the DEV private subnet."
+        },
+        {
+          "terraform_output_key": "db_prod_ip",
+          "ansible_group": "db_prod",
+          "host_variable": "ansible_host",
+          "notes": "Single PostgreSQL VM in the PROD private subnet."
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "jump",
+      "description": "Jump / bastion host — public IP, direct SSH. Used as ProxyCommand gateway for all other groups (ProxyJump not used — see extractor_notes).",
+      "vars": {
+        "ansible_ssh_common_args": ""
+      },
+      "children": []
+    },
+    {
+      "name": "nginx",
+      "description": "Parent group for all NGINX reverse proxy VMs across environments.",
+      "vars": {},
+      "children": ["nginx_dev", "nginx_prod"]
+    },
+    {
+      "name": "nginx_dev",
+      "description": "NGINX reverse proxy VM in the DEV environment — proxies HTTP/HTTPS to app_dev.",
+      "vars": {
+        "target_env": "dev",
+        "app_upstream_host": "{{ hostvars[groups['app_dev'][0]]['ansible_host'] }}",
+        "app_upstream_port": 8080,
+        "nginx_server_name": "dev.example.com",
+        "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+      },
+      "children": []
+    },
+    {
+      "name": "nginx_prod",
+      "description": "NGINX reverse proxy VM in the PROD environment — proxies HTTPS to app_prod, enforces TLS.",
+      "vars": {
+        "target_env": "prod",
+        "app_upstream_host": "{{ hostvars[groups['app_prod'][0]]['ansible_host'] }}",
+        "app_upstream_port": 8080,
+        "nginx_server_name": "app.example.com",
+        "nginx_ssl_certificate": "/etc/ssl/certs/app.example.com.crt",
+        "nginx_ssl_certificate_key": "/etc/ssl/private/app.example.com.key",
+        "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+      },
+      "children": []
+    },
+    {
+      "name": "app",
+      "description": "Parent group for all application VMs (backend Spring Boot + frontend Angular containers) across environments.",
+      "vars": {},
+      "children": ["app_dev", "app_prod"]
+    },
+    {
+      "name": "app_dev",
+      "description": "Application VM in the DEV environment — runs backend (Spring Boot) and frontend (Angular/NGINX) Docker containers.",
+      "vars": {
+        "target_env": "dev",
+        "backend_port": 8080,
+        "frontend_port": 80,
+        "db_host": "{{ hostvars[groups['db_dev'][0]]['ansible_host'] }}",
+        "db_port": 5432,
+        "db_name": "appdb_dev",
+        "db_user": "appuser",
+        "container_registry": "europe-west1-docker.pkg.dev/my-gcp-project/app",
+        "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+      },
+      "children": []
+    },
+    {
+      "name": "app_prod",
+      "description": "Application VM in the PROD environment — runs backend (Spring Boot) and frontend (Angular/NGINX) Docker containers.",
+      "vars": {
+        "target_env": "prod",
+        "backend_port": 8080,
+        "frontend_port": 80,
+        "db_host": "{{ hostvars[groups['db_prod'][0]]['ansible_host'] }}",
+        "db_port": 5432,
+        "db_name": "appdb_prod",
+        "db_user": "appuser",
+        "container_registry": "europe-west1-docker.pkg.dev/my-gcp-project/app",
+        "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+      },
+      "children": []
+    },
+    {
+      "name": "db",
+      "description": "Parent group for all PostgreSQL VMs across environments.",
+      "vars": {},
+      "children": ["db_dev", "db_prod"]
+    },
+    {
+      "name": "db_dev",
+      "description": "PostgreSQL VM in the DEV environment.",
+      "vars": {
+        "target_env": "dev",
+        "postgresql_version": "15",
+        "postgresql_port": 5432,
+        "postgresql_db_name": "appdb_dev",
+        "postgresql_db_user": "appuser",
+        "data_disk_device": "/dev/disk/by-id/google-proj-dev-db01-data",
+        "data_disk_fstype": "ext4",
+        "data_disk_mount_point": "/data/db",
+        "_note_data_disk_device": "Stable GCP path derived from google_compute_attached_disk.device_name. Never use /dev/sdb — sequential names are not guaranteed on cloud providers.",
+        "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+      },
+      "children": []
+    },
+    {
+      "name": "db_prod",
+      "description": "PostgreSQL VM in the PROD environment.",
+      "vars": {
+        "target_env": "prod",
+        "postgresql_version": "15",
+        "postgresql_port": 5432,
+        "postgresql_db_name": "appdb_prod",
+        "postgresql_db_user": "appuser",
+        "data_disk_device": "/dev/disk/by-id/google-proj-prod-db01-data",
+        "data_disk_fstype": "ext4",
+        "data_disk_mount_point": "/data/db",
+        "_note_data_disk_device": "Stable GCP path derived from google_compute_attached_disk.device_name. Never use /dev/sdb — sequential names are not guaranteed on cloud providers.",
+        "ansible_ssh_common_args": "-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ProxyCommand='ssh -W %h:%p -i {{ ssh_private_key_file }} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes {{ ansible_user }}@{{ hostvars[groups['jump'][0]]['ansible_host'] }}'"
+      },
+      "children": []
+    }
+  ],
+  "playbooks": [
+    {
+      "name": "site",
+      "file": "site.yml",
+      "description": "Full provisioning playbook — runs all roles on all hosts. Use for initial setup or full reprovisioning. Order: jump → db → app → nginx.",
+      "targets": ["jump", "db", "app", "nginx"],
+      "roles": ["common", "docker", "postgresql", "backend", "frontend", "nginx_proxy"],
+      "extra_vars": [
+        "backend_image_tag",
+        "frontend_image_tag"
+      ]
+    },
+    {
+      "name": "deploy",
+      "file": "deploy.yml",
+      "description": "Application-only deployment playbook — pulls new container images and restarts services. Does NOT touch DB or system config. Safe to run repeatedly in CI/CD.",
+      "targets": ["app", "nginx"],
+      "roles": ["backend", "frontend"],
+      "extra_vars": [
+        "backend_image_tag",
+        "frontend_image_tag",
+        "target_env"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "name": "common",
+      "description": "Base system configuration applied to all VMs — security hardening, package updates, logrotate, fail2ban, NTP sync, sysctl tuning.",
+      "tasks_summary": [
+        "Update apt cache and upgrade all packages",
+        "Install common packages: curl, wget, git, unzip, fail2ban, logrotate, chrony",
+        "Configure /etc/hosts for internal hostname resolution",
+        "Set timezone to UTC",
+        "Configure sysctl: disable IPv6 on internal interfaces, increase net.core.somaxconn",
+        "Enable and start fail2ban with SSH jail",
+        "Configure logrotate for /var/log/app/*.log with 14-day retention",
+        "Disable password-based SSH login (PasswordAuthentication no)",
+        "Create app system user for running containers (do NOT specify a fixed UID — cloud VM images often reserve UID 1000 for the default OS user)"
+      ],
+      "handlers": [
+        "restart fail2ban",
+        "restart sshd",
+        "reload sysctl"
+      ],
+      "defaults": {
+        "common_timezone": "UTC",
+        "common_app_user": "appuser",
+        "common_log_retention_days": 14
+      },
+      "required_vars": []
+    },
+    {
+      "name": "docker",
+      "description": "Installs Docker CE and configures the Docker daemon — applied to all VMs that run containers (app VMs).",
+      "tasks_summary": [
+        "Remove conflicting Docker packages (docker.io, docker-compose, podman)",
+        "Add Docker official GPG key and repository",
+        "Install docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin",
+        "Configure /etc/docker/daemon.json: log-driver json-file, log-opts max-size 50m / max-file 3, live-restore true",
+        "Enable and start Docker service",
+        "Add app system user to the docker group",
+        "Log in to the GCP Artifact Registry using gcloud access token (runs: gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin <registry>)"
+      ],
+      "handlers": [
+        "restart docker"
+      ],
+      "defaults": {
+        "docker_log_max_size": "50m",
+        "docker_log_max_file": "3",
+        "docker_registry": "europe-west1-docker.pkg.dev"
+      },
+      "required_vars": [
+        "container_registry"
+      ]
+    },
+    {
+      "name": "postgresql",
+      "description": "Installs PostgreSQL, initialises the cluster, creates application database and user — applied to db group only.",
+      "tasks_summary": [
+        "Add PostgreSQL official apt repository for the target version",
+        "Install postgresql-{{ postgresql_version }} and postgresql-client",
+        "Ensure PostgreSQL cluster is initialised and the service is started and enabled",
+        "Configure postgresql.conf: listen_addresses='*', max_connections=100, log_min_duration_statement=200",
+        "Configure pg_hba.conf: allow md5 auth from the app subnet CIDR (e.g. 10.0.2.0/24)",
+        "Reload PostgreSQL after config changes",
+        "Create application database ({{ postgresql_db_name }}) if not exists",
+        "Create application user ({{ postgresql_db_user }}) with password from vault_db_password",
+        "Grant all privileges on the application database to the application user",
+        "Create /etc/logrotate.d/postgresql entry for pg log rotation"
+      ],
+      "handlers": [
+        "reload postgresql",
+        "restart postgresql"
+      ],
+      "defaults": {
+        "postgresql_version": "15",
+        "postgresql_port": 5432,
+        "postgresql_max_connections": 100,
+        "postgresql_log_min_duration_ms": 200
+      },
+      "required_vars": [
+        "postgresql_db_name",
+        "postgresql_db_user",
+        "vault_db_password"
+      ]
+    },
+    {
+      "name": "backend",
+      "description": "Deploys the Spring Boot backend as a Docker container — applied to app group. Handles rolling updates via pull-then-restart.",
+      "tasks_summary": [
+        "Pull backend Docker image: {{ container_registry }}/backend:{{ backend_image_tag }}",
+        "Stop and remove existing backend container if running",
+        "Run backend container: name=backend, restart=unless-stopped, ports=[8080:8080], env=[SPRING_PROFILES_ACTIVE={{ target_env }}, DB_HOST={{ db_host }}, DB_PORT={{ db_port }}, DB_NAME={{ db_name }}, DB_USER={{ db_user }}, DB_PASS={{ vault_db_password }}, JAVA_OPTS=-Xmx512m -Xms256m]",
+        "Wait for backend health endpoint to return HTTP 200: GET http://localhost:8080{{ backend_health_path }} (retries: 10, delay: 5s) — confirm the actual path per service, do not assume /actuator/health",
+        "Fail the play if health check does not pass within timeout"
+      ],
+      "handlers": [],
+      "defaults": {
+        "backend_port": 8080,
+        "backend_health_path": "CONFIRM_WITH_TEAM — do not assume /actuator/health (only exists if actuator dependency is present); use a route the app actually exposes (e.g. /api/v1/health or any live endpoint)",
+        "backend_health_retries": 10,
+        "backend_health_delay": 5,
+        "backend_java_opts": "-Xmx512m -Xms256m"
+      },
+      "required_vars": [
+        "backend_image_tag",
+        "container_registry",
+        "target_env",
+        "db_host",
+        "db_port",
+        "db_name",
+        "db_user",
+        "vault_db_password"
+      ]
+    },
+    {
+      "name": "frontend",
+      "description": "Deploys the Angular frontend as a Docker container (served by NGINX inside the container) — applied to app group.",
+      "tasks_summary": [
+        "Pull frontend Docker image: {{ container_registry }}/frontend:{{ frontend_image_tag }}",
+        "Stop and remove existing frontend container if running",
+        "Run frontend container: name=frontend, restart=unless-stopped, ports=[{{ frontend_port }}:{{ frontend_container_port }}], env=[API_BASE_URL=http://{{ ansible_host }}:8080] — CONFIRM frontend_container_port: the port the process inside the container listens on (e.g. the NGINX inside the image may listen on 8080, not 80)",
+        "Wait for frontend to respond: GET http://localhost:{{ frontend_port }}/ (retries: 5, delay: 3s)"
+      ],
+      "handlers": [],
+      "defaults": {
+        "frontend_port": 80,
+        "frontend_health_retries": 5,
+        "frontend_health_delay": 3
+      },
+      "required_vars": [
+        "frontend_image_tag",
+        "container_registry"
+      ]
+    },
+    {
+      "name": "nginx_proxy",
+      "description": "Installs NGINX and configures it as a reverse proxy to the app VM — applied to nginx group. Handles HTTP→HTTPS redirect in PROD and plain HTTP in DEV.",
+      "tasks_summary": [
+        "Install nginx from apt",
+        "Remove default NGINX site config (/etc/nginx/sites-enabled/default)",
+        "Deploy /etc/nginx/sites-available/app.conf from template nginx_app.conf.j2 (upstream: {{ app_upstream_host }}:{{ app_upstream_port }}, server_name: {{ nginx_server_name }})",
+        "Enable site: symlink sites-available/app.conf → sites-enabled/app.conf",
+        "In PROD only: deploy /etc/nginx/snippets/ssl.conf with ssl_certificate and ssl_certificate_key paths",
+        "Validate NGINX config: nginx -t",
+        "Ensure NGINX is started and enabled",
+        "Open firewall for port 80 (DEV) and port 443 (PROD) via ufw if installed"
+      ],
+      "handlers": [
+        "reload nginx",
+        "restart nginx"
+      ],
+      "defaults": {
+        "nginx_worker_processes": "auto",
+        "nginx_worker_connections": 1024,
+        "nginx_keepalive_timeout": 65,
+        "nginx_client_max_body_size": "10m",
+        "nginx_proxy_read_timeout": 60
+      },
+      "required_vars": [
+        "app_upstream_host",
+        "app_upstream_port",
+        "nginx_server_name",
+        "target_env"
+      ]
+    }
+  ],
+  "variables": {
+    "global": {
+      "ansible_python_interpreter": "/usr/bin/python3",
+      "ssh_private_key_file": "~/.ssh/id_ed25519",
+      "container_registry": "europe-west1-docker.pkg.dev/my-gcp-project/app"
+    },
+    "group_vars": {
+      "all": {
+        "ansible_python_interpreter": "/usr/bin/python3",
+        "ssh_private_key_file": "~/.ssh/id_ed25519"
+      },
+      "app_dev": {
+        "target_env": "dev",
+        "db_host": "{{ hostvars[groups['db_dev'][0]]['ansible_host'] }}",
+        "db_name": "appdb_dev",
+        "db_user": "appuser"
+      },
+      "app_prod": {
+        "target_env": "prod",
+        "db_host": "{{ hostvars[groups['db_prod'][0]]['ansible_host'] }}",
+        "db_name": "appdb_prod",
+        "db_user": "appuser"
+      },
+      "db_dev": {
+        "postgresql_db_name": "appdb_dev",
+        "postgresql_db_user": "appuser"
+      },
+      "db_prod": {
+        "postgresql_db_name": "appdb_prod",
+        "postgresql_db_user": "appuser"
+      }
+    },
+    "vault_vars": [
+      "vault_db_password",
+      "vault_registry_token"
+    ]
+  },
+  "ansible_cfg": {
+    "inventory": "inventory/dynamic_inventory.sh",
+    "remote_user": "debian",
+    "private_key_file": "~/.ssh/id_ed25519",
+    "host_key_checking": "False",
+    "ssh_args": ""
+  },
+  "extractor_notes": [
+    "IPs are not yet resolved — terraform plan was used as the source. Dynamic inventory script will call terraform output -json at pipeline runtime.",
+    "All private VMs (nginx, app, db) are in subnets with no external IP. SSH access is exclusively via the jump server using ProxyCommand (NOT ProxyJump). ProxyJump requires a live SSH agent to forward credentials — unavailable in Docker containers and CI/CD pipeline agents, causing 'Connection closed by UNKNOWN port 65535'. ProxyCommand with an explicit -i key works in every environment. ProxyCommand is set per-group in group_vars, NOT globally in ansible.cfg, to avoid applying it to the jump server itself.",
+    "The jump server connects directly (no ProxyCommand). Its ansible_ssh_common_args is intentionally set to empty string in group_vars/jump.yml to override any inherited value.",
+    "The backend role reads vault_db_password from ansible-vault. Populate group_vars/app_dev/vault.yml and group_vars/app_prod/vault.yml with real values before first run.",
+    "Docker registry login uses GCP Artifact Registry with gcloud access token. The pipeline agent must have the GCP service account key configured before running the docker role.",
+    "NGINX in DEV serves HTTP only (port 80, no TLS). NGINX in PROD serves HTTPS (port 443) and redirects port 80 to HTTPS. TLS certificates must be placed at the paths defined in nginx_prod group_vars before running the nginx_proxy role in PROD.",
+    "The frontend container serves the Angular SPA from its own embedded NGINX on port 80. The outer NGINX (nginx_proxy role) reverse-proxies to the app VM, not to individual container ports — the app VM's local NGINX or docker-compose handles internal routing if needed.",
+    "Health check path: NEVER default to /actuator/health for Spring Boot. That endpoint only exists if spring-boot-starter-actuator is a declared dependency. Always confirm the actual reachable path with the team before generating the role. Use backend_health_path in role defaults and mark it CONFIRM_WITH_TEAM in the manifest.",
+    "Container internal port: the right-hand side of host_port:container_port must be what the process INSIDE the container actually listens on. For frontend containers built with NGINX, the internal NGINX process typically listens on 8080 (not 80). Always confirm per Docker image — do not assume host port equals container port.",
+    "PostgreSQL pg_hba.conf allows connections from the app VM CIDR. The coder must calculate this CIDR from the Terraform VPC configuration or parameterise it as a variable.",
+    "ssh_private_key_file in group_vars/all.yml uses the default local key path (~/.ssh/id_ed25519). In CI/CD pipelines (Azure Pipelines), this will be overridden by --extra-vars pointing to the Azure DevOps Secure File download path."
+  ],
+  "sync_state": {
+    "last_synced_commit": "b7c3d9e1f2a4501234567890abcdef987654cd",
+    "last_synced_at": "2026-03-21T09:15:00Z",
+    "ansible_path": "{{PATH_INFRA}}/deployment/ansible"
+  }
+}

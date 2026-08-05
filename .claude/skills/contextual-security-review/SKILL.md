@@ -1,11 +1,11 @@
----
+﻿---
 name: contextual-security-review
-description: Invoke contextual security agents (auth, cloud, runtime, supply-chain) when scope justifies. Use when executing step 10 in frontend-development or backend-development, or when asked for contextual security review. Skip if --no-security.
+description: Invoke contextual security agents (auth, cloud, runtime, supply-chain) when scope justifies. Use when executing step 10 in frontend-development or backend-development, or when asked for contextual security review. Skip if features.security is false in settings.json.
 ---
 
 # Contextual Security Review
 
-Use this skill when you need to **invoke additional security agents** based on feature scope: authentication, cloud/IaC, runtime attacks, supply chain. This corresponds to **step 10** in **`/frontend-development`** or **`/backend-development`**. **Skip** when `--no-security` is set. security-architect is already used in step **4b**; invoke others when scope justifies.
+Use this skill when you need to **invoke additional security agents** based on feature scope: authentication, cloud/IaC, runtime attacks, supply chain. This corresponds to **step 10** in **`/frontend-development`** or **`/backend-development`**. **Skip** when `features.security` is `false` in `settings.json`. security-architect is already used in step **4b**; invoke others when scope justifies.
 
 ## Where Used
 
@@ -16,7 +16,7 @@ Use this skill when you need to **invoke additional security agents** based on f
 
 | Context | How to run |
 |---------|------------|
-| **Direct** (manual) | Invoke with req-id and scope description. Select and launch relevant agents from `.claude/agents/security/` per the decision table below. |
+| **Direct** (manual) | Invoke with tx-id and scope description. Select and launch relevant agents from `.claude/agents/security/` per the decision table below. |
 | **In flow** | Step 10 invokes contextual agents as needed; no single preferred agent. |
 
 ## Purpose
@@ -42,7 +42,7 @@ Use this skill when you need to **invoke additional security agents** based on f
 
 ## Process
 
-1. **Assess scope**: Does the requirement touch login/auth? IaC? API endpoints? Pipeline?
+1. **Assess scope**: Does the Transaction touch login/auth? IaC? API endpoints? Pipeline?
 2. **Select agents**: Use table above.
 3. **Invoke**: Pass feature context, tech-spec, changed files.
 4. **Document findings**: Any Critical/High should be addressed; recommend fixes.

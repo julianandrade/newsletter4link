@@ -1,4 +1,4 @@
----
+﻿---
 name: dotnet
 description: .NET 8.0 backend development guidelines, Clean Architecture patterns, CQRS with MediatR, and Entity Framework Core. Use when working with .NET backend projects, implementing APIs, creating domain entities, setting up repositories, or configuring ASP.NET Core applications. Includes FluentValidation, AutoMapper, PostgreSQL integration, and Podman containerization.
 ---
@@ -326,7 +326,7 @@ FuzzyMatching__Threshold="0.8"
 
 ## Security Considerations
 
-- **Authentication**: JWT bearer token requirements
+- **Authentication**: JWT bearer token Transactions
 - **Authorization**: Define required roles/permissions per endpoint
 - **Input Validation**: Specify sanitization rules
 - **Data Protection**: Note sensitive fields requiring encryption

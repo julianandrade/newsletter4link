@@ -1,0 +1,22 @@
+# =============================================================
+# THIS FILE BELONGS IN: ms-todo-list/Pipelines/Variables/variables-dev.yaml
+# Per-repo DEV environment overrides.
+# =============================================================
+
+variables:
+  - name: "Pool.Name"
+    value: "appmod-agents"
+
+  - name: "Pool.Image"
+    value: ""
+
+  # App.Host is set at pipeline runtime from Terraform output — do NOT hardcode IPs here.
+  # These two variables combine with the dynamic App.Host to form the health check target.
+  - name: "App.HealthPort"
+    value: "8080"
+
+  - name: "App.HealthPath"
+    value: "/actuator/health"
+
+  - name: "App.Angular.Config"
+    value: ""   # not used for maven repos — harmless

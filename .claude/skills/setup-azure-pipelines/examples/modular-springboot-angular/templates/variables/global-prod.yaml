@@ -1,0 +1,15 @@
+variables:
+  - name: "Environment.ID"
+    value: "prod"
+
+  - name: "Environment.Name"
+    value: "appmod_prod"
+
+  - name: "Database.Host"
+    value: "db-prod.appmod.internal"
+
+  - name: "Database.Port"
+    value: "27017"
+
+  - name: "Ansible.Target.Group"
+    value: "app_servers_prod"

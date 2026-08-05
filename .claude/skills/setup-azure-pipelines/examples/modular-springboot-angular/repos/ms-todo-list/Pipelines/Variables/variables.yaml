@@ -1,0 +1,30 @@
+# =============================================================
+# THIS FILE BELONGS IN: ms-todo-list/Pipelines/Variables/variables.yaml
+# App identity — does not change between environments.
+# App.Tech + App.GroupName determine which sub-pipeline runs.
+# =============================================================
+
+variables:
+  - name: "App.GroupName"
+    value: "ms"
+
+  - name: "App.Tech"
+    value: "maven"
+
+  - name: "App.Type"
+    value: "manager"
+
+  - name: "App.Module"
+    value: "todo"
+
+  - name: "App.Name"
+    value: "$(App.GroupName)-$(App.Module)-$(App.Type)"
+
+  - name: "App.Version"
+    value: "v1"
+
+  - name: "API.Port.Container"
+    value: "$(API.Port.Container.Default)"
+
+  - name: "API.Port.Public"
+    value: "8080"

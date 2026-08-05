@@ -1,0 +1,27 @@
+parameters:
+  - name: Environment
+    default: "dev"
+
+steps:
+  - bash: |
+      set -e
+      echo "Waiting for $(App.Name) at $(App.HealthEndpoint)..."
+      for i in $(seq 1 10); do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          --connect-timeout 5 --max-time 10 \
+          "$(App.HealthEndpoint)")
+        [ "$STATUS" -eq 200 ] && echo "Service is up" && break
+        echo "HTTP $STATUS — waiting 10s (attempt $i/10)..."
+        sleep 10
+      done
+    displayName: "Wait for service health"
+
+  - task: PublishTestResults@2
+    displayName: "Publish verify results placeholder"
+    condition: eq(variables.deployModule, 'true')
+    inputs:
+      testResultsFormat: "JUnit"
+      testResultsFiles: "Report-${{ parameters.Environment }}.xml"
+      mergeTestResults: true
+      failTaskOnFailedTests: false
+      testRunTitle: "$(App.Name)-${{ parameters.Environment }}-Verify-$(Build.BuildId)"

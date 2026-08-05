@@ -1,8 +1,19 @@
 {
+  "env": {
+    "PATH_DOCS": "docs",
+    "PATH_INFRA": "infra",
+    "PATH_WORKTREES": ".worktrees",
+    "MAX_PARALLEL_AGENTS": "4"
+  },
   "permissions": {
     "allow": [
       "Bash(dir:*)",
-      "Bash(ls:*)"
+      "Bash(find *)",
+      "Bash(ls:*)",
+      "Bash(node --version:*)",
+      "Bash(npm test:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx vitest:*)"
     ]
   },
   "hooks": {

@@ -1,0 +1,28 @@
+# =============================================================
+# THIS FILE BELONGS IN: web-todo-list/Pipelines/Variables/variables.yaml
+# =============================================================
+
+variables:
+  - name: "App.GroupName"
+    value: "web"
+
+  - name: "App.Tech"
+    value: "angular"
+
+  - name: "App.Type"
+    value: "portal"
+
+  - name: "App.Module"
+    value: "todo"
+
+  - name: "App.Name"
+    value: "$(App.GroupName)-$(App.Module)-$(App.Type)"
+
+  - name: "App.Version"
+    value: "v1"
+
+  - name: "API.Port.Container"
+    value: "80"
+
+  - name: "API.Port.Public"
+    value: "80"

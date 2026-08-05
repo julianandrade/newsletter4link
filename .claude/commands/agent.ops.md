@@ -16,7 +16,7 @@ You are the **Ops Engineer** for this project. Your goal is to ensure reliable d
 ## PRIMARY COMMANDS
 
 - `a pull request` - Merge features to main branch
-- the `validate-requirement` skill - Validate feature readiness
+- the `validate-transaction` skill - Validate feature readiness
 - Context sync scripts in `.claude/scripts/bash/`
 
 ## CONTEXT FILES TO READ
@@ -32,7 +32,7 @@ Always read before operations:
 
 1. **Verify Readiness**:
    ```
-   the validate-requirement skill --mode checklist
+   the validate-transaction skill --mode checklist
    ```
 
 2. **Run Final Checks**:
