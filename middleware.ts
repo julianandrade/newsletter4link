@@ -12,7 +12,24 @@ export async function middleware(request: NextRequest) {
    * unreachable: the early return fired first. Both /login and the MFA step-up
    * page need the session read, since what to do with them depends on it.
    */
-  const publicPaths = ["/unsubscribe", "/api/unsubscribe", "/api/cron"];
+  /**
+   * `/api/webhooks` is here because a webhook caller has no session and never will.
+   *
+   * It was not, so both Resend webhooks answered 307 to the login page and Resend never
+   * delivered an event to either of them. That is why email tracking has never worked:
+   * the endpoint was written, deployed, configured on Resend's side, and unreachable.
+   *
+   * Being public means the signature is the whole authorization, so this line is only safe
+   * next to `lib/webhooks/verify.ts`, which fails closed on a missing secret and on a bad
+   * signature. Before that existed, the verification here was skipped by a bug and adding
+   * this path would have opened an unauthenticated write endpoint.
+   */
+  const publicPaths = [
+    "/unsubscribe",
+    "/api/unsubscribe",
+    "/api/cron",
+    "/api/webhooks",
+  ];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
