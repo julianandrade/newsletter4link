@@ -13,6 +13,14 @@ interface RSSArticle {
   sourceName: string;
 }
 
+/**
+ * Upper bound on stored feed content.
+ *
+ * Matches the rewrite pipeline's own input cap, so nothing is stored that could never
+ * be used, and nothing usable is discarded on the way in.
+ */
+const MAX_FEED_CONTENT_CHARS = 24_000;
+
 const parser = new Parser({
   customFields: {
     item: [
@@ -38,9 +46,23 @@ function cleanHtmlContent(html: string): string {
   // Remove extra whitespace
   text = text.replace(/\s+/g, " ").trim();
 
-  // Limit length to ~2000 characters for embedding
-  if (text.length > 2000) {
-    text = text.substring(0, 2000) + "...";
+  /**
+   * Kept long. The old cap was 2000 characters, for the embedding.
+   *
+   * That cap was redundant: `generateEmbedding` already truncates its own input to
+   * 8000 characters, because that is its model's limit and not this function's
+   * business. What the cap did instead was throw away text the publisher had already
+   * given us. MIT Technology Review, Ars Technica and The Verge all publish more than
+   * 2000 characters in their feeds, and 1416 stored articles are cut at exactly 2003.
+   *
+   * It matters for RQ-006, which needs real text to write from and refuses when there
+   * is too little. Recovering what the feed already carries is a better answer than
+   * fetching the publisher's page, and it raises no question about scraping at all.
+   *
+   * The remaining cap is a sanity bound against a feed that inlines an entire book.
+   */
+  if (text.length > MAX_FEED_CONTENT_CHARS) {
+    text = text.substring(0, MAX_FEED_CONTENT_CHARS) + "...";
   }
 
   return text;
