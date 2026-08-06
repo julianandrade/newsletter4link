@@ -136,6 +136,8 @@ export async function POST(request: Request) {
           sourceUrl: article.sourceUrl,
           category: article.category,
           relevanceScore: article.relevanceScore,
+          // Only the lead's is read, to find the top story's image. See content-image.ts.
+          content: article.content,
         })),
         projects: projects.map((project: any) => ({
           id: project.id,

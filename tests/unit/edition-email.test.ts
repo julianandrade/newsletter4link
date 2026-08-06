@@ -540,6 +540,92 @@ describe("a named edition", () => {
  * ever passed one, while the label arrived as "Week 31 · 2026" from editionLabel, so the
  * masthead read "WEEK 31 · 2026 · 2026".
  */
+/**
+ * The two-column top story, which edition-template.ts has always been able to render and no send
+ * ever triggered, because nothing set topStoryImage.
+ */
+describe("the top story image", () => {
+  it("comes from the lead article's stored content", () => {
+    const edition = input({
+      articles: [
+        {
+          title: "Lead",
+          summary: "s",
+          sourceUrl: "https://techcrunch.com/lead",
+          category: ["Models"],
+          relevanceScore: 9,
+          content: `<p>Words.</p><img src="https://cdn.techcrunch.com/lead.jpg" width="1200">`,
+        },
+      ],
+      projects: [],
+    });
+
+    expect(edition.topStoryImage).toBe("https://cdn.techcrunch.com/lead.jpg");
+  });
+
+  it("renders the two-column layout when there is one", () => {
+    const html = renderEditionEmail(
+      input({
+        articles: [
+          {
+            title: "Lead",
+            summary: "s",
+            sourceUrl: "https://techcrunch.com/lead",
+            relevanceScore: 9,
+            content: `<img src="https://cdn.techcrunch.com/lead.jpg" width="1200">`,
+          },
+        ],
+        projects: [],
+      })
+    );
+
+    expect(html).toContain("https://cdn.techcrunch.com/lead.jpg");
+    expect(html).toContain('class="stack thumb"');
+  });
+
+  it("stays undefined when the lead carries no usable image", () => {
+    expect(input().topStoryImage).toBeUndefined();
+
+    const beacon = input({
+      articles: [
+        {
+          title: "Lead",
+          summary: "s",
+          sourceUrl: "https://techcrunch.com/lead",
+          relevanceScore: 9,
+          content: `<img src="https://cdn.example.com/p.gif" width="1" height="1">`,
+        },
+      ],
+      projects: [],
+    });
+    expect(beacon.topStoryImage).toBeUndefined();
+  });
+
+  it("reads the lead's content, not another article's", () => {
+    const edition = input({
+      articles: [
+        {
+          title: "Not the lead",
+          summary: "s",
+          sourceUrl: "https://example.com/b",
+          relevanceScore: 2,
+          content: `<img src="https://cdn.example.com/wrong.jpg" width="900">`,
+        },
+        {
+          title: "The lead",
+          summary: "s",
+          sourceUrl: "https://example.com/a",
+          relevanceScore: 9,
+          content: `<img src="https://cdn.example.com/right.jpg" width="900">`,
+        },
+      ],
+      projects: [],
+    });
+
+    expect(edition.topStoryImage).toBe("https://cdn.example.com/right.jpg");
+  });
+});
+
 describe("the masthead", () => {
   it("does not print the year twice for an unnamed edition", () => {
     const email = input({

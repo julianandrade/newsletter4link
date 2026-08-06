@@ -79,6 +79,8 @@ export default async function EditionArchivePage({
               sourceUrl: true,
               category: true,
               relevanceScore: true,
+              // Only the lead's is read, to find the top story's image.
+              content: true,
             },
           },
         },
@@ -101,6 +103,7 @@ export default async function EditionArchivePage({
       sourceUrl: row.article.sourceUrl,
       category: row.article.category,
       relevanceScore: row.article.relevanceScore,
+      content: row.article.content,
     })),
     projects: edition.projects.map((row) => ({
       name: row.project.name,

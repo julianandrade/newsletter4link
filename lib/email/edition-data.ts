@@ -9,6 +9,7 @@
 
 import { config } from "@/lib/config";
 import { weekRangeLabel } from "@/lib/radar/week";
+import { firstContentImage } from "./content-image";
 import type { EditionEmail, EmailArticle, EmailSection, EmailTrend } from "./edition-template";
 import type { Trend } from "@/lib/trends/compute";
 
@@ -18,6 +19,14 @@ export interface SourceArticle {
   sourceUrl: string;
   category?: string[];
   relevanceScore?: number | null;
+  /**
+   * The article's stored text, used only to find the lead story's image.
+   *
+   * Optional because most callers do not select it. A caller that does gets the two-column top
+   * story when the publisher's feed carried a picture; one that does not gets the single-column
+   * layout, which is what every send produced before this existed.
+   */
+  content?: string | null;
 }
 
 export interface SourceProject {
@@ -263,6 +272,14 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
         ? "A quieter week: we held back thin items rather than pad the brief."
         : undefined,
     topStory,
+    /**
+     * The design's two-column top story, finally reachable.
+     *
+     * The branch has always been in edition-template.ts and nothing ever set this, so the layout
+     * had never appeared in a real send. Taken from the lead's stored content rather than from a
+     * new column, so it works on articles collected before this existed.
+     */
+    topStoryImage: firstContentImage(lead?.content),
     sections,
     trends: input.trends ?? [],
     internal: project
