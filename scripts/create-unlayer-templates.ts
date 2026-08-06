@@ -9,6 +9,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { createRadarFrameTemplate } from "./templates/radar-frame";
+import { createRadarUnlayerTemplate } from "./templates/radar-unlayer";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -1660,6 +1661,12 @@ async function main() {
         description:
           "The built-in edition with an editable frame. The masthead, the intro copy, the call to action and the footer are Unlayer rows you can restyle or remove. The stories, the topic sections and the trend radar arrive as merge tags rendered by the same code the built-in edition uses, because a design cannot hold a loop. A block that renders nothing takes its row with it.",
         ...createRadarFrameTemplate(branding),
+      },
+      {
+        name: "AI Radar Weekly - Unlayer",
+        description:
+          "The edition converted as far as a design can go. Every part of the frame that appears once is a row you can restyle, the four block headings included. What repeats N times stays a merge tag, because a design has no loop; dark mode, the Outlook conditional and the rows that vanish when empty are reinstated on export.",
+        ...createRadarUnlayerTemplate(branding),
       },
     ];
 

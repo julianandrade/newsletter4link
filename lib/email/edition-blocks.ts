@@ -159,15 +159,33 @@ export function bulletRow(bullet: { text: string; url: string }): string {
  * Was built inline inside renderEditionEmail. Extracted so a template can place it through a
  * merge tag and get the same box, note included.
  */
+/**
+ * Whether a block renders its own heading.
+ *
+ * v3 of the template lifts the headings out into Unlayer text blocks so an editor can reword and
+ * restyle them, which means the block must be able to render without one. Default true, so the
+ * code renderer and v2 are untouched.
+ */
+export interface HeadingOption {
+  heading?: boolean;
+}
+
 export function bulletsBlock(
   bullets: Array<{ text: string; url: string }>,
-  note: string | undefined
+  note: string | undefined,
+  options: HeadingOption = {}
 ): string {
   if (bullets.length === 0) return "";
 
+  const heading = options.heading !== false;
+
   return `<tr><td class="px" style="padding:28px 40px 0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT};">
-  <tr><td style="padding:22px 24px 8px 24px; font-family:${SANS}; font-size:12px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">This week in 30 seconds</td></tr>
+  ${
+    heading
+      ? `<tr><td style="padding:22px 24px 8px 24px; font-family:${SANS}; font-size:12px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">This week in 30 seconds</td></tr>`
+      : `<tr><td style="padding:14px 24px 0 24px; font-size:0; line-height:0;">&nbsp;</td></tr>`
+  }
   ${
     note
       ? `<tr><td class="t-muted" style="padding:2px 24px 0 24px; font-family:${SANS}; font-size:12px; line-height:18px; mso-line-height-rule:exactly; color:${MUTED}; font-style:italic;">${escapeHtml(
@@ -262,15 +280,21 @@ export function trendRow(trend: EmailTrend, isLast: boolean): string {
       }`;
 }
 
-export function trendBlock(trends: EmailTrend[]): string {
+export function trendBlock(trends: EmailTrend[], options: HeadingOption = {}): string {
   if (trends.length === 0) return "";
+
+  const heading = options.heading !== false;
 
   return `<tr><td class="px" id="radar" style="padding:30px 40px 0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT};">
   <tr><td height="3" style="height:3px; background-color:${PRIMARY}; font-size:0; line-height:3px;">&nbsp;</td></tr>
-  <tr><td style="padding:20px 24px 4px 24px;">
+  ${
+    heading
+      ? `<tr><td style="padding:20px 24px 4px 24px;">
     <div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">Trend radar &nbsp;·&nbsp; accelerating this week</div>
-  </td></tr>
+  </td></tr>`
+      : `<tr><td style="padding:14px 24px 0 24px; font-size:0; line-height:0;">&nbsp;</td></tr>`
+  }
   <tr><td style="padding:0 24px 22px 24px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
 ${trends.map((trend, index) => trendRow(trend, index === trends.length - 1)).join("\n")}
@@ -280,15 +304,20 @@ ${trends.map((trend, index) => trendRow(trend, index === trends.length - 1)).joi
 </td></tr>`;
 }
 
-export function topStoryBlock(data: EditionEmail): string {
+export function topStoryBlock(data: EditionEmail, options: HeadingOption = {}): string {
   const story = data.topStory;
   if (!story) return "";
 
   const image = safeUrl(data.topStoryImage);
   const meta = story.source ? `Lead: ${story.source}` : "";
+  const heading = options.heading !== false;
 
   return `<tr><td class="px" id="top-story" style="padding:34px 40px 0 40px;">
-  <div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${ACCENT}; text-transform:uppercase; padding-bottom:10px;">Top story</div>
+  ${
+    heading
+      ? `<div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${ACCENT}; text-transform:uppercase; padding-bottom:10px;">Top story</div>`
+      : ""
+  }
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
     <td valign="top" class="stack" style="${image ? "width:380px;" : "width:100%;"}">
@@ -344,14 +373,25 @@ export function topStoryBlock(data: EditionEmail): string {
 </td></tr>`;
 }
 
-export function internalBlock(internal: EmailInternal | undefined): string {
+export function internalBlock(
+  internal: EmailInternal | undefined,
+  options: HeadingOption = {}
+): string {
   if (!internal) return "";
 
+  const heading = options.heading !== false;
+
   return `<tr><td class="px" style="padding:30px 40px 0 40px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+  ${
+    heading
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
     <td style="background-color:${PRIMARY}; padding:4px 8px; font-family:${SANS}; font-size:10px; line-height:14px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.4px; color:#ffffff; text-transform:uppercase;">Internal</td>
-  </tr></table>
-  <div class="h2 t-strong" style="font-family:${SERIF}; font-size:21px; line-height:28px; mso-line-height-rule:exactly; color:${INK}; padding:12px 0 6px 0;">${link(
+  </tr></table>`
+      : ""
+  }
+  <div class="h2 t-strong" style="font-family:${SERIF}; font-size:21px; line-height:28px; mso-line-height-rule:exactly; color:${INK}; padding:${
+    heading ? "12px" : "0"
+  } 0 6px 0;">${link(
     internal.url,
     internal.title,
     `color:${INK}; text-decoration:none;`

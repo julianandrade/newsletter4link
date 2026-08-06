@@ -17,7 +17,12 @@ import {
   renderProjectItemsHtml,
 } from "./edition-template";
 import { buildEditionEmail, publicationName } from "./edition-data";
-import { editionMergeValues, renderMergeTags, RADAR_MERGE_TAGS } from "./merge-tags";
+import {
+  editionMergeValues,
+  isHeadlessTemplate,
+  renderMergeTags,
+  RADAR_MERGE_TAGS,
+} from "./merge-tags";
 import { weekRangeLabel } from "@/lib/radar/week";
 
 export interface Article {
@@ -121,8 +126,9 @@ export function replaceContentMergeTags(
         label,
       }),
       // Same as the server renderer: this substitutes into HTML exported from Unlayer, where a
-      // block lands inside Unlayer's own table cell and a bare <tr> would be invalid.
-      { wrapInTable: true }
+      // block lands inside Unlayer's own table cell and a bare <tr> would be invalid, and the
+      // template says whether it owns the block headings.
+      { wrapInTable: true, headless: isHeadlessTemplate(html) }
     ),
   };
 

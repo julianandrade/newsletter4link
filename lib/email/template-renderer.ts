@@ -19,7 +19,7 @@ import {
   type BlockPosition,
 } from "./edition-template";
 import { buildEditionEmail, publicationName } from "./edition-data";
-import { editionMergeValues, renderMergeTags } from "./merge-tags";
+import { editionMergeValues, isHeadlessTemplate, renderMergeTags } from "./merge-tags";
 import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 export interface CustomBlock {
@@ -221,7 +221,9 @@ export function renderTemplate(
         year,
         label,
       }),
-      { wrapInTable: true }
+      // The template says whether it owns the block headings. v3 does; v2 and the hand-built
+      // templates do not.
+      { wrapInTable: true, headless: isHeadlessTemplate(html) }
     ),
   };
 

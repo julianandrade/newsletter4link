@@ -1,55 +1,54 @@
 /**
- * v2 of the AI Radar Weekly: an editable frame around a code-rendered body.
+ * v3 of the AI Radar Weekly: the frame decomposed as far as a design can go.
  *
- * The built-in edition is code, and the things that make it good are the things an Unlayer design
- * cannot hold: MSO conditionals, the [data-ogsc] dark mirror, a logo pair swapped by media query,
- * and sections that render only when they have items. This variant keeps all of that and hands
- * the editor everything else.
+ * v2 hands the editor the masthead, the copy, the call to action and the footer. v3 goes further
+ * and lifts the four block headings out of the code into Unlayer text blocks, so "This week in 30
+ * seconds", "Top story", "Trend radar" and the "Internal" badge become words an editor can change,
+ * recolour and reorder.
  *
- * What the editor controls: the masthead, the intro copy, the call to action, the footer, the
- * order of the blocks, and whether a block is there at all.
+ * WHAT COULD NOT BE CONVERTED, and why. This is the list the spec's Risk 2 asked for, written now
+ * that it is known rather than promised:
  *
- * What stays code: anything that repeats N times. A design has no loop, so the articles, the
- * topic sections and the trend radar rows arrive through merge tags rendered by
- * lib/email/edition-blocks.ts, which is the same code the built-in edition uses. That is what
- * keeps a template built here from looking like a different product.
+ *  1. Anything repeating N times. The articles inside a topic section, the topic sections
+ *     themselves, and the rows of the trend radar. A design has no loop, and the sections come
+ *     from `article.category` at runtime, so not even a row per known topic can be pre-seeded.
+ *     These stay merge tags in v3 exactly as in v2. This is the floor, not a shortcoming.
+ *  2. A topic section's eyebrow. It is the topic's name, one per section, so it repeats and
+ *     follows rule 1. The four headings v3 does lift are the ones that appear exactly once.
+ *  3. The 64px accent rule. Unlayer's divider draws one colour across the full width; the design
+ *     wants 64px of accent then a hairline. It is an html block, editable as HTML without the
+ *     visual controls.
+ *  4. The "Covered by N sources" badge and the "Lead:" caption. Inline table cells whose presence
+ *     depends on the data, so they live inside {{top_story}}.
+ *  5. The light/dark logo pair and its MSO conditional. Unlayer emits neither a conditional
+ *     comment nor a media-query swap; the pair is seeded as two images with the class hooks, and
+ *     lib/email/harden-export.ts reinstates the conditional on export.
+ *  6. The dark-mode block and the [data-ogsc] mirror. Same reason. Injected on export.
  *
- * Two seeded details carry meaning:
- *
- *  - `_meta.htmlClassNames` seeds the hooks lib/email/harden-export.ts needs. `card`, `tint`,
- *    `t-body`, `t-strong`, `t-muted` and `rule` are what the injected dark-mode block selects on;
- *    `radar-optional` marks a row that must disappear when its merge tag renders nothing. A row
- *    the editor adds later carries no hook and simply gets no dark-mode treatment, which is
- *    degradation rather than breakage.
- *  - the html blocks holding merge tags have `containerPadding: "0px"`, because each block brings
- *    the 40px gutter it has in the code renderer. Changing that gutter means editing the block,
- *    not the row.
+ * So "full conversion" means every part of the frame that appears once is a row. It does not mean
+ * the merge tags go away, and it cannot.
  */
+
+import { RADAR_HEADLESS_MARKER } from "@/lib/email/merge-tags";
 
 interface Branding {
   logoUrl: string;
   bannerUrl: string;
 }
 
-/**
- * Where the Linkroad logo pair lives.
- *
- * Baked into the stored html at seed time, the way the other seeded templates bake
- * `branding.logoUrl`. Relative paths never resolve in an email client, so it has to be absolute.
- */
+const ACCENT = "#ff7901";
+const PRIMARY = "#2d4449";
+const MUTED = "#6b7674";
+const TINT = "#e9eeee";
+const CARD = "#fbfbfa";
+const PAGE = "#eceeed";
+const SANS = "Arial,Helvetica,sans-serif";
+
 function assetBase(): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://newsletter4link.vercel.app";
   return `${appUrl.replace(/\/$/, "")}/email`;
 }
 
-const ACCENT = "#ff7901";
-const PRIMARY = "#2d4449";
-const MUTED = "#6b7674";
-const CARD = "#fbfbfa";
-const PAGE = "#eceeed";
-const SANS = "Arial,Helvetica,sans-serif";
-
-/** An Unlayer text block. */
 function text(
   id: string,
   html: string,
@@ -79,17 +78,6 @@ function text(
   };
 }
 
-/**
- * Marks a merge tag as the body of its optional row.
- *
- * lib/email/harden-export.ts drops a row whose body holds no text. Without the marker it would
- * have to guess emptiness from the row's whole text, and the guess mistakes a heading for content.
- */
-function body(tag: string): string {
-  return `<div class="radar-body">${tag}</div>`;
-}
-
-/** An Unlayer raw-html block. Used for everything a merge tag fills. */
 function rawHtml(
   id: string,
   html: string,
@@ -109,11 +97,25 @@ function rawHtml(
 }
 
 /**
- * One row, one column.
+ * Marks a merge tag as the body of its optional row.
  *
- * `htmlClassNames` lands on the rendered element, which is how the hardening pass finds the row
- * to drop and how the injected dark-mode CSS finds what to recolour.
+ * Load-bearing in v3, more than in v2. The heading shares the row with the body, so without the
+ * marker the hardening pass judges the row by its whole text, finds the heading, and keeps an
+ * otherwise empty row alive. That is the exact bug a test caught here.
  */
+function body(tag: string): string {
+  return `<div class="radar-body">${tag}</div>`;
+}
+
+/** An eyebrow: the small uppercase label above a block. Editable, which is the point of v3. */
+function eyebrow(id: string, label: string, color: string): Record<string, unknown> {
+  return text(
+    id,
+    `<p style="line-height: 145%; letter-spacing: 1.6px; text-transform: uppercase;"><strong>${label}</strong></p>`,
+    { containerPadding: "26px 40px 10px", fontSize: "11px", color }
+  );
+}
+
 function row(
   id: string,
   contents: Array<Record<string, unknown>>,
@@ -121,7 +123,6 @@ function row(
     rowClasses?: string;
     columnClasses?: string;
     columnBackground?: string;
-    rowBackground?: string;
     padding?: string;
   } = {}
 ): Record<string, unknown> {
@@ -147,7 +148,7 @@ function row(
     values: {
       displayCondition: null,
       columns: false,
-      backgroundColor: options.rowBackground ?? "",
+      backgroundColor: "",
       columnsBackgroundColor: "",
       backgroundImage: {
         url: "",
@@ -164,23 +165,31 @@ function row(
   };
 }
 
-export function createRadarFrameTemplate(branding: Branding): {
+export function createRadarUnlayerTemplate(branding: Branding): {
   design: object;
   html: string;
 } {
+  const logoHtml = branding.logoUrl
+    ? `<div style="text-align:right; padding-bottom:10px;"><img src="${branding.logoUrl}" width="130" alt="Linkroad" style="display:inline-block; border:0; width:130px;"></div>`
+    : `<div style="text-align:right; padding-bottom:10px;"><img class="logo-light" src="${assetBase()}/linkroad-h-on-light.png" width="130" height="17" alt="Linkroad" style="display:inline-block; border:0; width:130px; height:17px;"><img class="logo-dark" src="${assetBase()}/linkroad-h-on-dark.png" width="130" height="17" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; width:130px; height:17px;"></div>`;
+
   const design = {
     counters: {
-      u_column: 11,
-      u_row: 11,
-      u_content_text: 6,
-      u_content_html: 7,
+      u_column: 16,
+      u_row: 16,
+      u_content_text: 12,
+      u_content_html: 9,
       u_content_button: 1,
-      u_content_image: branding.logoUrl ? 1 : 0,
     },
     body: {
       id: "body",
       rows: [
-        // Navigation, not content, so it sits above the card on the page background.
+        // Declares that this template owns the block headings. lib/email/merge-tags.ts finds it
+        // and renders the blocks headless, or every heading would appear twice.
+        row("headless-marker", [rawHtml("headless-marker-html", RADAR_HEADLESS_MARKER)], {
+          rowClasses: "u_row",
+        }),
+
         row(
           "view-in-browser",
           [
@@ -195,36 +204,17 @@ export function createRadarFrameTemplate(branding: Branding): {
               }
             ),
           ],
-          { rowClasses: "u_row t-muted", columnClasses: "u_column" }
+          { rowClasses: "u_row t-muted" }
         ),
 
         row(
           "masthead",
           [
-            ...(branding.logoUrl
-              ? [
-                  {
-                    id: "masthead-logo",
-                    type: "image",
-                    values: {
-                      containerPadding: "26px 40px 0px",
-                      anchor: "",
-                      src: { url: branding.logoUrl, width: 130, height: 17 },
-                      textAlign: "right",
-                      altText: "Linkroad",
-                      action: { name: "web", values: { href: "", target: "_blank" } },
-                    },
-                  },
-                ]
-              : []),
+            rawHtml("masthead-logo", logoHtml, "26px 40px 0px"),
             text(
               "masthead-wordmark",
               `<p style="line-height: 120%; letter-spacing: 2px;"><strong>AI&nbsp;RADAR<span style="color: ${ACCENT};">.</span></strong></p>`,
-              {
-                containerPadding: branding.logoUrl ? "10px 40px 0px" : "26px 40px 0px",
-                fontSize: "20px",
-                color: PRIMARY,
-              }
+              { containerPadding: "0px 40px", fontSize: "20px", color: PRIMARY }
             ),
             text(
               "masthead-meta",
@@ -232,15 +222,9 @@ export function createRadarFrameTemplate(branding: Branding): {
               { containerPadding: "6px 40px 18px", fontSize: "11px", color: MUTED }
             ),
           ],
-          {
-            rowClasses: "u_row card",
-            columnClasses: "u_column t-strong",
-            columnBackground: CARD,
-          }
+          { rowClasses: "u_row card", columnClasses: "u_column t-strong", columnBackground: CARD }
         ),
 
-        // The design's signature: 64px of accent against a full-width rule. Not expressible as an
-        // Unlayer divider, which draws one colour across the whole width.
         row(
           "accent-rule",
           [
@@ -268,33 +252,61 @@ export function createRadarFrameTemplate(branding: Branding): {
           { rowClasses: "u_row card", columnClasses: "u_column t-body", columnBackground: CARD }
         ),
 
-        // The five content blocks. radar-optional on the four that can be empty: the hardening
-        // pass removes the row rather than leaving a gap where a section did not render.
-        row("tldr", [rawHtml("tldr-html", body("{{tldr}}"))], {
-          rowClasses: "u_row card radar-optional",
-          columnClasses: "u_column tint",
-          columnBackground: CARD,
-        }),
-        row("top-story", [rawHtml("top-story-html", body("{{top_story}}"))], {
-          rowClasses: "u_row card radar-optional",
-          columnClasses: "u_column",
-          columnBackground: CARD,
-        }),
+        // The four blocks whose headings v3 owns. Heading and body share a row, so the hardening
+        // pass takes both when the body renders nothing.
+        row(
+          "tldr",
+          [
+            eyebrow("tldr-heading", "This week in 30 seconds", PRIMARY),
+            rawHtml("tldr-html", body("{{tldr}}")),
+          ],
+          {
+            rowClasses: "u_row card radar-optional",
+            columnClasses: "u_column tint",
+            columnBackground: CARD,
+          }
+        ),
+        row(
+          "top-story",
+          [
+            eyebrow("top-story-heading", "Top story", ACCENT),
+            rawHtml("top-story-html", body("{{top_story}}")),
+          ],
+          {
+            rowClasses: "u_row card radar-optional",
+            columnClasses: "u_column",
+            columnBackground: CARD,
+          }
+        ),
         row("sections", [rawHtml("sections-html", "{{sections}}")], {
           rowClasses: "u_row card",
           columnClasses: "u_column",
           columnBackground: CARD,
         }),
-        row("trends", [rawHtml("trends-html", body("{{trend_radar}}"))], {
-          rowClasses: "u_row card radar-optional",
-          columnClasses: "u_column tint",
-          columnBackground: CARD,
-        }),
-        row("internal", [rawHtml("internal-html", body("{{internal}}"))], {
-          rowClasses: "u_row card radar-optional",
-          columnClasses: "u_column",
-          columnBackground: CARD,
-        }),
+        row(
+          "trends",
+          [
+            eyebrow("trends-heading", "Trend radar &nbsp;·&nbsp; accelerating this week", PRIMARY),
+            rawHtml("trends-html", body("{{trend_radar}}")),
+          ],
+          {
+            rowClasses: "u_row card radar-optional",
+            columnClasses: "u_column tint",
+            columnBackground: CARD,
+          }
+        ),
+        row(
+          "internal",
+          [
+            eyebrow("internal-heading", "Internal", ACCENT),
+            rawHtml("internal-html", body("{{internal}}")),
+          ],
+          {
+            rowClasses: "u_row card radar-optional",
+            columnClasses: "u_column",
+            columnBackground: CARD,
+          }
+        ),
 
         row(
           "cta",
@@ -305,10 +317,7 @@ export function createRadarFrameTemplate(branding: Branding): {
               values: {
                 containerPadding: "30px 40px 34px",
                 anchor: "",
-                href: {
-                  name: "web",
-                  values: { href: "{{portal_url}}", target: "_blank" },
-                },
+                href: { name: "web", values: { href: "{{portal_url}}", target: "_blank" } },
                 buttonColors: {
                   color: "#ffffff",
                   backgroundColor: ACCENT,
@@ -342,10 +351,14 @@ export function createRadarFrameTemplate(branding: Branding): {
               "0px 40px"
             ),
             text(
-              "footer-text",
-              `<p style="line-height: 165%;"><strong style="color: ${PRIMARY}; letter-spacing: 1px;">AI RADAR WEEKLY</strong> &nbsp;·&nbsp; curated by the Linkroad AI practice &nbsp;·&nbsp; {{articleCount}} stories this week.</p>` +
-                `<p style="line-height: 165%;"><a href="{{portal_url}}" rel="noopener" target="_blank">AI Radar portal</a> &nbsp;·&nbsp; <a href="{{unsubscribe_url}}" rel="noopener" target="_blank">Unsubscribe</a></p>`,
+              "footer-brand",
+              `<p style="line-height: 165%;"><strong style="color: ${PRIMARY}; letter-spacing: 1px;">AI RADAR WEEKLY</strong> &nbsp;·&nbsp; curated by the Linkroad AI practice &nbsp;·&nbsp; {{articleCount}} stories this week.</p>`,
               { containerPadding: "22px 40px 0px", fontSize: "12px", color: MUTED }
+            ),
+            text(
+              "footer-links",
+              `<p style="line-height: 165%;"><a href="{{portal_url}}" rel="noopener" target="_blank">AI Radar portal</a> &nbsp;·&nbsp; <a href="{{unsubscribe_url}}" rel="noopener" target="_blank">Unsubscribe</a></p>`,
+              { containerPadding: "10px 40px 0px", fontSize: "12px", color: MUTED }
             ),
             text(
               "footer-legal",
@@ -408,14 +421,9 @@ export function createRadarFrameTemplate(branding: Branding): {
     schemaVersion: 16,
   };
 
-  /**
-   * The stored html, which is what a send actually renders.
-   *
-   * Written by hand rather than exported, because seeding runs headless and Unlayer's exporter
-   * only runs in a browser. Saving the template from the editor once replaces this with Unlayer's
-   * own export; until then this is a faithful stand-in carrying the same tags and the same class
-   * hooks, so the hardening pass and the dark mode behave identically either way.
-   */
+  const eyebrowStyle = (color: string) =>
+    `font-family:${SANS}; font-size:11px; line-height:16px; font-weight:bold; letter-spacing:1.6px; color:${color}; text-transform:uppercase;`;
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -443,6 +451,7 @@ export function createRadarFrameTemplate(branding: Branding): {
 </style>
 </head>
 <body class="body-bg" style="margin:0; padding:0; background-color:${PAGE}; -webkit-font-smoothing:antialiased;">
+${RADAR_HEADLESS_MARKER}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="body-bg" style="background-color:${PAGE};">
 <tr><td align="center" style="padding:18px 12px 40px 12px;">
 
@@ -453,15 +462,8 @@ export function createRadarFrameTemplate(branding: Branding): {
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="wrap card" style="width:640px; max-width:640px; background-color:${CARD};">
 
 <tr><td class="px t-strong" style="padding:26px 40px 0 40px;">
-${
-  branding.logoUrl
-    ? // One asset, so it cannot be swapped for the dark card the way the Linkroad pair is.
-      // Uploading light-on-transparent artwork is the fix, same as the built-in edition.
-      `  <div style="text-align:right; padding-bottom:10px;"><img src="${branding.logoUrl}" width="130" alt="Linkroad" style="display:inline-block; border:0; width:130px;"></div>\n`
-    : // The Linkroad pair, swapped by the media query the hardening pass injects. The dark one is
-      // wrapped by wrapMsoLogo on export so Word-engine Outlook does not show both.
-      `  <div style="text-align:right; padding-bottom:10px;"><img class="logo-light" src="${assetBase()}/linkroad-h-on-light.png" width="130" height="17" alt="Linkroad" style="display:inline-block; border:0; width:130px; height:17px;"><img class="logo-dark" src="${assetBase()}/linkroad-h-on-dark.png" width="130" height="17" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; width:130px; height:17px;"></div>\n`
-}  <div style="font-family:${SANS}; font-size:20px; line-height:24px; font-weight:bold; letter-spacing:2px; color:${PRIMARY};">AI&nbsp;RADAR<span style="color:${ACCENT};">.</span></div>
+  ${logoHtml}
+  <div style="font-family:${SANS}; font-size:20px; line-height:24px; font-weight:bold; letter-spacing:2px; color:${PRIMARY};">AI&nbsp;RADAR<span style="color:${ACCENT};">.</span></div>
   <div class="t-muted" style="padding-top:6px; padding-bottom:18px; font-family:${SANS}; font-size:11px; line-height:14px; letter-spacing:1.2px; color:${MUTED}; text-transform:uppercase;">{{edition_label}} &nbsp;·&nbsp; {{date_range}}</div>
 </td></tr>
 
@@ -474,11 +476,27 @@ ${
 
 <tr><td class="px t-body" style="padding:22px 40px 0 40px; font-family:${SANS}; font-size:15px; line-height:24px; color:#3c4547;">The week in AI, curated by the Linkroad AI practice. Edit or remove this paragraph: it is yours.</td></tr>
 
-<tr class="radar-optional"><td><div class="radar-body">{{tldr}}</div></td></tr>
-<tr class="radar-optional"><td><div class="radar-body">{{top_story}}</div></td></tr>
+<tr class="radar-optional"><td>
+  <div class="px t-strong" style="padding:26px 40px 10px 40px; ${eyebrowStyle(PRIMARY)}">This week in 30 seconds</div>
+  <div class="radar-body">{{tldr}}</div>
+</td></tr>
+
+<tr class="radar-optional"><td>
+  <div class="px" style="padding:26px 40px 10px 40px; ${eyebrowStyle(ACCENT)}">Top story</div>
+  <div class="radar-body">{{top_story}}</div>
+</td></tr>
+
 <tr><td>{{sections}}</td></tr>
-<tr class="radar-optional"><td><div class="radar-body">{{trend_radar}}</div></td></tr>
-<tr class="radar-optional"><td><div class="radar-body">{{internal}}</div></td></tr>
+
+<tr class="radar-optional"><td>
+  <div class="px t-strong" style="padding:26px 40px 10px 40px; ${eyebrowStyle(PRIMARY)}">Trend radar &nbsp;·&nbsp; accelerating this week</div>
+  <div class="radar-body">{{trend_radar}}</div>
+</td></tr>
+
+<tr class="radar-optional"><td>
+  <div class="px" style="padding:26px 40px 10px 40px; ${eyebrowStyle(ACCENT)}">Internal</div>
+  <div class="radar-body">{{internal}}</div>
+</td></tr>
 
 <tr><td class="px cta" align="center" style="padding:30px 40px 34px 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>

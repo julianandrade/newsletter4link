@@ -22,6 +22,23 @@ import {
 } from "./edition-blocks";
 import type { EditionEmail } from "./edition-template";
 
+/**
+ * A template declaring that it owns the block headings itself.
+ *
+ * v3 lifts "This week in 30 seconds", "Top story", "Trend radar" and the "Internal" badge into
+ * Unlayer text blocks so an editor can reword and restyle them, which means the merge tags must
+ * render without them or the heading appears twice.
+ *
+ * Carried in the template's own markup rather than in a column on EmailTemplate, for two reasons:
+ * it needs no migration, and it survives Unlayer's export, so a template still declares itself
+ * correctly after the editor saves it.
+ */
+export const RADAR_HEADLESS_MARKER = "<!--radar:headless-->";
+
+export function isHeadlessTemplate(html: string): boolean {
+  return html.includes(RADAR_HEADLESS_MARKER);
+}
+
 export interface MergeTag {
   /** The name inside the braces. */
   name: string;
@@ -124,18 +141,25 @@ export function unlayerMergeTagOptions(
  */
 export function editionMergeValues(
   edition: EditionEmail,
-  options: { wrapInTable?: boolean } = {}
+  options: { wrapInTable?: boolean; headless?: boolean } = {}
 ): Record<string, string> {
   const wrap = options.wrapInTable ? asTable : identity;
+
+  /**
+   * `headless` drops each block's own heading, for the template variant that lifts them into
+   * Unlayer text blocks so an editor can reword them. The topic sections keep theirs: a section's
+   * eyebrow is its topic name, one per section, and what repeats cannot become a row.
+   */
+  const heading = options.headless ? { heading: false } : {};
 
   return {
     edition_label: escapeHtml(edition.editionLabel),
     date_range: escapeHtml(edition.dateLabel),
-    tldr: wrap(bulletsBlock(edition.bullets, edition.bulletsNote)),
-    top_story: wrap(topStoryBlock(edition)),
+    tldr: wrap(bulletsBlock(edition.bullets, edition.bulletsNote, heading)),
+    top_story: wrap(topStoryBlock(edition, heading)),
     sections: wrap(edition.sections.map(sectionBlock).join("\n")),
-    trend_radar: wrap(trendBlock(edition.trends)),
-    internal: wrap(internalBlock(edition.internal)),
+    trend_radar: wrap(trendBlock(edition.trends, heading)),
+    internal: wrap(internalBlock(edition.internal, heading)),
   };
 }
 

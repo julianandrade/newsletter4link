@@ -121,6 +121,69 @@ describe("dropEmptyOptionalRows", () => {
 });
 
 /**
+ * The marker exists because the older heuristic was wrong.
+ *
+ * "No lowercase letter and no digit means empty" held for an eyebrow baked in as "TREND RADAR" and
+ * failed the moment a template wrote "Trend radar" and uppercased it in CSS: the heading kept its
+ * own empty row alive. With the body marked, emptiness stops being a guess.
+ */
+describe("dropEmptyOptionalRows with the body marked", () => {
+  it("drops a row whose body is empty even when the heading is sentence case", () => {
+    const html =
+      `<tr class="radar-optional"><td>` +
+      `<div style="text-transform: uppercase;">Trend radar and accelerating this week</div>` +
+      `<div class="radar-body"></div>` +
+      `</td></tr>`;
+
+    expect(dropEmptyOptionalRows(html)).toBe("");
+  });
+
+  it("keeps the row when the body has content, heading and all", () => {
+    const html =
+      `<tr class="radar-optional"><td>` +
+      `<div>Trend radar</div>` +
+      `<div class="radar-body"><p>Agents rose 62%.</p></div>` +
+      `</td></tr>`;
+
+    expect(dropEmptyOptionalRows(html)).toBe(html);
+  });
+
+  it("treats a body of only whitespace and nbsp as empty", () => {
+    const html =
+      `<tr class="radar-optional"><td><div class="radar-body">  &nbsp; </div></td></tr>`;
+    expect(dropEmptyOptionalRows(html)).toBe("");
+  });
+
+  it("ignores markup in the body that carries no text, like an empty table", () => {
+    const html =
+      `<tr class="radar-optional"><td><div class="radar-body">` +
+      `<table><tr><td></td></tr></table>` +
+      `</div></td></tr>`;
+
+    expect(dropEmptyOptionalRows(html)).toBe("");
+  });
+
+  it("finds the body through nested markup", () => {
+    const html =
+      `<div class="radar-optional"><table><tr><td>` +
+      `<div>SOME HEADING</div>` +
+      `<div class="radar-body"><table><tr><td>real content here</td></tr></table></div>` +
+      `</td></tr></table></div>`;
+
+    expect(dropEmptyOptionalRows(html)).toBe(html);
+  });
+
+  it("falls back to the old rule when a row carries no body marker", () => {
+    // Kept for a row written by hand. Seeded templates always carry the marker.
+    const empty = `<tr class="radar-optional"><td>TREND RADAR</td></tr>`;
+    const full = `<tr class="radar-optional"><td>real content</td></tr>`;
+
+    expect(dropEmptyOptionalRows(empty)).toBe("");
+    expect(dropEmptyOptionalRows(full)).toBe(full);
+  });
+});
+
+/**
  * Unlayer wraps every row in a div, then a table, then a column table, then a content table.
  * Toy markup does not exercise the depth counting, and the depth counting is the part that can
  * delete real content if it gets the extent wrong.
