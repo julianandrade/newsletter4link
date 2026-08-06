@@ -1,6 +1,7 @@
 import { load } from "cheerio";
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { structuredOutputTuning } from "@/lib/ai-models";
 import { messageText, describeBlocks } from "@/lib/ai/message";
 import { rethrowIfModelRejected } from "@/lib/ai/model";
 
@@ -222,6 +223,17 @@ export function buildExtractionInput(
   return `${text}${block}`;
 }
 
+/**
+ * One line in both prompts, phrased the way the model documentation asks for.
+ *
+ * With thinking turned off, these models can occasionally write internal markup into the
+ * visible reply. Two counterintuitive rules apply, and both are followed here: the
+ * instruction is generic rather than naming the tags, because naming them is measurably
+ * less effective, and there is deliberately no instruction telling the model not to think
+ * or not to reason, because that kind of rule makes the leakage worse rather than better.
+ */
+const NO_MARKUP = `\nDo not include internal or system XML tags in your response.\n`;
+
 export function buildDigestPrompt(input: string, maxItems: number): string {
   return `This is an email newsletter that links to articles published elsewhere. List the articles it points at.
 
@@ -242,7 +254,7 @@ Rules:
 - The title is the article's title as the newsletter gives it.
 
 Reply with strict JSON and nothing else: an array of {"title": "...", "url": "...", "snippet": "..."}. An empty array is a valid answer.
-
+${NO_MARKUP}
 EMAIL:
 ${input}`;
 }
@@ -270,7 +282,7 @@ Identify two things:
 Do not return the body. Do not summarise the piece.
 
 Reply with strict JSON and nothing else: {"title": "...", "webVersionUrl": "..." or null}
-
+${NO_MARKUP}
 EMAIL:
 ${input}`;
 }
@@ -337,6 +349,16 @@ const askAnthropic: AskModel = async (prompt, model) => {
     // Thinking is drawn from this too, which is why the old 4000 could be spent without a
     // single character of reply being emitted. See the config entry for the measurements.
     max_tokens: config.emailIngest.maxExtractionTokens,
+    /**
+     * Thinking off, lowest effort, on the models where that is expressible.
+     *
+     * The 5-family models think when the request does not say otherwise, and this call
+     * does not want it: reading a newsletter and listing what it points at is not a
+     * reasoning task. Raising the budget alone did not fix it, because thinking scales to
+     * fill what it is given: 4000 tokens were exhausted, then 8000 were exhausted on the
+     * same two emails. Not thinking is the fix; a bigger budget only moved the wall.
+     */
+    ...structuredOutputTuning(model),
     // No temperature: the current models reject it with a 400, which RQ-006 found by
     // making a real call. The plan asked for 0.2.
     messages: [{ role: "user", content: prompt }],
