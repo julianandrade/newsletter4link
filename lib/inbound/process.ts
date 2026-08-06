@@ -163,6 +163,7 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
 
       let created = 0;
       let duplicates = 0;
+      const failures: string[] = [];
 
       // One email, possibly several organizations: each curates independently, against its
       // own brand voice and its own threshold, and pays for its own calls.
@@ -171,6 +172,30 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
         created += outcome.created;
         duplicates += outcome.duplicates;
         if (outcome.note) result.notes.push(outcome.note);
+        if (outcome.failure) failures.push(outcome.failure);
+      }
+
+      /**
+       * A failure for any source means this email was not dealt with.
+       *
+       * Every source is attempted first rather than stopping at the first failure, so one
+       * organization's broken extraction does not cost another organization its articles.
+       * Whatever was created stays: re-processing this row later cannot duplicate it,
+       * because the curator checks for duplicates by URL and by embedding.
+       */
+      if (failures.length > 0) {
+        const reason = failures.join("; ");
+
+        await prisma.inboundEmail.update({
+          where: { id: email.id },
+          data: { status: "FAILED", error: reason, processedAt: new Date() },
+        });
+
+        result.emailsFailed += 1;
+        result.articlesCreated += created;
+        result.duplicatesSkipped += duplicates;
+        result.notes.push(`${email.resendEmailId}: ${reason}`);
+        continue;
       }
 
       await prisma.inboundEmail.update({
@@ -203,6 +228,20 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
   return result;
 }
 
+interface SourceOutcome {
+  created: number;
+  duplicates: number;
+  /** Something worth saying about a run that nevertheless finished. */
+  note: string | null;
+  /**
+   * Set when this email was not dealt with and must not be marked processed.
+   *
+   * Separate from `note` on purpose. A note is advisory and the caller may ignore it; a
+   * failure changes what the caller writes to the row.
+   */
+  failure: string | null;
+}
+
 /**
  * One email, one source.
  *
@@ -213,7 +252,7 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
 async function ingestForSource(
   email: { id: string; html: string | null; text: string | null; subject: string | null; receivedAt: Date },
   source: MatchableSource & { url?: string }
-): Promise<{ created: number; duplicates: number; note: string | null }> {
+): Promise<SourceOutcome> {
   const { model } = await resolveAiModels(source.organizationId);
 
   const extracted = await extractNewsletterItems(
@@ -222,8 +261,25 @@ async function ingestForSource(
     model
   );
 
+  /**
+   * A failure and an empty email take different paths from here.
+   *
+   * They used to take the same one, as a `note`, which is advisory text. The caller then
+   * marked the email PROCESSED with a null error either way, so four of the largest
+   * newsletters were recorded as dealt with having produced nothing, with no reason
+   * stored and no possibility of a retry.
+   */
+  if (extracted.mode === "FAILED") {
+    return { created: 0, duplicates: 0, note: null, failure: extracted.reason };
+  }
+
   if (extracted.mode === "NONE") {
-    return { created: 0, duplicates: 0, note: `${email.id}: ${extracted.reason}` };
+    return {
+      created: 0,
+      duplicates: 0,
+      note: `${email.id}: ${extracted.reason}`,
+      failure: null,
+    };
   }
 
   if (extracted.mode === "ESSAY") {
@@ -236,6 +292,7 @@ async function ingestForSource(
         created: 0,
         duplicates: 0,
         note: `${email.id}: an essay with no web version and no source address, so nothing to link to`,
+        failure: null,
       };
     }
 
@@ -250,6 +307,12 @@ async function ingestForSource(
       created: outcome.success ? 1 : 0,
       duplicates: outcome.isDuplicate ? 1 : 0,
       note: outcome.success || outcome.isDuplicate ? null : `${email.id}: ${outcome.error}`,
+      // An essay is one article. If curating it failed and it was not a duplicate, this
+      // email produced nothing, and that is a failure rather than a quiet note.
+      failure:
+        outcome.success || outcome.isDuplicate
+          ? null
+          : `curating the essay failed: ${outcome.error ?? "unknown error"}`,
     };
   }
 
@@ -297,5 +360,13 @@ async function ingestForSource(
     else notes.push(`${email.id}: ${item.url} ${outcome.error}`);
   }
 
-  return { created, duplicates, note: notes.length > 0 ? notes.join("; ") : null };
+  // A digest that yielded nothing is not a failure. The extraction succeeded and the
+  // answer was an empty list, which the prompt states is valid: a newsletter can be all
+  // sponsors and job listings, and every item can legitimately be a duplicate.
+  return {
+    created,
+    duplicates,
+    note: notes.length > 0 ? notes.join("; ") : null,
+    failure: null,
+  };
 }

@@ -31,10 +31,23 @@ export interface EssayItem {
   plainTextBody: string;
 }
 
+/**
+ * `NONE` is a finished job and `FAILED` is not.
+ *
+ * They used to be one variant, and that is what lost the four largest newsletters on
+ * 6 August 2026: a call that died and an email that legitimately had nothing in it
+ * arrived at the caller as the same value, so the caller marked both PROCESSED with a
+ * null error. The failure was invisible in the data and could never be retried.
+ *
+ * Anything that reads this must branch on the difference.
+ */
 export type ExtractResult =
   | { mode: "DIGEST"; items: DigestItem[]; dropped: string[] }
   | { mode: "ESSAY"; item: EssayItem }
-  | { mode: "NONE"; reason: string };
+  /** The email was read and there was nothing in it to extract. Nothing went wrong. */
+  | { mode: "NONE"; reason: string }
+  /** The extraction did not complete. The email has not been dealt with. */
+  | { mode: "FAILED"; reason: string };
 
 let client: Anthropic | null = null;
 
@@ -130,15 +143,29 @@ EMAIL:
 ${input}`;
 }
 
+/**
+ * The essay prompt asks for identification only, never for the body.
+ *
+ * It used to ask the model to return `plainTextBody`: the whole piece, unsummarised. That
+ * cannot work and did not. Measured on the two real newsletters it lost, the bodies were
+ * 4354 and 4654 output tokens against a budget of 4000 that thinking also drew on, so the
+ * reply was truncated mid-JSON on every attempt. Raising the budget only moves the wall.
+ *
+ * The body is in the email. Copying it through a model spends output tokens to receive
+ * text we already hold, and asks the model not to paraphrase while giving us no way to
+ * check that it did not. Two things here genuinely need a reader: which of the headings is
+ * the piece's own title, and which of the links is the "read online" one.
+ */
 export function buildEssayPrompt(input: string): string {
   return `This is an email newsletter that is itself a single piece of writing, not a list of links to other articles.
 
-Extract:
-- title: the piece's own title, from the subject or the heading.
+Identify two things:
+- title: the piece's own title, from the subject or the heading. Not the newsletter's name, the title of this particular piece.
 - webVersionUrl: the "view in browser" or "read online" URL, if one appears in the list of links below. Null when there is none. Never construct one.
-- plainTextBody: the piece's text, as plain text. Remove the header, the footer, the unsubscribe block, sponsor blocks and any navigation. Keep the author's paragraphs as they are written; do not summarise, shorten or rewrite them.
 
-Reply with strict JSON and nothing else: {"title": "...", "webVersionUrl": "..." or null, "plainTextBody": "..."}
+Do not return the body. Do not summarise the piece.
+
+Reply with strict JSON and nothing else: {"title": "...", "webVersionUrl": "..." or null}
 
 EMAIL:
 ${input}`;
@@ -203,7 +230,9 @@ export type AskModel = (prompt: string, model: string) => Promise<string>;
 const askAnthropic: AskModel = async (prompt, model) => {
   const message = await anthropic().messages.create({
     model,
-    max_tokens: 4000,
+    // Thinking is drawn from this too, which is why the old 4000 could be spent without a
+    // single character of reply being emitted. See the config entry for the measurements.
+    max_tokens: config.emailIngest.maxExtractionTokens,
     // No temperature: the current models reject it with a 400, which RQ-006 found by
     // making a real call. The plan asked for 0.2.
     messages: [{ role: "user", content: prompt }],
@@ -252,8 +281,9 @@ export async function extractNewsletterItems(
       reply = await ask(prompt, model);
     } catch (error) {
       rethrowIfModelRejected(error, model);
+      // FAILED, not NONE: nothing was read, so the email has not been dealt with.
       return {
-        mode: "NONE",
+        mode: "FAILED",
         reason: `the extraction call failed: ${error instanceof Error ? error.message : "unknown error"}`,
       };
     }
@@ -278,33 +308,39 @@ export async function extractNewsletterItems(
     if (
       parsed &&
       typeof parsed === "object" &&
-      typeof (parsed as EssayItem).title === "string" &&
-      typeof (parsed as EssayItem).plainTextBody === "string"
+      typeof (parsed as { title?: unknown }).title === "string"
     ) {
-      const item = parsed as EssayItem;
+      const item = parsed as { title: string; webVersionUrl?: unknown };
+      const title = item.title.trim();
+
+      if (title.length === 0) continue;
+
       const webVersionUrl =
         typeof item.webVersionUrl === "string" &&
         readable.links.includes(item.webVersionUrl.trim())
           ? item.webVersionUrl.trim()
           : null;
 
-      if (item.title.trim().length === 0 || item.plainTextBody.trim().length === 0) {
-        continue;
-      }
-
       return {
         mode: "ESSAY",
         item: {
-          title: item.title.trim(),
+          title,
           webVersionUrl,
-          plainTextBody: item.plainTextBody.trim(),
+          /**
+           * The email's own text, not the model's copy of it.
+           *
+           * Whatever the model returned for a body is ignored, including when it returns
+           * one after being told not to: a paraphrase presented as the author's words is
+           * the one failure here that would be invisible.
+           */
+          plainTextBody: readable.text.slice(0, config.emailIngest.maxEssayBodyChars),
         },
       };
     }
   }
 
   return {
-    mode: "NONE",
+    mode: "FAILED",
     reason: "the extractor did not return the requested shape after two attempts",
   };
 }

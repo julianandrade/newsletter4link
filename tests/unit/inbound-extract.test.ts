@@ -214,10 +214,16 @@ describe("the digest prompt", () => {
 });
 
 describe("the essay prompt", () => {
-  it("asks for the author's paragraphs unchanged", () => {
+  /**
+   * It used to ask for the author's paragraphs unchanged, and that assertion lived here.
+   * It is gone because the prompt is: asking a model to return a body we already hold
+   * could not fit the token budget on a real newsletter, and lost four of them. The body
+   * now comes from the email. See `inbound-extract-failure.test.ts`.
+   */
+  it("asks only for what a reader has to judge, and forbids inventing a URL", () => {
     const prompt = buildEssayPrompt("body");
 
-    expect(prompt).toContain("do not summarise");
+    expect(prompt).toContain("Do not return the body");
     expect(prompt).toContain("Never construct one");
   });
 });
@@ -313,7 +319,7 @@ describe("extractNewsletterItems, digest mode", () => {
     expect(result.items).toEqual([]);
   });
 
-  it("retries once on an unparsable reply, then refuses", async () => {
+  it("retries once on an unparsable reply, then reports a failure", async () => {
     const ask = vi.fn<AskModel>(async () => "I cannot help with that.");
 
     const result = await extractNewsletterItems(
@@ -324,7 +330,9 @@ describe("extractNewsletterItems, digest mode", () => {
     );
 
     expect(ask).toHaveBeenCalledTimes(2);
-    expect(result.mode).toBe("NONE");
+    // FAILED rather than NONE: the email has not been dealt with, and the caller has to
+    // be able to tell that apart from a newsletter that had nothing in it.
+    expect(result.mode).toBe("FAILED");
   });
 
   it("accepts a second attempt that returns the shape", async () => {
@@ -376,14 +384,16 @@ describe("extractNewsletterItems, essay mode", () => {
     expect(result.item.webVersionUrl).toBeNull();
   });
 
-  it("refuses an empty body", async () => {
+  it("refuses an empty title, which is the only field the model still supplies", async () => {
+    // This used to test an empty `plainTextBody`. The model no longer returns a body, so
+    // the title is the one thing it can fail to give.
     const ask = vi.fn<AskModel>(async () =>
-      JSON.stringify({ title: "Essay", webVersionUrl: null, plainTextBody: "   " })
+      JSON.stringify({ title: "   ", webVersionUrl: null })
     );
 
     const result = await extractNewsletterItems({ text: ESSAY_TEXT }, "ESSAY", "m", ask);
 
-    expect(result.mode).toBe("NONE");
+    expect(result.mode).toBe("FAILED");
     expect(ask).toHaveBeenCalledTimes(2);
   });
 });
@@ -398,7 +408,7 @@ describe("extractNewsletterItems refuses cheaply", () => {
     expect(result.mode).toBe("NONE");
   });
 
-  it("reports a failed model call as a refusal rather than throwing", async () => {
+  it("reports a failed model call as a failure rather than throwing", async () => {
     const result = await extractNewsletterItems(
       { html: DIGEST_HTML },
       "DIGEST",
@@ -408,8 +418,8 @@ describe("extractNewsletterItems refuses cheaply", () => {
       }
     );
 
-    expect(result.mode).toBe("NONE");
-    if (result.mode !== "NONE") return;
+    expect(result.mode).toBe("FAILED");
+    if (result.mode !== "FAILED") return;
     expect(result.reason).toContain("connection reset");
   });
 });

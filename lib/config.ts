@@ -81,6 +81,28 @@ export const config = {
     maxContentAttempts: 3,
     /** Stored html is capped, because a newsletter can carry half a megabyte of markup. */
     maxHtmlBytes: 500_000,
+    /**
+     * Total token budget for one extraction call, covering the model's thinking as well
+     * as its reply.
+     *
+     * It was 4000, and that is what silently lost the four largest newsletters on
+     * 6 August 2026. Two were ESSAY sources whose bodies needed 4354 and 4654 output
+     * tokens to echo, so the reply could not fit the budget however many times it was
+     * retried. Two were DIGEST sources on inputs near the 32000-character cap, where
+     * thinking consumed the whole allowance before any text was emitted.
+     *
+     * The echo is gone now, so the reply is small in both modes and this figure only has
+     * to cover thinking plus a list of at most `maxItemsPerDigest` items.
+     */
+    maxExtractionTokens: 8_000,
+    /**
+     * An essay's body, in characters, taken from the email rather than from the model.
+     *
+     * Everything downstream is bounded anyway: relevance scoring and the embedding read a
+     * prefix, and the Link Take pipeline caps its own input at 24000 characters. Storing
+     * less of somebody else's newsletter is also the posture RQ-006 argued for.
+     */
+    maxEssayBodyChars: 12_000,
   },
 
   // Cron
