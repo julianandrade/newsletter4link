@@ -9,33 +9,56 @@ you, and [ROADMAP.md](ROADMAP.md) for the longer view.
 
 ---
 
-## Read this first: the same one thing still blocks the inbound email
+## The inbound email blocker is gone
 
-**The production `RESEND_API_KEY` cannot read inbound email.** Unchanged from
-yesterday. I verified it against the database at the start of the night rather than
-taking the note's word for it: every inbound email still has an unread body, and the
-most recent stored error is still `Resend answered 401` against
-`frontend@cooperpress.com`.
+**Fixed 6 August 2026.** A full-access `RESEND_API_KEY` went into the Vercel production
+scope and the deployment that carries it is live. Every inbound email has been read:
 
-**There are now 42, not 39.** Three arrived since yesterday's note and sit at
-`retryCount: 0`, never attempted. The other 39 are at `1`.
+| | |
+|---|---|
+| Bodies fetched | **44 of 44**, html on all of them |
+| `CONTENT_PENDING` left | **0** |
+| `FAILED` | **0** |
+| Final status | 42 `PROCESSED`, 2 `IGNORED_UNKNOWN_SENDER` |
 
-The diagnosis has not changed and is confident. A `401` is an authenticated request
-being refused, not a wrong path, which returns `404`. The same key sends newsletters
-from production successfully, so it works; it is scoped to sending, and reading an
-inbound email's body needs full access.
+Nothing was lost. The 39 emails reached `retryCount: 2` of 3 before this was fixed, so
+they came within one failed run of `FAILED`.
 
-**What to do, and it is the whole fix:**
+Two things learned while fixing it, both now recorded further down: **a Vercel env change
+does nothing until the next deployment**, and **checking a Resend key from WSL costs
+nothing** and does not need a run against real email.
 
-1. In Resend, create an API key with **full access**, or upgrade the existing one.
-2. Set `RESEND_API_KEY` to it in the Vercel project settings, production scope.
-3. Redeploy, or wait: the 05:30 cron picks it up on its next run.
+### What it produced, and the two things still open
 
-**The deadline is now about two days.** `maxContentAttempts` is 3, the 39 are at 1, and
-the cron is daily, so two more runs mark them `FAILED`. Nothing is destroyed when that
-happens: Resend keeps its own copy of every inbound email and supports replay, and a
-`FAILED` row can be reset to `CONTENT_PENDING` by hand. It is tidier to fix the key
-first.
+**10 articles, all of them auto-rejected, and that is correct.** They came from welcome
+and confirmation mail, they scored 0 to 2 against a threshold of 6, and every one is
+`REJECTED`. The fear recorded yesterday, that junk would reach the queue, did not
+materialise: the threshold did its job. No lever needs pulling.
+
+**Open 1: four extractions failed and the emails were marked `PROCESSED` anyway,
+with a null `error` column.** So the failure is invisible in the data and will never be
+retried. The four are large newsletters, 67 to 92 kb of html:
+`hi@mail.theresanaiforthat.com`, `avi@dailydoseofds.com`,
+`thefoundercorner@substack.com`, `crew@morningbrew.com`. The run's notes said why:
+
+- one `the extraction call failed: the model returned no text (thinking, stop reason max_tokens)`
+- three `the extractor did not return the requested shape after two attempts`
+
+The first is a `max_tokens` budget too small for a model that thinks before answering,
+on a 74 kb body. The other three are the extractor's JSON contract failing on big input.
+Both are RQ-007 defects and neither is about the key.
+
+**Open 2: the three real editions are `PROCESSED` and no article in the window carries
+their content.** That is either "everything they linked had already been collected by
+RSS, so it was all duplicates" or "extraction returned nothing". I could not tell the
+two apart afterwards: the full run's response was lost to a function timeout, and
+nothing relates an `Article` back to the `InboundEmail` it came from. The next real
+edition to arrive settles it, and adding that relation would settle every future one.
+
+**Also worth knowing: the job cannot finish a large batch inside its 300-second limit.**
+Two runs were killed mid-flight, at 8 emails and at 42. Work committed before the kill
+persists, so it converged over three runs, but the daily schedule will hit the same wall
+whenever a backlog builds. `?limit=` now exists on the route for exactly this.
 
 ---
 
@@ -91,8 +114,9 @@ markup.
 | Link Take input pipeline, allowlist empty | 30 tests, gate proven both ways |
 | Generation on approval, after the response | 15 tests on the order of refusals |
 | Webhook signatures actually verified | Production: forged signature answers 401, was 307 |
-| Inbound email webhook recording arrivals | **42 real emails recorded**, bodies still unread |
-| Inbound extraction, unwrapping, ingestion job | Unit tests, but see the blocker: never yet run against a real body |
+| Inbound email webhook recording arrivals | **44 real emails recorded** |
+| Inbound content fetch, end to end in production | **44 of 44 bodies read, 0 pending, 0 failed** |
+| Inbound extraction against real bodies | Ran: 38 emails extracted, **4 failed on large html**, 10 articles created and all 10 correctly auto-rejected below the threshold |
 | RQ-007 step 3, sources UI and unknown senders | 38 tests, preview harness, one fixture per health state |
 | The ingest job runs in production at all | Triggered manually: HTTP 200 in 7.4s, reached Resend, got 401 |
 | **RQ-006_03, source name and URL on every rendering** | **8 assertions across all four states and both roles** |
@@ -107,16 +131,24 @@ radar 06:00, email ingest 05:30.
 
 ## What is left, in the order I would do it
 
-### 1. Fix the Resend key, then watch one real run
+### 1. The extractor on a large newsletter
 
-Covered at the top. After it, check that the bodies are fetched rather than 0, and read
-what the three real editions produced. **Judge it on those three**: 36 of the 42 are
-welcome and confirmation mail, so a run that looks like it did very little will be
-correct. If junk articles appear, the lever is the relevance threshold, not the
-extractor.
+The blocker at the top is fixed, and it exposed the next thing. Four of the biggest
+emails produced nothing, and the job recorded that only in a log line: the row says
+`PROCESSED` with a null error. Two fixes, both small, in this order:
 
-The three real editions are from `frontend@cooperpress.com`,
-`bytebytego@substack.com` and `superintel@mail.beehiiv.com`.
+1. **Record the failure on the row.** A silent `PROCESSED` that produced nothing is
+   indistinguishable from a newsletter that legitimately had nothing to extract. Write
+   the reason to `error`, and use a status that can be retried.
+2. **Raise `max_tokens` for the extraction call, and check the stop reason.** One of the
+   four died with `stop reason max_tokens` having emitted only thinking. That is the same
+   family as the `content[0].type === "text"` bug this repository already fixed in
+   twenty-one places: a reply whose text is empty for a structural reason, not a content
+   one.
+
+Then relate `Article` to the `InboundEmail` it came from. Without it, "what did this
+newsletter actually produce" is not answerable after the fact, which is why open 2 above
+is still open.
 
 ### 2. RQ-006_04, using a Link Take in the newsletter
 
