@@ -1,12 +1,89 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
-import { editionWriteFields } from "@/lib/editions/identity";
-import { isoWeekStart } from "@/lib/radar/week";
+import {
+  editionLabel,
+  editionWriteFields,
+  type EditionKind,
+} from "@/lib/editions/identity";
 
 export const dynamic = "force-dynamic";
 
 const ARCHIVED_MODES = ["exclude", "only", "all"] as const;
 type ArchivedMode = (typeof ARCHIVED_MODES)[number];
+
+const KINDS: EditionKind[] = ["WEEKLY", "SPECIAL"];
+const MAX_TITLE = 120;
+
+export interface EditionCreateInput {
+  title: string | null;
+  publishDate: Date;
+  kind: EditionKind;
+  autoPopulate: boolean;
+}
+
+export type ParsedCreate =
+  | { ok: true; value: EditionCreateInput }
+  | { ok: false; error: string };
+
+/**
+ * RQ-008: what creating an edition needs, validated apart from the request.
+ *
+ * The old route required `week` and `year` as numbers between 1 and 53 and 2000 and
+ * 2100, which is why nothing could ask for a special edition: the two required fields
+ * were the identity, and the identity was a week. A date and an optional name replace
+ * them, and the week is read off the date by `editionWriteFields`.
+ */
+export function parseEditionCreate(body: unknown): ParsedCreate {
+  const input = (body ?? {}) as Record<string, unknown>;
+
+  const rawDate = input.publishDate;
+  const publishDate =
+    typeof rawDate === "string" || typeof rawDate === "number"
+      ? new Date(rawDate)
+      : null;
+
+  if (!publishDate || Number.isNaN(publishDate.getTime())) {
+    return {
+      ok: false,
+      error: "publishDate is required, as an ISO date such as 2026-08-10",
+    };
+  }
+
+  const rawKind = input.kind ?? "WEEKLY";
+  if (typeof rawKind !== "string" || !KINDS.includes(rawKind as EditionKind)) {
+    return { ok: false, error: "kind must be WEEKLY or SPECIAL" };
+  }
+  const kind = rawKind as EditionKind;
+
+  const rawTitle = typeof input.title === "string" ? input.title.trim() : "";
+  if (rawTitle.length > MAX_TITLE) {
+    return { ok: false, error: `title must be ${MAX_TITLE} characters or fewer` };
+  }
+  const title = rawTitle.length > 0 ? rawTitle : null;
+
+  /**
+   * A special edition has to be named. Without a title it falls back to the same week
+   * label as the weekly edition beside it, so the two would be indistinguishable in
+   * every list on every screen.
+   */
+  if (kind === "SPECIAL" && title === null) {
+    return {
+      ok: false,
+      error:
+        "a special edition needs a title, so it can be told apart from the weekly one",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      title,
+      publishDate,
+      kind,
+      autoPopulate: input.autoPopulate !== false,
+    },
+  };
+}
 
 /**
  * GET /api/editions?archived=exclude|only|all
@@ -52,9 +129,16 @@ export async function GET(request: Request) {
 
     const editions = await db.edition.findMany({
       where,
+      /**
+       * RQ-008: the publication date is the order, not the week.
+       *
+       * A special edition has a week like everything else, but two editions can now
+       * share one, so week/year alone no longer produces a stable order. createdAt
+       * breaks the tie between two editions dated the same day.
+       */
       orderBy: [
-        { year: "desc" },
-        { week: "desc" },
+        { publishDate: "desc" },
+        { createdAt: "desc" },
       ],
       include: {
         _count: {
@@ -71,6 +155,12 @@ export async function GET(request: Request) {
       id: edition.id,
       week: edition.week,
       year: edition.year,
+      // RQ-008: the edition's own identity. `label` is derived once here so no screen
+      // has to reimplement the title-or-week-label fallback rule.
+      title: edition.title,
+      kind: edition.kind,
+      publishDate: edition.publishDate,
+      label: editionLabel(edition),
       status: edition.status,
       scheduledDate: edition.scheduledDate,
       finalizedAt: edition.finalizedAt,
@@ -118,7 +208,12 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/editions
- * Create a new edition with optional auto-population of approved articles and featured projects (tenant-scoped)
+ *
+ * Create an edition from a publication date and, optionally, a name (tenant-scoped).
+ * Approved articles and featured projects are pulled in unless the caller opts out.
+ *
+ * RQ-008: this took `week` and `year` as required numbers, which is what made a special
+ * edition impossible to ask for. The week is read off the date now.
  */
 export async function POST(request: Request) {
   try {
@@ -126,62 +221,53 @@ export async function POST(request: Request) {
     const { db } = ctx;
 
     const body = await request.json();
-    const { week, year, autoPopulate = true } = body;
+    const parsed = parseEditionCreate(body);
 
-    // Validation
-    if (week === undefined || year === undefined) {
+    if (!parsed.ok) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Week and year are required",
-        },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
 
-    if (typeof week !== "number" || week < 1 || week > 53) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Week must be a number between 1 and 53",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (typeof year !== "number" || year < 2000 || year > 2100) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Year must be a valid year between 2000 and 2100",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if edition already exists in this org
-    const existingEdition = await db.edition.findFirst({
-      where: { week, year },
+    const fields = editionWriteFields({
+      publishDate: parsed.value.publishDate,
+      kind: parsed.value.kind,
     });
 
-    if (existingEdition) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Edition for week ${week}, ${year} already exists`,
-        },
-        { status: 409 }
-      );
+    /**
+     * RQ-008: only a weekly edition can collide, and the database is what refuses it.
+     *
+     * The old route did a findFirst on week and year and answered 409 from that, which
+     * cannot be right under concurrency and is now also wrong in meaning: two editions
+     * sharing a week is the point. A special edition holds a null slot and is never
+     * refused. This read is a courtesy that produces a sentence a person can act on;
+     * the unique index is what actually guarantees it.
+     */
+    if (fields.weeklySlot) {
+      const clash = await db.edition.findFirst({
+        where: { weeklySlot: fields.weeklySlot },
+        select: { id: true, week: true, year: true },
+      });
+
+      if (clash) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `The weekly edition for week ${clash.week} of ${clash.year} already exists. Create a special edition to add another for the same week.`,
+            editionId: clash.id,
+          },
+          { status: 409 }
+        );
+      }
     }
 
-    // Create the edition. RQ-008: the columns come from identity.ts, which is the only
-    // thing that may write week, year and weeklySlot.
+    // RQ-008: the columns come from identity.ts, which is the only thing that may write
+    // week, year and weeklySlot.
     const edition = await db.edition.create({
       data: {
-        ...editionWriteFields({
-          publishDate: isoWeekStart(week, year),
-          kind: "WEEKLY",
-        }),
+        ...fields,
+        title: parsed.value.title,
         status: "DRAFT",
       } as any,
     });
@@ -190,7 +276,7 @@ export async function POST(request: Request) {
     let projectsAdded = 0;
 
     // Auto-populate with approved articles and featured projects if requested
-    if (autoPopulate) {
+    if (parsed.value.autoPopulate) {
       // Get approved articles not yet in any edition, sorted by relevance
       const approvedArticles = await db.article.findMany({
         where: {
@@ -261,10 +347,11 @@ export async function POST(request: Request) {
         success: true,
         data: {
           ...completeEdition,
+          label: completeEdition ? editionLabel(completeEdition) : null,
           articleCount: (completeEdition as any)?._count?.articles ?? 0,
           projectCount: (completeEdition as any)?._count?.projects ?? 0,
         },
-        message: autoPopulate
+        message: parsed.value.autoPopulate
           ? `Edition created with ${articlesAdded} articles and ${projectsAdded} projects`
           : "Edition created successfully",
       },
