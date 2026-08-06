@@ -210,12 +210,35 @@ model BrandVoice {
 // ==================== ARTICLE MODELS ====================
 
 model Article {
-  id          String   @id @default(cuid())
-  sourceUrl   String
-  title       String
-  content     String   @db.Text
-  author      String?
-  publishedAt DateTime
+  id        String @id @default(cuid())
+  sourceUrl String
+  title     String
+  content   String @db.Text
+  author    String?
+
+  /**
+   * When the publisher published it. Null when nobody told us.
+   *
+   * Nullable since 6 August 2026, finding C1. `curateArticle` wrote
+   * `publishedAt: new Date()`, so every article arriving through a newsletter carried its
+   * own ingestion time as its publication date, and the queue showed that under a column
+   * headed PUBLISHED. A digest gives a title, a URL and a sentence, and no date at all,
+   * so the honest value is absent rather than now: 38 rows were backfilled to null by
+   * `scripts/backfill-captured-at.ts`.
+   *
+   * Anything that sorts or filters on this has to decide what an unknown date means,
+   * which is the point. `capturedAt` is what to fall back to.
+   */
+  publishedAt DateTime?
+
+  /**
+   * When we took it in. Always known, because it is our own clock.
+   *
+   * This is what `publishedAt` was really holding for email-sourced articles. Separating
+   * them is what lets a screen say "captured today, published we do not know" instead of
+   * stating something untrue.
+   */
+  capturedAt DateTime @default(now())
 
   // AI-generated content
   embedding      Float[] // pgvector embedding

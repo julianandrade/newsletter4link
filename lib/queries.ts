@@ -12,9 +12,11 @@ import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
 export async function getPendingArticles(db: TenantClient) {
   return await db.article.findMany({
     where: { status: "PENDING_REVIEW" },
+    // Finding C1: nulls last, then the capture time. See app/api/articles/pending.
     orderBy: [
       { relevanceScore: "desc" },
-      { publishedAt: "desc" },
+      { publishedAt: { sort: "desc", nulls: "last" } },
+      { capturedAt: "desc" },
     ],
     select: {
       id: true,
@@ -22,6 +24,7 @@ export async function getPendingArticles(db: TenantClient) {
       sourceUrl: true,
       author: true,
       publishedAt: true,
+      capturedAt: true,
       relevanceScore: true,
       summary: true,
       category: true,

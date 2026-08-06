@@ -285,9 +285,11 @@ export async function POST(request: Request) {
             none: {},
           },
         },
+        // Finding C1: nulls last, then the capture time.
         orderBy: [
           { relevanceScore: "desc" },
-          { publishedAt: "desc" },
+          { publishedAt: { sort: "desc", nulls: "last" } },
+          { capturedAt: "desc" },
         ],
         take: 10, // Limit to 10 articles
       });

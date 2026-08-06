@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { bestKnownDate } from "@/lib/articles/date";
 import { clampDays, clampLimit, computeTrends } from "@/lib/trends/compute";
 
 export const dynamic = "force-dynamic";
@@ -35,18 +36,35 @@ export async function GET(request: NextRequest) {
         publishedAt: { gte: from },
         status: { not: "REJECTED" },
       },
-      orderBy: { publishedAt: "desc" },
+      // Finding C1: nulls last. The trend buckets by bestKnownDate below either way,
+      // but this keeps an undated article from displacing dated ones out of the read.
+      orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { capturedAt: "desc" }],
       select: {
         id: true,
         title: true,
         sourceUrl: true,
         publishedAt: true,
+        capturedAt: true,
         relevanceScore: true,
         category: true,
       },
     });
 
-    const { trends, meta } = computeTrends(articles, { days, limit, now });
+    /**
+     * A trend buckets mentions by time, so an article with no publication date is bucketed
+     * by when we captured it. That is the right answer rather than a compromise: a trend
+     * measures when a topic was being talked about in our sources, and for an article a
+     * newsletter told us about with no date, the day we saw it is the only fact we have
+     * about its position in time. Dropping it instead would understate every topic that
+     * arrives mainly through newsletters.
+     */
+    const { trends, meta } = computeTrends(
+      articles.map((article) => ({
+        ...article,
+        publishedAt: bestKnownDate(article),
+      })),
+      { days, limit, now }
+    );
 
     return NextResponse.json({ success: true, data: trends, meta });
   } catch (error) {

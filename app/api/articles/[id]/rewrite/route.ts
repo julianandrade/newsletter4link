@@ -19,7 +19,8 @@ export const maxDuration = 120;
 
 function attribution(article: {
   sourceUrl: string;
-  publishedAt: Date;
+  publishedAt: Date | null;
+  capturedAt: Date;
   title: string;
   sourceUnresolved: boolean;
 }) {
@@ -28,7 +29,12 @@ function attribution(article: {
   return {
     publication: publicationOf(article.sourceUrl),
     url: article.sourceUrl,
-    publishedAt: article.publishedAt.toISOString(),
+    /**
+     * Finding C1: both dates travel, because the block has to be able to say which one it
+     * is showing. A capture time rendered as a publication date is the defect.
+     */
+    publishedAt: article.publishedAt?.toISOString() ?? null,
+    capturedAt: article.capturedAt.toISOString(),
     originalTitle: article.title,
     // Finding D4: whether that url is the publisher's or a newsletter's wrapper. It
     // travels with the attribution because that is the block which shows the url.

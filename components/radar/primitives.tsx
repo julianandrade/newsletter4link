@@ -315,6 +315,7 @@ export function ExternalLink({
 export function SourceStamp({
   sourceUrl,
   publishedAt,
+  capturedAt,
   clusterCount,
   sourceName,
   href,
@@ -322,6 +323,16 @@ export function SourceStamp({
   sourceUrl: string;
   /** Web results often carry no date, so the stamp drops the age rather than faking one. */
   publishedAt?: string | null;
+  /**
+   * Finding C1: when there is no publication date, the capture time is shown instead and
+   * labelled as one.
+   *
+   * The stamp used to render `publishedAt` alone, and `publishedAt` used to be the
+   * ingestion time for every article arriving through a newsletter, so "2h ago" beside a
+   * publisher's name was a lie told confidently. Showing nothing would be honest but
+   * loses the only date we have; showing it under a different word is both.
+   */
+  capturedAt?: string | null;
   clusterCount?: number;
   sourceName?: string;
   /** When set, the stamp is a link to here, usually the article on the publisher's site. */
@@ -329,6 +340,16 @@ export function SourceStamp({
 }) {
   const identity = sourceIdentity(sourceUrl);
   const name = sourceName || identity.name;
+
+  /**
+   * The date to show and what it is. Null when neither is known, which keeps the existing
+   * behaviour for web search results that carry no date at all.
+   */
+  const stampDate = publishedAt
+    ? { value: publishedAt, isCapture: false }
+    : capturedAt
+      ? { value: capturedAt, isCapture: true }
+      : null;
 
   const Wrapper = ({ children }: { children: React.ReactNode }) =>
     href ? (
@@ -354,17 +375,22 @@ export function SourceStamp({
           {(name || "?").charAt(0).toUpperCase()}
         </span>
         <span className="text-[11.5px] font-medium text-radar-ink2">{name}</span>
-        {publishedAt ? (
+        {stampDate ? (
           <>
             <span aria-hidden="true" className="text-radar-ink3">
               ·
             </span>
             <time
-              dateTime={publishedAt}
+              dateTime={stampDate.value}
               className="text-[11.5px] text-radar-ink3"
-              title={new Date(publishedAt).toLocaleString("en-GB")}
+              title={
+                stampDate.isCapture
+                  ? `We captured this on ${new Date(stampDate.value).toLocaleString("en-GB")}. The source gave no publication date.`
+                  : `Published ${new Date(stampDate.value).toLocaleString("en-GB")}`
+              }
             >
-              {relativeTime(publishedAt)}
+              {stampDate.isCapture ? "captured " : ""}
+              {relativeTime(stampDate.value)}
             </time>
           </>
         ) : null}

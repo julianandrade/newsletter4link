@@ -45,9 +45,11 @@ export async function GET(request: NextRequest) {
           },
         }),
       },
+      // Finding C1: nulls last, then the capture time. See the pending route.
       orderBy: [
         { relevanceScore: "desc" },
-        { publishedAt: "desc" },
+        { publishedAt: { sort: "desc", nulls: "last" } },
+        { capturedAt: "desc" },
       ],
       select: {
         id: true,
@@ -55,6 +57,7 @@ export async function GET(request: NextRequest) {
         sourceUrl: true,
         author: true,
         publishedAt: true,
+        capturedAt: true,
         relevanceScore: true,
         summary: true,
         category: true,

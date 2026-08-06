@@ -21,6 +21,7 @@ const ATTRIBUTION = {
   publication: "reuters.com",
   url: "https://www.reuters.com/technology/ai-act-banks",
   publishedAt: "2026-08-05T07:00:00.000Z",
+  capturedAt: "2026-08-05T08:30:00.000Z",
   originalTitle: "EU AI Act high-risk obligations bite for banks",
 };
 

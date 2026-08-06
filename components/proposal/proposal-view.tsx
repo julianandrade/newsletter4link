@@ -154,6 +154,7 @@ export function ProposalView({
                   <SourceStamp
                     sourceUrl={article.sourceUrl}
                     publishedAt={article.publishedAt}
+                    capturedAt={article.capturedAt}
                     href={article.sourceUrl}
                   />
                   <h3 className="font-editorial m-0 text-[16px] font-medium leading-[1.3] text-radar-ink text-pretty">

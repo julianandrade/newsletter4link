@@ -75,6 +75,7 @@ const ARTICLE_FIELDS = {
   sourceUrl: true,
   author: true,
   publishedAt: true,
+  capturedAt: true,
   relevanceScore: true,
   summary: true,
   category: true,

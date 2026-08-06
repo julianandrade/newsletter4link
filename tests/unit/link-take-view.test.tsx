@@ -37,6 +37,7 @@ function payload(over: Partial<LinkTakePayload> = {}): LinkTakePayload {
       publication: PUBLICATION,
       url: SOURCE_URL,
       publishedAt: "2026-08-05T07:00:00.000Z",
+      capturedAt: "2026-08-05T08:30:00.000Z",
       originalTitle: "EU AI Act high-risk obligations bite for banks",
     },
     rewrite: null,

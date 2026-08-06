@@ -180,6 +180,7 @@ export function AddToProposal({
                     <SourceStamp
                       sourceUrl={article.sourceUrl}
                       publishedAt={article.publishedAt}
+                      capturedAt={article.capturedAt}
                     />
                     <span className="font-editorial block text-[14.5px] leading-[1.3] text-radar-ink text-pretty">
                       {article.title}

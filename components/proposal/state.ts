@@ -19,7 +19,10 @@ export interface ProposalArticle {
   title: string;
   sourceUrl: string;
   author?: string | null;
-  publishedAt: string;
+  /** Null when nobody told us when it was published. Finding C1. */
+  publishedAt: string | null;
+  /** Always known. Shown, and labelled as a capture, when the above is null. */
+  capturedAt: string;
   relevanceScore: number | null;
   summary: string | null;
   category: string[];
@@ -118,7 +121,10 @@ export interface QueueArticle {
   title: string;
   sourceUrl: string;
   author?: string | null;
-  publishedAt: string;
+  /** Null when nobody told us when it was published. Finding C1. */
+  publishedAt: string | null;
+  /** Always known. Shown, and labelled as a capture, when the above is null. */
+  capturedAt: string;
   relevanceScore: number | null;
   summary: string | null;
   category: string[];

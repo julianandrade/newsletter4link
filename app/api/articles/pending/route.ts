@@ -81,14 +81,20 @@ export async function GET(request: NextRequest) {
     const orderByField = validSortFields.includes(sortBy) ? sortBy : "relevanceScore";
     const orderByDirection = sortOrder === "asc" ? "asc" : "desc";
 
+    // Finding C1: publishedAt is nullable, and a null sorts first on a descending
+    // order in Postgres, so an undated article would head the list. Nulls last, with
+    // the capture time as the tie-break: it is the only date an undated article has.
     const orderBy: Prisma.ArticleOrderByWithRelationInput[] = [
-      { [orderByField]: orderByDirection },
+      orderByField === "publishedAt"
+        ? { publishedAt: { sort: orderByDirection, nulls: "last" } }
+        : { [orderByField]: orderByDirection },
     ];
 
-    // Secondary sort by publishedAt if primary isn't publishedAt
     if (orderByField !== "publishedAt") {
-      orderBy.push({ publishedAt: "desc" });
+      orderBy.push({ publishedAt: { sort: "desc", nulls: "last" } });
     }
+
+    orderBy.push({ capturedAt: "desc" });
 
     const articles = await db.article.findMany({
       where,
@@ -99,6 +105,7 @@ export async function GET(request: NextRequest) {
         sourceUrl: true,
         author: true,
         publishedAt: true,
+        capturedAt: true,
         relevanceScore: true,
         summary: true,
         category: true,

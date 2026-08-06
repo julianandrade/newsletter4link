@@ -41,6 +41,7 @@ const ARTICLES = [
       "EU AI Act high-risk obligations bite for banks as first conformity audits begin",
     sourceUrl: "https://www.reuters.com/technology/ai-act-banks",
     publishedAt: iso(0, 2),
+    capturedAt: iso(0, 2),
     relevanceScore: 9.1,
     summary:
       "Credit-scoring and fraud models now need documented conformity assessments; supervisors in three member states have opened the first reviews. Vendors with unclear model provenance are the exposure.",
@@ -53,6 +54,7 @@ const ARTICLES = [
       "Retrieval-free long-context agents match RAG pipelines at a sixth of the serving cost",
     sourceUrl: "https://arxiv.org/abs/2608.01234",
     publishedAt: iso(0, 3),
+    capturedAt: iso(0, 3),
     relevanceScore: 8.4,
     summary:
       "Benchmarked on 1.2M-token enterprise corpora with deterministic caching. If it holds outside the benchmark, a lot of RAG plumbing in current proposals becomes optional.",
@@ -65,6 +67,7 @@ const ARTICLES = [
       "SAP folds agent orchestration into the S/4HANA cloud tier at no extra list price",
     sourceUrl: "https://news.sap.com/2026/08/agent-orchestration",
     publishedAt: iso(0, 6),
+    capturedAt: iso(0, 6),
     relevanceScore: 8.0,
     summary:
       "Bundling pressures standalone orchestration vendors and changes the build-versus-configure conversation on every S/4 modernisation deal we are in.",
@@ -77,6 +80,7 @@ const ARTICLES = [
       "The MCP server registry passes 10,000 entries, and hits its first supply-chain scare",
     sourceUrl: "https://news.ycombinator.com/item?id=99887766",
     publishedAt: iso(0, 8),
+    capturedAt: iso(0, 8),
     relevanceScore: 7.4,
     summary:
       "A typosquatted connector shipped for nine days before removal. Expect client procurement to start asking who signs your tool manifests.",
@@ -89,6 +93,7 @@ const ARTICLES = [
       "Iberian banks pilot AI underwriting under fresh DORA operational-resilience scrutiny",
     sourceUrl: "https://www.bloomberg.com/news/iberia-ai-underwriting",
     publishedAt: iso(1, 4),
+    capturedAt: iso(1, 4),
     relevanceScore: 8.7,
     summary:
       "Two of the pilots use third-party model APIs, which puts exit plans and concentration risk back on the table for regulators.",
@@ -101,6 +106,7 @@ const ARTICLES = [
       "Deterministic replay lands in the main agent frameworks within a fortnight of each other",
     sourceUrl: "https://github.com/trending",
     publishedAt: iso(1, 7),
+    capturedAt: iso(1, 7),
     relevanceScore: 7.6,
     summary:
       "Replayable traces are quietly becoming the thing enterprise architecture boards ask for first. Worth a slide in the agent governance deck.",
@@ -111,7 +117,13 @@ const ARTICLES = [
     id: "a7",
     title: "Enterprise MCP gateways compared across seven deployments",
     sourceUrl: "https://www.infoq.com/articles/mcp-gateways",
-    publishedAt: iso(2, 5),
+    /**
+     * Finding C1: the undated case, which is what a digest produces. A newsletter gives
+     * a title, a URL and a sentence, so there is no publication date to have, and the
+     * stamp has to say "captured" rather than inventing one.
+     */
+    publishedAt: null,
+    capturedAt: iso(2, 5),
     relevanceScore: 7.1,
     summary:
       "The pattern that survived production was narrow: one gateway per business domain, with deterministic fallbacks into the existing service layer.",
@@ -570,6 +582,7 @@ const SEARCH_RESULTS = [
     snippet:
       "Credit scoring and fraud detection models are the first in scope for documented conformity assessments.",
     publishedAt: iso(1, 4),
+    capturedAt: iso(1, 4),
     source: "reuters.com",
     aiScore: 9.2,
     aiSummary:
@@ -585,6 +598,7 @@ const SEARCH_RESULTS = [
     snippet:
       "Four of the ten largest retail banks now run agent orchestration in customer operations.",
     publishedAt: iso(3, 9),
+    capturedAt: iso(3, 9),
     source: "ft.com",
     aiScore: 8.4,
     aiSummary:
@@ -601,6 +615,7 @@ const SEARCH_RESULTS = [
     snippet:
       "Benchmarked across 1.2M-token enterprise corpora with deterministic caching.",
     publishedAt: iso(6, 2),
+    capturedAt: iso(6, 2),
     source: "arxiv.org",
     aiScore: 7.6,
     aiSummary:
@@ -630,6 +645,7 @@ const SEARCH_RESULTS = [
     title: "Two more agent orchestration vendors fold into platform suites",
     snippet: "Standalone orchestration is being bundled away at list price.",
     publishedAt: iso(9, 7),
+    capturedAt: iso(9, 7),
     source: "venturebeat.com",
     aiScore: 5.9,
     aiSummary:
@@ -1413,6 +1429,7 @@ const ARTICLE_ATTRIBUTION = {
   publication: "reuters.com",
   url: "https://www.reuters.com/technology/ai-act-banks",
   publishedAt: iso(0, 2),
+    capturedAt: iso(0, 2),
   originalTitle:
     "EU AI Act high-risk obligations bite for banks as first conformity audits begin",
 };
@@ -1512,6 +1529,7 @@ const ARTICLE_STATES = {
       publication: "Beehiiv",
       url: "https://link.mail.beehiiv.com/ss/c/u001.7Hy2mQ/xR4tK9",
       publishedAt: iso(0, 2),
+    capturedAt: iso(0, 2),
       originalTitle:
         "EU AI Act high-risk obligations bite for banks as first conformity audits begin",
       sourceUnresolved: true,

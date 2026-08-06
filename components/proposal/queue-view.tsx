@@ -55,6 +55,7 @@ import {
   type BulkAction,
 } from "@/components/radar/selection";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
+import { describeDate } from "@/lib/articles/date";
 import { LayoutToggle, useLayoutPreference } from "@/components/layout-toggle";
 import {
   ArticleFiltersComponent,
@@ -241,6 +242,7 @@ export function QueueView({
                 <SourceStamp
                   sourceUrl={article.sourceUrl}
                   publishedAt={article.publishedAt}
+                  capturedAt={article.capturedAt}
                   href={article.sourceUrl}
                 />
               </div>
@@ -318,6 +320,7 @@ export function QueueView({
             <SourceStamp
               sourceUrl={article.sourceUrl}
               publishedAt={article.publishedAt}
+              capturedAt={article.capturedAt}
               href={article.sourceUrl}
             />
             <h3 className="font-editorial m-0 text-[15.5px] font-medium leading-[1.3] text-radar-ink text-pretty">
@@ -379,7 +382,7 @@ export function QueueView({
               Source
             </th>
             <th scope="col" className={thClass}>
-              Published
+              Date
             </th>
             <th scope="col" className={thClass}>
               Topics
@@ -424,8 +427,19 @@ export function QueueView({
                   {sourceIdentity(article.sourceUrl).name}
                 </ExternalLink>
               </td>
+              {/*
+                Finding C1: the header said Published and the cell showed whatever was in
+                publishedAt, which for every article arriving through a newsletter was its
+                own ingestion time. The cell now says which date it is showing.
+              */}
               <td className={cn(tdClass, "whitespace-nowrap")}>
-                {relativeTime(article.publishedAt)}
+                {describeDate(article).isCapture ? (
+                  <span title="The source gave no publication date, so this is when we captured it.">
+                    captured {relativeTime(describeDate(article).value)}
+                  </span>
+                ) : (
+                  relativeTime(describeDate(article).value)
+                )}
               </td>
               <td className={tdClass}>
                 <div className="flex flex-wrap gap-1.5">

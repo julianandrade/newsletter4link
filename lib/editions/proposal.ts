@@ -33,6 +33,7 @@ import {
   editionWriteFields,
   weeklySlotFor,
 } from "@/lib/editions/identity";
+import { bestKnownDate } from "@/lib/articles/date";
 
 /** RQ-005 section 2.2 of the specification: product-owner defaults. */
 export const PROPOSAL_ARTICLE_TARGET = 10;
@@ -75,6 +76,13 @@ export type CandidateStatus = "PENDING_REVIEW" | "APPROVED";
 export interface Candidate {
   id: string;
   relevanceScore: number | null;
+  /**
+   * Non-null on purpose, even though the column is nullable now.
+   *
+   * Ranking needs a date for every candidate or the tie-break is undefined, so the
+   * fallback to `capturedAt` is applied at the boundary that builds these rows and the
+   * ranking rules stay pure. See `lib/articles/date.ts`.
+   */
   publishedAt: Date;
   createdAt: Date;
   status: CandidateStatus;
@@ -221,7 +229,10 @@ export interface ProposalArticle {
   title: string;
   sourceUrl: string;
   author: string | null;
-  publishedAt: string;
+  /** Null when nobody told us, which a digest never does. Finding C1. */
+  publishedAt: string | null;
+  /** Always known. What to show, and to label as a capture, when the above is null. */
+  capturedAt: string;
   relevanceScore: number | null;
   summary: string | null;
   category: string[];
@@ -595,17 +606,21 @@ async function readArticleCandidates(
       id: true,
       relevanceScore: true,
       publishedAt: true,
+      capturedAt: true,
       createdAt: true,
       status: true,
     },
-    orderBy: [{ relevanceScore: "desc" }, { publishedAt: "desc" }],
+    // Nulls sort last on a descending order in Postgres, so an undated article would be
+    // fetched last and could fall outside the limit. The fallback fixes the ranking below;
+    // this keeps the fetch from losing rows before ranking sees them.
+    orderBy: [{ relevanceScore: "desc" }, { capturedAt: "desc" }],
     take: CANDIDATE_FETCH_LIMIT,
   });
 
   return rows.map((row) => ({
     id: row.id,
     relevanceScore: row.relevanceScore,
-    publishedAt: row.publishedAt,
+    publishedAt: bestKnownDate(row),
     createdAt: row.createdAt,
     status: row.status as CandidateStatus,
   }));
@@ -669,7 +684,8 @@ async function readEditionArticles(
     title: row.article.title,
     sourceUrl: row.article.sourceUrl,
     author: row.article.author,
-    publishedAt: row.article.publishedAt.toISOString(),
+    publishedAt: row.article.publishedAt?.toISOString() ?? null,
+    capturedAt: row.article.capturedAt.toISOString(),
     relevanceScore: row.article.relevanceScore,
     summary: row.article.summary,
     category: row.article.category,
@@ -771,7 +787,11 @@ export async function readCandidatePool(
       where: matchesTerm ? { AND: [eligible, matchesTerm] } : eligible,
       orderBy: [
         { relevanceScore: { sort: "desc", nulls: "last" } },
-        { publishedAt: "desc" },
+        // publishedAt is nullable now, so nulls last: without it an undated article
+        // sorts to the front of a descending order in Postgres and displaces a dated one
+        // out of the limit. Finding C1.
+        { publishedAt: { sort: "desc", nulls: "last" } },
+        { capturedAt: "desc" },
       ],
       take: limit,
     }),
@@ -798,7 +818,8 @@ export async function readCandidatePool(
       title: article.title,
       sourceUrl: article.sourceUrl,
       author: article.author,
-      publishedAt: article.publishedAt.toISOString(),
+      publishedAt: article.publishedAt?.toISOString() ?? null,
+      capturedAt: article.capturedAt.toISOString(),
       relevanceScore: article.relevanceScore,
       summary: article.summary,
       category: article.category,

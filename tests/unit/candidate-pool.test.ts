@@ -49,6 +49,7 @@ const article = (over: Record<string, unknown> = {}) => ({
   sourceUrl: "https://example.test/a1",
   author: "Someone",
   publishedAt: new Date("2026-08-01T10:00:00.000Z"),
+  capturedAt: new Date("2026-08-01T11:00:00.000Z"),
   relevanceScore: 8.5,
   summary: "Short summary",
   category: ["AI Tools"],
@@ -144,13 +145,20 @@ describe("readCandidatePool eligibility", () => {
     expect(calls.article.where.editions).toEqual({ none: {} });
   });
 
-  it("ranks by score then recency, with unscored last", async () => {
+  /**
+   * Finding C1 changed this. `publishedAt` is nullable now, and in Postgres a null sorts
+   * first on a descending order, so an undated article would take the front of the pool
+   * and displace a dated one out of the limit. Nulls last, then the capture time as the
+   * tie-break, which is the only date an undated article has.
+   */
+  it("ranks by score then recency, with unscored and undated last", async () => {
     const { db, calls } = fakeDb({});
     await readCandidatePool(db);
 
     expect(calls.article.orderBy).toEqual([
       { relevanceScore: { sort: "desc", nulls: "last" } },
-      { publishedAt: "desc" },
+      { publishedAt: { sort: "desc", nulls: "last" } },
+      { capturedAt: "desc" },
     ]);
   });
 
@@ -188,6 +196,7 @@ describe("readCandidatePool shaping", () => {
       sourceUrl: "https://example.test/a1",
       author: "Someone",
       publishedAt: "2026-08-01T10:00:00.000Z",
+      capturedAt: "2026-08-01T11:00:00.000Z",
       relevanceScore: 8.5,
       summary: "Short summary",
       category: ["AI Tools"],

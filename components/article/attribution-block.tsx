@@ -30,6 +30,7 @@ export function AttributionBlock({
         sourceUrl={attribution.url}
         sourceName={attribution.publication}
         publishedAt={attribution.publishedAt}
+        capturedAt={attribution.capturedAt}
       />
 
       {showOriginalTitle ? (

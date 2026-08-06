@@ -16,7 +16,10 @@
 export interface LinkTakeAttribution {
   publication: string;
   url: string;
-  publishedAt: string;
+  /** Null when nobody told us when it was published. Finding C1. */
+  publishedAt: string | null;
+  /** Always known. Shown, and labelled as a capture, when the above is null. */
+  capturedAt: string;
   originalTitle: string;
   /**
    * Finding D4: true when `url` is the wrapper a newsletter used rather than the

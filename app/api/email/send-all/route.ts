@@ -139,7 +139,8 @@ export async function POST(request: Request) {
         where: { status: "APPROVED" },
         orderBy: [
           { relevanceScore: "desc" },
-          { publishedAt: "desc" },
+          // Finding C1: nulls last, so an undated article does not head the list.
+          { publishedAt: { sort: "desc", nulls: "last" } },
         ],
         take: 10,
       });
