@@ -56,3 +56,8 @@ docs/screenshots/
 # Print-resolution brand assets: 17MB of sources the app does not serve.
 # The derived email assets in public/email/ are the ones that ship.
 public/link-linkroad logos/
+
+# Screenshot artefacts. Playwright writes to the working directory when given a bare
+# filename, so these accumulate at the root; real image assets live in subdirectories.
+/*.png
+
