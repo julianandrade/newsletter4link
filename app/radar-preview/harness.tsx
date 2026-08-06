@@ -26,6 +26,8 @@ import SettingsPage from "@/app/dashboard/settings/page";
 import BuilderPage from "@/app/dashboard/send/[id]/page";
 import SourcesPage from "@/app/dashboard/sources/page";
 import ArticleDetailPage from "@/app/dashboard/articles/[id]/page";
+import { editionLabel } from "@/lib/editions/identity";
+import { isoWeekStart } from "@/lib/radar/week";
 import type { User } from "@supabase/supabase-js";
 
 const DAY = 86400000;
@@ -465,7 +467,50 @@ const EDITIONS = [
     approvedAt: iso(21),
     approvedByEmail: "someone.else@linkconsulting.com",
   },
-];
+  /**
+   * RQ-008: a special edition, open in the same week as the weekly one above.
+   *
+   * The whole point of the change, and the reason it is a fixture: the screen used to
+   * pick the first non-sent edition and call it "the" open one, so this row and e1
+   * together are what prove it no longer does.
+   */
+  {
+    id: "e-special",
+    week: 32,
+    year: 2026,
+    title: "AI Act: what changes in January",
+    kind: "SPECIAL" as const,
+    status: "DRAFT",
+    finalizedAt: null,
+    sentAt: null,
+    createdAt: iso(1),
+    updatedAt: iso(0),
+    articleCount: 4,
+    projectCount: 0,
+    sharePointUrl: null,
+    sharePointPublishedAt: null,
+    sharePointError: null,
+    archivedAt: null,
+    approvedAt: null,
+    approvedByEmail: null,
+  },
+].map((edition) => {
+  /**
+   * The identity fields, derived the way the API derives them, so a fixture cannot
+   * disagree with production about what an edition of week N is called or dated.
+   */
+  const publishDate = isoWeekStart(edition.week, edition.year);
+  const title = (edition as { title?: string }).title ?? null;
+  const kind = (edition as { kind?: "WEEKLY" | "SPECIAL" }).kind ?? "WEEKLY";
+
+  return {
+    ...edition,
+    title,
+    kind,
+    publishDate: publishDate.toISOString(),
+    label: editionLabel({ title, week: edition.week, year: edition.year }),
+  };
+});
 
 function buildTrends() {
   const topics = [

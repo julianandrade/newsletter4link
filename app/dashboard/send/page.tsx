@@ -32,15 +32,48 @@ import {
   type BulkAction,
 } from "@/components/radar/selection";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
-import { isoWeekAndYear } from "@/lib/radar/week";
+import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
 import { useOrgRole } from "@/components/radar/use-role";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+/**
+ * RQ-008: open and sent, from one list, with a stable order for each.
+ *
+ * Exported and pure so the ordering rules are tested without rendering the page. Generic
+ * over the row shape for the same reason: the test passes the four fields it cares about
+ * rather than building a whole Edition.
+ */
+export function splitEditions<
+  T extends { status: string; publishDate: string; sentAt: string | null },
+>(editions: T[]): { open: T[]; sent: T[] } {
+  const open = editions
+    .filter((edition) => edition.status !== "SENT")
+    .sort((a, b) => b.publishDate.localeCompare(a.publishDate));
+
+  const sent = editions
+    .filter((edition) => edition.status === "SENT")
+    .sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? ""));
+
+  return { open, sent };
+}
+
+/** The Monday of `now`'s ISO week, which is what a weekly edition is dated. */
+export function nextWeeklyDate(now: Date): Date {
+  const { week, year } = isoWeekAndYear(now);
+  return isoWeekStart(week, year);
+}
 
 interface Edition {
   id: string;
   week: number;
   year: number;
+  /** RQ-008: the edition's own name, null on a weekly. */
+  title: string | null;
+  kind: "WEEKLY" | "SPECIAL";
+  publishDate: string;
+  /** The title, or the week label when there is none. Derived by the API. */
+  label: string;
   status: "DRAFT" | "FINALIZED" | "SENT";
   finalizedAt: string | null;
   sentAt: string | null;
@@ -104,6 +137,24 @@ function formatStamp(value: string | null): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+/**
+ * A publication date, which is a day rather than an instant.
+ *
+ * RQ-008: read in UTC on purpose. `publishDate` is written as midnight UTC, so rendering
+ * it in the viewer's timezone shows a time nobody chose ("01:00" in Lisbon) and, west of
+ * UTC, shows the day before: midnight on 3 August reads as 2 August, 21:00 in São Paulo.
+ * No time is shown for the same reason, there is not one.
+ */
+function formatDay(value: string | null): string {
+  if (!value) return "no date";
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -277,8 +328,9 @@ export default function EditionsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [week, setWeek] = useState(1);
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [newTitle, setNewTitle] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newKind, setNewKind] = useState<"WEEKLY" | "SPECIAL">("WEEKLY");
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -314,9 +366,9 @@ export default function EditionsPage() {
 
   useEffect(() => {
     void load();
-    const { week: w, year: y } = isoWeekAndYear();
-    setWeek(w);
-    setYear(y);
+    // RQ-008: the Monday of the current ISO week, which is what a weekly edition is
+    // dated. Sliced to yyyy-mm-dd because that is what a date input reads.
+    setNewDate(nextWeeklyDate(new Date()).toISOString().slice(0, 10));
   }, [load]);
 
   /**
@@ -348,7 +400,12 @@ export default function EditionsPage() {
       const res = await fetch("/api/editions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ week, year, autoPopulate: true }),
+        body: JSON.stringify({
+          title: newTitle.trim() || null,
+          publishDate: newDate,
+          kind: newKind,
+          autoPopulate: true,
+        }),
       });
       const json = await res.json();
 
@@ -377,36 +434,46 @@ export default function EditionsPage() {
     () => approved.filter((a) => Boolean(a.editionCount)),
     [approved]
   );
-  const sentEditions = useMemo(
-    () =>
-      editions
-        .filter((e) => e.status === "SENT")
-        .sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? "")),
+  const { open: openEditions, sent: sentEditions } = useMemo(
+    () => splitEditions(editions),
     [editions]
   );
 
-  const openEdition = useMemo(
-    () => editions.find((e) => e.status !== "SENT") ?? null,
-    [editions]
-  );
+  /**
+   * RQ-008: the edition the "Open builder" shortcut points at, which is the soonest one.
+   *
+   * There can be several open editions now, and that is the change. Nothing else on this
+   * screen treats this as "the" edition any more.
+   */
+  const nextEdition = openEditions[openEditions.length - 1] ?? null;
 
-  const headline = openEdition
-    ? `Week ${openEdition.week} · ${openEdition.year}`
-    : "No edition in progress";
+  const headline =
+    openEditions.length === 0
+      ? "No edition in progress"
+      : openEditions.length === 1
+        ? openEditions[0].label
+        : `${openEditions.length} editions in progress`;
 
-  const subtitle = openEdition ? (
-    <>
-      <Num>{openEdition.articleCount}</Num> stories and{" "}
-      <Num>{openEdition.projectCount}</Num> projects in the draft ·{" "}
-      <Num>{waitingApproved.length}</Num> approved and waiting ·{" "}
-      <Num>{pending.length}</Num> still in review
-    </>
-  ) : (
-    <>
-      <Num>{waitingApproved.length}</Num> approved stories are waiting for an
-      edition, and <Num>{pending.length}</Num> are still in review.
-    </>
-  );
+  const subtitle =
+    openEditions.length === 0 ? (
+      <>
+        <Num>{waitingApproved.length}</Num> approved stories are waiting for an
+        edition, and <Num>{pending.length}</Num> are still in review.
+      </>
+    ) : openEditions.length === 1 ? (
+      <>
+        <Num>{openEditions[0].articleCount}</Num> stories and{" "}
+        <Num>{openEditions[0].projectCount}</Num> projects in the draft ·{" "}
+        <Num>{waitingApproved.length}</Num> approved and waiting ·{" "}
+        <Num>{pending.length}</Num> still in review
+      </>
+    ) : (
+      <>
+        {openEditions.map((edition) => edition.label).join(", ")} ·{" "}
+        <Num>{waitingApproved.length}</Num> approved and waiting ·{" "}
+        <Num>{pending.length}</Num> still in review
+      </>
+    );
 
   return (
     <>
@@ -440,18 +507,20 @@ export default function EditionsPage() {
                   )}
                 />
               )}
-              {openEdition ? (
+              {nextEdition && (
                 <Link
-                  href={`/dashboard/send/${openEdition.id}`}
-                  className={radarButtonClass("accent")}
+                  href={`/dashboard/send/${nextEdition.id}`}
+                  className={radarButtonClass()}
                 >
                   Open builder
                 </Link>
-              ) : (
-                <RadarButton variant="accent" onClick={() => setShowCreate(true)}>
-                  Create edition
-                </RadarButton>
               )}
+              {/* RQ-008: always reachable. This used to appear only when no edition was
+                  open, which is what made a special edition impossible to create: with
+                  the week's edition open there was no button to press. */}
+              <RadarButton variant="accent" onClick={() => setShowCreate(true)}>
+                Create edition
+              </RadarButton>
             </>
           }
         />
@@ -535,7 +604,13 @@ export default function EditionsPage() {
               title="In edition"
               dot="var(--r-accent)"
               count={inEdition.length}
-              note={openEdition ? `Week ${openEdition.week}` : "unscheduled"}
+              note={
+                openEditions.length === 0
+                  ? "unscheduled"
+                  : openEditions.length === 1
+                    ? openEditions[0].label
+                    : `${openEditions.length} open editions`
+              }
               empty="Create an edition to pull approved stories in."
             >
               {inEdition.slice(0, 8).map((article) => (
@@ -562,8 +637,13 @@ export default function EditionsPage() {
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <span className="text-[11px] text-radar-ink3">
-                      Week {edition.week} · {edition.year}
+                      {edition.label}
                     </span>
+                    {/* RQ-008: a named edition needs saying what kind it is, or a
+                        special reads as an oddly titled weekly. */}
+                    {edition.kind === "SPECIAL" && (
+                      <StatusChip tone="neutral">special</StatusChip>
+                    )}
                     <span className="flex-1" />
                     {edition.sharePointUrl && (
                       <StatusChip tone="ok">on SharePoint</StatusChip>
@@ -663,7 +743,7 @@ export default function EditionsPage() {
                               onToggle={(modifiers) =>
                                 selection.toggle(edition.id, modifiers)
                               }
-                              label={`Select week ${edition.week} of ${edition.year}`}
+                              label={`Select ${edition.label}`}
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -671,10 +751,13 @@ export default function EditionsPage() {
                               href={`/dashboard/send/${edition.id}`}
                               className="text-[13px] font-medium text-radar-ink no-underline hover:text-radar-accent"
                             >
-                              Week {edition.week} · {edition.year}
+                              {edition.label}
                             </Link>
+                            {/* RQ-008: the publication date, so a named edition is
+                                placed in time rather than floating. */}
                             <div className="mt-0.5 text-[11px] text-radar-ink3">
-                              Created {formatStamp(edition.createdAt)}
+                              {edition.kind === "SPECIAL" ? "Special · " : ""}
+                              {formatDay(edition.publishDate)}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-[12.5px] text-radar-ink2">
@@ -834,40 +917,56 @@ export default function EditionsPage() {
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block">
-                <span className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2">
-                  Week number
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  max={53}
-                  value={week}
-                  onChange={(event) =>
-                    setWeek(parseInt(event.target.value, 10) || 1)
-                  }
-                  className="h-9 w-full rounded-lg border border-radar-line bg-radar-bg px-3 text-[13px] text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2">
-                  Year
-                </span>
-                <input
-                  type="number"
-                  min={2000}
-                  max={2100}
-                  value={year}
-                  onChange={(event) =>
-                    setYear(
-                      parseInt(event.target.value, 10) || new Date().getFullYear()
-                    )
-                  }
-                  className="h-9 w-full rounded-lg border border-radar-line bg-radar-bg px-3 text-[13px] text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
-                />
-              </label>
-            </div>
+            {/* RQ-008: a date and a name. This used to be two number inputs, Week and
+                Year, and those two required numbers were the edition's whole identity,
+                which is what made a special edition impossible to ask for. */}
+            <label className="block">
+              <span className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2">
+                Publication date
+              </span>
+              <input
+                type="date"
+                value={newDate}
+                onChange={(event) => setNewDate(event.target.value)}
+                className="h-9 w-full rounded-lg border border-radar-line bg-radar-bg px-3 text-[13px] text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+              />
+              <span className="mt-1 block text-[11.5px] text-radar-ink3">
+                The week number is read from this date, so nothing has to be counted.
+              </span>
+            </label>
+
+            <ChipGroup<"WEEKLY" | "SPECIAL">
+              label="Edition kind"
+              value={newKind}
+              onChange={setNewKind}
+              options={[
+                { value: "WEEKLY", label: "Weekly" },
+                { value: "SPECIAL", label: "Special" },
+              ]}
+            />
+
+            <label className="block">
+              <span className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2">
+                Name {newKind === "WEEKLY" ? "(optional)" : ""}
+              </span>
+              <input
+                type="text"
+                maxLength={120}
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                placeholder={
+                  newKind === "WEEKLY"
+                    ? "Left empty, it is labelled by its week"
+                    : "AI Act special"
+                }
+                className="h-9 w-full rounded-lg border border-radar-line bg-radar-bg px-3 text-[13px] text-radar-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+              />
+              <span className="mt-1 block text-[11.5px] text-radar-ink3">
+                {newKind === "SPECIAL"
+                  ? "A special edition needs a name, so it can be told apart from the weekly one."
+                  : "A weekly edition without a name is labelled from its date."}
+              </span>
+            </label>
           </div>
 
           <DialogFooter>
@@ -877,9 +976,15 @@ export default function EditionsPage() {
             <RadarButton
               variant="accent"
               onClick={createEdition}
-              disabled={creating}
+              // A special with no name is refused by the API, so it is refused here too
+              // rather than sending a request that can only come back a 400.
+              disabled={
+                creating ||
+                !newDate ||
+                (newKind === "SPECIAL" && newTitle.trim().length === 0)
+              }
             >
-              {creating ? "Creating…" : `Create Week ${week}`}
+              {creating ? "Creating…" : "Create edition"}
             </RadarButton>
           </DialogFooter>
         </DialogContent>
