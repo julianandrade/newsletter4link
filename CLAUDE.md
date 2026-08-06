@@ -311,6 +311,12 @@ stub, which is how UI work gets verified without a Supabase session.
 | Claude for scoring | Best-in-class reasoning for content relevance | Jan 2026 |
 | Resend for email | Modern API, good deliverability, React Email support | Jan 2026 |
 | An edition is identified by its publication date and its name | `week` and `year` under a unique index made a second edition in one week impossible and left no room for a name. They survive as a cache derived from `publishDate` and written only by `lib/editions/identity.ts`; `weeklySlot` (null on a special) carries the uniqueness that keeps the weekly schedule idempotent | Aug 2026 |
+| The edition's HTML fragments live in `lib/email/edition-blocks.ts` | The code renderer and the merge tags that feed the Unlayer variants have to emit the same markup, or a template built in the editor renders articles that look like a different product | Aug 2026 |
+| Every merge tag comes from `lib/email/merge-tags.ts` | Four hand-written lists existed and two had already drifted, so `{{articleCount}}` worked in a real send and printed literally in the preview. A test asserts both renderers resolve every tag in the table | Aug 2026 |
+| What repeats N times stays a merge tag, in every template | An Unlayer design has no loop, and topic sections come from `article.category` at runtime. The Unlayer variants differ from the built-in in how much of the *frame* is editable, never in whether the body is code | Aug 2026 |
+| The three subscriber-bound URLs resolve inside the send loop | Rendering once and reusing the string gave every recipient the first one's links, which is how the signed unsubscribe link was being dropped on three of four send paths. `lib/email/personalize.ts` is the only place they are filled in | Aug 2026 |
+| A token carries its purpose in the signature, except `unsubscribe` | Otherwise one token opens every subscriber-scoped surface. `unsubscribe` keeps signing the bare id forever, because tokens of that shape are in mail already delivered | Aug 2026 |
+| An edition is readable in a browser by the subscriber it was sent to, not by the public | An internal newsletter citing paid sources should not sit behind MFA and should not be open either. The HMAC that already signed unsubscribe links is the whole gate; `app/editions/` uses the raw Prisma client and scopes by the verified subscriber's organization by hand | Aug 2026 |
 
 ---
 
