@@ -149,12 +149,28 @@ goes out, which was not true yesterday.
 
 ## Local environment, two gotchas
 
-**Kaspersky intercepts `api.resend.com` on this machine** and its root CA is not in
-`~/corporate-ca-bundle.pem`, so any local call to Resend fails with
+**Kaspersky intercepts `api.resend.com` from Windows** and its root CA is not in
+`~/corporate-ca-bundle.pem`, so a local Node call to Resend fails with
 `SELF_SIGNED_CERT_IN_CHAIN`. Anthropic, OpenAI and GitHub all pass; only Resend fails,
-and `context7` fails the same way. This is why the content fetch cannot be verified
-locally and has to be tested by triggering the production cron. Appending the Kaspersky
-root CA to that bundle fixes it; the file is outside the repository and was left alone.
+and `context7` fails the same way. Appending the Kaspersky root CA to that bundle fixes
+it; the file is outside the repository and was left alone.
+
+**But WSL is not intercepted, and that is the cheap way to check a Resend key.**
+Found 6 August 2026. `wsl bash -c 'curl ... https://api.resend.com/domains'` completes
+its TLS handshake normally. This matters because it separates two questions that used to
+be answerable only by spending a retry on 42 real emails:
+
+- **Does the key have full access?** `GET /domains` and `GET /api-keys` answer **200**
+  for a full-access key and **401** for a sending-scoped one. Neither touches an inbound
+  email, so the check is free.
+- **Does it still send?** `POST /emails` with `{}` answers **400** on a validation error,
+  which is a key that works.
+
+Pass the key through `WSLENV` rather than on the command line, so it stays out of shell
+history and process listings.
+
+**Changing `RESEND_API_KEY` in Vercel does nothing until the next deployment.** The
+functions already running hold the value they were deployed with.
 
 **The preview harness is how screens get verified**, at `/radar-preview?screen=...`,
 dev-only. The new screen has four entries: `article`, `article-stale`, `article-absent`,
