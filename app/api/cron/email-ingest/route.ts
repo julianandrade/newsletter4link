@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { authorizeCron } from "@/lib/auth/cron";
 import { config } from "@/lib/config";
+import { handoverAccepted, selfOrigin } from "@/lib/inbound/handover";
 import { runEmailIngestion, type IngestResult } from "@/lib/inbound/process";
 
 export const dynamic = "force-dynamic";
@@ -55,18 +56,6 @@ function readBudget(request: Request): number {
 }
 
 /**
- * This deployment's own origin, for handing the remainder to a fresh invocation.
- *
- * `VERCEL_URL` is the deployment's own hostname, which is what a handover wants: the child
- * should run the same build as the parent, not whatever the production alias points at by
- * the time it is called.
- */
-function selfOrigin(): string | null {
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return process.env.NEXT_PUBLIC_APP_URL ?? null;
-}
-
-/**
  * Hand the remainder to a fresh invocation, if there is a remainder and room in the chain.
  *
  * Inside `after()`, so the request is sent once this invocation has already answered and
@@ -75,22 +64,37 @@ function selfOrigin(): string | null {
  * if it answered only when finished, the parent would wait out the child's whole run and
  * the chain would serialise into one long invocation rather than several short ones.
  *
- * A lost handover costs a day, not data: tomorrow's cron picks the backlog up. Worth a
- * line in the log and nothing more.
+ * The status is checked, not just the absence of a throw. The first version awaited the
+ * fetch inside a try and logged only thrown errors, so the 302 that Vercel's deployment
+ * protection answers counted as success: eight emails sat untouched for four minutes and
+ * nothing anywhere said why.
+ *
+ * A lost handover costs a day, not data: tomorrow's cron picks the backlog up. So this
+ * logs loudly and gives up rather than retrying into the same wall.
  */
 function handOver(result: IngestResult, chain: number): void {
-  const origin = selfOrigin();
+  const origin = selfOrigin(process.env);
 
   if (!result.moreWork || chain >= MAX_CHAIN || !origin || !config.cron.secret) return;
 
   after(async () => {
+    const target = `${origin}/api/cron/email-ingest?chain=${chain + 1}&handover=1`;
+
     try {
-      await fetch(
-        `${origin}/api/cron/email-ingest?chain=${chain + 1}&handover=1`,
-        { headers: { Authorization: `Bearer ${config.cron.secret}` } }
-      );
+      const response = await fetch(target, {
+        headers: { Authorization: `Bearer ${config.cron.secret}` },
+        // A redirect is a refusal here, never something to follow: the only thing that
+        // redirects this request is an authentication wall in front of the route.
+        redirect: "manual",
+      });
+
+      if (!handoverAccepted(response.status)) {
+        console.error(
+          `[EMAIL INGEST] handover refused with ${response.status} by ${origin}; the backlog waits for the next cron`
+        );
+      }
     } catch (error) {
-      console.warn("[EMAIL INGEST] handover failed:", error);
+      console.error("[EMAIL INGEST] handover could not be sent:", error);
     }
   });
 }
