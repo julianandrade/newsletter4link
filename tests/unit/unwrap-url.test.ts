@@ -74,6 +74,43 @@ describe("isBlockedIpv4", () => {
     }
   });
 
+  /**
+   * The special-use ranges are /24s, not /16s.
+   *
+   * The check blocked all of 192.0.0.0/16, 198.51.0.0/16 and 203.0.0.0/16, which is 256
+   * times too much in each case. The cost was measured on 6 August 2026: one Morning Brew
+   * issue lost five articles because techcrunch.com, variety.com, deadline.com and
+   * hollywoodreporter.com all resolve into 192.0.66.0/24, which is ordinary public space
+   * that Automattic happens to own.
+   */
+  it("allows the public space next door to a reserved range", () => {
+    for (const address of [
+      "192.0.66.220", // techcrunch.com
+      "192.0.66.91", // hollywoodreporter.com
+      "192.0.66.176", // variety.com
+      "192.0.66.32", // deadline.com
+      "192.0.1.1", // just past the protocol-assignments /24
+      "192.0.3.1", // just past TEST-NET-1
+      "198.51.99.1", // just before TEST-NET-2
+      "198.51.101.1", // just after it
+      "203.0.112.1", // just before TEST-NET-3
+      "203.0.114.1", // just after it
+    ]) {
+      expect(isBlockedIpv4(address), address).toBe(false);
+    }
+  });
+
+  it("still blocks the reserved /24s themselves", () => {
+    for (const address of [
+      "192.0.0.1", // IETF protocol assignments
+      "192.0.2.1", // TEST-NET-1
+      "198.51.100.1", // TEST-NET-2
+      "203.0.113.1", // TEST-NET-3
+    ]) {
+      expect(isBlockedIpv4(address), address).toBe(true);
+    }
+  });
+
   it("blocks anything that is not four numbers", () => {
     expect(isBlockedIpv4("not.an.ip.address")).toBe(true);
     expect(isBlockedIpv4("1.2.3")).toBe(true);

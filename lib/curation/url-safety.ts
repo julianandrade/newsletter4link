@@ -69,8 +69,19 @@ export function isBlockedIpv4(address: string): boolean {
   const parts = address.split(".").map(Number);
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return true;
 
-  const [a, b] = parts;
+  const [a, b, c] = parts;
 
+  /**
+   * The narrow ranges are /24s and must be matched as /24s.
+   *
+   * Three of them were written as /16s, which blocked 256 times more address space than
+   * the reservation covers. It was not theoretical: on 6 August 2026 one Morning Brew
+   * issue lost five articles, because techcrunch.com, variety.com, deadline.com and
+   * hollywoodreporter.com all resolve into 192.0.66.0/24 — ordinary public space that
+   * happens to sit inside the /16 next to the reserved /24s.
+   *
+   * A guard that refuses real publishers is not a stricter guard, it is a broken one.
+   */
   return (
     a === 0 || // this network
     a === 10 || // private
@@ -79,10 +90,11 @@ export function isBlockedIpv4(address: string): boolean {
     (a === 169 && b === 254) || // link local, which is where cloud metadata lives
     (a === 172 && b >= 16 && b <= 31) || // private
     (a === 192 && b === 168) || // private
-    (a === 192 && b === 0) || // protocol assignments and test net
-    (a === 198 && (b === 18 || b === 19)) || // benchmarking
-    (a === 198 && b === 51) || // documentation
-    (a === 203 && b === 0) || // documentation
+    (a === 192 && b === 0 && c === 0) || // IETF protocol assignments, 192.0.0.0/24
+    (a === 192 && b === 0 && c === 2) || // TEST-NET-1, 192.0.2.0/24
+    (a === 198 && (b === 18 || b === 19)) || // benchmarking, 198.18.0.0/15
+    (a === 198 && b === 51 && c === 100) || // TEST-NET-2, 198.51.100.0/24
+    (a === 203 && b === 0 && c === 113) || // TEST-NET-3, 203.0.113.0/24
     a >= 224 // multicast, reserved and broadcast
   );
 }
