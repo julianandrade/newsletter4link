@@ -7,7 +7,7 @@ import { cleanUrl, unwrapUrl } from "@/lib/curation/unwrap-url";
 import { extractNewsletterItems } from "@/lib/inbound/extract";
 import { matchSources, type MatchableSource } from "@/lib/inbound/match";
 import { fetchEmailContent } from "@/lib/inbound/receive";
-import { tallyItems, type ItemOutcome } from "@/lib/inbound/tally";
+import { dedupeByUrl, tallyItems, type ItemOutcome } from "@/lib/inbound/tally";
 
 /**
  * RQ-007 step 3: turn stored emails into articles.
@@ -361,7 +361,9 @@ async function ingestForSource(
    * report different numbers on different runs.
    */
   const outcomes = await mapWithConcurrency(
-    extracted.items,
+    // Deduplicated first: two copies of one URL in the same batch would both pass the
+    // duplicate check before either wrote, and nothing downstream would catch it.
+    dedupeByUrl(extracted.items),
     config.emailIngest.itemConcurrency,
     async (item): Promise<ItemOutcome> => {
       // Mandatory, as the plan says: the same story arriving through a feed and through two

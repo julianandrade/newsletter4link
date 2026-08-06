@@ -1,5 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { tallyItems, type ItemOutcome } from "@/lib/inbound/tally";
+import { dedupeByUrl, tallyItems, type ItemOutcome } from "@/lib/inbound/tally";
+
+/**
+ * The race the worker pool opens, and the guard that closes it.
+ *
+ * Sequentially a repeated URL was harmless: the second copy was recognised as a duplicate
+ * of the row the first had just written. Concurrently both copies can pass the duplicate
+ * check before either writes, and `Article.sourceUrl` has no unique index to catch it.
+ */
+describe("dedupeByUrl", () => {
+  it("keeps the first of a repeated URL and drops the rest", () => {
+    const items = [
+      { url: "https://a.com/1", title: "headline" },
+      { url: "https://b.com/2", title: "other" },
+      { url: "https://a.com/1", title: "read more" },
+    ];
+
+    expect(dedupeByUrl(items)).toEqual([
+      { url: "https://a.com/1", title: "headline" },
+      { url: "https://b.com/2", title: "other" },
+    ]);
+  });
+
+  it("treats surrounding whitespace as the same URL", () => {
+    const items = [{ url: "https://a.com/1" }, { url: " https://a.com/1 " }];
+    expect(dedupeByUrl(items)).toHaveLength(1);
+  });
+
+  it("leaves a list with no repeats untouched", () => {
+    const items = [{ url: "https://a.com/1" }, { url: "https://b.com/2" }];
+    expect(dedupeByUrl(items)).toHaveLength(2);
+  });
+
+  it("does not treat different paths on one host as the same", () => {
+    const items = [{ url: "https://a.com/1" }, { url: "https://a.com/2" }];
+    expect(dedupeByUrl(items)).toHaveLength(2);
+  });
+
+  it("handles an empty list", () => {
+    expect(dedupeByUrl([])).toEqual([]);
+  });
+});
 
 /**
  * With a worker pool, items finish out of order. The totals and the notes must not

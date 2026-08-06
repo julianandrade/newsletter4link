@@ -21,6 +21,29 @@ export interface ItemTally {
   notes: string[];
 }
 
+/**
+ * Drop items that repeat a URL already in the list, keeping the first.
+ *
+ * Sequentially this cost nothing: the second copy reached `curateArticle`, was recognised
+ * as a duplicate of the row the first copy had just written, and was counted as one. With a
+ * worker pool both copies can pass the duplicate check before either writes, and two
+ * articles for one URL reach the review queue. `Article.sourceUrl` carries no unique index,
+ * so nothing downstream would catch it.
+ *
+ * A newsletter linking the same piece twice, once in a headline and once in a "read more",
+ * is ordinary rather than exotic, and the extractor is not asked to deduplicate.
+ */
+export function dedupeByUrl<T extends { url: string }>(items: readonly T[]): T[] {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const key = item.url.trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function tallyItems(outcomes: readonly ItemOutcome[]): ItemTally {
   return {
     created: outcomes.reduce((total, outcome) => total + outcome.created, 0),
