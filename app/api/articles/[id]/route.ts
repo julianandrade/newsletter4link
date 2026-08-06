@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getArticleById } from "@/lib/queries";
-import { prisma } from "@/lib/db";
-import { requireOrgContext } from "@/lib/auth/context";
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
 
 /**
  * GET /api/articles/:id
@@ -46,13 +45,27 @@ export async function GET(
 
 /**
  * PATCH /api/articles/:id
- * Update article summary and/or categories
+ *
+ * Update an article's summary and categories. EDITOR or above, this organization only.
+ *
+ * This handler had neither guard. It called no auth at all and wrote with the bare
+ * `prisma` client, so any authenticated member of any organization could rewrite the
+ * summary and categories of any article in any tenant, and a VIEWER could too. It is the
+ * same defect RQ-005 recorded as conflict C2 and fixed on the edition routes, left behind
+ * here. Finding B4 of 6 August 2026.
+ *
+ * The tenant client is what scopes the write now, and its `update` was itself unscoped
+ * until the same day; see `lib/db/tenant.ts`.
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireOrgContext();
+    requireRole(ctx, "EDITOR");
+    const { db } = ctx;
+
     const { id } = await params;
     const body = await request.json();
 
@@ -79,7 +92,25 @@ export async function PATCH(
       );
     }
 
-    const article = await prisma.article.update({
+    /**
+     * Read it first, scoped, so an article in another organization answers 404 rather
+     * than the P2025 the scoped update would raise. Never 403 and never the row: a
+     * refusal that distinguishes "not yours" from "does not exist" tells a caller which
+     * ids are real elsewhere.
+     */
+    const existing = await db.article.findFirst({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Article not found" },
+        { status: 404 }
+      );
+    }
+
+    const article = await db.article.update({
       where: { id },
       data: updateData,
     });
@@ -91,6 +122,20 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Error updating article:", error);
+
+    if (error instanceof Error && error.message.startsWith("Unauthorized")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof Error && error.message.startsWith("Forbidden")) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json(
       {

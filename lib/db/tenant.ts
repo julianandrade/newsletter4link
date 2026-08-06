@@ -6,6 +6,21 @@ import { Prisma } from "@prisma/client";
  *
  * Provides a wrapper around Prisma that automatically scopes queries
  * to a specific organization, preventing data leakage between tenants.
+ *
+ * **`organizationId` goes into the where clause of every read and every write**, and
+ * that is the whole contract. It is asserted per model in
+ * `tests/unit/tenant-scoping.test.ts`, because it was not true: `update` and `delete`
+ * passed the caller's where through untouched on all thirteen models, while `findMany`,
+ * `findFirst`, `count` and `updateMany` scoped correctly. The wrapper therefore read as
+ * though everything was safe, and `db.article.update({ where: { id } })` wrote to
+ * whichever organization happened to own that id.
+ *
+ * The scope is applied last, after the caller's own where, so a request body carrying
+ * someone else's `organizationId` cannot widen it.
+ *
+ * Prisma accepts a non-unique field alongside the unique one in `update` and `delete`,
+ * which is what makes this possible: a row in another organization raises P2025 rather
+ * than being written. Verified against the database, not assumed.
  */
 
 export type TenantScopedModels =
@@ -61,7 +76,7 @@ export function createTenantClient(organizationId: string) {
       update: <T extends Prisma.ArticleUpdateArgs>(args: T) =>
         prisma.article.update({
           ...args,
-          where: { ...args.where },
+          where: { ...args.where, organizationId },
         } as T),
 
       updateMany: <T extends Prisma.ArticleUpdateManyArgs>(args: T) =>
@@ -71,7 +86,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.ArticleDeleteArgs>(args: T) =>
-        prisma.article.delete(args),
+        prisma.article.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.ArticleCountArgs>(args?: T) =>
         prisma.article.count({
@@ -106,7 +124,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.ProjectUpdateArgs>(args: T) =>
-        prisma.project.update(args),
+        prisma.project.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.ProjectUpdateManyArgs>(args: T) =>
         prisma.project.updateMany({
@@ -122,7 +143,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.ProjectDeleteArgs>(args: T) =>
-        prisma.project.delete(args),
+        prisma.project.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.ProjectCountArgs>(args?: T) =>
         prisma.project.count({
@@ -157,7 +181,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.EditionUpdateArgs>(args: T) =>
-        prisma.edition.update(args),
+        prisma.edition.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.EditionUpdateManyArgs>(args: T) =>
         prisma.edition.updateMany({
@@ -179,7 +206,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.EditionDeleteArgs>(args: T) =>
-        prisma.edition.delete(args),
+        prisma.edition.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.EditionCountArgs>(args?: T) =>
         prisma.edition.count({
@@ -221,7 +251,10 @@ export function createTenantClient(organizationId: string) {
       },
 
       update: <T extends Prisma.SubscriberUpdateArgs>(args: T) =>
-        prisma.subscriber.update(args),
+        prisma.subscriber.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.SubscriberUpdateManyArgs>(args: T) =>
         prisma.subscriber.updateMany({
@@ -237,7 +270,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.SubscriberDeleteArgs>(args: T) =>
-        prisma.subscriber.delete(args),
+        prisma.subscriber.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.SubscriberCountArgs>(args?: T) =>
         prisma.subscriber.count({
@@ -272,7 +308,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.RSSSourceUpdateArgs>(args: T) =>
-        prisma.rSSSource.update(args),
+        prisma.rSSSource.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.RSSSourceUpdateManyArgs>(args: T) =>
         prisma.rSSSource.updateMany({
@@ -281,7 +320,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.RSSSourceDeleteArgs>(args: T) =>
-        prisma.rSSSource.delete(args),
+        prisma.rSSSource.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       // Scoped like updateMany: ids from another organization simply do not
       // match, so a bulk delete can never reach across tenants.
@@ -324,7 +366,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.CurationJobUpdateArgs>(args: T) =>
-        prisma.curationJob.update(args),
+        prisma.curationJob.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.CurationJobUpdateManyArgs>(args: T) =>
         prisma.curationJob.updateMany({
@@ -333,7 +378,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.CurationJobDeleteArgs>(args: T) =>
-        prisma.curationJob.delete(args),
+        prisma.curationJob.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.CurationJobCountArgs>(args?: T) =>
         prisma.curationJob.count({
@@ -368,7 +416,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.EmailTemplateUpdateArgs>(args: T) =>
-        prisma.emailTemplate.update(args),
+        prisma.emailTemplate.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.EmailTemplateUpdateManyArgs>(args: T) =>
         prisma.emailTemplate.updateMany({
@@ -377,7 +428,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.EmailTemplateDeleteArgs>(args: T) =>
-        prisma.emailTemplate.delete(args),
+        prisma.emailTemplate.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.EmailTemplateCountArgs>(args?: T) =>
         prisma.emailTemplate.count({
@@ -412,7 +466,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.MediaAssetDeleteArgs>(args: T) =>
-        prisma.mediaAsset.delete(args),
+        prisma.mediaAsset.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.MediaAssetCountArgs>(args?: T) =>
         prisma.mediaAsset.count({
@@ -447,7 +504,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.BrandVoiceUpdateArgs>(args: T) =>
-        prisma.brandVoice.update(args),
+        prisma.brandVoice.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.BrandVoiceUpdateManyArgs>(args: T) =>
         prisma.brandVoice.updateMany({
@@ -456,7 +516,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.BrandVoiceDeleteArgs>(args: T) =>
-        prisma.brandVoice.delete(args),
+        prisma.brandVoice.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.BrandVoiceCountArgs>(args?: T) =>
         prisma.brandVoice.count({
@@ -491,7 +554,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.SearchTopicUpdateArgs>(args: T) =>
-        prisma.searchTopic.update(args),
+        prisma.searchTopic.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.SearchTopicUpdateManyArgs>(args: T) =>
         prisma.searchTopic.updateMany({
@@ -500,7 +566,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.SearchTopicDeleteArgs>(args: T) =>
-        prisma.searchTopic.delete(args),
+        prisma.searchTopic.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.SearchTopicCountArgs>(args?: T) =>
         prisma.searchTopic.count({
@@ -535,7 +604,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.SearchHistoryUpdateArgs>(args: T) =>
-        prisma.searchHistory.update(args),
+        prisma.searchHistory.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.SearchHistoryUpdateManyArgs>(args: T) =>
         prisma.searchHistory.updateMany({
@@ -544,7 +616,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.SearchHistoryDeleteArgs>(args: T) =>
-        prisma.searchHistory.delete(args),
+        prisma.searchHistory.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.SearchHistoryCountArgs>(args?: T) =>
         prisma.searchHistory.count({
@@ -579,7 +654,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.GenerationDraftUpdateArgs>(args: T) =>
-        prisma.generationDraft.update(args),
+        prisma.generationDraft.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       updateMany: <T extends Prisma.GenerationDraftUpdateManyArgs>(args: T) =>
         prisma.generationDraft.updateMany({
@@ -588,7 +666,10 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       delete: <T extends Prisma.GenerationDraftDeleteArgs>(args: T) =>
-        prisma.generationDraft.delete(args),
+        prisma.generationDraft.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.GenerationDraftCountArgs>(args?: T) =>
         prisma.generationDraft.count({
@@ -623,10 +704,16 @@ export function createTenantClient(organizationId: string) {
         } as T),
 
       update: <T extends Prisma.ApiKeyUpdateArgs>(args: T) =>
-        prisma.apiKey.update(args),
+        prisma.apiKey.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       delete: <T extends Prisma.ApiKeyDeleteArgs>(args: T) =>
-        prisma.apiKey.delete(args),
+        prisma.apiKey.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
 
       count: <T extends Prisma.ApiKeyCountArgs>(args?: T) =>
         prisma.apiKey.count({
