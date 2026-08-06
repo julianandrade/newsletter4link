@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { pgSafe, pgSafeDeep } from "@/lib/pg-safe-text";
 import { JobStatus, JobType, BackgroundJob } from "@prisma/client";
 
 export interface JobLogEntry {
@@ -56,7 +57,7 @@ export async function updateJobProgress(
         data: {
           currentStage: stage,
           progress: Math.min(100, Math.max(0, progress)),
-          logs: logs as any,
+          logs: pgSafeDeep(logs) as any,
         },
       });
       return;
@@ -116,7 +117,7 @@ export async function completeJob(
     data: {
       status: "COMPLETED",
       progress: 100,
-      result: result as any,
+      result: pgSafeDeep(result) as any,
       completedAt: new Date(),
     },
   });
@@ -145,9 +146,9 @@ export async function failJob(
     where: { id: jobId },
     data: {
       status: "FAILED",
-      error: errorMessage,
+      error: pgSafe(errorMessage),
       completedAt: new Date(),
-      logs: logs as any,
+      logs: pgSafeDeep(logs) as any,
     },
   });
 }
@@ -181,7 +182,7 @@ export async function cancelJob(jobId: string): Promise<BackgroundJob> {
     data: {
       status: "CANCELLED",
       completedAt: new Date(),
-      logs: logs as any,
+      logs: pgSafeDeep(logs) as any,
     },
   });
 }

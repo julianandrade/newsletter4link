@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import { load } from "cheerio";
 import { prisma } from "@/lib/db";
 import { config } from "@/lib/config";
+import { pgSafe } from "@/lib/pg-safe-text";
 
 interface RSSArticle {
   title: string;
@@ -127,10 +128,12 @@ export async function fetchRSSFeed(
       }
 
       articles.push({
-        title: item.title,
+        // Cleaned at the boundary, like the search provider and the inbound email path.
+        // Feed XML forbids a NUL, and malformed feeds carry them anyway.
+        title: pgSafe(item.title ?? ""),
         link: item.link,
-        content,
-        author: item.creator || (item as any).author,
+        content: pgSafe(content),
+        author: pgSafe(item.creator || (item as any).author || "") || undefined,
         publishedAt,
         sourceUrl: url,
         sourceName,

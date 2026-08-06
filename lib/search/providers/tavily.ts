@@ -12,6 +12,7 @@ import {
   SearchProviderResult,
   TIME_RANGE_DAYS,
 } from "./types";
+import { pgSafe } from "@/lib/pg-safe-text";
 
 interface TavilySearchResult {
   url: string;
@@ -84,11 +85,23 @@ export class TavilyProvider implements SearchProvider {
 
     const data: TavilyResponse = await response.json();
 
+    /**
+     * Cleaned here, at the boundary the text arrives through.
+     *
+     * `include_raw_content` above means whole scraped pages come back as strings, and
+     * scraped text carries NUL bytes. A NUL cannot be stored by Postgres, in jsonb or in
+     * text, so leaving it means the search runs, costs its model calls, and then fails on
+     * the write with the database's own message: "unsupported Unicode escape sequence".
+     *
+     * The slice is the other half of it. Cutting at 500 characters lands mid-character on
+     * any emoji near the boundary and leaves a lone surrogate, which jsonb refuses too, so
+     * the clean happens after the cut rather than before.
+     */
     const results: SearchProviderResult[] = data.results.map((result) => ({
       url: result.url,
-      title: result.title,
-      snippet: result.content.slice(0, 500),
-      content: result.raw_content || result.content,
+      title: pgSafe(result.title),
+      snippet: pgSafe(result.content.slice(0, 500)),
+      content: pgSafe(result.raw_content || result.content),
       publishedAt: result.published_date ? new Date(result.published_date) : undefined,
       source: this.extractDomain(result.url),
       rawScore: result.score,

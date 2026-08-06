@@ -1,5 +1,6 @@
 import { load } from "cheerio";
 import { config } from "@/lib/config";
+import { pgSafe } from "@/lib/pg-safe-text";
 
 /**
  * RQ-007: fetch an inbound email's content from Resend, and make it safe to store.
@@ -127,11 +128,19 @@ export async function fetchEmailContent(
     return { ok: false, reason: "the email had no html and no text", retryable: false };
   }
 
+  /**
+   * `pgSafe` last, after sanitising and capping.
+   *
+   * A NUL cannot be stored by Postgres in a text column any more than in jsonb, and these
+   * two strings are the least controlled input this product takes: whatever a newsletter
+   * sender put in the message. The search failed on exactly this class of byte from
+   * scraped web pages; there is no reason email would be cleaner.
+   */
   return {
     ok: true,
     content: {
-      html: html ? capHtml(sanitizeEmailHtml(html)) : null,
-      text,
+      html: html ? pgSafe(capHtml(sanitizeEmailHtml(html))) : null,
+      text: text ? pgSafe(text) : null,
     },
   };
 }

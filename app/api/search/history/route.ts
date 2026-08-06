@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import type { AnalyzedResult } from "@/lib/search/result-analyzer";
+import { pgSafeDeep } from "@/lib/pg-safe-text";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -64,9 +65,12 @@ export async function POST(request: NextRequest) {
       data: {
         query: query.trim(),
         queryExpanded: queryExpanded?.trim() || null,
-        queryAnalysis: queryAnalysis ?? Prisma.DbNull,
+        // Defence in depth: the provider already cleans its text, and this is the other
+        // jsonb column the same scraped strings reach. A NUL here refused the write with
+        // "Failed to save search history" and no clue why.
+        queryAnalysis: queryAnalysis ? pgSafeDeep(queryAnalysis) : Prisma.DbNull,
         resultCount: results.length,
-        results: results,
+        results: pgSafeDeep(results),
       },
     });
 
