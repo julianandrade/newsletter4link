@@ -242,7 +242,10 @@ export default function TemplatesPage() {
                     )}
                     <p className="mt-2 mb-0 text-[11px] text-radar-ink3">
                       {template.builtIn
-                        ? "Ships with the app. Adapts to the content, so it cannot be edited visually."
+                        ? // The old wording ended at "cannot be edited visually", which was a dead
+                          // end for anyone who wanted to change it. Two editable copies exist now,
+                          // so the line points at them instead of just refusing.
+                          "Ships with the app, and stays as it is. To change it, edit “AI Radar Weekly - editable frame” or “- Unlayer”, which are the same edition with the frame opened up."
                         : `Updated ${relativeTime(template.updatedAt)}`}
                     </p>
                   </div>
