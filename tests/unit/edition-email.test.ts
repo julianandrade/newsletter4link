@@ -16,6 +16,7 @@ import {
   renderTemplate,
 } from "@/lib/email/template-renderer";
 import { computeTrends, type TrendInputArticle } from "@/lib/trends/compute";
+import { editionEmailLabel } from "@/lib/editions/identity";
 
 const APP_URL = "https://newsletter4link.vercel.app";
 
@@ -501,5 +502,66 @@ describe("a named edition", () => {
 
     expect(email.editionLabel).toBe("Week 32");
     expect(email.subject).toBe("AI Radar Weekly - Week 32, 2026");
+  });
+});
+
+/**
+ * The masthead prints `editionLabel · dateLabel`. dateLabel was `String(year)` and no caller
+ * ever passed one, while the label arrived as "Week 31 · 2026" from editionLabel, so the
+ * masthead read "WEEK 31 · 2026 · 2026".
+ */
+describe("the masthead", () => {
+  it("does not print the year twice for an unnamed edition", () => {
+    const email = input({
+      week: 32,
+      year: 2026,
+      label: editionEmailLabel({ title: null, week: 32 }),
+    });
+
+    expect(email.editionLabel).toBe("Week 32");
+    expect(email.dateLabel).toBe("3-9 Aug 2026");
+
+    const masthead = `${email.editionLabel} · ${email.dateLabel}`;
+    expect(masthead).toBe("Week 32 · 3-9 Aug 2026");
+    expect(masthead.match(/2026/g)?.length).toBe(1);
+  });
+
+  it("keeps the subject line an unnamed edition already had", () => {
+    const email = input({
+      week: 32,
+      year: 2026,
+      label: editionEmailLabel({ title: null, week: 32 }),
+    });
+
+    expect(email.subject).toBe("AI Radar Weekly - Week 32, 2026");
+  });
+
+  it("still recognises the old label shape as unnamed", () => {
+    // A caller not yet migrated passes editionLabel's shape. Without accepting both, its
+    // subject would silently become "AI Radar - Week 32 · 2026".
+    const email = input({ week: 32, year: 2026, label: "Week 32 · 2026" });
+
+    expect(email.subject).toBe("AI Radar Weekly - Week 32, 2026");
+  });
+
+  it("gives a named edition its name and the range", () => {
+    const email = input({ week: 32, year: 2026, label: "AI Act special" });
+
+    expect(email.editionLabel).toBe("AI Act special");
+    expect(email.dateLabel).toBe("3-9 Aug 2026");
+    expect(email.subject).toBe("AI Radar - AI Act special");
+  });
+
+  it("puts the range in the text part too, where the year was also doubled", () => {
+    const text = renderEditionText(
+      input({ week: 32, year: 2026, label: editionEmailLabel({ title: null, week: 32 }) })
+    );
+
+    expect(text).toContain("Week 32 · 3-9 Aug 2026");
+  });
+
+  it("lets a caller override the date label", () => {
+    const email = input({ week: 32, year: 2026, dateLabel: "the week of the summit" });
+    expect(email.dateLabel).toBe("the week of the summit");
   });
 });

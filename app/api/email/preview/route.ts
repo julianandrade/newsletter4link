@@ -11,7 +11,7 @@ import {
 } from "@/lib/email/template-renderer";
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { isoWeekAndYear } from "@/lib/radar/week";
-import { editionLabel } from "@/lib/editions/identity";
+import { editionEmailLabel } from "@/lib/editions/identity";
 
 export const dynamic = "force-dynamic";
 
@@ -182,10 +182,9 @@ export async function POST(request: Request) {
           week: edition.week,
           year: edition.year,
           // RQ-008: the edition names itself in the eyebrow and the subject.
-          label: editionLabel({
+          label: editionEmailLabel({
             title: edition.title,
             week: edition.week,
-            year: edition.year,
           }),
         };
       } else {
@@ -208,10 +207,9 @@ export async function POST(request: Request) {
           })),
           week: edition.week,
           year: edition.year,
-          label: editionLabel({
+          label: editionEmailLabel({
             title: edition.title,
             week: edition.week,
-            year: edition.year,
           }),
         };
       }

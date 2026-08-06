@@ -8,6 +8,7 @@
  */
 
 import { config } from "@/lib/config";
+import { weekRangeLabel } from "@/lib/radar/week";
 import type { EditionEmail, EmailArticle, EmailSection, EmailTrend } from "./edition-template";
 import type { Trend } from "@/lib/trends/compute";
 
@@ -163,17 +164,26 @@ export function trendsForEmail(trends: Trend[], limit = 3): EmailTrend[] {
 }
 
 /**
- * True when the label is only the derived week label, so nothing was actually named.
+ * True when the label is only a derived week label, so nothing was actually named.
  *
  * This is what keeps a weekly edition's subject line the wording subscribers already
  * recognise, while a named edition gets its name.
+ *
+ * Both derived shapes are accepted. `editionEmailLabel` produces "Week 32" and the screens'
+ * `editionLabel` produces "Week 32 · 2026"; a caller still passing the second would otherwise
+ * have its subject change from "AI Radar Weekly - Week 32, 2026" to "AI Radar - Week 32 ·
+ * 2026" with nothing anywhere reporting it.
  */
 function isWeekLabel(
   label: string | undefined,
   week: number,
   year: number
 ): boolean {
-  return !label || label === `Week ${week} · ${year}`;
+  return (
+    !label ||
+    label === `Week ${week}` ||
+    label === `Week ${week} · ${year}`
+  );
 }
 
 export function buildEditionEmail(input: EditionInput): EditionEmail {
@@ -228,7 +238,9 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
 
   return {
     editionLabel: input.label ?? `Week ${input.week}`,
-    dateLabel: input.dateLabel ?? String(input.year),
+    // The week's days, not the year. The label already names the edition, and when it was
+    // the derived week label it carried the year, so the masthead printed it twice.
+    dateLabel: input.dateLabel ?? weekRangeLabel(input.week, input.year),
     previewText,
     subject: isWeekLabel(input.label, input.week, input.year)
       ? `AI Radar Weekly - Week ${input.week}, ${input.year}`

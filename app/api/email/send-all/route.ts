@@ -20,7 +20,7 @@ import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
 import {
-  editionLabel,
+  editionEmailLabel,
   editionWriteFields,
   weeklySlotFor,
 } from "@/lib/editions/identity";
@@ -361,8 +361,9 @@ export async function POST(request: Request) {
         })),
         week: edition.week,
         year: edition.year,
-        // RQ-008: the edition names itself in the eyebrow and the subject.
-        label: editionLabel(edition),
+        // RQ-008: the edition names itself in the eyebrow and the subject. The email's label
+        // carries no year, because the masthead prints it beside the week's date range.
+        label: editionEmailLabel(edition),
       };
     } else {
       emailData = {
@@ -384,7 +385,7 @@ export async function POST(request: Request) {
         })),
         week: edition.week,
         year: edition.year,
-        label: editionLabel(edition),
+        label: editionEmailLabel(edition),
       };
     }
 
