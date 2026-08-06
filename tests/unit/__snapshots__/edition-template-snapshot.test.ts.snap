@@ -1,0 +1,419 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`an edition with nothing optional in it > renders the same HTML 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>AI Radar Weekly - Week 33, 2026</title>
+<!--[if mso]>
+<xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+<![endif]-->
+<style>
+  a { color: #2d4449; }
+  a:hover { color: #ff7901; }
+  @media only screen and (max-width: 620px) {
+    .wrap { width: 100% !important; }
+    .px { padding-left: 20px !important; padding-right: 20px !important; }
+    .stack { display: block !important; width: 100% !important; max-width: 100% !important; }
+    .thumb { padding: 0 0 16px 0 !important; }
+    .h1 { font-size: 27px !important; line-height: 32px !important; }
+    .h2 { font-size: 19px !important; line-height: 25px !important; }
+    .cta a { display: block !important; }
+    /* A named edition can be far wider than the 130px logo it shares the row with. At
+       320px "AI Act special edition" wrapped to two lines and pushed the wordmark out of
+       alignment, so on a narrow screen the masthead stacks instead of competing. The
+       align="right" attributes stay on the cells: Outlook's Word engine ignores this
+       query and needs them. */
+    .masthead-cell { display: block !important; width: 100% !important; text-align: left !important; }
+    .masthead-logo { float: none !important; }
+    .masthead-logo td { text-align: left !important; }
+    .masthead-meta { padding-top: 10px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
+    .logo-dark { display: block !important; max-height: none !important; }
+    .body-bg { background-color: #14191a !important; }
+    .card { background-color: #1c2224 !important; }
+    .tint { background-color: #232b2c !important; }
+    .t-strong, .t-strong a { color: #eef1f0 !important; }
+    .t-body, .t-body a { color: #c3cbc9 !important; }
+    .t-muted { color: #94a09d !important; }
+    .rule { border-color: #303a3b !important; }
+    .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
+    .trend-figure { color: #8fb8ad !important; }
+    /* The primary teal is a light-card colour; on the dark card it reads as
+       almost nothing. This step keeps text links at 7.5:1 against #1c2224.
+       Scoped to a class rather than every anchor, so the accent button's white
+       label is not overridden along with them. */
+    .link-strong, .link-strong a, a.link-strong { color: #8fb8ad !important; }
+  }
+  [data-ogsc] .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
+  [data-ogsc] .logo-dark { display: block !important; max-height: none !important; }
+  [data-ogsc] .body-bg { background-color: #14191a !important; }
+  [data-ogsc] .card { background-color: #1c2224 !important; }
+  [data-ogsc] .tint { background-color: #232b2c !important; }
+  [data-ogsc] .t-strong, [data-ogsc] .t-strong a { color: #eef1f0 !important; }
+  [data-ogsc] .t-body, [data-ogsc] .t-body a { color: #c3cbc9 !important; }
+  [data-ogsc] .t-muted { color: #94a09d !important; }
+  [data-ogsc] .rule { border-color: #303a3b !important; }
+  [data-ogsc] .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
+  [data-ogsc] .trend-figure { color: #8fb8ad !important; }
+  [data-ogsc] .link-strong, [data-ogsc] .link-strong a { color: #8fb8ad !important; }
+</style>
+</head>
+<body class="body-bg" style="margin:0; padding:0; background-color:#eceeed; -webkit-font-smoothing:antialiased;">
+<span style="display:none !important; visibility:hidden; opacity:0; color:transparent; height:0; width:0; overflow:hidden; mso-hide:all;">Nothing moved.</span>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="body-bg" style="background-color:#eceeed;">
+<tr><td align="center" style="padding:24px 12px 40px 12px;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="wrap card" style="width:640px; max-width:640px; background-color:#fbfbfa;">
+
+<!-- MASTHEAD -->
+<tr><td class="px" style="padding:26px 40px 18px 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+  <tr>
+    <td align="left" style="font-family:Arial,Helvetica,sans-serif; font-size:20px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:2px; color:#2d4449;" class="t-strong masthead-cell">AI&nbsp;RADAR<span style="color:#ff7901;">.</span></td>
+    <td align="right" valign="top" style="font-family:Arial,Helvetica,sans-serif;" class="masthead-cell">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" class="masthead-logo"><tr><td align="right" style="padding-bottom:6px;">
+        <img class="logo-light" src="https://example.com/h-light.png" width="130" height="17" alt="Linkroad" style="display:block; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:130px; height:17px;">
+        <!--[if !mso]><!--><img class="logo-dark" src="https://example.com/h-dark.png" width="130" height="17" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:130px; height:17px;"><!--<![endif]-->
+      </td></tr><tr><td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.2px; color:#6b7674; text-transform:uppercase;" class="t-muted masthead-meta">Week 33 &nbsp;·&nbsp; 10-16 Aug 2026</td></tr></table>
+    </td>
+  </tr>
+  </table>
+</td></tr>
+<tr><td class="px" style="padding:0 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+    <td width="64" height="3" style="width:64px; height:3px; background-color:#ff7901; line-height:3px; font-size:0;">&nbsp;</td>
+    <td height="3" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
+  </tr></table>
+</td></tr>
+
+
+
+
+<!--radar:before-articles-->
+
+<!--radar:after-articles-->
+
+<!--radar:before-projects-->
+
+<!--radar:after-projects-->
+
+<!-- CTA -->
+<tr><td class="px" align="center" style="padding:30px 40px 34px 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta"><tr>
+    <td align="center" bgcolor="#ff7901" style="background-color:#ff7901; border-radius:4px;">
+      <a href="https://example.com/editions" style="display:block; padding:14px 30px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:20px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; text-decoration:none;">Read the full feed &rarr;</a>
+    </td>
+  </tr></table>
+</td></tr>
+
+<!-- FOOTER -->
+<tr><td class="px" style="padding:0 40px;"><div class="rule" style="border-top:1px solid #dfe3e2; font-size:0; line-height:0;">&nbsp;</div></td></tr>
+<tr><td class="px" style="padding:22px 40px 30px 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-bottom:14px;">
+    <img class="logo-light" src="https://example.com/v-light.png" width="100" height="48" alt="Linkroad" style="display:block; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:100px; height:48px;">
+    <!--[if !mso]><!--><img class="logo-dark" src="https://example.com/v-dark.png" width="100" height="48" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:100px; height:48px;"><!--<![endif]-->
+  </td></tr></table>
+  <div style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; mso-line-height-rule:exactly; color:#6b7674;" class="t-muted">
+    <strong style="color:#2d4449; letter-spacing:1px;" class="t-strong">AI RADAR WEEKLY</strong> &nbsp;·&nbsp; curated by the Linkroad AI practice.
+  </div>
+  <div class="link-strong" style="padding-top:10px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; mso-line-height-rule:exactly; color:#6b7674;">
+    <a href="https://example.com/editions" style="color:#2d4449; text-decoration:underline;">AI Radar portal</a> &nbsp;·&nbsp;
+    <a href="https://example.com/unsubscribe" style="color:#2d4449; text-decoration:underline;">Unsubscribe</a>
+  </div>
+  <div style="padding-top:12px; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:17px; mso-line-height-rule:exactly; color:#8a9491;" class="t-muted">
+    Summaries are machine-generated from public sources and may contain errors, so verify before client use.<br>
+    Linkroad Group, Av. Duque de Avila 23, 1000-138 Lisboa, Portugal
+  </div>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"
+`;
+
+exports[`the edition email is byte stable across the block extraction > renders the same HTML 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>AI Radar Weekly - Week 32, 2026</title>
+<!--[if mso]>
+<xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+<![endif]-->
+<style>
+  a { color: #2d4449; }
+  a:hover { color: #ff7901; }
+  @media only screen and (max-width: 620px) {
+    .wrap { width: 100% !important; }
+    .px { padding-left: 20px !important; padding-right: 20px !important; }
+    .stack { display: block !important; width: 100% !important; max-width: 100% !important; }
+    .thumb { padding: 0 0 16px 0 !important; }
+    .h1 { font-size: 27px !important; line-height: 32px !important; }
+    .h2 { font-size: 19px !important; line-height: 25px !important; }
+    .cta a { display: block !important; }
+    /* A named edition can be far wider than the 130px logo it shares the row with. At
+       320px "AI Act special edition" wrapped to two lines and pushed the wordmark out of
+       alignment, so on a narrow screen the masthead stacks instead of competing. The
+       align="right" attributes stay on the cells: Outlook's Word engine ignores this
+       query and needs them. */
+    .masthead-cell { display: block !important; width: 100% !important; text-align: left !important; }
+    .masthead-logo { float: none !important; }
+    .masthead-logo td { text-align: left !important; }
+    .masthead-meta { padding-top: 10px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
+    .logo-dark { display: block !important; max-height: none !important; }
+    .body-bg { background-color: #14191a !important; }
+    .card { background-color: #1c2224 !important; }
+    .tint { background-color: #232b2c !important; }
+    .t-strong, .t-strong a { color: #eef1f0 !important; }
+    .t-body, .t-body a { color: #c3cbc9 !important; }
+    .t-muted { color: #94a09d !important; }
+    .rule { border-color: #303a3b !important; }
+    .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
+    .trend-figure { color: #8fb8ad !important; }
+    /* The primary teal is a light-card colour; on the dark card it reads as
+       almost nothing. This step keeps text links at 7.5:1 against #1c2224.
+       Scoped to a class rather than every anchor, so the accent button's white
+       label is not overridden along with them. */
+    .link-strong, .link-strong a, a.link-strong { color: #8fb8ad !important; }
+  }
+  [data-ogsc] .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
+  [data-ogsc] .logo-dark { display: block !important; max-height: none !important; }
+  [data-ogsc] .body-bg { background-color: #14191a !important; }
+  [data-ogsc] .card { background-color: #1c2224 !important; }
+  [data-ogsc] .tint { background-color: #232b2c !important; }
+  [data-ogsc] .t-strong, [data-ogsc] .t-strong a { color: #eef1f0 !important; }
+  [data-ogsc] .t-body, [data-ogsc] .t-body a { color: #c3cbc9 !important; }
+  [data-ogsc] .t-muted { color: #94a09d !important; }
+  [data-ogsc] .rule { border-color: #303a3b !important; }
+  [data-ogsc] .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
+  [data-ogsc] .trend-figure { color: #8fb8ad !important; }
+  [data-ogsc] .link-strong, [data-ogsc] .link-strong a { color: #8fb8ad !important; }
+</style>
+</head>
+<body class="body-bg" style="margin:0; padding:0; background-color:#eceeed; -webkit-font-smoothing:antialiased;">
+<span style="display:none !important; visibility:hidden; opacity:0; color:transparent; height:0; width:0; overflow:hidden; mso-hide:all;">A quiet week with one loud release.</span>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="body-bg" style="background-color:#eceeed;">
+<tr><td align="center" style="padding:24px 12px 40px 12px;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="wrap card" style="width:640px; max-width:640px; background-color:#fbfbfa;">
+
+<!-- MASTHEAD -->
+<tr><td class="px" style="padding:26px 40px 18px 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+  <tr>
+    <td align="left" style="font-family:Arial,Helvetica,sans-serif; font-size:20px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:2px; color:#2d4449;" class="t-strong masthead-cell">AI&nbsp;RADAR<span style="color:#ff7901;">.</span></td>
+    <td align="right" valign="top" style="font-family:Arial,Helvetica,sans-serif;" class="masthead-cell">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" class="masthead-logo"><tr><td align="right" style="padding-bottom:6px;">
+        <img class="logo-light" src="https://example.com/h-light.png" width="130" height="17" alt="Linkroad" style="display:block; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:130px; height:17px;">
+        <!--[if !mso]><!--><img class="logo-dark" src="https://example.com/h-dark.png" width="130" height="17" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:130px; height:17px;"><!--<![endif]-->
+      </td></tr><tr><td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.2px; color:#6b7674; text-transform:uppercase;" class="t-muted masthead-meta">Week 32 &nbsp;·&nbsp; 3-9 Aug 2026</td></tr></table>
+    </td>
+  </tr>
+  </table>
+</td></tr>
+<tr><td class="px" style="padding:0 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+    <td width="64" height="3" style="width:64px; height:3px; background-color:#ff7901; line-height:3px; font-size:0;">&nbsp;</td>
+    <td height="3" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
+  </tr></table>
+</td></tr>
+
+<tr><td class="px" style="padding:28px 40px 0 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:#e9eeee;">
+  <tr><td style="padding:22px 24px 8px 24px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:#2d4449; text-transform:uppercase;" class="t-strong">This week in 30 seconds</td></tr>
+  <tr><td class="t-muted" style="padding:2px 24px 0 24px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; mso-line-height-rule:exactly; color:#6b7674; font-style:italic;">A quieter week: we held back thin items rather than pad the brief.</td></tr>
+  <tr><td style="padding:0 24px 22px 24px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr>
+        <td width="18" valign="top" style="width:18px; padding:7px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#ff7901; font-weight:bold;">&#8250;</td>
+        <td valign="top" style="padding:6px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:23px; mso-line-height-rule:exactly; color:#22282a;" class="t-body"><a href="https://anthropic.com/a" style="color:#22282a; text-decoration:none; border-bottom:1px solid #b9c3c1;">Anthropic ships an agent runtime</a></td>
+      </tr>
+<tr>
+        <td width="18" valign="top" style="width:18px; padding:7px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#ff7901; font-weight:bold;">&#8250;</td>
+        <td valign="top" style="padding:6px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:23px; mso-line-height-rule:exactly; color:#22282a;" class="t-body"><a href="https://reuters.com/b" style="color:#22282a; text-decoration:none; border-bottom:1px solid #b9c3c1;">EU AI Act timeline slips</a></td>
+      </tr>
+    </table>
+  </td></tr>
+  </table>
+</td></tr>
+<tr><td class="px" id="top-story" style="padding:34px 40px 0 40px;">
+  <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:#ff7901; text-transform:uppercase; padding-bottom:10px;">Top story</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+  <tr>
+    <td valign="top" class="stack" style="width:380px;">
+      <div class="h1 t-strong" style="font-family:Georgia,'Times New Roman',serif; font-size:30px; line-height:36px; mso-line-height-rule:exactly; font-weight:normal; color:#1a1d1e; padding-bottom:12px;"><a href="https://anthropic.com/a" style="color:#1a1d1e; text-decoration:none;">Anthropic ships an agent runtime</a></div>
+      <div class="t-body" style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px; mso-line-height-rule:exactly; color:#3c4547; padding-bottom:14px;">Durable sessions move into the model layer.</div>
+    </td>
+    <td width="24" class="stack" style="width:24px; font-size:0; line-height:0;">&nbsp;</td>
+    <td valign="top" align="right" width="152" class="stack thumb" style="width:152px;">
+      <img src="https://example.com/lead.png" width="152" height="114" alt="Anthropic ships an agent runtime" style="display:block; width:152px; height:auto; border:1px solid #dfe3e2; background-color:#e9eeee; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; color:#6b7674;">
+    </td>
+  </tr>
+  </table>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td class="badge" style="background-color:#e9eeee; padding:5px 9px; font-family:Arial,Helvetica,sans-serif; font-size:10px; line-height:14px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.2px; color:#2d4449; text-transform:uppercase;">Covered by 7 sources</td>
+    <td width="12" style="width:12px; font-size:0;">&nbsp;</td>
+    <td style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1px; color:#6b7674; text-transform:uppercase;" class="t-muted">Lead: Anthropic</td>
+  </tr></table>
+  <div class="link-strong" style="padding-top:14px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; mso-line-height-rule:exactly;"><a href="https://anthropic.com/a" style="color:#2d4449; font-weight:bold; text-decoration:none; border-bottom:2px solid #ff7901;">Read the analysis</a></div>
+</td></tr>
+<tr><td class="px" style="padding:30px 40px 0 40px;"><div class="rule" style="border-top:1px solid #dfe3e2; font-size:0; line-height:0;">&nbsp;</div></td></tr>
+<!--radar:before-articles-->
+<tr><td class="px" style="padding:26px 40px 0 40px;"><div class="rule" style="border-top:1px solid #dfe3e2; font-size:0; line-height:0;">&nbsp;</div></td></tr>
+<tr><td class="px" id="topic-models" style="padding:26px 40px 0 40px;">
+  <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:#ff7901; text-transform:uppercase; padding-bottom:14px;">Models</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td class="" style="padding-bottom:16px;">
+      <div class="h2 t-strong" style="font-family:Arial,Helvetica,sans-serif; font-size:17px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:#1a1d1e; padding-bottom:5px;"><a href="https://arxiv.org/1" style="color:#1a1d1e; text-decoration:none;">One</a></div>
+      <div class="t-body" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#3c4547; padding-bottom:6px;">First.</div>
+      <div class="t-muted" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1px; color:#6b7674; text-transform:uppercase;">arXiv · 3 sources</div>
+    </td></tr>
+<tr><td class="rule" style="border-top:1px solid #ebeeed; padding-top:16px;">
+      <div class="h2 t-strong" style="font-family:Arial,Helvetica,sans-serif; font-size:17px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:#1a1d1e; padding-bottom:5px;"><a href="https://arxiv.org/2" style="color:#1a1d1e; text-decoration:none;">Two</a></div>
+      <div class="t-body" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#3c4547;">Second.</div>
+      
+    </td></tr>
+  </table>
+</td></tr>
+<tr><td class="px" style="padding:26px 40px 0 40px;"><div class="rule" style="border-top:1px solid #dfe3e2; font-size:0; line-height:0;">&nbsp;</div></td></tr>
+<tr><td class="px" id="topic-regulation" style="padding:26px 40px 0 40px;">
+  <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:#ff7901; text-transform:uppercase; padding-bottom:14px;">Regulation</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td class="" style="padding-bottom:0;">
+      <div class="h2 t-strong" style="font-family:Arial,Helvetica,sans-serif; font-size:17px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:#1a1d1e; padding-bottom:5px;"><a href="https://reuters.com/3" style="color:#1a1d1e; text-decoration:none;">Three</a></div>
+      <div class="t-body" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#3c4547; padding-bottom:6px;">Third.</div>
+      <div class="t-muted" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1px; color:#6b7674; text-transform:uppercase;">Reuters</div>
+    </td></tr>
+  </table>
+</td></tr>
+<!--radar:after-articles-->
+<tr><td class="px" id="radar" style="padding:30px 40px 0 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:#e9eeee;">
+  <tr><td height="3" style="height:3px; background-color:#2d4449; font-size:0; line-height:3px;">&nbsp;</td></tr>
+  <tr><td style="padding:20px 24px 4px 24px;">
+    <div style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:#2d4449; text-transform:uppercase;" class="t-strong">Trend radar &nbsp;·&nbsp; accelerating this week</div>
+  </td></tr>
+  <tr><td style="padding:0 24px 22px 24px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr>
+        <td valign="top" style="padding:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:22px; mso-line-height-rule:exactly; font-weight:bold; color:#1a1d1e;" class="t-strong">Agent orchestration</td>
+        <td valign="top" align="right" width="72" class="trend-figure" style="width:72px; padding:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; font-weight:bold; color:#2d4449;">&#9650;&nbsp;62%</td>
+      </tr>
+      <tr><td colspan="2" style="padding:2px 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:21px; mso-line-height-rule:exactly; color:#3c4547;" class="t-body">24 mentions across 9 sources.</td></tr>
+      <tr><td colspan="2" class="rule" style="border-top:1px solid #d6dddc; font-size:0; line-height:0;">&nbsp;</td></tr>
+<tr>
+        <td valign="top" style="padding:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:22px; mso-line-height-rule:exactly; font-weight:bold; color:#1a1d1e;" class="t-strong">Inference cost</td>
+        <td valign="top" align="right" width="72" class="trend-figure" style="width:72px; padding:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; font-weight:bold; color:#2d4449;">new</td>
+      </tr>
+      <tr><td colspan="2" style="padding:2px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:21px; mso-line-height-rule:exactly; color:#3c4547;" class="t-body">New this fortnight.</td></tr>
+      
+    </table>
+  </td></tr>
+  </table>
+</td></tr>
+<!--radar:before-projects-->
+<tr><td class="px" style="padding:30px 40px 0 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td style="background-color:#2d4449; padding:4px 8px; font-family:Arial,Helvetica,sans-serif; font-size:10px; line-height:14px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.4px; color:#ffffff; text-transform:uppercase;">Internal</td>
+  </tr></table>
+  <div class="h2 t-strong" style="font-family:Georgia,'Times New Roman',serif; font-size:21px; line-height:28px; mso-line-height-rule:exactly; color:#1a1d1e; padding:12px 0 6px 0;"><a href="https://example.com/projects" style="color:#1a1d1e; text-decoration:none;">QE offering: the suite runs remotely</a></div>
+  <div class="t-body" style="font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:#3c4547;">Two infrastructures, one variable.</div>
+</td></tr>
+<!--radar:after-projects-->
+
+<!-- CTA -->
+<tr><td class="px" align="center" style="padding:30px 40px 34px 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cta"><tr>
+    <td align="center" bgcolor="#ff7901" style="background-color:#ff7901; border-radius:4px;">
+      <a href="https://example.com/editions" style="display:block; padding:14px 30px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:20px; mso-line-height-rule:exactly; font-weight:bold; color:#ffffff; text-decoration:none;">Read the full feed &rarr;</a>
+    </td>
+  </tr></table>
+</td></tr>
+
+<!-- FOOTER -->
+<tr><td class="px" style="padding:0 40px;"><div class="rule" style="border-top:1px solid #dfe3e2; font-size:0; line-height:0;">&nbsp;</div></td></tr>
+<tr><td class="px" style="padding:22px 40px 30px 40px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-bottom:14px;">
+    <img class="logo-light" src="https://example.com/v-light.png" width="100" height="48" alt="Linkroad" style="display:block; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:100px; height:48px;">
+    <!--[if !mso]><!--><img class="logo-dark" src="https://example.com/v-dark.png" width="100" height="48" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; outline:none; text-decoration:none; font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#6b7674; width:100px; height:48px;"><!--<![endif]-->
+  </td></tr></table>
+  <div style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; mso-line-height-rule:exactly; color:#6b7674;" class="t-muted">
+    <strong style="color:#2d4449; letter-spacing:1px;" class="t-strong">AI RADAR WEEKLY</strong> &nbsp;·&nbsp; curated by the Linkroad AI practice from 7 tracked sources.
+  </div>
+  <div class="link-strong" style="padding-top:10px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; mso-line-height-rule:exactly; color:#6b7674;">
+    <a href="https://example.com/editions" style="color:#2d4449; text-decoration:underline;">AI Radar portal</a> &nbsp;·&nbsp;
+    <a href="https://example.com/unsubscribe" style="color:#2d4449; text-decoration:underline;">Unsubscribe</a>
+  </div>
+  <div style="padding-top:12px; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:17px; mso-line-height-rule:exactly; color:#8a9491;" class="t-muted">
+    Summaries are machine-generated from public sources and may contain errors, so verify before client use.<br>
+    Linkroad Group, Av. Duque de Avila 23, 1000-138 Lisboa, Portugal
+  </div>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"
+`;
+
+exports[`the edition email is byte stable across the block extraction > renders the same text part 1`] = `
+"AI RADAR WEEKLY
+Week 32 · 3-9 Aug 2026
+
+THIS WEEK IN 30 SECONDS
+- Anthropic ships an agent runtime
+- EU AI Act timeline slips
+
+TOP STORY
+Anthropic ships an agent runtime
+Durable sessions move into the model layer.
+https://anthropic.com/a
+
+MODELS
+- One
+  First.
+  https://arxiv.org/1
+- Two
+  Second.
+  https://arxiv.org/2
+
+REGULATION
+- Three
+  Third.
+  https://reuters.com/3
+
+TREND RADAR
+- Agent orchestration (+62%): 24 mentions across 9 sources.
+- Inference cost (new): New this fortnight.
+
+INTERNAL
+QE offering: the suite runs remotely
+Two infrastructures, one variable.
+https://example.com/projects
+
+Read the full feed: https://example.com/editions
+Unsubscribe: https://example.com/unsubscribe
+
+Summaries are machine-generated from public sources and may contain errors, so verify before client use.
+Linkroad Group, Av. Duque de Avila 23, 1000-138 Lisboa, Portugal"
+`;
