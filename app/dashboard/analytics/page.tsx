@@ -35,6 +35,8 @@ interface Edition {
   id: string;
   week: number;
   year: number;
+  /** RQ-008: the title, or the week label when there is none. Derived by the API. */
+  label: string;
   sentAt: string | null;
 }
 
@@ -265,7 +267,7 @@ export default function AnalyticsPage() {
         <option value="all">Every edition</option>
         {data?.editions?.map((edition) => (
           <option key={edition.id} value={edition.id}>
-            Week {edition.week}, {edition.year}
+            {edition.label}
           </option>
         ))}
       </RadarSelect>

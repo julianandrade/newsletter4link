@@ -51,6 +51,13 @@ interface RenderContext {
   projects: Project[];
   week: number;
   year: number;
+  /**
+   * RQ-008: what the edition is called, so the subject and the eyebrow can name it.
+   *
+   * Optional because the preview builds a context from ad-hoc articles with no edition
+   * behind them, and there is nothing to name in that case.
+   */
+  label?: string;
   subscriberId?: string;
   customBlocks?: CustomBlock[];
 }

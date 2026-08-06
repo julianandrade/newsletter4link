@@ -42,6 +42,12 @@ export interface Proposal {
   id: string;
   week: number;
   year: number;
+  /** RQ-008: the edition's own name, null on a weekly. */
+  title: string | null;
+  kind: "WEEKLY" | "SPECIAL";
+  publishDate: string;
+  /** What to call it on screen: the title, or the week label when there is none. */
+  label: string;
   status: EditionStatus;
   thin: boolean;
   archivedAt: string | null;

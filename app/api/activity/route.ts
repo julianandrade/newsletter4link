@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { editionLabel } from "@/lib/editions/identity";
 
 interface ActivityItem {
   id: string;
@@ -99,19 +100,28 @@ export async function GET() {
         id: true,
         week: true,
         year: true,
+        // RQ-008: needed to name the edition rather than its week.
+        title: true,
         sentAt: true,
       },
     });
 
     for (const edition of recentEditions) {
       if (edition.sentAt) {
+        const label = editionLabel(edition);
+
         activities.push({
           id: `edition-${edition.id}`,
           type: "edition",
           action: "sent",
-          description: `Newsletter Week ${edition.week}, ${edition.year} sent`,
+          description: `${label} sent`,
           timestamp: edition.sentAt,
-          metadata: { editionId: edition.id, week: edition.week, year: edition.year },
+          metadata: {
+            editionId: edition.id,
+            label,
+            week: edition.week,
+            year: edition.year,
+          },
         });
       }
     }

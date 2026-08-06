@@ -139,14 +139,13 @@ describe("sendConfirmation", () => {
   it("states the edition, the number of articles and the number of recipients", () => {
     // RQ-005 AC-2.3: one confirmation, with the real numbers in it.
     const sentence = sendConfirmation({
-      week: 32,
-      year: 2026,
+      label: "Week 32 · 2026",
       articles: 6,
       projects: 2,
       recipients: 412,
     });
 
-    expect(sentence).toContain("Week 32 of 2026");
+    expect(sentence).toContain("Week 32 · 2026");
     expect(sentence).toContain("6 stories");
     expect(sentence).toContain("2 projects");
     expect(sentence).toContain("412 active recipients");
@@ -154,8 +153,7 @@ describe("sendConfirmation", () => {
 
   it("keeps the singular readable", () => {
     const sentence = sendConfirmation({
-      week: 1,
-      year: 2027,
+      label: "Week 1 · 2027",
       articles: 1,
       projects: 1,
       recipients: 1,
@@ -163,6 +161,34 @@ describe("sendConfirmation", () => {
     expect(sentence).toContain("1 story");
     expect(sentence).toContain("1 project");
     expect(sentence).toContain("1 active recipient");
+  });
+
+  /**
+   * RQ-008: the confirmation names the edition rather than the week.
+   *
+   * "Week 32 of 2026 goes out now" is wrong the moment two editions share a week, and it
+   * was never right for a special edition.
+   */
+  it("names the edition in the confirmation", () => {
+    expect(
+      sendConfirmation({
+        label: "AI Act special",
+        articles: 3,
+        projects: 1,
+        recipients: 240,
+      })
+    ).toContain("AI Act special");
+  });
+
+  it("does not say the word week when the edition has a name", () => {
+    const text = sendConfirmation({
+      label: "Year in review",
+      articles: 5,
+      projects: 0,
+      recipients: 12,
+    });
+
+    expect(text).not.toMatch(/week/i);
   });
 });
 

@@ -94,7 +94,7 @@ async function checkCancellation(jobId?: string): Promise<void> {
  */
 export async function generateNewsletter(
   articles: ArticleForPlanning[],
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   brandVoice: BrandVoice | null,
   onProgress?: (progress: GenerationProgress) => void | Promise<void>,
   jobId?: string,
@@ -122,10 +122,10 @@ export async function generateNewsletter(
     }));
 
     const subjectLines = [
-      `AI Radar • Week ${edition.week}`,
+      `AI Radar • ${edition.label}`,
       `This Week in AI: ${plan.totalArticles} highlights`,
       `AI Radar Briefing W${edition.week}`,
-      `Top AI updates — Week ${edition.week}`,
+      `Top AI updates - ${edition.label}`,
       `Your AI Radar Digest (${edition.year})`,
     ];
 
@@ -137,7 +137,7 @@ export async function generateNewsletter(
     });
 
     return {
-      opening: `Welcome to AI Radar Week ${edition.week}. Here's the latest in AI, curated for you.`,
+      opening: `Welcome to AI Radar, ${edition.label}. Here's the latest in AI, curated for you.`,
       sections: mockSections,
       closing: "Thanks for reading AI Radar. See you next week!",
       subjectLines,
@@ -248,7 +248,7 @@ export async function generateNewsletter(
  */
 async function generateOpening(
   heroArticle: ArticleForPlanning,
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   brandVoice: BrandVoice | null,
   // RQ-002
   model: string
@@ -428,7 +428,7 @@ async function generateClosing(
  */
 async function generateSubjectLines(
   plan: NewsletterPlan,
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   brandVoice: BrandVoice | null,
   // RQ-002
   model: string
@@ -466,11 +466,11 @@ async function generateSubjectLines(
 
   // Fallback subject lines
   return [
-    `Week ${edition.week}: ${plan.heroArticle.title.slice(0, 40)}`,
+    `${edition.label}: ${plan.heroArticle.title.slice(0, 40)}`,
     `This Week in AI: ${plan.totalArticles} Stories You Need`,
     `AI Newsletter W${edition.week}: Top Developments`,
     `Don't Miss: ${plan.heroArticle.title.slice(0, 35)}...`,
-    `Your AI Briefing: Week ${edition.week}`,
+    `Your AI Briefing: ${edition.label}`,
   ];
 }
 
@@ -480,18 +480,18 @@ async function generateSubjectLines(
 export async function regenerateSubjectLines(
   heroTitle: string,
   heroSummary: string | null,
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   brandVoice: BrandVoice | null,
   // RQ-002
   model: string = DEFAULT_AI_MODEL
 ): Promise<string[]> {
   if (useMockGeneration) {
     return [
-      `AI Radar • Week ${edition.week}`,
+      `AI Radar • ${edition.label}`,
       `AI Radar Briefing: ${heroTitle.slice(0, 40)}`,
-      `Week ${edition.week} AI Highlights`,
+      `${edition.label} AI Highlights`,
       `Your AI Radar Digest`,
-      `Top AI news — Week ${edition.week}`,
+      `Top AI news - ${edition.label}`,
     ];
   }
 
@@ -521,7 +521,7 @@ export async function regenerateSubjectLines(
     console.error("Failed to parse subject lines:", e);
   }
 
-  return [`Week ${edition.week}: ${heroTitle.slice(0, 50)}`];
+  return [`${edition.label}: ${heroTitle.slice(0, 50)}`];
 }
 
 /**
@@ -529,7 +529,7 @@ export async function regenerateSubjectLines(
  */
 export async function quickGenerateNewsletter(
   articles: ArticleForPlanning[],
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   brandVoice: BrandVoice | null,
   // RQ-002
   model: string = DEFAULT_AI_MODEL
@@ -537,15 +537,15 @@ export async function quickGenerateNewsletter(
   if (useMockGeneration) {
     const plan = await planNewsletter(articles);
     const subjectLines = [
-      `AI Radar • Week ${edition.week}`,
+      `AI Radar • ${edition.label}`,
       `This Week in AI: ${plan.totalArticles} highlights`,
       `AI Radar Briefing W${edition.week}`,
-      `Top AI updates — Week ${edition.week}`,
+      `Top AI updates - ${edition.label}`,
       `Your AI Radar Digest (${edition.year})`,
     ];
 
     return {
-      opening: `Welcome to AI Radar Week ${edition.week}. Here's the latest in AI, curated for you.`,
+      opening: `Welcome to AI Radar, ${edition.label}. Here's the latest in AI, curated for you.`,
       sections: plan.sections.map((section) => ({
         name: section.name,
         articles: section.articles.map((article, index) => ({

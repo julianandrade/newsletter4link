@@ -65,7 +65,7 @@ Avoid hype and marketing speak. Be factual and insightful.`;
 export function getOpeningHookPrompt(
   brandVoice: BrandVoice | null,
   heroArticle: { title: string; summary?: string | null },
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   greeting?: string
 ): string {
   const brandPrompt = buildBrandVoicePrompt(brandVoice);
@@ -76,7 +76,7 @@ export function getOpeningHookPrompt(
 ${brandPrompt}
 
 NEWSLETTER INFO:
-- Edition: Week ${edition.week}, ${edition.year}
+- Edition: ${edition.label}
 - Hero Story: "${heroArticle.title}"
 ${heroArticle.summary ? `- Hero Summary: ${heroArticle.summary}` : ""}
 
@@ -201,7 +201,7 @@ Write ONLY the closing paragraph. No headers or labels.`;
 export function getSubjectLinesPrompt(
   brandVoice: BrandVoice | null,
   heroArticle: { title: string; summary?: string | null },
-  edition: { week: number; year: number },
+  edition: { week: number; year: number; label: string },
   otherTopics: string[]
 ): string {
   const brandPrompt = buildBrandVoicePrompt(brandVoice);
@@ -211,7 +211,7 @@ export function getSubjectLinesPrompt(
 ${brandPrompt}
 
 NEWSLETTER INFO:
-- Edition: Week ${edition.week}, ${edition.year}
+- Edition: ${edition.label}
 - Hero Story: "${heroArticle.title}"
 ${heroArticle.summary ? `- Hero Summary: ${heroArticle.summary}` : ""}
 ${otherTopics.length > 0 ? `- Other topics: ${otherTopics.join(", ")}` : ""}
@@ -289,7 +289,7 @@ export function getFullNewsletterPrompt(
     summary?: string | null;
     sourceUrl: string;
   }>,
-  edition: { week: number; year: number }
+  edition: { week: number; year: number; label: string }
 ): string {
   const brandPrompt = buildBrandVoicePrompt(brandVoice);
   const greeting = brandVoice?.greetings?.[0] || "Hello";
@@ -312,7 +312,7 @@ Content: ${a.content.slice(0, 1000)}
 ${brandPrompt}
 
 NEWSLETTER INFO:
-- Edition: Week ${edition.week}, ${edition.year}
+- Edition: ${edition.label}
 - Greeting style: "${greeting}"
 - Closing style: "${closing}"
 

@@ -28,7 +28,11 @@
 
 import type { Prisma } from "@prisma/client";
 import type { TenantClient } from "@/lib/db/tenant";
-import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
+import {
+  editionLabel,
+  editionWriteFields,
+  weeklySlotFor,
+} from "@/lib/editions/identity";
 
 /** RQ-005 section 2.2 of the specification: product-owner defaults. */
 export const PROPOSAL_ARTICLE_TARGET = 10;
@@ -251,6 +255,12 @@ export interface ProposalPayload {
     id: string;
     week: number;
     year: number;
+    /** RQ-008: the edition's own name, null on a weekly. */
+    title: string | null;
+    kind: "WEEKLY" | "SPECIAL";
+    publishDate: string;
+    /** The title, or the week label when there is none. */
+    label: string;
     status: string;
     thin: boolean;
     archivedAt: string | null;
@@ -512,6 +522,12 @@ export async function readProposal(
       id: edition.id,
       week: edition.week,
       year: edition.year,
+      // RQ-008: the edition's own identity, and the label derived from it once here so
+      // no screen reimplements the title-or-week fallback.
+      title: edition.title,
+      kind: edition.kind,
+      publishDate: edition.publishDate.toISOString(),
+      label: editionLabel(edition),
       status: edition.status,
       thin,
       // RQ-005 AC-2.6: the approval record unit A added, so a sent edition can

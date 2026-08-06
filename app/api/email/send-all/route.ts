@@ -19,7 +19,11 @@ import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
-import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
+import {
+  editionLabel,
+  editionWriteFields,
+  weeklySlotFor,
+} from "@/lib/editions/identity";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -356,6 +360,8 @@ export async function POST(request: Request) {
         })),
         week: edition.week,
         year: edition.year,
+        // RQ-008: the edition names itself in the eyebrow and the subject.
+        label: editionLabel(edition),
       };
     } else {
       emailData = {
@@ -377,6 +383,7 @@ export async function POST(request: Request) {
         })),
         week: edition.week,
         year: edition.year,
+        label: editionLabel(edition),
       };
     }
 

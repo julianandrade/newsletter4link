@@ -20,6 +20,7 @@ import {
 } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 import { isoWeekAndYear } from "@/lib/radar/week";
+import { editionLabel } from "@/lib/editions/identity";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -116,8 +117,16 @@ export async function GET(request: NextRequest) {
       );
 
       // Get week and year from edition
-      const editionDate = edition.scheduledDate || new Date();
-      const { week: weekNumber, year } = isoWeekAndYear(editionDate);
+      /**
+       * RQ-008: the edition's own publication date and name.
+       *
+       * This read `edition.scheduledDate || new Date()`, and `scheduledDate` has never been
+       * written by anything, so the week was always the current one no matter which edition
+       * was being drafted. `publishDate` is always set, and the label is what a special
+       * edition needs so its subject lines do not name a week it does not belong to.
+       */
+      const { week: weekNumber, year } = isoWeekAndYear(edition.publishDate);
+      const label = editionLabel(edition);
 
       // RQ-002: the organization's selected model governs drafting too.
       const { model } = await resolveAiModels(organizationId);
@@ -127,7 +136,7 @@ export async function GET(request: NextRequest) {
       try {
         newsletter = await generateNewsletter(
           articlesForPlanning,
-          { week: weekNumber, year },
+          { week: weekNumber, year, label },
           brandVoice,
           async (progress) => {
             // Map the stage to a progress percentage (0-100)

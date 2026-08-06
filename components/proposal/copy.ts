@@ -143,14 +143,19 @@ export function thinReason(counts: ProposalCounts): string {
  * and the number of active recipients.
  */
 export function sendConfirmation(input: {
-  week: number;
-  year: number;
+  /**
+   * RQ-008: what the edition is called, not its week.
+   *
+   * This took `week` and `year` and wrote "Week 32 of 2026 goes out now", which is wrong
+   * as soon as two editions share a week and was never right for a special edition.
+   */
+  label: string;
   articles: number;
   projects: number;
   recipients: number;
 }): string {
   return (
-    `Week ${input.week} of ${input.year} goes out now: ` +
+    `${input.label} goes out now: ` +
     `${input.articles} ${stories(input.articles)} and ` +
     `${input.projects} ${input.projects === 1 ? "project" : "projects"}, to ` +
     `${input.recipients} active ${input.recipients === 1 ? "recipient" : "recipients"}. ` +

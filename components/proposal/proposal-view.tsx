@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * RQ-005 actions 2 and 6: this week's edition, and the one decision that sends it.
+ * RQ-005 actions 2 and 6: the open edition, and the one decision that sends it.
+ *
+ * RQ-008: every heading here said "this week", which stopped being true when an
+ * organization could hold a special edition alongside the weekly one. The edition names
+ * itself through `proposal.label`, which is its title when it has one.
  *
  * Everything an editor needs is on this view: the assembled edition, the
  * controls to change it, the rendered email, and one primary control that
@@ -105,7 +109,7 @@ export function ProposalView({
       )}
 
       <RadarPanel
-        title="In this week's edition"
+        title={`In ${proposal.label}`}
         note={
           proposal.articles.length === 0
             ? "Nothing has been assembled yet."
@@ -123,9 +127,8 @@ export function ProposalView({
         {proposal.articles.length === 0 ? (
           <div className="px-4 py-4">
             <EmptyNote>
-              This week&rsquo;s proposal is empty. Nothing failed: either nothing
-              cleared your relevance threshold, or every story is still awaiting a
-              decision.
+              This proposal is empty. Nothing failed: either nothing cleared your
+              relevance threshold, or every story is still awaiting a decision.
             </EmptyNote>
             <div className="mt-3 flex flex-wrap justify-center gap-2.5">
               <RadarButton onClick={onOpenQueue}>Open the queue</RadarButton>
@@ -197,7 +200,7 @@ export function ProposalView({
         title="From inside Link"
         note={
           proposal.projects.length === 0
-            ? "No projects in this week's edition."
+            ? `No projects in ${proposal.label}.`
             : `${proposal.projects.length} ${proposal.projects.length === 1 ? "project" : "projects"}.`
         }
         padded={false}
@@ -323,12 +326,11 @@ export function ProposalView({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Send week {proposal.week} of {proposal.year}?
+              Send {proposal.label}?
             </DialogTitle>
             <DialogDescription>
               {sendConfirmation({
-                week: proposal.week,
-                year: proposal.year,
+                label: proposal.label,
                 articles: proposal.articles.length,
                 projects: proposal.projects.length,
                 recipients,

@@ -30,6 +30,13 @@ interface NewsletterData {
   projects: Project[];
   week: number;
   year: number;
+  /**
+   * RQ-008: what the edition is called, the title or the derived week label.
+   *
+   * Optional so a caller with nothing but a week still works, which is what the preview
+   * with ad-hoc data does. Absent means the subject keeps its weekly wording.
+   */
+  label?: string;
   /** Trend radar rows; when absent the radar block is not rendered. */
   trends?: EmailTrend[];
   /** Shown in the footer as "from N tracked sources" when known. */

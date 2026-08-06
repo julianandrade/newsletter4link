@@ -448,3 +448,58 @@ describe("edition email shape is stable", () => {
     }
   });
 });
+
+/**
+ * RQ-008: the subject and the edition label follow the edition's name.
+ *
+ * Both were built from the week number, so a special edition would have gone out
+ * subject-lined as a weekly issue of a week it did not belong to.
+ */
+describe("a named edition", () => {
+  const named = (label: string) =>
+    buildEditionEmail({
+      appUrl: APP_URL,
+      week: 32,
+      year: 2026,
+      label,
+      articles: [
+        {
+          title: "A story",
+          summary: "A summary.",
+          sourceUrl: "https://example.com/a",
+          category: ["Regulation"],
+          relevanceScore: 8,
+        },
+      ],
+      projects: [],
+    });
+
+  it("puts its name in the eyebrow and the subject", () => {
+    const email = named("AI Act special");
+
+    expect(email.editionLabel).toBe("AI Act special");
+    expect(email.subject).toBe("AI Radar - AI Act special");
+  });
+
+  it("keeps the wording subscribers recognise when nothing was named", () => {
+    const email = named("Week 32 · 2026");
+
+    expect(email.editionLabel).toBe("Week 32 · 2026");
+    expect(email.subject).toBe("AI Radar Weekly - Week 32, 2026");
+  });
+
+  it("falls back to the week when no label is supplied at all", () => {
+    const email = buildEditionEmail({
+      appUrl: APP_URL,
+      week: 32,
+      year: 2026,
+      articles: [
+        { title: "A story", sourceUrl: "https://example.com/a", relevanceScore: 8 },
+      ],
+      projects: [],
+    });
+
+    expect(email.editionLabel).toBe("Week 32");
+    expect(email.subject).toBe("AI Radar Weekly - Week 32, 2026");
+  });
+});

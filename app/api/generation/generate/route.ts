@@ -12,6 +12,7 @@ import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { generateNewsletter, GeneratedNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 import { isoWeekAndYear } from "@/lib/radar/week";
+import { editionLabel } from "@/lib/editions/identity";
 
 export async function POST(request: NextRequest) {
   try {
@@ -112,8 +113,16 @@ export async function POST(request: NextRequest) {
     }));
 
     // Get week and year from edition
-    const editionDate = edition.scheduledDate || new Date();
-    const { week: weekNumber, year } = isoWeekAndYear(editionDate);
+    /**
+     * RQ-008: the edition's own publication date and name.
+     *
+     * This read `edition.scheduledDate || new Date()`, and `scheduledDate` has never been
+     * written by anything, so the week was always the current one no matter which edition
+     * was being drafted. `publishDate` is always set, and the label is what a special
+     * edition needs so its subject lines do not name a week it does not belong to.
+     */
+    const { week: weekNumber, year } = isoWeekAndYear(edition.publishDate);
+    const label = editionLabel(edition);
 
     // RQ-002: the organization's selected model governs drafting too.
     const { model } = await resolveAiModels(ctx.organization.id);
@@ -121,7 +130,7 @@ export async function POST(request: NextRequest) {
     // Generate the newsletter
     const generated = await generateNewsletter(
       articlesForPlanning,
-      { week: weekNumber, year },
+      { week: weekNumber, year, label },
       brandVoice,
       undefined,
       undefined,

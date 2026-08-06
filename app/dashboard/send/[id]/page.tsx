@@ -107,6 +107,12 @@ interface EditionDetail {
   id: string;
   week: number;
   year: number;
+  /** RQ-008: the edition's own name, null on a weekly. */
+  title: string | null;
+  kind: "WEEKLY" | "SPECIAL";
+  publishDate: string;
+  /** The title, or the week label when there is none. Derived by the API. */
+  label: string;
   status: "DRAFT" | "FINALIZED" | "SENT";
   finalizedAt: string | null;
   sentAt: string | null;
@@ -948,7 +954,7 @@ export default function EditionDetailPage() {
 
       <RadarMain width="1320px">
         <PageHeading
-          eyebrow={`Edition · week ${edition.week}, ${edition.year}`}
+          eyebrow={`Edition · ${edition.label}`}
           title={
             isSent
               ? "Sent and locked"
@@ -1312,7 +1318,7 @@ export default function EditionDetailPage() {
                 </div>
                 <div>
                   <div className="text-lg font-bold">
-                    Week {edition.week}, {edition.year}
+                    {edition.label}
                   </div>
                   <div className="text-sm text-radar-ink2">Edition Period</div>
                 </div>
@@ -2197,7 +2203,7 @@ export default function EditionDetailPage() {
                       <br />
                     </>
                   )}
-                  <strong>Edition:</strong> Week {edition.week}, {edition.year}
+                  <strong>Edition:</strong> {edition.label}
                   <br />
                   <strong>Content:</strong> {selectedArticleIds.length} article
                   {selectedArticleIds.length !== 1 ? "s" : ""}, {selectedProjectIds.length}{" "}

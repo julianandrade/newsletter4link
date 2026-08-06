@@ -417,11 +417,12 @@ export default function ProposalPage() {
       <AppHeader />
 
       <RadarMain width="1180px">
+        {/* RQ-008: the edition names itself. The eyebrow used to carry the week and the
+            title said "this week's edition", which is two ways of saying the same thing
+            and neither of them survives a special edition. */}
         <PageHeading
-          eyebrow={
-            proposal ? `Week ${proposal.week} · ${proposal.year}` : "This week"
-          }
-          title={"This week’s edition"}
+          eyebrow="Edition"
+          title={proposal ? proposal.label : "This week’s edition"}
           subtitle={
             <>
               {subtitle}

@@ -11,6 +11,7 @@ import {
 } from "@/lib/email/template-renderer";
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { isoWeekAndYear } from "@/lib/radar/week";
+import { editionLabel } from "@/lib/editions/identity";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,9 @@ export async function POST(request: Request) {
         edition = {
           week,
           year,
+          // RQ-008: an ad-hoc preview has no edition behind it, so there is no name to
+          // show and the label falls back to the week.
+          title: null,
           articles: articles.map((article: any, index: number) => ({
             article,
             order: index,
@@ -176,6 +180,12 @@ export async function POST(request: Request) {
           })),
           week: edition.week,
           year: edition.year,
+          // RQ-008: the edition names itself in the eyebrow and the subject.
+          label: editionLabel({
+            title: edition.title,
+            week: edition.week,
+            year: edition.year,
+          }),
         };
       } else {
         // Prepare data for email
@@ -197,6 +207,11 @@ export async function POST(request: Request) {
           })),
           week: edition.week,
           year: edition.year,
+          label: editionLabel({
+            title: edition.title,
+            week: edition.week,
+            year: edition.year,
+          }),
         };
       }
     }

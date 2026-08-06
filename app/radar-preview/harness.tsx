@@ -829,8 +829,21 @@ const TEMPLATES = [
 
 const ANALYTICS = {
   editions: [
-    { id: "e1", week: 31, year: 2026, sentAt: iso(2) },
-    { id: "e2", week: 30, year: 2026, sentAt: iso(9) },
+    // RQ-008: analytics names the edition, so the fixture carries its label.
+    {
+      id: "e1",
+      week: 31,
+      year: 2026,
+      label: editionLabel({ title: null, week: 31, year: 2026 }),
+      sentAt: iso(2),
+    },
+    {
+      id: "e2",
+      week: 30,
+      year: 2026,
+      label: editionLabel({ title: null, week: 30, year: 2026 }),
+      sentAt: iso(9),
+    },
   ],
   metrics: {
     sent: 412,
@@ -999,6 +1012,11 @@ const EDITION_DETAIL = {
   id: "ed-live",
   week: 31,
   year: 2026,
+  // RQ-008: the builder screen names the edition in its eyebrow.
+  title: null,
+  kind: "WEEKLY" as const,
+  publishDate: isoWeekStart(31, 2026).toISOString(),
+  label: editionLabel({ title: null, week: 31, year: 2026 }),
   status: "DRAFT",
   finalizedAt: null,
   sentAt: null,
@@ -1027,6 +1045,11 @@ const PROPOSAL_PAYLOAD = {
     id: "e1",
     week: 32,
     year: 2026,
+    // RQ-008: a weekly edition, so no title and the label falls back to the week.
+    title: null,
+    kind: "WEEKLY" as const,
+    publishDate: isoWeekStart(32, 2026).toISOString(),
+    label: editionLabel({ title: null, week: 32, year: 2026 }),
     status: "DRAFT",
     thin: false,
     archivedAt: null,

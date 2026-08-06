@@ -11,6 +11,7 @@ import { requireOrgContext } from "@/lib/auth/context";
 import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
 import { regenerateSubjectLines } from "@/lib/generation/generator";
 import { isoWeekAndYear } from "@/lib/radar/week";
+import { editionLabel } from "@/lib/editions/identity";
 
 export async function POST(request: NextRequest) {
   try {
@@ -132,8 +133,20 @@ export async function POST(request: NextRequest) {
       : await prisma.edition.findFirst({
           where: { id: draft.editionId, organizationId: ctx.organization.id },
         });
-    const editionDate = editionForDate?.scheduledDate || new Date();
-    const { week: weekNumber, year } = isoWeekAndYear(editionDate);
+    /**
+     * RQ-008: the edition's own publication date and name.
+     *
+     * This read `edition.scheduledDate || new Date()`, and `scheduledDate` has never been
+     * written by anything, so the week was always the current one no matter which edition
+     * was being drafted. `publishDate` is always set, and the label is what a special
+     * edition needs so its subject lines do not name a week it does not belong to.
+     */
+    const { week: weekNumber, year } = isoWeekAndYear(
+      editionForDate?.publishDate ?? new Date()
+    );
+    const label = editionForDate
+      ? editionLabel(editionForDate)
+      : `Week ${weekNumber} · ${year}`;
 
     // Generate new subject lines
     // RQ-002
@@ -142,7 +155,7 @@ export async function POST(request: NextRequest) {
     const subjectLines = await regenerateSubjectLines(
       title,
       summary,
-      { week: weekNumber, year },
+      { week: weekNumber, year, label },
       brandVoice,
       model
     );

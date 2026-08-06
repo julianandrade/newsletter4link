@@ -47,6 +47,11 @@ const proposal = (articles: ProposalArticle[]): Proposal => ({
   id: "ed1",
   week: 32,
   year: 2026,
+  // RQ-008: a weekly edition, so no title and the label falls back to the week.
+  title: null,
+  kind: "WEEKLY",
+  publishDate: "2026-08-03T00:00:00.000Z",
+  label: "Week 32 · 2026",
   status: "DRAFT",
   thin: isThinCount(articles.length),
   archivedAt: null,

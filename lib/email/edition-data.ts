@@ -41,6 +41,15 @@ export interface EditionInput {
   sourceCount?: number;
   dateLabel?: string;
   /**
+   * RQ-008: what this edition is called, the title or the derived week label.
+   *
+   * Supplied by the caller rather than derived here, because this module is reachable
+   * from client components through content-renderer and must not import the
+   * Prisma-facing helpers. Absent falls back to the week, which is what every caller
+   * produced before an edition could be named.
+   */
+  label?: string;
+  /**
    * Pre-built, HMAC-signed unsubscribe URL. Passed in rather than built here:
    * signing needs node crypto, and this module is reachable from client
    * components through content-renderer. Without one, the generic unsubscribe
@@ -153,6 +162,20 @@ export function trendsForEmail(trends: Trend[], limit = 3): EmailTrend[] {
     }));
 }
 
+/**
+ * True when the label is only the derived week label, so nothing was actually named.
+ *
+ * This is what keeps a weekly edition's subject line the wording subscribers already
+ * recognise, while a named edition gets its name.
+ */
+function isWeekLabel(
+  label: string | undefined,
+  week: number,
+  year: number
+): boolean {
+  return !label || label === `Week ${week} · ${year}`;
+}
+
 export function buildEditionEmail(input: EditionInput): EditionEmail {
   const appUrl = (input.appUrl ?? config.app.url).replace(/\/$/, "");
   const assets = `${appUrl}/email`;
@@ -204,10 +227,12 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
     : `AI Radar, week ${input.week} of ${input.year}.`;
 
   return {
-    editionLabel: `Week ${input.week}`,
+    editionLabel: input.label ?? `Week ${input.week}`,
     dateLabel: input.dateLabel ?? String(input.year),
     previewText,
-    subject: `AI Radar Weekly - Week ${input.week}, ${input.year}`,
+    subject: isWeekLabel(input.label, input.week, input.year)
+      ? `AI Radar Weekly - Week ${input.week}, ${input.year}`
+      : `AI Radar - ${input.label}`,
     bullets,
     // A thin week says so, rather than letting the reader wonder whether the
     // pipeline broke. The design calls for this caption on light editions.

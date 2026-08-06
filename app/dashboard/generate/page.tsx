@@ -34,6 +34,8 @@ interface Edition {
   id: string;
   week: number;
   year: number;
+  /** RQ-008: the title, or the week label when there is none. Derived by the API. */
+  label: string;
   status: string;
   scheduledDate?: string;
   generatedContent?: GeneratedNewsletter | null;
@@ -750,9 +752,9 @@ export default function GeneratePage() {
   const heading = isGenerating
     ? "Writing the edition"
     : generated && selectedEdition
-      ? `Week ${selectedEdition.week} is drafted`
+      ? `${selectedEdition.label} is drafted`
       : selectedEdition
-        ? `Week ${selectedEdition.week} is ready to write`
+        ? `${selectedEdition.label} is ready to write`
         : "Write the edition";
 
   return (
@@ -825,7 +827,7 @@ export default function GeneratePage() {
                 <option value="">Choose an edition</option>
                 {editions.map((edition) => (
                   <option key={edition.id} value={edition.id}>
-                    Week {edition.week}, {edition.year} · {edition.articleCount}{" "}
+                    {edition.label} · {edition.articleCount}{" "}
                     stories
                   </option>
                 ))}
