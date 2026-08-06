@@ -9,6 +9,39 @@ you, and [ROADMAP.md](ROADMAP.md) for the longer view.
 
 ---
 
+## The edition is no longer a week
+
+**Done 6 August 2026, afternoon.** Julian's four complaints about rigidity were audited
+into [FINDINGS-2026-08-06-flexibility-and-provenance.md](FINDINGS-2026-08-06-flexibility-and-provenance.md),
+23 findings, and the edition-model half of them is closed. Plan:
+[docs/superpowers/plans/2026-08-06-edition-identity.md](../../../docs/superpowers/plans/2026-08-06-edition-identity.md),
+seven tasks, seven commits.
+
+**An edition is identified by a publication date and a name.** `week` and `year` survive
+as a cache derived from `publishDate` and written only by `lib/editions/identity.ts`, so
+the forty-odd sites reading `edition.week` still work. The unique index moved from
+`[week, year, organizationId]` to `[weeklySlot, organizationId]`: a weekly edition holds
+`"2026-W32"`, a special holds null, and Postgres treats nulls in a unique index as
+distinct. **Verified against the database, not assumed:** two specials in week 32 insert
+alongside the weekly, and a second weekly for week 32 is refused.
+
+| Closed | Was |
+|---|---|
+| A1, A2, A6 | An edition could only be a week, and only one could be open |
+| A3 | `publishDate` replaces the never-written `scheduledDate` |
+| A5 | The subject line derived from the week; a named edition gets its name |
+| D4 | An unwrap that failed stored the newsletter's wrapper in silence |
+
+**835 unit tests, `tsc` clean, `next build` clean.** Not yet deployed.
+
+**Three P0s from the audit are deliberately still open**, each needing its own change:
+the missing tenant scope and role check on `PATCH /api/articles/[id]`;
+`publishedAt: new Date()` in `curateArticle`, which dates every email-sourced article to
+its ingestion; and the absent `Article` relations to `RSSSource` and `InboundEmail`, plus
+the fact that no screen shows the 44 emails received.
+
+---
+
 ## What is mid-flight right now
 
 **Nothing is half-done in the code.** Every commit from this session is pushed and each one

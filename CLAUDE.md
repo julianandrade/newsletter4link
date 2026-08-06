@@ -310,6 +310,7 @@ stub, which is how UI work gets verified without a Supabase session.
 | Prisma + Supabase | Type-safe ORM, managed PostgreSQL with pgvector | Jan 2026 |
 | Claude for scoring | Best-in-class reasoning for content relevance | Jan 2026 |
 | Resend for email | Modern API, good deliverability, React Email support | Jan 2026 |
+| An edition is identified by its publication date and its name | `week` and `year` under a unique index made a second edition in one week impossible and left no room for a name. They survive as a cache derived from `publishDate` and written only by `lib/editions/identity.ts`; `weeklySlot` (null on a special) carries the uniqueness that keeps the weekly schedule idempotent | Aug 2026 |
 
 ---
 
