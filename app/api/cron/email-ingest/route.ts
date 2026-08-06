@@ -6,6 +6,29 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
 
 /**
+ * `?limit=` — how many emails this run may touch. Absent means the job's own default,
+ * which is what Vercel's schedule invokes and what the behaviour was before.
+ *
+ * It exists to make this job safe to test. Every pending email carries a `retryCount`
+ * against `maxContentAttempts`, so a run that fails spends an attempt on every email it
+ * touches, and three failures mark one `FAILED`. Verifying a change to
+ * `RESEND_API_KEY` by running the whole backlog therefore risks the entire backlog to
+ * answer one question. With a limit, the same question costs one email.
+ *
+ * Out of range values are clamped rather than refused: this is an operator's tool, and
+ * failing a maintenance run over a typo in a query string helps nobody.
+ */
+function readLimit(request: Request): number | undefined {
+  const raw = new URL(request.url).searchParams.get("limit");
+  if (raw === null) return undefined;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return undefined;
+
+  return Math.min(Math.max(parsed, 1), 200);
+}
+
+/**
  * GET /api/cron/email-ingest
  *
  * RQ-007 step 2: read the emails the webhook recorded and create the articles they point at.
@@ -35,7 +58,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const result = await runEmailIngestion();
+    const result = await runEmailIngestion({ limit: readLimit(request) });
 
     if (result.emailsFailed > 0 || result.contentFailed > 0) {
       console.warn(
