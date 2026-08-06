@@ -113,9 +113,11 @@ describe("buildExtractionInput", () => {
     );
   });
 
-  it("caps the input and keeps the link list whole", () => {
-    // The links are the part that must survive truncation: they are the only URLs the model
-    // is allowed to use.
+  it("caps the input, and a short link list still survives a very long body", () => {
+    // This used to assert that the links survive truncation whatever it costs the text,
+    // and that allocation is what starved two real newsletters of their own content. The
+    // text is served first now; a link list this small needs almost nothing, so it is kept
+    // either way. See `inbound-extract-budget.test.ts` for the case where they compete.
     const input = buildExtractionInput(
       { text: "x".repeat(50_000), links: ["https://a.com/1"] },
       1_000

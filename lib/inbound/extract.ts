@@ -83,6 +83,7 @@ export function readableEmail(input: { html?: string | null; text?: string | nul
     const href = $(element).attr("href")?.trim();
     if (!href) return;
     if (!/^https?:\/\//i.test(href)) return;
+    if (isBoilerplateLink(href)) return;
     if (!links.includes(href)) links.push(href);
   });
 
@@ -94,28 +95,131 @@ export function readableEmail(input: { html?: string | null; text?: string | nul
   };
 }
 
+/**
+ * Links that cannot be an article, dropped before they cost anything.
+ *
+ * The digest prompt already tells the model to exclude these. Sending them spends the
+ * character budget to be told no, and on the newsletters that failed, the budget running
+ * out was the whole problem: one had 64 tracking links of 419 characters each, which left
+ * no room for the email's own text.
+ *
+ * Deliberately narrow. Each pattern matches boilerplate in the path or the query, not any
+ * URL containing the word: `example.com/how-to-unsubscribe-from-anything` is an article
+ * about unsubscribing and must survive.
+ */
+function isBoilerplateLink(href: string): boolean {
+  let url: URL;
+
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+
+  const path = url.pathname.toLowerCase();
+  const query = url.search.toLowerCase();
+
+  // A path segment that *is* the boilerplate, rather than a word inside a longer slug.
+  const segments = path.split("/").filter(Boolean);
+  const boilerplateSegments = [
+    "unsubscribe",
+    "manage-preferences",
+    "manage-subscription",
+    "email-preferences",
+    "update-profile",
+    "sharer",
+  ];
+
+  if (segments.some((segment) => boilerplateSegments.includes(segment))) return true;
+
+  // The share intents, which are a host plus a fixed path.
+  if (/^(www\.)?(twitter|x)\.com$/.test(url.hostname) && path.startsWith("/intent/")) {
+    return true;
+  }
+  if (/(^|\.)facebook\.com$/.test(url.hostname) && path.includes("/sharer")) return true;
+  if (/(^|\.)linkedin\.com$/.test(url.hostname) && path.includes("/sharing/")) return true;
+
+  if (query.includes("action=unsubscribe")) return true;
+
+  return false;
+}
+
 function extractBareUrls(text: string): string[] {
   const found = text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
   return [...new Set(found)];
 }
 
-/** The input as the model sees it, capped, with the links enumerated. */
+/**
+ * The share of the budget the email's own text is guaranteed.
+ *
+ * The text says what the articles are; the links are what they point at. Whichever of the
+ * two has to be cut, it cannot be the text.
+ */
+const TEXT_SHARE = 0.55;
+
+/**
+ * The input as the model sees it, capped, with the links enumerated.
+ *
+ * The link block used to be assembled first and given whatever length it wanted, with the
+ * text taking the remainder. That is backwards, and on 6 August 2026 it cost two
+ * newsletters entirely: tracking URLs run 400 to 1200 characters, so 64 of them filled a
+ * 32000-character budget to 99% and the email's text was truncated to nothing. The model
+ * was handed a wall of URLs and asked which articles the email described.
+ *
+ * Now the text is served first, up to its share, and the links fill what is left. Links
+ * that do not fit are dropped, and the count is stated: a silently shorter list looks like
+ * an email with fewer links, and the model would be asked to match an article against a
+ * list missing its URL.
+ */
 export function buildExtractionInput(
   readable: { text: string; links: string[] },
   // Typed as number rather than inferred: config is a const object, so the inferred type is
   // the literal 32000 and no caller could pass anything else.
   maxChars: number = config.emailIngest.maxInputChars
 ): string {
-  const linkBlock =
-    readable.links.length > 0
-      ? `\n\nLINKS PRESENT IN THIS EMAIL (you may only use URLs from this list):\n${readable.links
-          .map((link, index) => `${index + 1}. ${link}`)
-          .join("\n")}`
-      : "\n\nThis email contains no links.";
+  const header = "\n\nLINKS PRESENT IN THIS EMAIL (you may only use URLs from this list):\n";
 
-  const room = Math.max(0, maxChars - linkBlock.length);
+  if (readable.links.length === 0) {
+    return `${readable.text.slice(0, maxChars)}\n\nThis email contains no links.`;
+  }
 
-  return `${readable.text.slice(0, room)}${linkBlock}`;
+  const lineFor = (link: string, index: number) => `${index + 1}. ${link}\n`;
+
+  // The text keeps its share, and takes any room the links do not need.
+  const linksNeed =
+    header.length +
+    readable.links.reduce((total, link, index) => total + lineFor(link, index).length, 0);
+  const textRoom = Math.max(Math.floor(maxChars * TEXT_SHARE), maxChars - linksNeed);
+  const text = readable.text.slice(0, textRoom);
+
+  /**
+   * The links get exactly what the text did not use, and the omission sentence is
+   * reserved out of that only when something is actually going to be omitted.
+   *
+   * Computed rather than approximated with a margin: a margin large enough to be safe
+   * dropped links that would have fitted, and one small enough to keep them let the
+   * result run over the cap.
+   */
+  const allFit = linksNeed <= maxChars - text.length;
+  const omissionRoom = "(999 further links omitted)\n".length;
+  const linkBudget = maxChars - text.length - (allFit ? 0 : omissionRoom);
+
+  let block = header;
+  let kept = 0;
+
+  for (const [index, link] of readable.links.entries()) {
+    const line = lineFor(link, index);
+    if (block.length + line.length > linkBudget) break;
+    block += line;
+    kept += 1;
+  }
+
+  const dropped = readable.links.length - kept;
+  if (dropped > 0) {
+    block += `(${dropped} further link${dropped === 1 ? "" : "s"} omitted)\n`;
+  }
+
+  return `${text}${block}`;
 }
 
 export function buildDigestPrompt(input: string, maxItems: number): string {
