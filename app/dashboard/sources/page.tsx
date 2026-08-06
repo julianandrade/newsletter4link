@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { EmailSourceManager } from "@/components/email-source-manager";
+import { ReceivedEmails } from "@/components/inbound/received-emails";
 import { RSSSourceManager } from "@/components/rss-source-manager";
 import {
+  ChipGroup,
   Num,
   PageHeading,
   radarButtonClass,
@@ -25,9 +27,12 @@ interface RssSource {
   lastError: string | null;
 }
 
+type Panel = "sources" | "received";
+
 export default function SourcesPage() {
   const [sources, setSources] = useState<RssSource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [panel, setPanel] = useState<Panel>("sources");
 
   useEffect(() => {
     fetch("/api/rss-sources")
@@ -121,13 +126,39 @@ export default function SourcesPage() {
           </div>
         )}
 
-        <SectionLabel className="mb-3">Email newsletters</SectionLabel>
-        <div className="mb-8">
-          <EmailSourceManager />
-        </div>
+        {/*
+          Finding D2: the emails, beside the sources that claim them.
 
-        <SectionLabel className="mb-3">Feed management</SectionLabel>
-        <RSSSourceManager />
+          Here rather than in its own navigation entry, and not inside a single source,
+          because the question that goes unanswered today is "what arrived, and what did it
+          give us", which is about the mail rather than about one subscription.
+        */}
+        <ChipGroup<Panel>
+          label="Sources view"
+          value={panel}
+          onChange={setPanel}
+          options={[
+            { value: "sources", label: "Sources" },
+            { value: "received", label: "Received" },
+          ]}
+        />
+
+        {panel === "received" ? (
+          <div className="mt-5">
+            <SectionLabel className="mb-3">Emails received</SectionLabel>
+            <ReceivedEmails />
+          </div>
+        ) : (
+          <div className="mt-5">
+            <SectionLabel className="mb-3">Email newsletters</SectionLabel>
+            <div className="mb-8">
+              <EmailSourceManager />
+            </div>
+
+            <SectionLabel className="mb-3">Feed management</SectionLabel>
+            <RSSSourceManager />
+          </div>
+        )}
       </RadarMain>
     </>
   );

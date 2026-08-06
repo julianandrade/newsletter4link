@@ -287,7 +287,29 @@ model Article {
    */
   sourceUnresolved Boolean @default(false)
 
+  /**
+   * Where this article came from. Finding D1.
+   *
+   * There was nothing here at all: the only trace of an article's origin was the string
+   * in `sourceUrl`, so "what did this newsletter produce" was not answerable and "where
+   * did this come from" could only be guessed from a hostname. The RSS collector already
+   * carried a `sourceName` and the curator used it in log lines and then dropped it.
+   *
+   * Both nullable, and for the same reason: the corpus predates them, an article can be
+   * imported by hand or from a web search, and `SetNull` on delete means removing a source
+   * does not remove the articles it found. A row with neither is honest about not knowing.
+   */
+  source   RSSSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceId String?
+
+  /** The email this came out of, when a newsletter is what produced it. */
+  inboundEmail   InboundEmail? @relation(fields: [inboundEmailId], references: [id], onDelete: SetNull)
+  inboundEmailId String?
+
   rewrites ArticleRewrite[]
+
+  @@index([sourceId])
+  @@index([inboundEmailId])
 }
 
 enum ArticleStatus {
@@ -591,6 +613,9 @@ model RSSSource {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /** Finding D1: the articles this source produced, so the question is answerable. */
+  articles Article[]
 
   @@unique([url, organizationId]) // Same RSS can be used by different orgs
   @@index([active])
@@ -1142,6 +1167,9 @@ model InboundEmail {
    * 2026 removing from the extractor.
    */
   claimedAt DateTime?
+
+  /** Finding D1: what this email produced, which is the whole point of keeping it. */
+  articles Article[]
 
   @@index([status, receivedAt])
   @@index([status, claimedAt])

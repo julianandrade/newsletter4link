@@ -390,7 +390,19 @@ async function ingestForSource(
       cleanUrl(url),
       extracted.item.title,
       extracted.item.plainTextBody,
-      source.organizationId
+      source.organizationId,
+      {
+        // Finding D1: which source, and which email.
+        sourceId: source.id,
+        inboundEmailId: email.id,
+        /**
+         * Finding C1: an essay is the newsletter, so when the newsletter arrived is a
+         * real publication date rather than a stand-in. This is the one inbound case
+         * where a date is genuinely known, and it is why the fallback is per-caller
+         * rather than a default inside curateArticle.
+         */
+        publishedAt: email.receivedAt,
+      }
     );
 
     return {
@@ -467,7 +479,18 @@ async function ingestForSource(
         item.title,
         content,
         source.organizationId,
-        { sourceUnresolved: outcome === "unresolved" }
+        {
+          sourceUnresolved: outcome === "unresolved",
+          // Finding D1: which source, and which email, so "what did this newsletter
+          // produce" becomes a query rather than a guess.
+          sourceId: source.id,
+          inboundEmailId: email.id,
+          /**
+           * Finding C1: no publishedAt. A digest gives a title, a URL and a sentence, and
+           * the email's own arrival time is when *the newsletter* published, not when the
+           * article did. Absent is the honest value, and capturedAt carries the rest.
+           */
+        }
       );
 
       if (curated.success) {

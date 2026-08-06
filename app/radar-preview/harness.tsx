@@ -524,6 +524,124 @@ const EDITIONS = [
   };
 });
 
+/**
+ * Finding D2: the emails, and what each produced.
+ *
+ * Five rows chosen to cover the states a person actually has to read: one that produced
+ * articles including a wrapper link, one that produced nothing legitimately, one whose
+ * body could not be fetched, one still waiting to be read, and one whose extraction failed.
+ */
+const RECEIVED_EMAILS = [
+  {
+    id: "ie1",
+    from: "news@tldr.tech",
+    subject: "TLDR AI: Anthropic ships Opus 5, and the MCP registry hits 10k",
+    receivedAt: iso(0, 4),
+    processedAt: iso(0, 3),
+    status: "PROCESSED",
+    error: null,
+    sourceId: "es1",
+    sourceName: "TLDR AI",
+    articleCount: 3,
+    unresolvedCount: 1,
+    hasContent: true,
+  },
+  {
+    id: "ie2",
+    from: "itbrew@morningbrew.com",
+    subject: "Morning Brew IT: the overhead bin economy",
+    receivedAt: iso(0, 7),
+    processedAt: iso(0, 6),
+    status: "PROCESSED",
+    error: null,
+    sourceId: "es3",
+    sourceName: "Morning Brew IT",
+    articleCount: 0,
+    unresolvedCount: 0,
+    hasContent: true,
+  },
+  {
+    id: "ie3",
+    from: "pragmaticengineer@substack.com",
+    subject: "The Pragmatic Engineer: what platform teams get wrong",
+    receivedAt: iso(1, 2),
+    processedAt: null,
+    status: "CONTENT_PENDING",
+    error: "Resend answered 500",
+    sourceId: "es2",
+    sourceName: "The Pragmatic Engineer",
+    articleCount: 0,
+    unresolvedCount: 0,
+    hasContent: false,
+  },
+  {
+    id: "ie4",
+    from: "bytebytego@substack.com",
+    subject: "ByteByteGo: designing for replay",
+    receivedAt: iso(1, 5),
+    processedAt: null,
+    status: "RECEIVED",
+    error: null,
+    sourceId: "es4",
+    sourceName: "ByteByteGo",
+    articleCount: 0,
+    unresolvedCount: 0,
+    hasContent: true,
+  },
+  {
+    id: "ie5",
+    from: "news@tldr.tech",
+    subject: "TLDR AI: the one with 64 tracking links",
+    receivedAt: iso(2, 4),
+    processedAt: iso(2, 3),
+    status: "FAILED",
+    error: "the extractor did not return the requested shape after two attempts",
+    sourceId: "es1",
+    sourceName: "TLDR AI",
+    articleCount: 0,
+    unresolvedCount: 0,
+    hasContent: true,
+  },
+];
+
+const RECEIVED_ARTICLES: Record<string, unknown[]> = {
+  ie1: [
+    {
+      id: "a1",
+      title:
+        "EU AI Act high-risk obligations bite for banks as first conformity audits begin",
+      sourceUrl: "https://www.reuters.com/technology/ai-act-banks",
+      status: "APPROVED",
+      relevanceScore: 9.1,
+      sourceUnresolved: false,
+      capturedAt: iso(0, 3),
+    },
+    {
+      id: "a4",
+      title: "The MCP server registry passes 10,000 entries",
+      sourceUrl: "https://news.ycombinator.com/item?id=99887766",
+      status: "PENDING_REVIEW",
+      relevanceScore: 7.4,
+      sourceUnresolved: false,
+      capturedAt: iso(0, 3),
+    },
+    {
+      // Finding D4: the wrapper case, visible in the list it belongs to.
+      id: "a9",
+      title: "Build a website hands-free with Claude Voice",
+      sourceUrl: "https://link.mail.beehiiv.com/ss/c/u001.7Hy2mQ/xR4tK9",
+      status: "PENDING_REVIEW",
+      relevanceScore: 6.2,
+      sourceUnresolved: true,
+      capturedAt: iso(0, 3),
+    },
+  ],
+  ie2: [],
+  ie3: [],
+  ie4: [],
+  ie5: [],
+};
+
 function buildTrends() {
   const topics = [
     { name: "MCP", base: [2, 3, 3, 4, 5, 6, 8, 11, 14, 19, 24, 31] },
@@ -1262,6 +1380,18 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
     }
     if (url.includes("/api/projects")) {
       return json({ success: true, data: PROJECTS, count: PROJECTS.length });
+    }
+    if (url.includes("/api/inbound/received")) {
+      const match = /emailId=([^&]+)/.exec(url);
+      if (match) {
+        return json({ success: true, data: RECEIVED_ARTICLES[match[1]] ?? [] });
+      }
+      return json({
+        success: true,
+        emails: RECEIVED_EMAILS,
+        total: RECEIVED_EMAILS.length,
+        limit: 100,
+      });
     }
     if (url.includes("/api/inbound/unknown-senders")) {
       return json({ groups: UNKNOWN_SENDERS, emailsExamined: 39, truncated: false });

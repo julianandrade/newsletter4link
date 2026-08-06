@@ -107,6 +107,8 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
               content: article.content,
               author: article.author,
               publishedAt: article.publishedAt,
+              // Finding D1: which of the feeds found it.
+              sourceId: article.sourceId ?? null,
               embedding,
               relevanceScore,
               status: "REJECTED",
@@ -143,6 +145,8 @@ export async function runCurationPipeline(organizationId: string): Promise<Curat
             content: article.content,
             author: article.author,
             publishedAt: article.publishedAt,
+            // Finding D1: which of the feeds found it.
+            sourceId: article.sourceId ?? null,
             embedding,
             relevanceScore,
             summary,
@@ -377,6 +381,8 @@ export async function runCurationPipelineWithStreaming(
               content: article.content,
               author: article.author,
               publishedAt: article.publishedAt,
+              // Finding D1: which of the feeds found it.
+              sourceId: article.sourceId ?? null,
               embedding,
               relevanceScore,
               status: "REJECTED",
@@ -423,6 +429,8 @@ export async function runCurationPipelineWithStreaming(
             content: article.content,
             author: article.author,
             publishedAt: article.publishedAt,
+            // Finding D1: which of the feeds found it.
+            sourceId: article.sourceId ?? null,
             embedding,
             relevanceScore,
             summary,
@@ -540,6 +548,22 @@ export async function curateArticle(
      * wrapper passing for the publisher's own address.
      */
     sourceUnresolved?: boolean;
+    /**
+     * Finding D1: where this came from, so the question is answerable afterwards.
+     *
+     * `sourceId` is the RSS feed or the email source that found it; `inboundEmailId` is
+     * the specific email it came out of, which is what makes "what did this newsletter
+     * produce" a query rather than a guess. Both optional: a manual import or a web
+     * search result has neither, and saying so is better than inventing one.
+     */
+    sourceId?: string | null;
+    inboundEmailId?: string | null;
+    /**
+     * When the publisher published it, if anything told us. Finding C1: this used to be
+     * `new Date()` unconditionally, which recorded our own ingestion time as the
+     * publication date for every article a newsletter gave us.
+     */
+    publishedAt?: Date | null;
   } = {}
 ): Promise<{
   success: boolean;
@@ -592,7 +616,12 @@ export async function curateArticle(
         sourceUrl: url,
         title,
         content,
-        publishedAt: new Date(),
+        /**
+         * Finding C1: null unless a caller actually knows. This was `new Date()`, which
+         * meant every article a newsletter gave us claimed to have been published at the
+         * moment we read the email.
+         */
+        publishedAt: options.publishedAt ?? null,
         embedding,
         relevanceScore,
         summary,
@@ -604,6 +633,9 @@ export async function curateArticle(
         organizationId,
         // Finding D4: whether `url` is the publisher's address or a newsletter's wrapper.
         sourceUnresolved: options.sourceUnresolved ?? false,
+        // Finding D1: the provenance, when the caller knows it.
+        sourceId: options.sourceId ?? null,
+        inboundEmailId: options.inboundEmailId ?? null,
       },
     });
 

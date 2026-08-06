@@ -12,6 +12,14 @@ interface RSSArticle {
   publishedAt: Date;
   sourceUrl: string;
   sourceName: string;
+  /**
+   * Finding D1: the feed's own row id, so the article can point back at it.
+   *
+   * Optional because the config fallback below has no database row. `sourceName` has been
+   * carried here all along and the curator used it in log lines and then dropped it, which
+   * is why no article knew which of the 442 feeds found it.
+   */
+  sourceId?: string;
 }
 
 /**
@@ -94,7 +102,8 @@ function cleanHtmlContent(html: string): string {
  */
 export async function fetchRSSFeed(
   url: string,
-  sourceName: string
+  sourceName: string,
+  sourceId?: string
 ): Promise<RSSArticle[]> {
   try {
     const feed = await parser.parseURL(url);
@@ -137,6 +146,7 @@ export async function fetchRSSFeed(
         publishedAt,
         sourceUrl: url,
         sourceName,
+        sourceId,
       });
     }
 
@@ -183,7 +193,12 @@ export async function fetchAllRSSFeeds(maxAgeDays: number = 7, organizationId?: 
   for (const source of sources) {
     try {
       console.log(`Fetching RSS feed: ${source.name}...`);
-      const articles = await fetchRSSFeed(source.url, source.name);
+      const articles = await fetchRSSFeed(
+        source.url,
+        source.name,
+        // The config fallback has no row, so no id. Everything from the database has one.
+        (source as { id?: string }).id
+      );
 
       // Filter articles by date
       const filteredArticles = articles.filter(
@@ -307,7 +322,12 @@ export async function fetchRSSFeedsByIds(
   for (const source of sources) {
     try {
       console.log(`Fetching RSS feed: ${source.name}...`);
-      const articles = await fetchRSSFeed(source.url, source.name);
+      const articles = await fetchRSSFeed(
+        source.url,
+        source.name,
+        // The config fallback has no row, so no id. Everything from the database has one.
+        (source as { id?: string }).id
+      );
 
       // Filter articles by date
       const filteredArticles = articles.filter(
