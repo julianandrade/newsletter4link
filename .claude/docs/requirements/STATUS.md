@@ -1,11 +1,40 @@
 # Where we are, and how to pick this up
 
-Written 6 August 2026, early morning. Everything is committed and pushed, production
-is deployed and healthy, and nothing is left running.
+Written 6 August 2026, updated late morning. Everything is committed and pushed,
+production is deployed and healthy, and nothing is left running.
 
 Read this file, then
 [DECISIONS-2026-08-06.md](DECISIONS-2026-08-06.md) for the calls made overnight without
 you, and [ROADMAP.md](ROADMAP.md) for the longer view.
+
+---
+
+## What is mid-flight right now
+
+**Nothing is half-done in the code.** All eight commits from this session are pushed and
+each one deployed green. The working tree is clean.
+
+**What is agreed and not yet started:** the ingest throughput work, planned in
+[RQ-007-email-ingestion/RQ-007-throughput-plan.md](RQ-007-email-ingestion/RQ-007-throughput-plan.md).
+Five tasks, chosen scope is "parallelise then continuation", chosen execution is inline
+rather than by subagents. Task 1 is the first thing to pick up. Nothing has been written
+for it, so there is no partial state to reconcile.
+
+**Two things waiting on Julian, neither blocking:**
+
+- **[DECISIONS-2026-08-06.md](DECISIONS-2026-08-06.md) is unreviewed.** Fourteen entries.
+  §11 is the one worth reading first: it is not a decision but a defect found in passing,
+  where `withinDailyCap` says it counts the two triggers separately and does not.
+- **The `.env` `RESEND_API_KEY` value ends with a literal `\n` escape, inside the quotes.**
+  The key itself is fine and has full access: with the escape stripped, `GET /domains` and
+  `GET /emails/receiving` both answer 200. The application never noticed, because dotenv
+  expands `\n` inside a double-quoted value and header serialisation trims the trailing
+  whitespace that results. Anything reading the line by hand does notice, and gets
+  `400 "API key is invalid"` from Resend with no hint that the key is not the problem.
+
+  Worth removing from the file, and worth checking whether the value stored in the Vercel
+  dashboard carries the same trailing escape. This cost an hour of misdiagnosis on
+  6 August 2026, described in the local-environment section below.
 
 ---
 
@@ -28,37 +57,68 @@ Two things learned while fixing it, both now recorded further down: **a Vercel e
 does nothing until the next deployment**, and **checking a Resend key from WSL costs
 nothing** and does not need a run against real email.
 
-### What it produced, and the two things still open
+### The extractor was broken too, in three separate ways, and all three are fixed
 
-**10 articles, all of them auto-rejected, and that is correct.** They came from welcome
-and confirmation mail, they scored 0 to 2 against a threshold of 6, and every one is
-`REJECTED`. The fear recorded yesterday, that junk would reach the queue, did not
-materialise: the threshold did its job. No lever needs pulling.
+Fixing the key exposed five newsletters that produced nothing. Final state after the fixes:
+**43 `PROCESSED`, 2 `IGNORED_UNKNOWN_SENDER`, zero rows carrying an error, 45 bodies read,
+and 8 articles above the threshold sitting in `PENDING_REVIEW`.** Those eight are the first
+real articles this product has ever taken from an email rather than a feed.
 
-**Open 1: four extractions failed and the emails were marked `PROCESSED` anyway,
-with a null `error` column.** So the failure is invisible in the data and will never be
-retried. The four are large newsletters, 67 to 92 kb of html:
-`hi@mail.theresanaiforthat.com`, `avi@dailydoseofds.com`,
-`thefoundercorner@substack.com`, `crew@morningbrew.com`. The run's notes said why:
+**One: a failure and an empty email were the same value.** `ExtractResult` used one `NONE`
+variant for "nothing to extract", "the call died" and "the reply never had the shape". The
+caller could not tell them apart, so it marked all three `PROCESSED` with a null `error`:
+invisible in the data, never retried. `FAILED` is now its own variant and the reason lands
+on the row.
 
-- one `the extraction call failed: the model returned no text (thinking, stop reason max_tokens)`
-- three `the extractor did not return the requested shape after two attempts`
+**Two: the essay prompt asked for output that could not fit.** It asked the model to return
+the whole piece. Measured on the two real emails: 4354 and 4654 output tokens of body
+against a budget of 4000 that thinking also drew on. It could never have parsed on any
+attempt. The body is in the email, so the prompt stopped asking for it.
 
-The first is a `max_tokens` budget too small for a model that thinks before answering,
-on a 74 kb body. The other three are the extractor's JSON contract failing on big input.
-Both are RQ-007 defects and neither is about the key.
+**Three: the prompt budget was allocated backwards.** The link block was assembled first
+and given whatever it wanted, with the email's text taking the remainder. Tracking URLs run
+400 to 1200 characters, so `news@daily.therundown.ai` was sent **80 characters** of its own
+text. Eighty. The extractor was being asked which articles a newsletter described while
+being shown almost none of it. The text is served first now.
 
-**Open 2: the three real editions are `PROCESSED` and no article in the window carries
-their content.** That is either "everything they linked had already been collected by
-RSS, so it was all duplicates" or "extraction returned nothing". I could not tell the
-two apart afterwards: the full run's response was lost to a function timeout, and
-nothing relates an `Article` back to the `InboundEmail` it came from. The next real
-edition to arrive settles it, and adding that relation would settle every future one.
+**And then a fourth, which raising the budget could not fix.** Two emails still died with
+`the model returned no text (thinking, stop reason max_tokens)` at 4000 tokens and again at
+8000, because thinking scales to fill whatever it is given. The cause is documented model
+behaviour: the 5-family models think when the request omits the `thinking` field, and
+`max_tokens` caps thinking and reply together. Extraction is not a reasoning task, so it now
+says so. Gated per model, because `output_config.effort` is a 400 on Haiku 4.5, which this
+product offers as the cheap option.
 
-**Also worth knowing: the job cannot finish a large batch inside its 300-second limit.**
+**A fifth defect fell out of the fix, in code nobody was looking at.** The successful run's
+notes carried five refused links: `techcrunch.com`, `variety.com`, `deadline.com`,
+`hollywoodreporter.com`, all reported as not public addresses. `isBlockedIpv4` blocked all
+of `192.0.0.0/16`, `198.51.0.0/16` and `203.0.0.0/16`, where the reservations are `/24`s.
+Each check covered 256 times the space it meant to, and those four publishers live in
+`192.0.66.0/24`, ordinary public space. Every newsletter linking to them had been silently
+losing items. Corrected, and reprocessing Morning Brew went from five refusals to zero.
+
+### The 300-second ceiling: measured, and planned
+
 Two runs were killed mid-flight, at 8 emails and at 42. Work committed before the kill
-persists, so it converged over three runs, but the daily schedule will hit the same wall
-whenever a backlog builds. `?limit=` now exists on the route for exactly this.
+persists, so it converged over three runs, but the daily schedule hits the same wall
+whenever a backlog builds.
+
+**Where the time goes, measured rather than assumed.** The job is not slow because the work
+is heavy. Both phases loop strictly sequentially over work that is almost entirely waiting:
+a DNS lookup and a HEAD per redirect hop, an embedding call, a scoring call. Per email that
+is a 20 to 25 second extraction call plus 3 to 7 seconds per item, one item at a time.
+Morning Brew: 16 items in 71s. theresanaiforthat: about 20 items in 129s. therundown: 3
+items in 46s.
+
+The plan is
+[RQ-007-throughput-plan.md](RQ-007-email-ingestion/RQ-007-throughput-plan.md): bounded
+concurrency in both phases first, since that is the actual defect and it puts a normal day
+of 6 or 7 emails under a minute, then a wall-clock budget with an atomic row claim and a
+chained handover, so a backlog drains in one cron firing rather than over days. No new
+dependencies, and `vercel.json` is not touched.
+
+`?limit=` already exists on the route, which is what made testing against one email
+possible instead of risking 39.
 
 ---
 
@@ -200,6 +260,24 @@ be answerable only by spending a retry on 42 real emails:
 
 Pass the key through `WSLENV` rather than on the command line, so it stays out of shell
 history and process listings.
+
+**Read the value out of `.env` carefully, or the check lies to you.** This cost an hour on
+6 August 2026 and produced a confident, wrong conclusion that the key had been revoked. The
+line is `RESEND_API_KEY="re_..._...\n"`: double quoted, ending in a literal `\n` escape, on
+a CRLF line. Three traps, and each one alone yields the same `400 "API key is invalid"` from
+Resend, which reads exactly like a dead key:
+
+- `.Trim('"').Trim()` in that order leaves the closing quote behind, because the last
+  character is the carriage return rather than the quote. Trim whitespace **first**, quotes
+  second.
+- The literal `\n` survives every trim and has to be removed on purpose:
+  `-replace '\\[nr]$', ''`.
+- Verify the result before trusting a verdict: a valid key matches
+  `^re_[A-Za-z0-9_]+$` and is 36 characters. If the shape check fails, the next 400 is
+  about your string.
+
+The lesson generalises past this key: when a credential check fails, prove the credential
+you sent is the credential you have before concluding anything about the credential itself.
 
 **Changing `RESEND_API_KEY` in Vercel does nothing until the next deployment.** The
 functions already running hold the value they were deployed with.
