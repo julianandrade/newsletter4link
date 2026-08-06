@@ -388,6 +388,15 @@ ${data.bullets.map(bulletRow).join("\n")}
     .h1 { font-size: 27px !important; line-height: 32px !important; }
     .h2 { font-size: 19px !important; line-height: 25px !important; }
     .cta a { display: block !important; }
+    /* A named edition can be far wider than the 130px logo it shares the row with. At
+       320px "AI Act special edition" wrapped to two lines and pushed the wordmark out of
+       alignment, so on a narrow screen the masthead stacks instead of competing. The
+       align="right" attributes stay on the cells: Outlook's Word engine ignores this
+       query and needs them. */
+    .masthead-cell { display: block !important; width: 100% !important; text-align: left !important; }
+    .masthead-logo { float: none !important; }
+    .masthead-logo td { text-align: left !important; }
+    .masthead-meta { padding-top: 10px !important; }
   }
   @media (prefers-color-scheme: dark) {
     .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
@@ -435,16 +444,16 @@ ${data.bullets.map(bulletRow).join("\n")}
 <tr><td class="px" style="padding:26px 40px 18px 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
-    <td align="left" style="font-family:${SANS}; font-size:20px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:2px; color:${PRIMARY};" class="t-strong">AI&nbsp;RADAR<span style="color:${ACCENT};">.</span></td>
-    <td align="right" valign="top" style="font-family:${SANS};">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr><td align="right" style="padding-bottom:6px;">
+    <td align="left" style="font-family:${SANS}; font-size:20px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:2px; color:${PRIMARY};" class="t-strong masthead-cell">AI&nbsp;RADAR<span style="color:${ACCENT};">.</span></td>
+    <td align="right" valign="top" style="font-family:${SANS};" class="masthead-cell">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" class="masthead-logo"><tr><td align="right" style="padding-bottom:6px;">
         <img class="logo-light" src="${escapeHtml(
           data.logoOnLight
         )}" width="130" height="17" alt="Linkroad" style="display:block; border:0; outline:none; text-decoration:none; font-family:${SANS}; font-size:11px; color:${MUTED}; width:130px; height:17px;">
         <!--[if !mso]><!--><img class="logo-dark" src="${escapeHtml(
           data.logoOnDark
         )}" width="130" height="17" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; outline:none; text-decoration:none; font-family:${SANS}; font-size:11px; color:${MUTED}; width:130px; height:17px;"><!--<![endif]-->
-      </td></tr><tr><td align="right" style="font-family:${SANS}; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.2px; color:${MUTED}; text-transform:uppercase;" class="t-muted">${escapeHtml(
+      </td></tr><tr><td align="right" style="font-family:${SANS}; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1.2px; color:${MUTED}; text-transform:uppercase;" class="t-muted masthead-meta">${escapeHtml(
     data.editionLabel
   )} &nbsp;·&nbsp; ${escapeHtml(data.dateLabel)}</td></tr></table>
     </td>
