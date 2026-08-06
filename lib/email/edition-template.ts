@@ -21,19 +21,34 @@
  * markup of an email that has already been sent.
  */
 
-const ACCENT = "#ff7901";
-const PRIMARY = "#2d4449";
-const INK = "#1a1d1e";
-const BODY_INK = "#3c4547";
-const MUTED = "#6b7674";
-const RULE = "#dfe3e2";
-const RULE_SOFT = "#ebeeed";
-const TINT = "#e9eeee";
-const CARD = "#fbfbfa";
-const PAGE = "#eceeed";
+import {
+  ACCENT,
+  BODY_INK,
+  CARD,
+  INK,
+  MUTED,
+  PAGE,
+  PRIMARY,
+  RULE,
+  SANS,
+  SERIF,
+  TINT,
+  bulletsBlock,
+  escapeHtml,
+  internalBlock,
+  safeUrl,
+  sectionBlock,
+  topStoryBlock,
+  topicItem,
+  trendBlock,
+} from "./edition-blocks";
 
-const SANS = "Arial,Helvetica,sans-serif";
-const SERIF = "Georgia,'Times New Roman',serif";
+/**
+ * Re-exported because content-renderer.ts and template-renderer.ts have imported it from here
+ * since before the fragments moved, and moving a function is not a reason to make every caller
+ * change its import.
+ */
+export { escapeHtml };
 
 export interface EmailArticle {
   title: string;
@@ -114,255 +129,13 @@ export const BLOCK_ANCHORS: Record<BlockPosition, string> = {
   "after-projects": "<!--radar:after-projects-->",
 };
 
-export function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => {
-    switch (character) {
-      case "&":
-        return "&amp;";
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
-      case '"':
-        return "&quot;";
-      default:
-        return "&#039;";
-    }
-  });
-}
-
-/** Absolute http(s) only: a javascript: or data: href must never reach an inbox. */
-function safeUrl(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function link(url: string | undefined, label: string, style: string): string {
-  const safe = safeUrl(url);
-  const text = escapeHtml(label);
-  if (!safe) return text;
-  return `<a href="${escapeHtml(safe)}" style="${style}">${text}</a>`;
-}
-
-/* ------------------------------------------------------------------ fragments */
-
-function bulletRow(bullet: { text: string; anchor: string }): string {
-  return `<tr>
-        <td width="18" valign="top" style="width:18px; padding:7px 0 0 0; font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${ACCENT}; font-weight:bold;">&#8250;</td>
-        <td valign="top" style="padding:6px 0 0 0; font-family:${SANS}; font-size:15px; line-height:23px; mso-line-height-rule:exactly; color:#22282a;" class="t-body">${link(
-          bullet.anchor,
-          bullet.text,
-          "color:#22282a; text-decoration:none; border-bottom:1px solid #b9c3c1;"
-        )}</td>
-      </tr>`;
-}
-
-/** One story inside a topic section. The rule belongs to the item, not the section. */
-function topicItem(item: EmailArticle, isFirst: boolean, isLast: boolean): string {
-  const meta = [item.source, item.coverage ? `${item.coverage} sources` : null]
-    .filter(Boolean)
-    .join(" · ");
-
-  const cellStyle = isFirst
-    ? `padding-bottom:${isLast ? "0" : "16px"};`
-    : `border-top:1px solid ${RULE_SOFT}; padding-top:16px;${isLast ? "" : " padding-bottom:16px;"}`;
-
-  return `<tr><td class="${isFirst ? "" : "rule"}" style="${cellStyle}">
-      <div class="h2 t-strong" style="font-family:${SANS}; font-size:17px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:${INK}; padding-bottom:5px;">${link(
-        item.url,
-        item.title,
-        `color:${INK}; text-decoration:none;`
-      )}</div>
-      <div class="t-body" style="font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${BODY_INK};${meta ? " padding-bottom:6px;" : ""}">${escapeHtml(
-        item.summary
-      )}</div>
-      ${
-        meta
-          ? `<div class="t-muted" style="font-family:${SANS}; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1px; color:${MUTED}; text-transform:uppercase;">${escapeHtml(
-              meta
-            )}</div>`
-          : ""
-      }
-    </td></tr>`;
-}
-
-function sectionBlock(section: EmailSection): string {
-  if (section.items.length === 0) return "";
-
-  const items = section.items
-    .map((item, index) =>
-      topicItem(item, index === 0, index === section.items.length - 1)
-    )
-    .join("\n");
-
-  return `<tr><td class="px" style="padding:26px 40px 0 40px;"><div class="rule" style="border-top:1px solid ${RULE}; font-size:0; line-height:0;">&nbsp;</div></td></tr>
-<tr><td class="px" id="${escapeHtml(section.anchor)}" style="padding:26px 40px 0 40px;">
-  <div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${ACCENT}; text-transform:uppercase; padding-bottom:14px;">${escapeHtml(
-    section.name
-  )}</div>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-${items}
-  </table>
-</td></tr>`;
-}
-
-function trendRow(trend: EmailTrend, isLast: boolean): string {
-  // No baseline means no honest percentage: say "new" rather than invent one.
-  const figure =
-    trend.delta === null
-      ? "new"
-      : `${trend.delta > 0 ? "&#9650;&nbsp;" : trend.delta < 0 ? "&#9660;&nbsp;" : ""}${Math.abs(
-          trend.delta
-        )}%`;
-
-  return `<tr>
-        <td valign="top" style="padding:12px 0 0 0; font-family:${SANS}; font-size:15px; line-height:22px; mso-line-height-rule:exactly; font-weight:bold; color:${INK};" class="t-strong">${escapeHtml(
-          trend.name
-        )}</td>
-        <td valign="top" align="right" width="72" class="trend-figure" style="width:72px; padding:12px 0 0 0; font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; font-weight:bold; color:${PRIMARY};">${figure}</td>
-      </tr>
-      <tr><td colspan="2" style="padding:2px 0 ${isLast ? "0" : "12px"} 0; font-family:${SANS}; font-size:14px; line-height:21px; mso-line-height-rule:exactly; color:${BODY_INK};" class="t-body">${escapeHtml(
-        trend.note
-      )}</td></tr>
-      ${
-        isLast
-          ? ""
-          : `<tr><td colspan="2" class="rule" style="border-top:1px solid #d6dddc; font-size:0; line-height:0;">&nbsp;</td></tr>`
-      }`;
-}
-
-function trendBlock(trends: EmailTrend[]): string {
-  if (trends.length === 0) return "";
-
-  return `<tr><td class="px" id="radar" style="padding:30px 40px 0 40px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT};">
-  <tr><td height="3" style="height:3px; background-color:${PRIMARY}; font-size:0; line-height:3px;">&nbsp;</td></tr>
-  <tr><td style="padding:20px 24px 4px 24px;">
-    <div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">Trend radar &nbsp;·&nbsp; accelerating this week</div>
-  </td></tr>
-  <tr><td style="padding:0 24px 22px 24px;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-${trends.map((trend, index) => trendRow(trend, index === trends.length - 1)).join("\n")}
-    </table>
-  </td></tr>
-  </table>
-</td></tr>`;
-}
-
-function topStoryBlock(data: EditionEmail): string {
-  const story = data.topStory;
-  if (!story) return "";
-
-  const image = safeUrl(data.topStoryImage);
-  const meta = story.source ? `Lead: ${story.source}` : "";
-
-  return `<tr><td class="px" id="top-story" style="padding:34px 40px 0 40px;">
-  <div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${ACCENT}; text-transform:uppercase; padding-bottom:10px;">Top story</div>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-  <tr>
-    <td valign="top" class="stack" style="${image ? "width:380px;" : "width:100%;"}">
-      <div class="h1 t-strong" style="font-family:${SERIF}; font-size:30px; line-height:36px; mso-line-height-rule:exactly; font-weight:normal; color:${INK}; padding-bottom:12px;">${link(
-        story.url,
-        story.title,
-        `color:${INK}; text-decoration:none;`
-      )}</div>
-      <div class="t-body" style="font-family:${SANS}; font-size:15px; line-height:24px; mso-line-height-rule:exactly; color:${BODY_INK}; padding-bottom:14px;">${escapeHtml(
-        story.summary
-      )}</div>
-    </td>
-    ${
-      image
-        ? `<td width="24" class="stack" style="width:24px; font-size:0; line-height:0;">&nbsp;</td>
-    <td valign="top" align="right" width="152" class="stack thumb" style="width:152px;">
-      <img src="${escapeHtml(image)}" width="152" height="114" alt="${escapeHtml(
-        story.title
-      )}" style="display:block; width:152px; height:auto; border:1px solid ${RULE}; background-color:${TINT}; font-family:${SANS}; font-size:11px; line-height:16px; color:${MUTED};">
-    </td>`
-        : ""
-    }
-  </tr>
-  </table>
-  ${
-    story.coverage || meta
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-    ${
-      story.coverage
-        ? `<td class="badge" style="background-color:${TINT}; padding:5px 9px; font-family:${SANS}; font-size:10px; line-height:14px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.2px; color:${PRIMARY}; text-transform:uppercase;">Covered by ${story.coverage} sources</td>
-    <td width="12" style="width:12px; font-size:0;">&nbsp;</td>`
-        : ""
-    }
-    ${
-      meta
-        ? `<td style="font-family:${SANS}; font-size:11px; line-height:14px; mso-line-height-rule:exactly; letter-spacing:1px; color:${MUTED}; text-transform:uppercase;" class="t-muted">${escapeHtml(
-            meta
-          )}</td>`
-        : ""
-    }
-  </tr></table>`
-      : ""
-  }
-  ${
-    safeUrl(story.url)
-      ? `<div class="link-strong" style="padding-top:14px; font-family:${SANS}; font-size:14px; line-height:20px; mso-line-height-rule:exactly;">${link(
-          story.url,
-          "Read the analysis",
-          `color:${PRIMARY}; font-weight:bold; text-decoration:none; border-bottom:2px solid ${ACCENT};`
-        )}</div>`
-      : ""
-  }
-</td></tr>`;
-}
-
-function internalBlock(internal: EmailInternal | undefined): string {
-  if (!internal) return "";
-
-  return `<tr><td class="px" style="padding:30px 40px 0 40px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="background-color:${PRIMARY}; padding:4px 8px; font-family:${SANS}; font-size:10px; line-height:14px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.4px; color:#ffffff; text-transform:uppercase;">Internal</td>
-  </tr></table>
-  <div class="h2 t-strong" style="font-family:${SERIF}; font-size:21px; line-height:28px; mso-line-height-rule:exactly; color:${INK}; padding:12px 0 6px 0;">${link(
-    internal.url,
-    internal.title,
-    `color:${INK}; text-decoration:none;`
-  )}</div>
-  <div class="t-body" style="font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${BODY_INK};">${escapeHtml(
-    internal.body
-  )}</div>
-</td></tr>`;
-}
-
 /* ---------------------------------------------------------------- the email */
 
 export function renderEditionEmail(data: EditionEmail): string {
   const portal = safeUrl(data.portalUrl) ?? "";
   const unsubscribe = safeUrl(data.unsubscribeUrl) ?? "";
 
-  const bullets = data.bullets.length
-    ? `<tr><td class="px" style="padding:28px 40px 0 40px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT};">
-  <tr><td style="padding:22px 24px 8px 24px; font-family:${SANS}; font-size:12px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">This week in 30 seconds</td></tr>
-  ${
-    data.bulletsNote
-      ? `<tr><td class="t-muted" style="padding:2px 24px 0 24px; font-family:${SANS}; font-size:12px; line-height:18px; mso-line-height-rule:exactly; color:${MUTED}; font-style:italic;">${escapeHtml(
-          data.bulletsNote
-        )}</td></tr>`
-      : ""
-  }
-  <tr><td style="padding:0 24px 22px 24px;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-${data.bullets.map(bulletRow).join("\n")}
-    </table>
-  </td></tr>
-  </table>
-</td></tr>`
-    : "";
-
+  const bullets = bulletsBlock(data.bullets, data.bulletsNote);
   const topStory = topStoryBlock(data);
 
   return `<!DOCTYPE html>
