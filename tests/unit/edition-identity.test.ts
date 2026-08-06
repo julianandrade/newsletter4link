@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  editionEmailLabel,
   editionLabel,
   editionWriteFields,
   parseWeeklySlot,
@@ -121,5 +122,35 @@ describe("editionLabel", () => {
     expect(editionLabel({ title: "  Year in review  ", week: 1, year: 2027 })).toBe(
       "Year in review"
     );
+  });
+});
+
+/**
+ * The email's label, which is deliberately not editionLabel.
+ *
+ * The masthead concatenates the label with a date, so a label carrying the year printed it
+ * twice: "WEEK 31 · 2026 · 2026". This one leaves the year to weekRangeLabel.
+ */
+describe("editionEmailLabel", () => {
+  it("uses the title when the edition has one", () => {
+    expect(editionEmailLabel({ title: "AI Act special", week: 32 })).toBe("AI Act special");
+  });
+
+  it("falls back to the week with no year, because the date carries the year", () => {
+    expect(editionEmailLabel({ title: null, week: 32 })).toBe("Week 32");
+  });
+
+  it("treats a whitespace-only title as no title", () => {
+    expect(editionEmailLabel({ title: "   ", week: 9 })).toBe("Week 9");
+  });
+
+  it("trims a title that has room around it", () => {
+    expect(editionEmailLabel({ title: "  Year in review  ", week: 1 })).toBe("Year in review");
+  });
+
+  it("does not change what editionLabel returns", () => {
+    // Forty-odd screens and routes read editionLabel's "Week 32 · 2026" shape. Adding a
+    // second function is the smaller change; altering that one is not on the table.
+    expect(editionLabel({ title: null, week: 32, year: 2026 })).toBe("Week 32 · 2026");
   });
 });

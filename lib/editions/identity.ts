@@ -91,3 +91,22 @@ export function editionLabel(edition: {
   const trimmed = edition.title?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : weekLabel(edition.week, edition.year);
 }
+
+/**
+ * What the email calls this edition.
+ *
+ * Deliberately not `editionLabel`. That one returns "Week 32 · 2026" and forty-odd screens
+ * read it, but the email masthead concatenates the label with a date, so a label carrying the
+ * year printed it twice: "WEEK 31 · 2026 · 2026". The year belongs to the date, so this drops
+ * it and `weekRangeLabel` supplies it once.
+ *
+ * Two functions rather than one changed function, because changing `editionLabel` would mean
+ * auditing every screen that reads it to find which ones also print a date.
+ */
+export function editionEmailLabel(edition: {
+  title: string | null;
+  week: number;
+}): string {
+  const trimmed = edition.title?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : `Week ${edition.week}`;
+}
