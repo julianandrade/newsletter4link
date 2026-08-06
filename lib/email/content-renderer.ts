@@ -119,7 +119,10 @@ export function replaceContentMergeTags(
         week,
         year,
         label,
-      })
+      }),
+      // Same as the server renderer: this substitutes into HTML exported from Unlayer, where a
+      // block lands inside Unlayer's own table cell and a bare <tr> would be invalid.
+      { wrapInTable: true }
     ),
   };
 

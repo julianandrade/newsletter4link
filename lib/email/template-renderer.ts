@@ -199,6 +199,8 @@ export function renderTemplate(
     // leaves these standing through keepPerRecipient and signs them inside its batch loop.
     archive_url: `${config.app.url.replace(/\/$/, "")}/editions`,
     portal_url: `${config.app.url.replace(/\/$/, "")}/editions`,
+    // wrapInTable: this renders HTML exported from Unlayer, where a block lands inside Unlayer's
+    // own table cell and a bare <tr> would be invalid.
     ...editionMergeValues(
       buildEditionEmail({
         articles: articles.map((article) => ({
@@ -218,7 +220,8 @@ export function renderTemplate(
         week,
         year,
         label,
-      })
+      }),
+      { wrapInTable: true }
     ),
   };
 

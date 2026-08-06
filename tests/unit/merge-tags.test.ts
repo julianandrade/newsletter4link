@@ -264,6 +264,31 @@ describe("editionMergeValues", () => {
     expect(values.internal).toContain("Internal thing");
   });
 
+  it("wraps each block in a table when asked, so it can sit in an Unlayer html block", () => {
+    const values = editionMergeValues(edition, { wrapInTable: true });
+
+    for (const tag of ["tldr", "top_story", "sections", "trend_radar", "internal"]) {
+      expect(values[tag], tag).toMatch(/^<table role="presentation"/);
+      expect(values[tag], tag).toMatch(/<\/table>$/);
+    }
+  });
+
+  it("leaves an absent block empty rather than wrapping nothing in a table", () => {
+    // An empty table would survive dropEmptyOptionalRows and leave a gap where the row was.
+    const values = editionMergeValues(
+      { ...edition, trends: [], internal: undefined },
+      { wrapInTable: true }
+    );
+
+    expect(values.trend_radar).toBe("");
+    expect(values.internal).toBe("");
+  });
+
+  it("emits a bare row when not wrapping, which is what the code renderer wants", () => {
+    const values = editionMergeValues(edition);
+    expect(values.trend_radar).toMatch(/^<tr>/);
+  });
+
   it("renders an absent block as the empty string, so its optional row can be dropped", () => {
     const values = editionMergeValues({
       ...edition,

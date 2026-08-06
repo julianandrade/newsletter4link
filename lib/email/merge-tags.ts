@@ -122,14 +122,43 @@ export function unlayerMergeTagOptions(
  * block renders as the empty string rather than a placeholder, so the optional row wrapping it
  * can be dropped on export.
  */
-export function editionMergeValues(edition: EditionEmail): Record<string, string> {
+export function editionMergeValues(
+  edition: EditionEmail,
+  options: { wrapInTable?: boolean } = {}
+): Record<string, string> {
+  const wrap = options.wrapInTable ? asTable : identity;
+
   return {
     edition_label: escapeHtml(edition.editionLabel),
     date_range: escapeHtml(edition.dateLabel),
-    tldr: bulletsBlock(edition.bullets, edition.bulletsNote),
-    top_story: topStoryBlock(edition),
-    sections: edition.sections.map(sectionBlock).join("\n"),
-    trend_radar: trendBlock(edition.trends),
-    internal: internalBlock(edition.internal),
+    tldr: wrap(bulletsBlock(edition.bullets, edition.bulletsNote)),
+    top_story: wrap(topStoryBlock(edition)),
+    sections: wrap(edition.sections.map(sectionBlock).join("\n")),
+    trend_radar: wrap(trendBlock(edition.trends)),
+    internal: wrap(internalBlock(edition.internal)),
   };
+}
+
+function identity(html: string): string {
+  return html;
+}
+
+/**
+ * Wraps a block in a table of its own, so it can sit inside an Unlayer html block.
+ *
+ * Every block renderer emits `<tr><td>…</td></tr>`, because in the code renderer it is a row of
+ * the 640px shell. Unlayer puts an html block's content inside its own table cell, where a bare
+ * `<tr>` is invalid markup and clients disagree about how to recover from it.
+ *
+ * Empty stays empty rather than becoming an empty table, so `dropEmptyOptionalRows` still sees
+ * nothing and removes the row around it.
+ *
+ * The consequence, worth knowing before reaching for Unlayer's padding controls: these blocks
+ * keep the 40px horizontal padding they carry in the code renderer, so the rows holding them are
+ * seeded with zero container padding. Changing the gutter on one of them means editing the block,
+ * not the row.
+ */
+function asTable(html: string): string {
+  if (html.length === 0) return "";
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">\n${html}\n</table>`;
 }

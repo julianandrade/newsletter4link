@@ -269,7 +269,15 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
       ? {
           title: project.name,
           body: [project.description, project.impact].filter(Boolean).join(" ").trim(),
-          url: `${appUrl}/dashboard/projects`,
+          /**
+           * Deliberately unlinked.
+           *
+           * This pointed at /dashboard/projects, which middleware guards with a session, a domain
+           * allowlist and MFA, so for a reader who does not administer the app it was the same
+           * dead end the call to action was. There is no public page for internal work to link
+           * to, and a headline that goes nowhere is better than one that goes to a login form.
+           */
+          url: undefined,
         }
       : undefined,
     /**
