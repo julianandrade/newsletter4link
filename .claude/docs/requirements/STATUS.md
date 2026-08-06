@@ -9,6 +9,42 @@ you, and [ROADMAP.md](ROADMAP.md) for the longer view.
 
 ---
 
+## The audit's remaining findings are closed
+
+**Done 6 August 2026, evening.** Everything else on
+[FINDINGS-2026-08-06-flexibility-and-provenance.md](FINDINGS-2026-08-06-flexibility-and-provenance.md),
+plus a production search failure Julian reported.
+
+**The search.** "The search did not finish: unsupported Unicode escape sequence", and the
+search had in fact finished: only the write of its result failed. Tavily returns whole
+scraped pages, scraped text carries NUL bytes, and a NUL inside a jsonb value is refused by
+Postgres. What jsonb accepts was measured against the database: NUL and lone surrogates
+refused, valid surrogate pairs and other C0 controls accepted. So `lib/pg-safe-text.ts`
+removes exactly two things, because stripping the surrogate range would delete emoji and
+stripping all controls would eat newlines, both silently.
+
+**The tenant hole was larger than the audit found.** `PATCH /api/articles/:id` had no auth
+at all, but fixing it exposed that the tenant client's `update` and `delete` passed the
+caller's where through untouched on **all thirteen models**, while findMany, findFirst,
+count and updateMany scoped correctly. Every caller trusting the wrapper was performing a
+cross-tenant write. 24 methods fixed, 41 tests assert the contract per model.
+
+**Dates.** `publishedAt` is nullable and `capturedAt` is new. 38 of 4456 rows carried their
+ingestion time as a publication date and were cleared; their source hosts say what they
+were: beehiiv, twitter.com, facebook.com. Nine ordering clauses needed `nulls: "last"`.
+
+**Provenance.** `Article.sourceId` and `Article.inboundEmailId`, written by both ingest
+paths, and a Received view on the Sources screen: one row per email, expandable to the
+articles with each one's real publisher. No backfill: 31 existing articles fall inside some
+email's window and only 19 match exactly one, so attributing the rest would invent data.
+
+**901 unit tests, `tsc` clean, `next build` clean.**
+
+**One thing without a screenshot:** the 390px fix to the collection band. The Playwright
+profile was held by another session when that change was made.
+
+---
+
 ## The edition is no longer a week
 
 **Done 6 August 2026, afternoon.** Julian's four complaints about rigidity were audited
