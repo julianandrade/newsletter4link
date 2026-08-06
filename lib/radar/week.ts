@@ -76,3 +76,48 @@ export function isoWeekEnd(week: number, year: number): Date {
 export function weekLabel(week: number, year: number): string {
   return `Week ${week} · ${year}`;
 }
+
+const MONTH_ABBREVIATIONS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/**
+ * The week's date range, as in "3-9 Aug 2026".
+ *
+ * The email masthead used to read "WEEK 31 · 2026 · 2026", because the edition label already
+ * carried the year and the date label carried it again. The year belongs to the date and now
+ * appears once, which is what this produces.
+ *
+ * The trailing year is the year the range *ends* in, not the ISO week-year: week 1 of 2026
+ * starts on 29 December 2025, and a reader looking at that line wants to see 2026.
+ *
+ * All arithmetic stays UTC, because `isoWeekStart` is UTC and reading it back through a
+ * local-time getter shifts the day for anyone east or west of the server.
+ */
+export function weekRangeLabel(week: number, year: number): string {
+  const start = isoWeekStart(week, year);
+  const end = isoWeekEnd(week, year);
+
+  const startDay = start.getUTCDate();
+  const endDay = end.getUTCDate();
+  const startMonth = MONTH_ABBREVIATIONS[start.getUTCMonth()];
+  const endMonth = MONTH_ABBREVIATIONS[end.getUTCMonth()];
+  const endYear = end.getUTCFullYear();
+
+  if (startMonth === endMonth && start.getUTCFullYear() === endYear) {
+    return `${startDay}-${endDay} ${startMonth} ${endYear}`;
+  }
+
+  return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${endYear}`;
+}
