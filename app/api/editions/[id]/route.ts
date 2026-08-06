@@ -1,7 +1,65 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { deleteNeverSentEditions } from "@/lib/editions/lifecycle";
+import { editionLabel, editionWriteFields } from "@/lib/editions/identity";
 import { EditionStatus, Prisma } from "@prisma/client";
+
+const MAX_TITLE = 120;
+
+export interface EditionPatchInput {
+  /** Absent leaves the name alone. Null clears it back to the derived week label. */
+  title?: string | null;
+  publishDate?: Date;
+}
+
+export type ParsedPatch =
+  | { ok: true; value: EditionPatchInput }
+  | { ok: false; error: string };
+
+/**
+ * RQ-008: the name and the date an editor may change on an unsent edition.
+ *
+ * Absent and null are kept apart deliberately. Every screen that sends a partial PATCH
+ * omits the fields it is not touching, so treating an omitted title as "clear it" would
+ * erase the name on every reorder.
+ */
+export function parseEditionPatch(body: unknown): ParsedPatch {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const value: EditionPatchInput = {};
+
+  if ("title" in input) {
+    const raw = input.title;
+
+    if (raw !== null && typeof raw !== "string") {
+      return { ok: false, error: "title must be a string or null" };
+    }
+
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+
+    if (trimmed.length > MAX_TITLE) {
+      return { ok: false, error: `title must be ${MAX_TITLE} characters or fewer` };
+    }
+
+    value.title = trimmed.length > 0 ? trimmed : null;
+  }
+
+  if ("publishDate" in input) {
+    const raw = input.publishDate;
+    const parsed =
+      typeof raw === "string" || typeof raw === "number" ? new Date(raw) : null;
+
+    if (!parsed || Number.isNaN(parsed.getTime())) {
+      return {
+        ok: false,
+        error: "publishDate must be an ISO date such as 2026-08-10",
+      };
+    }
+
+    value.publishDate = parsed;
+  }
+
+  return { ok: true, value };
+}
 
 /**
  * RQ-005 conflict C2: these three handlers used bare prisma with no auth call at
@@ -54,6 +112,11 @@ function transformEdition(edition: EditionWithContents) {
     id: edition.id,
     week: edition.week,
     year: edition.year,
+    // RQ-008: the edition's own identity, and the label derived from it once.
+    title: edition.title,
+    kind: edition.kind,
+    publishDate: edition.publishDate,
+    label: editionLabel(edition),
     status: edition.status,
     finalizedAt: edition.finalizedAt,
     sentAt: edition.sentAt,
@@ -201,6 +264,22 @@ export async function PATCH(
       );
     }
 
+    /**
+     * RQ-008: the name and the date, on an edition that has not gone out.
+     *
+     * The kind never changes here, and that is deliberate: turning a weekly into a
+     * special would free its slot and let the schedule create a second weekly for a week
+     * that already had one, which is the one thing the slot exists to prevent.
+     */
+    const patch = parseEditionPatch(body);
+
+    if (!patch.ok) {
+      return NextResponse.json(
+        { success: false, error: patch.error },
+        { status: 400 }
+      );
+    }
+
     const updateData: Prisma.EditionUpdateInput = {};
 
     if (editorDesignJson !== undefined) {
@@ -209,6 +288,28 @@ export async function PATCH(
     }
     if (templateId !== undefined) {
       updateData.templateId = templateId;
+    }
+
+    if (patch.value.title !== undefined) {
+      updateData.title = patch.value.title;
+    }
+
+    /**
+     * Rescheduling rewrites the derived week, year and slot through
+     * `editionWriteFields`, so moving a weekly edition across a week boundary moves its
+     * slot with it. Writing publishDate alone would leave the cache pointing at the old
+     * week and the slot claiming a week the edition no longer belongs to.
+     */
+    if (patch.value.publishDate) {
+      const fields = editionWriteFields({
+        publishDate: patch.value.publishDate,
+        kind: existingEdition.kind,
+      });
+
+      updateData.publishDate = fields.publishDate;
+      updateData.week = fields.week;
+      updateData.year = fields.year;
+      updateData.weeklySlot = fields.weeklySlot;
     }
 
     if (status !== undefined) {
@@ -303,6 +404,29 @@ export async function PATCH(
           order: p.order ?? index + 1,
         })
       );
+    }
+
+    /**
+     * A weekly edition moved onto a week that already has one is refused by name rather
+     * than by a Prisma error reaching the screen as "Unique constraint failed". Scoped to
+     * this organization by the tenant client, and excluding this edition so that saving
+     * a reschedule that does not move the week is not a collision with itself.
+     */
+    if (typeof updateData.weeklySlot === "string") {
+      const clash = await db.edition.findFirst({
+        where: { weeklySlot: updateData.weeklySlot, id: { not: id } },
+        select: { week: true, year: true },
+      });
+
+      if (clash) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Week ${clash.week} of ${clash.year} already has a weekly edition. Move this one to another week, or make it a special edition.`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const updatedEdition = await db.$raw.$transaction(async (tx) => {
