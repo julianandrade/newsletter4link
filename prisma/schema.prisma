@@ -249,6 +249,21 @@ model Article {
    */
   contentHash String?
 
+  /**
+   * True when this article's URL is the wrapper the newsletter used, not the article's
+   * own address, because the redirect chain could not be followed.
+   *
+   * Finding D4 of 6 August 2026: the wrapper was stored in silence and nothing recorded
+   * it, so an edition could go out linking to link.mail.beehiiv.com with "Beehiiv" named
+   * as the publisher, since the publication name is derived from the host. The flag is
+   * what lets a screen say so and an editor decide.
+   *
+   * Defaulting to false rather than backfilling: every row written before this existed
+   * predates the distinction, and claiming to know which of them are wrapped would be
+   * inventing data.
+   */
+  sourceUnresolved Boolean @default(false)
+
   rewrites ArticleRewrite[]
 }
 

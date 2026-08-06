@@ -114,6 +114,44 @@ describe("the gate: source name and URL on every rendering", () => {
     });
   }
 
+  /**
+   * Finding D4: a wrapper URL says so, in every state and for either role.
+   *
+   * The publication name is derived from the URL's host, so an unwrapped tracking link
+   * renders "Beehiiv" or "Therundown" as the publisher. Both the name and the address
+   * read as the source and neither is, which is why the warning belongs on the block
+   * that shows them rather than in a column.
+   */
+  for (const [name, data] of STATES) {
+    for (const canEdit of [false, true]) {
+      const role = canEdit ? "an editor" : "a viewer";
+
+      it(`warns ${role} that the link is the newsletter's in the ${name} state`, () => {
+        const wrapped = {
+          ...data,
+          attribution: { ...data.attribution, sourceUnresolved: true },
+        };
+
+        const { unmount } = view(wrapped, canEdit);
+
+        expect(
+          // The copy uses a typographic apostrophe, so the matcher avoids one entirely.
+          screen.getByText(/This is the newsletter.s link, not the publisher.s/i)
+        ).toBeTruthy();
+
+        unmount();
+      });
+    }
+  }
+
+  it("says nothing about the link when it did resolve", () => {
+    view(READY);
+
+    expect(
+      screen.queryByText(/This is the newsletter.s link/i)
+    ).toBeNull();
+  });
+
   it("opens the source in a new tab without handing it the opener", () => {
     const { container } = view(READY);
     const link = container.querySelector(`a[href="${SOURCE_URL}"][target="_blank"]`);

@@ -17,7 +17,12 @@ export const maxDuration = 120;
  * and silence is a bad answer.
  */
 
-function attribution(article: { sourceUrl: string; publishedAt: Date; title: string }) {
+function attribution(article: {
+  sourceUrl: string;
+  publishedAt: Date;
+  title: string;
+  sourceUnresolved: boolean;
+}) {
   // Rule 5: the source attribution is not optional and not a footnote. Every response
   // carries it, so no surface can render the prose without it.
   return {
@@ -25,6 +30,9 @@ function attribution(article: { sourceUrl: string; publishedAt: Date; title: str
     url: article.sourceUrl,
     publishedAt: article.publishedAt.toISOString(),
     originalTitle: article.title,
+    // Finding D4: whether that url is the publisher's or a newsletter's wrapper. It
+    // travels with the attribution because that is the block which shows the url.
+    sourceUnresolved: article.sourceUnresolved,
   };
 }
 

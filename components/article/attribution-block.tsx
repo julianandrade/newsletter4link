@@ -51,6 +51,26 @@ export function AttributionBlock({
       >
         {attribution.url}
       </ExternalLink>
+
+      {/*
+        Finding D4: said where the URL is, not in a column nobody reads.
+
+        When the redirect chain could not be followed the address above is the tracking
+        link the newsletter used, and the publication name a few lines up was derived from
+        its host, so both read as the publisher and neither is. Nothing about this varies
+        with role: an editor and a viewer are equally misled by a wrapper that says
+        nothing.
+      */}
+      {attribution.sourceUnresolved ? (
+        <p className="mt-2.5 mb-0 rounded-lg border border-radar-warn bg-radar-surface px-3 py-2 text-[12px] text-radar-ink2 text-pretty">
+          <span className="font-semibold text-radar-ink">
+            This is the newsletter&rsquo;s link, not the publisher&rsquo;s.
+          </span>{" "}
+          The redirect chain could not be followed, so the address above is the tracking
+          link the newsletter used and the name beside it comes from that host. Check where
+          it really goes before this story leaves in an edition.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -18,6 +18,16 @@ export interface LinkTakeAttribution {
   url: string;
   publishedAt: string;
   originalTitle: string;
+  /**
+   * Finding D4: true when `url` is the wrapper a newsletter used rather than the
+   * publisher's own address, because the redirect chain would not resolve.
+   *
+   * On the attribution block rather than somewhere else, because this block is the one
+   * place the URL is always shown, and a wrapper presented without a word is exactly the
+   * failure the flag exists to end. Optional so a caller that predates the column, or a
+   * fixture, still type-checks and reads as resolved.
+   */
+  sourceUnresolved?: boolean;
 }
 
 /** The rewrite as the API serializes it, which is dates as strings. */

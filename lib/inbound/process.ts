@@ -6,6 +6,7 @@ import { curateArticle } from "@/lib/curation/curator";
 import { cleanUrl, unwrapUrl } from "@/lib/curation/unwrap-url";
 import { claimCutoff, claimEmail, shouldStop } from "@/lib/inbound/claim";
 import { extractNewsletterItems } from "@/lib/inbound/extract";
+import { classifyUnwrap } from "@/lib/inbound/link-outcome";
 import { matchSources, type MatchableSource } from "@/lib/inbound/match";
 import { fetchEmailContent } from "@/lib/inbound/receive";
 import { dedupeByUrl, tallyItems, type ItemOutcome } from "@/lib/inbound/tally";
@@ -433,18 +434,23 @@ async function ingestForSource(
       // newsletters is three wrapper URLs and none of them is the article's own.
       const unwrapped = await unwrapUrl(item.url);
 
-      if (!unwrapped.unwrapped && unwrapped.note?.startsWith("stopped: ")) {
+      /**
+       * Finding D4: three outcomes, not two.
+       *
+       * This used to check only for a refused target and let every other failure fall
+       * through, so an exhausted hop budget, a redirect loop and a five second timeout
+       * all created the article with the newsletter's tracking URL as its source, with
+       * nothing recorded anywhere.
+       */
+      const outcome = classifyUnwrap(unwrapped);
+
+      if (outcome === "refused") {
         // A URL the safety check refused is not stored. Something else would fetch it later.
-        if (
-          unwrapped.note.includes("not a public address") ||
-          unwrapped.note.includes("not allowed")
-        ) {
-          return {
-            created: 0,
-            duplicate: false,
-            note: `${email.id}: refused a link (${unwrapped.note})`,
-          };
-        }
+        return {
+          created: 0,
+          duplicate: false,
+          note: `${email.id}: refused a link (${unwrapped.note})`,
+        };
       }
 
       /**
@@ -456,20 +462,36 @@ async function ingestForSource(
        */
       const content = item.snippet.length > 0 ? item.snippet : item.title;
 
-      const outcome = await curateArticle(
+      const curated = await curateArticle(
         unwrapped.url,
         item.title,
         content,
-        source.organizationId
+        source.organizationId,
+        { sourceUnresolved: outcome === "unresolved" }
       );
 
-      if (outcome.success) return { created: 1, duplicate: false, note: null };
-      if (outcome.isDuplicate) return { created: 0, duplicate: true, note: null };
+      if (curated.success) {
+        return {
+          created: 1,
+          duplicate: false,
+          /**
+           * Said on the run as well as on the row. The note is what the person reading
+           * the ingest result sees, and "this article links to the newsletter rather
+           * than the publisher" is exactly what they need to know before it ships.
+           */
+          note:
+            outcome === "unresolved"
+              ? `${email.id}: ${item.url} could not be unwrapped (${unwrapped.note}), so the article links to the newsletter's wrapper`
+              : null,
+        };
+      }
+
+      if (curated.isDuplicate) return { created: 0, duplicate: true, note: null };
 
       return {
         created: 0,
         duplicate: false,
-        note: `${email.id}: ${item.url} ${outcome.error}`,
+        note: `${email.id}: ${item.url} ${curated.error}`,
       };
     }
   );

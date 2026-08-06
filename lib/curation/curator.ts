@@ -532,7 +532,15 @@ export async function curateArticle(
   url: string,
   title: string,
   content: string,
-  organizationId: string
+  organizationId: string,
+  options: {
+    /**
+     * Finding D4: true when `url` is the wrapper a newsletter used, because the redirect
+     * chain would not resolve. Stored on the row so a screen can say so, rather than the
+     * wrapper passing for the publisher's own address.
+     */
+    sourceUnresolved?: boolean;
+  } = {}
 ): Promise<{
   success: boolean;
   articleId?: string;
@@ -594,6 +602,8 @@ export async function curateArticle(
             ? "PENDING_REVIEW"
             : "REJECTED",
         organizationId,
+        // Finding D4: whether `url` is the publisher's address or a newsletter's wrapper.
+        sourceUnresolved: options.sourceUnresolved ?? false,
       },
     });
 

@@ -1500,6 +1500,28 @@ const ARTICLE_STATES = {
     attempted: true,
     summary: ARTICLE_SUMMARY,
   },
+  /**
+   * Finding D4: the article whose link is the newsletter's wrapper.
+   *
+   * A real one, taken from the shape these actually have: a beehiiv click tracker, whose
+   * host is what the publication name is derived from, so the block would otherwise
+   * present "Beehiiv" as the publisher of somebody else's article.
+   */
+  "article-wrapped": {
+    attribution: {
+      publication: "Beehiiv",
+      url: "https://link.mail.beehiiv.com/ss/c/u001.7Hy2mQ/xR4tK9",
+      publishedAt: iso(0, 2),
+      originalTitle:
+        "EU AI Act high-risk obligations bite for banks as first conformity audits begin",
+      sourceUnresolved: true,
+    },
+    rewrite: null,
+    unavailableReason: "No Link Take has been written for this article yet.",
+    stale: false,
+    attempted: false,
+    summary: ARTICLE_SUMMARY,
+  },
 } as const;
 
 /** Which of the four the current URL is asking for. */
@@ -1528,6 +1550,8 @@ const SCREENS = {
   "article-stale": ArticleDetailPage,
   "article-absent": ArticleDetailPage,
   "article-refused": ArticleDetailPage,
+  // Finding D4: the same screen with a link that could not be unwrapped.
+  "article-wrapped": ArticleDetailPage,
   subscribers: SubscribersPage,
   templates: TemplatesPage,
   analytics: AnalyticsPage,
