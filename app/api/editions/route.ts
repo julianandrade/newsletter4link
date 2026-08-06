@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
+import { editionWriteFields } from "@/lib/editions/identity";
+import { isoWeekStart } from "@/lib/radar/week";
 
 export const dynamic = "force-dynamic";
 
@@ -172,11 +174,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create the edition
+    // Create the edition. RQ-008: the columns come from identity.ts, which is the only
+    // thing that may write week, year and weeklySlot.
     const edition = await db.edition.create({
       data: {
-        week,
-        year,
+        ...editionWriteFields({
+          publishDate: isoWeekStart(week, year),
+          kind: "WEEKLY",
+        }),
         status: "DRAFT",
       } as any,
     });

@@ -447,13 +447,18 @@ describe("ensureProposal", () => {
     expect(result).toEqual({ id: "created-1", week: 32, year: 2026, created: true });
 
     const upsert = calls.find((c) => c.method === "upsert")?.args as {
-      where: { week_year_organizationId: Record<string, unknown> };
+      where: { weeklySlot_organizationId: Record<string, unknown> };
       update: Record<string, unknown>;
     };
 
-    expect(upsert.where.week_year_organizationId).toEqual({
-      week: 32,
-      year: 2026,
+    /**
+     * RQ-008: the key is the weekly slot now, not the week/year pair. This assertion is
+     * the whole of AC-1.4 restated: with the slot as the unique key a second weekly for
+     * one week is refused by the database, and a special edition holds null there, so a
+     * week can carry as many specials as anyone wants.
+     */
+    expect(upsert.where.weeklySlot_organizationId).toEqual({
+      weeklySlot: "2026-W32",
       organizationId: "org-42",
     });
     // An existing row is left exactly as it is: the upsert is a create or a
@@ -470,7 +475,28 @@ describe("ensureProposal", () => {
       create: Record<string, unknown>;
     };
 
-    expect(upsert.create).toEqual({ week: 32, year: 2026, status: "DRAFT" });
+    expect(upsert.create).toEqual({
+      weeklySlot: "2026-W32",
+      week: 32,
+      year: 2026,
+      kind: "WEEKLY",
+      // WEEK.startsAt: the Monday isoWeekStart computed, handed in by the caller, so the
+      // schedule and this write cannot disagree about which day the week begins on.
+      publishDate: new Date("2026-08-03T00:00:00.000Z"),
+      status: "DRAFT",
+    });
+  });
+
+  it("looks the existing proposal up by its slot, not by the week columns", async () => {
+    const { db, calls } = fakeDb({ existing: { id: "already-there" } });
+
+    await ensureProposal(db, WEEK);
+
+    const findFirst = calls.find((c) => c.method === "findFirst")?.args as {
+      where: Record<string, unknown>;
+    };
+
+    expect(findFirst.where).toEqual({ weeklySlot: "2026-W32" });
   });
 
   // AC-1.3: opening the product while the schedule runs yields one proposal,

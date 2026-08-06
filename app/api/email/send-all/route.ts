@@ -18,7 +18,8 @@ import { sendEmailWithProvider, isSpecificProviderConfigured, getProviderSetting
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { publishToSharePoint, isSharePointConfigured } from "@/lib/sharepoint";
 import type { GeneratedNewsletter } from "@/lib/generation/generator";
-import { isoWeekAndYear } from "@/lib/radar/week";
+import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
+import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -160,16 +161,26 @@ export async function POST(request: Request) {
       const now = new Date();
       const { week, year } = isoWeekAndYear(now);
 
-      // Check if edition exists for this week in this org
+      /**
+       * RQ-008: found by its weekly slot, not by the week columns.
+       *
+       * The lookup and the write both have to use the slot. A create that left
+       * `weeklySlot` null would not collide with anything, so the weekly schedule would
+       * happily add a second weekly edition for a week this route had already sent.
+       */
+      const slot = weeklySlotFor(week, year);
+
       edition = await db.edition.findFirst({
-        where: { week, year },
+        where: { weeklySlot: slot },
       });
 
       if (!edition) {
         edition = await db.edition.create({
           data: {
-            week,
-            year,
+            ...editionWriteFields({
+              publishDate: isoWeekStart(week, year),
+              kind: "WEEKLY",
+            }),
             status: "FINALIZED",
             finalizedAt: new Date(),
           } as any,

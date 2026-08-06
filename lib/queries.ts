@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { TenantClient } from "@/lib/db/tenant";
 import { ArticleStatus } from "@prisma/client";
-import { isoWeekAndYear } from "@/lib/radar/week";
+import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
+import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
 
 // ==================== Article Queries ====================
 
@@ -68,8 +69,12 @@ export async function getCurrentEdition(db: TenantClient) {
   const now = new Date();
   const { week, year } = isoWeekAndYear(now);
 
+  // RQ-008: the slot is the key, on the read and on the write below. See the note in
+  // app/api/email/send-all/route.ts for what a null slot would let the schedule do.
+  const slot = weeklySlotFor(week, year);
+
   let edition = await db.edition.findFirst({
-    where: { week, year },
+    where: { weeklySlot: slot },
     include: {
       articles: {
         include: { article: true },
@@ -85,8 +90,10 @@ export async function getCurrentEdition(db: TenantClient) {
   if (!edition) {
     edition = await db.edition.create({
       data: {
-        week,
-        year,
+        ...editionWriteFields({
+          publishDate: isoWeekStart(week, year),
+          kind: "WEEKLY",
+        }),
         status: "DRAFT",
       } as any,
       include: {

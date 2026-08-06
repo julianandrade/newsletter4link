@@ -16,15 +16,19 @@
  * - The assembly is pure, in the style of `lib/trends/compute.ts`: it takes a
  *   fetched list and returns a decision, so the ranking rules can be tested
  *   without a database.
- * - This module has no runtime imports at all, only type imports. Importing
- *   `lib/db` opens a connection pool, and importing `lib/radar/week.ts` would
- *   pull the clock in here. The week is passed in by the caller, which is also
- *   how AC-1.8 stays true: `lib/radar/week.ts` is the one helper that answers
- *   "which week is it", and the two routes in this unit both ask it.
+ * - This module imports nothing that opens a connection pool and nothing that
+ *   reads a clock. `lib/db` is a type import only. RQ-008 added one runtime
+ *   import, `lib/editions/identity.ts`, which is pure arithmetic over a date it
+ *   is given: it never calls `isoWeekAndYear()` without an argument, so no
+ *   ambient clock arrives with it. This module still does not ask what week it
+ *   is, and AC-1.8 still holds: `lib/radar/week.ts` is the one helper that
+ *   answers that question, the week is passed in by the caller, and the two
+ *   routes in this unit both ask it.
  */
 
 import type { Prisma } from "@prisma/client";
 import type { TenantClient } from "@/lib/db/tenant";
+import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
 
 /** RQ-005 section 2.2 of the specification: product-owner defaults. */
 export const PROPOSAL_ARTICLE_TARGET = 10;
@@ -292,35 +296,49 @@ export interface EnsureResult {
  * RQ-005 AC-1.1, AC-1.3, AC-1.4: one proposal per organization per week,
  * created without anyone asking, and never two.
  *
- * The compound unique `@@unique([week, year, organizationId])` is what makes a
- * collision impossible. The tenant client adds `organizationId` to `create` but
- * not to `where`, so the key is passed in full, and a concurrent create is
- * answered by re-reading the row that won rather than by an error reaching the
- * screen.
+ * The unique `@@unique([weeklySlot, organizationId])` is what makes a collision
+ * impossible. A weekly edition's slot is derived from its week, a special edition's
+ * is null, and Postgres treats nulls in a unique index as distinct, so this
+ * constraint binds the schedule without binding anything else: RQ-008 needed a week
+ * to be able to hold a special edition too, which the old `[week, year,
+ * organizationId]` index forbade.
+ *
+ * The tenant client adds `organizationId` to `create` but not to `where`, so the key
+ * is passed in full, and a concurrent create is answered by re-reading the row that
+ * won rather than by an error reaching the screen.
  */
 export async function ensureProposal(
   db: TenantClient,
   week: ProposalWeek
 ): Promise<EnsureResult> {
-  const { week: weekNumber, year } = week;
+  const { week: weekNumber, year, startsAt } = week;
+  const slot = weeklySlotFor(weekNumber, year);
 
   const existing = await db.edition.findFirst({
-    where: { week: weekNumber, year },
+    where: { weeklySlot: slot },
     select: { id: true },
   });
   if (existing) return { id: existing.id, week: weekNumber, year, created: false };
 
+  /**
+   * RQ-008: the weekly edition's publication date is the Monday of its week.
+   *
+   * `startsAt` is already that Monday, computed by `isoWeekStart` and handed in by the
+   * caller, so the schedule and this write cannot disagree about which day the week
+   * begins on.
+   */
+  const fields = editionWriteFields({ publishDate: startsAt, kind: "WEEKLY" });
+
   try {
     const created = await db.edition.upsert({
       where: {
-        week_year_organizationId: {
-          week: weekNumber,
-          year,
+        weeklySlot_organizationId: {
+          weeklySlot: slot,
           organizationId: db.organizationId,
         },
       },
       // organizationId is deliberately absent: the tenant client injects it.
-      create: { week: weekNumber, year, status: "DRAFT" } as unknown as Prisma.EditionCreateInput,
+      create: { ...fields, status: "DRAFT" } as unknown as Prisma.EditionCreateInput,
       update: {},
       select: { id: true },
     });
@@ -331,7 +349,7 @@ export async function ensureProposal(
     // Another request, or the schedule, created it between the read and the
     // write. The proposal for the week is theirs and ours, so use it (AC-1.3).
     const raced = await db.edition.findFirst({
-      where: { week: weekNumber, year },
+      where: { weeklySlot: slot },
       select: { id: true },
     });
     if (!raced) throw error;

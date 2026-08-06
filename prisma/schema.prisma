@@ -287,9 +287,39 @@ model Project {
 // ==================== NEWSLETTER EDITIONS ====================
 
 model Edition {
-  id     String        @id @default(cuid())
-  week   Int
-  year   Int
+  id String @id @default(cuid())
+
+  /**
+   * The day this edition is meant to go out, and the one date the product sorts by.
+   *
+   * RQ-008: `week` and `year` used to be the identity, under a unique index, which made a
+   * second edition inside one week impossible and left an edition with no way to carry a
+   * name. They are still here, as a cache derived from this date by
+   * `lib/editions/identity.ts` and written nowhere else, so every screen that reads
+   * `edition.week` keeps working. `weeklySlot` carries the uniqueness the index had.
+   */
+  publishDate DateTime
+
+  /** The edition's own name. Null on a weekly, which is labelled from its date. */
+  title String?
+
+  kind EditionKind @default(WEEKLY)
+
+  /**
+   * "2026-W32" on a weekly edition, null on anything else.
+   *
+   * This is what keeps the schedule from creating two proposals for one week. Postgres
+   * treats nulls in a unique index as distinct, so a week holds exactly one weekly and
+   * as many specials as anyone wants, without a partial index Prisma cannot express and
+   * without an application-level lock.
+   */
+  weeklySlot String?
+
+  /** Derived from publishDate by lib/editions/identity.ts. Never set by a caller. */
+  week Int
+  /** The ISO week-year, derived. Not always the calendar year of publishDate. */
+  year Int
+
   status EditionStatus @default(DRAFT)
 
   scheduledDate DateTime?
@@ -341,16 +371,27 @@ model Edition {
   // history is now either preserved with the edition or removed with it.
   emailEvents EmailEvent[]
 
-  @@unique([week, year, organizationId]) // Same week/year can exist in different orgs
+  // RQ-008: the weekly slot is the uniqueness now. Null on a special edition, and
+  // Postgres treats nulls here as distinct, so a week binds one weekly and nothing else.
+  @@unique([weeklySlot, organizationId])
   @@index([status])
   @@index([organizationId])
   @@index([archivedAt])
+  @@index([publishDate(sort: Desc)])
+  @@index([week, year])
 }
 
 enum EditionStatus {
   DRAFT
   FINALIZED
   SENT
+}
+
+enum EditionKind {
+  /** The edition the schedule creates once a week. Carries a weeklySlot. */
+  WEEKLY
+  /** Anything else: a themed issue, a launch, a year in review. No slot. */
+  SPECIAL
 }
 
 enum DraftStatus {
