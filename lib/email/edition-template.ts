@@ -25,6 +25,7 @@ import {
   ACCENT,
   BODY_INK,
   CARD,
+  DARK_MODE_RULES,
   INK,
   MUTED,
   PAGE,
@@ -178,36 +179,7 @@ export function renderEditionEmail(data: EditionEmail): string {
     .masthead-logo td { text-align: left !important; }
     .masthead-meta { padding-top: 10px !important; }
   }
-  @media (prefers-color-scheme: dark) {
-    .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
-    .logo-dark { display: block !important; max-height: none !important; }
-    .body-bg { background-color: #14191a !important; }
-    .card { background-color: #1c2224 !important; }
-    .tint { background-color: #232b2c !important; }
-    .t-strong, .t-strong a { color: #eef1f0 !important; }
-    .t-body, .t-body a { color: #c3cbc9 !important; }
-    .t-muted { color: #94a09d !important; }
-    .rule { border-color: #303a3b !important; }
-    .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
-    .trend-figure { color: #8fb8ad !important; }
-    /* The primary teal is a light-card colour; on the dark card it reads as
-       almost nothing. This step keeps text links at 7.5:1 against #1c2224.
-       Scoped to a class rather than every anchor, so the accent button's white
-       label is not overridden along with them. */
-    .link-strong, .link-strong a, a.link-strong { color: #8fb8ad !important; }
-  }
-  [data-ogsc] .logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
-  [data-ogsc] .logo-dark { display: block !important; max-height: none !important; }
-  [data-ogsc] .body-bg { background-color: #14191a !important; }
-  [data-ogsc] .card { background-color: #1c2224 !important; }
-  [data-ogsc] .tint { background-color: #232b2c !important; }
-  [data-ogsc] .t-strong, [data-ogsc] .t-strong a { color: #eef1f0 !important; }
-  [data-ogsc] .t-body, [data-ogsc] .t-body a { color: #c3cbc9 !important; }
-  [data-ogsc] .t-muted { color: #94a09d !important; }
-  [data-ogsc] .rule { border-color: #303a3b !important; }
-  [data-ogsc] .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
-  [data-ogsc] .trend-figure { color: #8fb8ad !important; }
-  [data-ogsc] .link-strong, [data-ogsc] .link-strong a { color: #8fb8ad !important; }
+${DARK_MODE_RULES}
 </style>
 </head>
 <body class="body-bg" style="margin:0; padding:0; background-color:${PAGE}; -webkit-font-smoothing:antialiased;">
