@@ -1053,7 +1053,19 @@ model InboundEmail {
   retryCount  Int       @default(0)
   processedAt DateTime?
 
+  /**
+   * When a run took this row to work on, so two runs cannot process it at once.
+   *
+   * A lease rather than a status, for two reasons. A `PROCESSING` state would strand rows
+   * for ever when a run is killed mid flight, which is exactly what the 300-second ceiling
+   * does; a timestamp expires by itself. And `processedAt` already means something else:
+   * conflating two meanings in one column is the defect this requirement spent 6 August
+   * 2026 removing from the extractor.
+   */
+  claimedAt DateTime?
+
   @@index([status, receivedAt])
+  @@index([status, claimedAt])
   @@index([from])
   @@index([subaddressTag])
 }

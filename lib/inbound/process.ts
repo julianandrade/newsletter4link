@@ -4,6 +4,7 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 import { resolveAiModels } from "@/lib/ai/model";
 import { curateArticle } from "@/lib/curation/curator";
 import { cleanUrl, unwrapUrl } from "@/lib/curation/unwrap-url";
+import { claimCutoff, claimEmail, shouldStop } from "@/lib/inbound/claim";
 import { extractNewsletterItems } from "@/lib/inbound/extract";
 import { matchSources, type MatchableSource } from "@/lib/inbound/match";
 import { fetchEmailContent } from "@/lib/inbound/receive";
@@ -30,6 +31,11 @@ export interface IngestResult {
   duplicatesSkipped: number;
   /** True when the run stopped at the article cap rather than because it ran out of work. */
   cappedOut: boolean;
+  /**
+   * True when work was left behind: the budget ran out, the cap was reached, or rows
+   * remain that this run did not take. The route reads this to decide whether to hand over.
+   */
+  moreWork: boolean;
   notes: string[];
 }
 
@@ -42,6 +48,7 @@ const empty = (): IngestResult => ({
   articlesCreated: 0,
   duplicatesSkipped: 0,
   cappedOut: false,
+  moreWork: false,
   notes: [],
 });
 
@@ -52,7 +59,11 @@ const empty = (): IngestResult => ({
  * retried for ever, and Resend still holds the email, so a person can replay it from the
  * dashboard once whatever was broken is fixed.
  */
-async function fetchPendingContent(result: IngestResult, limit: number): Promise<void> {
+async function fetchPendingContent(
+  result: IngestResult,
+  limit: number,
+  deadline?: number
+): Promise<void> {
   const pending = await prisma.inboundEmail.findMany({
     where: {
       status: "CONTENT_PENDING",
@@ -75,6 +86,11 @@ async function fetchPendingContent(result: IngestResult, limit: number): Promise
     pending,
     config.emailIngest.emailConcurrency,
     async (email) => {
+      if (shouldStop(deadline)) {
+        result.moreWork = true;
+        return;
+      }
+
       const outcome = await fetchEmailContent(email.resendEmailId);
 
       if (outcome.ok) {
@@ -136,11 +152,13 @@ async function loadEmailSources(): Promise<MatchableSource[]> {
 /**
  * Phase two: read each email and create what it points at.
  */
-export async function runEmailIngestion(options: { limit?: number } = {}): Promise<IngestResult> {
+export async function runEmailIngestion(
+  options: { limit?: number; deadline?: number } = {}
+): Promise<IngestResult> {
   const result = empty();
   const limit = options.limit ?? 50;
 
-  await fetchPendingContent(result, limit);
+  await fetchPendingContent(result, limit, options.deadline);
 
   const sources = await loadEmailSources();
 
@@ -172,6 +190,21 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
       return;
     }
 
+    if (shouldStop(options.deadline)) {
+      // Out of time. The row is untouched and unclaimed, so the next invocation takes it.
+      result.moreWork = true;
+      return;
+    }
+
+    /**
+     * Somebody else holds this row, so leave it alone.
+     *
+     * Not an error and not worth a note: the other holder is either a chained invocation
+     * or a manual trigger, and both are legitimate. What would not be legitimate is two
+     * runs extracting the same newsletter, paying twice and racing to write its row.
+     */
+    if (!(await claimEmail(email.id))) return;
+
     try {
       const match = matchSources(
         { from: email.from, subaddressTag: email.subaddressTag },
@@ -181,7 +214,7 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
       if (match.sources.length === 0) {
         await prisma.inboundEmail.update({
           where: { id: email.id },
-          data: { status: "IGNORED_UNKNOWN_SENDER", processedAt: new Date() },
+          data: { status: "IGNORED_UNKNOWN_SENDER", processedAt: new Date(), claimedAt: null },
         });
         result.emailsIgnored += 1;
         return;
@@ -214,7 +247,7 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
 
         await prisma.inboundEmail.update({
           where: { id: email.id },
-          data: { status: "FAILED", error: reason, processedAt: new Date() },
+          data: { status: "FAILED", error: reason, processedAt: new Date(), claimedAt: null },
         });
 
         result.emailsFailed += 1;
@@ -226,7 +259,7 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
 
       await prisma.inboundEmail.update({
         where: { id: email.id },
-        data: { status: "PROCESSED", processedAt: new Date(), error: null },
+        data: { status: "PROCESSED", processedAt: new Date(), error: null, claimedAt: null },
       });
 
       // The health signal the sources screen reads.
@@ -243,13 +276,43 @@ export async function runEmailIngestion(options: { limit?: number } = {}): Promi
 
       await prisma.inboundEmail.update({
         where: { id: email.id },
-        data: { status: "FAILED", error: reason, processedAt: new Date() },
+        data: { status: "FAILED", error: reason, processedAt: new Date(), claimedAt: null },
       });
 
       result.emailsFailed += 1;
       result.notes.push(`${email.resendEmailId}: ${reason}`);
     }
   });
+
+  /**
+   * Is anything left?
+   *
+   * Counted rather than inferred from the batch size. A row can be left behind for three
+   * different reasons: the budget ran out, the cap was hit, or `take: limit` did not reach
+   * it. Only a count sees all three, and the handover has to be driven by what is actually
+   * still there rather than by which branch this run happened to take.
+   *
+   * Rows another run currently holds are excluded, or a handover would fire for work that
+   * is already being done and the chain would never end.
+   */
+  if (!result.moreWork) {
+    const remaining = await prisma.inboundEmail.count({
+      where: {
+        OR: [
+          {
+            status: "CONTENT_PENDING",
+            retryCount: { lt: config.emailIngest.maxContentAttempts },
+          },
+          {
+            status: "RECEIVED",
+            OR: [{ claimedAt: null }, { claimedAt: { lte: claimCutoff() } }],
+          },
+        ],
+      },
+    });
+
+    result.moreWork = remaining > 0;
+  }
 
   return result;
 }

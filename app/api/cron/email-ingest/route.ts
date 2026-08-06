@@ -1,9 +1,99 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { authorizeCron } from "@/lib/auth/cron";
-import { runEmailIngestion } from "@/lib/inbound/process";
+import { config } from "@/lib/config";
+import { runEmailIngestion, type IngestResult } from "@/lib/inbound/process";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
+
+/**
+ * Chained invocations allowed from one cron firing.
+ *
+ * A backstop against a runaway rather than a throughput setting. Twelve runs of four
+ * emails each is far more than a real backlog, and if the chain ever reaches this the
+ * answer is that the budget is too small for the work, not that the cap is wrong.
+ */
+const MAX_CHAIN = 12;
+
+/**
+ * Wall clock a run may use before it stops and hands over.
+ *
+ * Sixty seconds below `maxDuration`, which is the room the handover itself needs plus the
+ * tail of whatever was already in flight when the budget ran out: a worker mid-email keeps
+ * going, and the largest newsletter measured takes about thirty seconds.
+ */
+const RUN_BUDGET_MS = 240_000;
+
+/** How deep in a handover chain this invocation is. */
+function readChain(request: Request): number {
+  const parsed = Number.parseInt(
+    new URL(request.url).searchParams.get("chain") ?? "0",
+    10
+  );
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+/**
+ * `?budgetMs=` — shorten the budget so a handover can be observed without waiting four
+ * minutes for one.
+ *
+ * The same argument as `?limit=`: the chain is the one part of this job that no test can
+ * exercise, because `tsc`, the suites and `next build` all pass without a single chained
+ * invocation ever running. A knob that forces the behaviour in seconds is the difference
+ * between verifying it and hoping.
+ *
+ * Clamped, and never above the real budget: this can make a run stop sooner, never later.
+ */
+function readBudget(request: Request): number {
+  const raw = new URL(request.url).searchParams.get("budgetMs");
+  if (raw === null) return RUN_BUDGET_MS;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return RUN_BUDGET_MS;
+
+  return Math.min(Math.max(parsed, 1_000), RUN_BUDGET_MS);
+}
+
+/**
+ * This deployment's own origin, for handing the remainder to a fresh invocation.
+ *
+ * `VERCEL_URL` is the deployment's own hostname, which is what a handover wants: the child
+ * should run the same build as the parent, not whatever the production alias points at by
+ * the time it is called.
+ */
+function selfOrigin(): string | null {
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return process.env.NEXT_PUBLIC_APP_URL ?? null;
+}
+
+/**
+ * Hand the remainder to a fresh invocation, if there is a remainder and room in the chain.
+ *
+ * Inside `after()`, so the request is sent once this invocation has already answered and
+ * the caller is not held open for the child. The child is asked with `handover=1`, which
+ * makes it answer immediately and do its work in its own `after()`, for the same reason:
+ * if it answered only when finished, the parent would wait out the child's whole run and
+ * the chain would serialise into one long invocation rather than several short ones.
+ *
+ * A lost handover costs a day, not data: tomorrow's cron picks the backlog up. Worth a
+ * line in the log and nothing more.
+ */
+function handOver(result: IngestResult, chain: number): void {
+  const origin = selfOrigin();
+
+  if (!result.moreWork || chain >= MAX_CHAIN || !origin || !config.cron.secret) return;
+
+  after(async () => {
+    try {
+      await fetch(
+        `${origin}/api/cron/email-ingest?chain=${chain + 1}&handover=1`,
+        { headers: { Authorization: `Bearer ${config.cron.secret}` } }
+      );
+    } catch (error) {
+      console.warn("[EMAIL INGEST] handover failed:", error);
+    }
+  });
+}
 
 /**
  * `?limit=` — how many emails this run may touch. Absent means the job's own default,
@@ -26,6 +116,37 @@ function readLimit(request: Request): number | undefined {
   if (!Number.isFinite(parsed)) return undefined;
 
   return Math.min(Math.max(parsed, 1), 200);
+}
+
+/**
+ * One run, its logging, and the handover it may trigger.
+ *
+ * Shared by the synchronous path and the handover path so the two cannot drift: whatever a
+ * manual trigger does, a chained invocation does the same.
+ */
+async function runAndHandOver(request: Request, chain: number): Promise<IngestResult> {
+  const result = await runEmailIngestion({
+    limit: readLimit(request),
+    deadline: Date.now() + readBudget(request),
+  });
+
+  if (result.emailsFailed > 0 || result.contentFailed > 0) {
+    console.warn(
+      `[EMAIL INGEST] ${result.emailsFailed} email(s) failed, ${result.contentFailed} content fetch(es) failed`
+    );
+  }
+
+  for (const note of result.notes) {
+    console.log(`[EMAIL INGEST] ${note}`);
+  }
+
+  if (result.moreWork) {
+    console.log(`[EMAIL INGEST] work remains, handing over from chain ${chain}`);
+  }
+
+  handOver(result, chain);
+
+  return result;
 }
 
 /**
@@ -58,19 +179,29 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const result = await runEmailIngestion({ limit: readLimit(request) });
+    const chain = readChain(request);
 
-    if (result.emailsFailed > 0 || result.contentFailed > 0) {
-      console.warn(
-        `[EMAIL INGEST] ${result.emailsFailed} email(s) failed, ${result.contentFailed} content fetch(es) failed`
-      );
+    /**
+     * A handover answers first and works afterwards.
+     *
+     * Its parent is inside its own `after()` waiting for this response, and if that wait
+     * lasted the whole child run the chain would collapse into one invocation of the same
+     * 300 seconds it exists to escape.
+     *
+     * Deliberately not the default: a manual trigger still runs synchronously and returns
+     * the result, which is how every diagnosis in this requirement was made.
+     */
+    if (new URL(request.url).searchParams.get("handover") === "1") {
+      after(async () => {
+        await runAndHandOver(request, chain);
+      });
+
+      return NextResponse.json({ success: true, accepted: true, chain });
     }
 
-    for (const note of result.notes) {
-      console.log(`[EMAIL INGEST] ${note}`);
-    }
+    const result = await runAndHandOver(request, chain);
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, chain, ...result });
   } catch (error) {
     console.error("Error ingesting inbound email:", error);
 
