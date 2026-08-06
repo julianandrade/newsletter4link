@@ -59,12 +59,20 @@ export function MachineStatus({
       aria-label="Collection status"
       className="mb-5 rounded-xl border border-radar-line bg-radar-surface px-4 py-4"
     >
+      {/*
+        The text takes the whole row on a phone, and shares it from `sm` up.
+
+        It was `flex-1` with `min-w-0` against a chip and a button that do not shrink, so
+        the browser never needed to wrap: the text column shrank instead, to about sixty
+        pixels at 390px, one or two words per line under a full-width button. `basis-full`
+        forces the wrap that `flex-wrap` alone could not.
+      */}
       <div className="flex flex-wrap items-center gap-3">
         <span
           aria-hidden="true"
           className={dotClass(pipeline.running, failed)}
         />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 basis-[calc(100%-1.5rem)] sm:flex-1 sm:basis-auto">
           <p className="m-0 text-[13px] font-semibold text-radar-ink">
             {pipeline.running
               ? (liveMessage || "Collecting and scoring now")
