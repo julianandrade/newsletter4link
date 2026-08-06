@@ -109,7 +109,37 @@ describe("buildEditionEmail", () => {
 
   it("tolerates a trailing slash on the app URL", () => {
     const edition = input({ appUrl: `${APP_URL}/` });
-    expect(edition.portalUrl).toBe(`${APP_URL}/dashboard`);
+    expect(edition.portalUrl).toBe(`${APP_URL}/editions`);
+  });
+
+  it("sends the call to action to the edition index, not behind the login wall", () => {
+    // /dashboard is guarded by a session, a domain allowlist and MFA. The email's only accent
+    // call to action used to point there, so for a reader who does not administer the app it
+    // was a dead end.
+    const edition = input();
+    expect(edition.portalUrl).not.toContain("/dashboard");
+    expect(edition.portalUrl).toBe(`${APP_URL}/editions`);
+  });
+
+  it("lets the caller pass merge tags through for the send loop to resolve", () => {
+    const edition = input({
+      portalUrl: "{{portal_url}}",
+      archiveUrl: "{{archive_url}}",
+      unsubscribeUrl: "{{unsubscribe_url}}",
+    });
+
+    const html = renderEditionEmail(edition);
+
+    // safeUrl lets a bare merge tag through, or these would fail the URL parse and each link
+    // would silently become plain text for every recipient.
+    expect(html).toContain("{{portal_url}}");
+    expect(html).toContain("{{archive_url}}");
+    expect(html).toContain("{{unsubscribe_url}}");
+  });
+
+  it("still refuses a scheme smuggled next to a merge tag", () => {
+    const html = renderEditionEmail(input({ portalUrl: "{{portal_url}}javascript:alert(1)" }));
+    expect(html).not.toContain("javascript:");
   });
 
   it("captions a thin week and stays silent on a full one", () => {

@@ -109,9 +109,21 @@ export function escapeHtml(value: string): string {
   });
 }
 
-/** Absolute http(s) only: a javascript: or data: href must never reach an inbox. */
+/** An unresolved merge tag and nothing else: `{{archive_url}}`, never `{{a}}b`. */
+const MERGE_TAG_ONLY = /^\{\{\w+\}\}$/;
+
+/**
+ * Absolute http(s) only: a javascript: or data: href must never reach an inbox.
+ *
+ * A bare merge tag passes through unchanged. The three signed URLs cannot be resolved when the
+ * edition is rendered, because each is bound to one subscriber and the send loop substitutes
+ * them later; without this they would fail the URL parse and be dropped, silently turning a
+ * link into plain text for every recipient. The pattern is anchored, so an attempt to smuggle
+ * `{{x}}javascript:...` is still rejected.
+ */
 export function safeUrl(value: string | undefined): string | null {
   if (!value) return null;
+  if (MERGE_TAG_ONLY.test(value)) return value;
   try {
     const url = new URL(value);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;

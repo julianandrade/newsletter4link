@@ -155,6 +155,7 @@ const edition: EditionEmail = {
   trends: [{ name: "Agents", delta: 40, note: "Rising." }],
   internal: { title: "Internal thing", body: "Body.", url: "https://example.com/p" },
   portalUrl: "https://example.com/editions",
+  archiveUrl: "https://example.com/editions/ed_1",
   unsubscribeUrl: "https://example.com/unsubscribe",
   logoOnLight: "https://example.com/a.png",
   logoOnDark: "https://example.com/b.png",

@@ -37,6 +37,7 @@ import {
   bulletsBlock,
   escapeHtml,
   internalBlock,
+  link,
   safeUrl,
   sectionBlock,
   topStoryBlock,
@@ -101,7 +102,10 @@ export interface EditionEmail {
   sections: EmailSection[];
   trends: EmailTrend[];
   internal?: EmailInternal;
+  /** The index of editions this reader received, linked from the accent call to action. */
   portalUrl: string;
+  /** This edition's own permalink, linked from "View in browser" above the masthead. */
+  archiveUrl: string;
   unsubscribeUrl: string;
   /** Absolute https URLs; relative paths never resolve in an email client. */
   logoOnLight: string;
@@ -188,7 +192,17 @@ ${DARK_MODE_RULES}
   )}</span>
 
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="body-bg" style="background-color:${PAGE};">
-<tr><td align="center" style="padding:24px 12px 40px 12px;">
+<tr><td align="center" style="padding:18px 12px 40px 12px;">
+
+<!-- VIEW IN BROWSER: above the card, on the page background, because it is navigation
+     rather than content. The standard affordance the design did not have. -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="wrap" style="width:640px; max-width:640px;">
+<tr><td align="right" class="px t-muted" style="padding:0 40px 8px 40px; font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; letter-spacing:0.6px; color:${MUTED};">${link(
+    data.archiveUrl,
+    "View in browser",
+    `color:${MUTED}; text-decoration:underline;`
+  )}</td></tr>
+</table>
 
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="wrap card" style="width:640px; max-width:640px; background-color:${CARD};">
 

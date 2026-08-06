@@ -24,6 +24,7 @@ import {
   editionWriteFields,
   weeklySlotFor,
 } from "@/lib/editions/identity";
+import { personalizeHtml } from "@/lib/email/personalize";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -416,7 +417,12 @@ export async function POST(request: Request) {
     }
 
     if (effectiveTemplateId) {
-      const templateResult = await renderTemplateById(effectiveTemplateId, emailData);
+      // keepPerRecipient: the three signed URLs stay as merge tags here and are resolved once
+      // per subscriber inside the batch loop. Rendering them now would give every recipient
+      // the same links, which is the bug this replaces.
+      const templateResult = await renderTemplateById(effectiveTemplateId, emailData, {
+        keepPerRecipient: true,
+      });
       if (!templateResult) {
         return NextResponse.json(
           { success: false, error: "Template not found" },
@@ -430,8 +436,13 @@ export async function POST(request: Request) {
     let result;
 
     if (useAdHocEmails) {
-      // Send to ad-hoc email addresses
-      const html = templateHtml || await renderNewsletterEmail(emailData as any);
+      // Send to ad-hoc email addresses. Still keepPerRecipient, so sendToAdHocEmails can run
+      // the same substitution with no subscriber and get unsigned URLs.
+      const html =
+        templateHtml ||
+        (await renderNewsletterEmail(emailData as any, undefined, undefined, {
+          keepPerRecipient: true,
+        }));
       result = await sendToAdHocEmails(
         html,
         emailData,
@@ -453,7 +464,9 @@ export async function POST(request: Request) {
       // If we have custom blocks, render with them
       if (customData?.customBlocks && customData.customBlocks.length > 0) {
         const html = injectCustomBlocks(
-          await renderNewsletterEmail(emailData as any),
+          await renderNewsletterEmail(emailData as any, undefined, undefined, {
+            keepPerRecipient: true,
+          }),
           customData.customBlocks
         );
         result = await sendNewsletterWithTemplate(
@@ -614,18 +627,30 @@ async function sendNewsletterWithTemplate(
       // Send all emails in batch concurrently
       const promises = batch.map(async (subscriber) => {
         try {
+          /**
+           * The signed links are resolved here, per subscriber, and nowhere earlier.
+           *
+           * templateHtml arrives with {{unsubscribe_url}}, {{archive_url}} and {{portal_url}}
+           * still standing. Before this, the same finished string went to everyone, so every
+           * recipient got the generic unsubscribe page rather than their own signed link.
+           */
+          const html = personalizeHtml(templateHtml, {
+            subscriberId: subscriber.id,
+            editionId,
+          });
+
           // Use provider override if specified, otherwise use default sendEmail
           const emailResult = providerOverride
             ? await sendEmailWithProvider(
                 providerOverride,
                 subscriber.email,
                 newsletterSubject(data as any),
-                templateHtml
+                html
               )
             : await sendEmail(
                 subscriber.email,
                 newsletterSubject(data as any),
-                templateHtml
+                html
               );
 
           if (emailResult.success) {
@@ -721,8 +746,13 @@ async function sendNewsletterToAllWithOptions(
     return sendNewsletterToAll(data as any, editionId);
   }
 
-  // Otherwise, render the email and use the template sender with options
-  const html = await renderNewsletterEmail(data as any);
+  // Otherwise, render the email and use the template sender with options. keepPerRecipient,
+  // because this path also fanned one identical string out to every subscriber: whenever a
+  // subscriber filter or a provider override was in play, the built-in edition lost its signed
+  // unsubscribe link the same way a stored template did.
+  const html = await renderNewsletterEmail(data as any, undefined, undefined, {
+    keepPerRecipient: true,
+  });
   return sendNewsletterWithTemplate(html, data, editionId, subscriberFilter, providerOverride);
 }
 
@@ -762,6 +792,13 @@ async function sendToAdHocEmails(
       batches.push(emails.slice(i, i + batchSize));
     }
 
+    /**
+     * Resolved once, not per recipient: an ad-hoc address has no subscriber row, so all of
+     * these get the same unsigned URLs. The archive page answers 404 for an unsigned link,
+     * which is correct, because an ad-hoc recipient has no archive to read.
+     */
+    const adHocHtml = personalizeHtml(html, { subscriberId: "", editionId });
+
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
 
@@ -772,12 +809,12 @@ async function sendToAdHocEmails(
                 providerOverride,
                 email,
                 newsletterSubject(data as any),
-                html
+                adHocHtml
               )
             : await sendEmail(
                 email,
                 newsletterSubject(data as any),
-                html
+                adHocHtml
               );
 
           // Note: We don't log email events for ad-hoc sends since the schema requires a subscriber reference

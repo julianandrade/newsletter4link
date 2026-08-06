@@ -57,6 +57,16 @@ export interface EditionInput {
    * page is linked, which is correct for previews and test sends.
    */
   unsubscribeUrl?: string;
+  /**
+   * The edition index, and this edition's permalink. Same reasoning as `unsubscribeUrl`: both
+   * carry a signature bound to one subscriber, so they are built by the caller.
+   *
+   * A caller sending to many recipients passes the literal `{{portal_url}}` and
+   * `{{archive_url}}` and lets the send loop resolve them per subscriber. `safeUrl` lets a bare
+   * merge tag through for exactly that reason.
+   */
+  portalUrl?: string;
+  archiveUrl?: string;
 }
 
 /** The order the design lays topics out in, when the data happens to use these names. */
@@ -262,7 +272,15 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
           url: `${appUrl}/dashboard/projects`,
         }
       : undefined,
-    portalUrl: `${appUrl}/dashboard`,
+    /**
+     * The edition index, not /dashboard.
+     *
+     * "Read the full feed" pointed at /dashboard, which middleware guards with a Supabase
+     * session, then a domain allowlist, then MFA. The email's only accent call to action sent
+     * every reader who does not administer the app into a login wall with a second factor.
+     */
+    portalUrl: input.portalUrl ?? `${appUrl}/editions`,
+    archiveUrl: input.archiveUrl ?? `${appUrl}/editions`,
     unsubscribeUrl: input.unsubscribeUrl ?? `${appUrl}/unsubscribe`,
     logoOnLight: `${assets}/linkroad-h-on-light.png`,
     logoOnDark: `${assets}/linkroad-h-on-dark.png`,

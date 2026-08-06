@@ -77,6 +77,30 @@ async function getBrandingSettings(organizationId: string): Promise<{
 }
 
 /**
+ * The three URLs bound to one subscriber.
+ *
+ * With `keep` set, the literal merge tags go into the rendered HTML and the send loop resolves
+ * them once per recipient. That is the only correct mode for a send to many people: rendering
+ * once and reusing the string is how every recipient came to share the first one's links.
+ *
+ * Without it, they resolve here, which is right for a preview or a one-recipient test send.
+ */
+function perRecipientUrls(
+  subscriberId: string | undefined,
+  keep: boolean | undefined
+): { unsubscribeUrl: string; portalUrl?: string; archiveUrl?: string } {
+  if (keep) {
+    return {
+      unsubscribeUrl: "{{unsubscribe_url}}",
+      portalUrl: "{{portal_url}}",
+      archiveUrl: "{{archive_url}}",
+    };
+  }
+
+  return { unsubscribeUrl: buildUnsubscribeUrl(subscriberId) };
+}
+
+/**
  * Render the newsletter to HTML in the AI Radar design.
  *
  * Signature kept from the previous react-email implementation so the preview,
@@ -85,14 +109,15 @@ async function getBrandingSettings(organizationId: string): Promise<{
 export async function renderNewsletterEmail(
   data: NewsletterData,
   subscriberId?: string,
-  organizationId?: string
+  organizationId?: string,
+  options: { keepPerRecipient?: boolean } = {}
 ): Promise<string> {
   // Signed here rather than in the mapper: signing needs node crypto, and the
   // mapper is reachable from client components through content-renderer.
   const edition = buildEditionEmail({
     ...data,
     subscriberId,
-    unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
+    ...perRecipientUrls(subscriberId, options.keepPerRecipient),
   });
 
   if (organizationId) {
