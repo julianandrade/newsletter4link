@@ -96,6 +96,25 @@ export const config = {
      */
     maxExtractionTokens: 8_000,
     /**
+     * Emails processed at once in phase two.
+     *
+     * Each one costs an extraction call of 20 to 25 seconds before its items begin, and
+     * that call is per email and unavoidable, so this is the limit that decides how many
+     * emails a 300-second window holds.
+     */
+    emailConcurrency: 4,
+    /**
+     * Items processed at once within one email.
+     *
+     * A digest item is a redirect chain to unwrap, an embedding and a relevance score,
+     * which is 3 to 7 seconds of almost pure waiting.
+     *
+     * Four times the email limit is sixteen calls in flight at the worst moment, across
+     * Anthropic and OpenAI. Both are rate limited per organization, and a 429 here costs
+     * an article rather than a retry, so the product is kept small on purpose.
+     */
+    itemConcurrency: 4,
+    /**
      * An essay's body, in characters, taken from the email rather than from the model.
      *
      * Everything downstream is bounded anyway: relevance scoring and the embedding read a
