@@ -11,14 +11,10 @@ you, and [ROADMAP.md](ROADMAP.md) for the longer view.
 
 ## What is mid-flight right now
 
-**Nothing is half-done in the code.** All eight commits from this session are pushed and
-each one deployed green. The working tree is clean.
-
-**What is agreed and not yet started:** the ingest throughput work, planned in
-[RQ-007-email-ingestion/RQ-007-throughput-plan.md](RQ-007-email-ingestion/RQ-007-throughput-plan.md).
-Five tasks, chosen scope is "parallelise then continuation", chosen execution is inline
-rather than by subagents. Task 1 is the first thing to pick up. Nothing has been written
-for it, so there is no partial state to reconcile.
+**Nothing is half-done in the code.** Every commit from this session is pushed and each one
+deployed green. The throughput plan is fully executed, all five tasks, verified in
+production. The working tree carries only two untracked files another session left behind, a
+`FINDINGS-2026-08-06-...` note and an `.impeccable/` critique, both untouched.
 
 **Two things waiting on Julian, neither blocking:**
 
@@ -97,28 +93,58 @@ Each check covered 256 times the space it meant to, and those four publishers li
 `192.0.66.0/24`, ordinary public space. Every newsletter linking to them had been silently
 losing items. Corrected, and reprocessing Morning Brew went from five refusals to zero.
 
-### The 300-second ceiling: measured, and planned
+### The 300-second ceiling is gone
 
-Two runs were killed mid-flight, at 8 emails and at 42. Work committed before the kill
-persists, so it converged over three runs, but the daily schedule hits the same wall
-whenever a backlog builds.
+**Fixed 7 August 2026**, following
+[RQ-007-throughput-plan.md](RQ-007-email-ingestion/RQ-007-throughput-plan.md). The job used
+to be bounded to two emails a run, and two runs were killed mid-flight at 8 emails and at
+42.
 
-**Where the time goes, measured rather than assumed.** The job is not slow because the work
-is heavy. Both phases loop strictly sequentially over work that is almost entirely waiting:
-a DNS lookup and a HEAD per redirect hop, an embedding call, a scoring call. Per email that
-is a 20 to 25 second extraction call plus 3 to 7 seconds per item, one item at a time.
-Morning Brew: 16 items in 71s. theresanaiforthat: about 20 items in 129s. therundown: 3
-items in 46s.
+**The job was never slow because the work was heavy.** Both phases looped strictly
+sequentially over work that is almost entirely waiting: a DNS lookup and a HEAD per redirect
+hop, an embedding call, a scoring call. Measured before the change: a 20 to 25 second
+extraction call per email plus 3 to 7 seconds per item, one item at a time. Morning Brew 16
+items in 71s, theresanaiforthat about 20 items in 129s, therundown 3 items in 46s.
 
-The plan is
-[RQ-007-throughput-plan.md](RQ-007-email-ingestion/RQ-007-throughput-plan.md): bounded
-concurrency in both phases first, since that is the actual defect and it puts a normal day
-of 6 or 7 emails under a minute, then a wall-clock budget with an atomic row claim and a
-chained handover, so a backlog drains in one cron firing rather than over days. No new
-dependencies, and `vercel.json` is not touched.
+| | before | after |
+|---|---|---|
+| Morning Brew, the same 16-item issue | **71s** | **31s** |
+| Eight small newsletters, from a standing start | two runs at best | **10 seconds**, in one handover |
 
-`?limit=` already exists on the route, which is what made testing against one email
-possible instead of risking 39.
+Two changes, and they fix different halves:
+
+- **Bounded concurrency**, four emails at a time and four items within each, so sixteen
+  outbound calls at the worst moment. The product is what reaches a provider, so it is the
+  product the test asserts: Anthropic and OpenAI are both rate limited per organization and
+  a 429 here costs an article rather than a retry.
+- **A wall-clock budget with a handover.** A run stops at 240 seconds and asks a fresh
+  invocation to continue, up to a chain of 12. The cron stays daily, so `vercel.json` is
+  untouched and the build-time rejection that cost eleven hours cannot recur.
+
+**A `claimedAt` lease, not a `PROCESSING` status.** Two runs can overlap: a chained
+invocation, or a manual trigger, which is what the section below tells you to do. Taking a
+row is a compare and swap, so the loser simply skips it. A lease rather than a status
+because a status strands rows for ever when a run is killed mid flight, which is exactly
+what the ceiling does, and because `processedAt` already means something else.
+
+**Two knobs on the route, both for testing.** `?limit=` bounds how many emails a run
+touches, which is what made verifying the Resend key cost one email instead of risking 39.
+`?budgetMs=` shortens the budget so a handover happens in seconds; it can only make a run
+stop sooner, never later.
+
+**The handover was wrong twice before it worked, and both failures were silent.** It first
+targeted `VERCEL_URL`, the deployment's own hostname, so the child would run the parent's
+exact build. Deployment URLs sit behind Vercel's deployment protection: that hostname
+answers **302** to an SSO page while the production alias answers 401 from our own cron
+guard. And the fetch was awaited inside a `try` that logged only thrown errors, so the 302
+counted as success. Eight emails sat untouched for four minutes with nothing logged. Both
+are fixed, the status is now checked and a refusal is logged at error level, and
+`lib/inbound/handover.ts` has a test that says in words that `VERCEL_URL` must never be
+used.
+
+Verified in production rather than by the suite, because the chain is the one part no test
+can reach: four rows held at once mid-flight, matching the concurrency limit; zero terminal
+rows left holding a lease; zero duplicated `sourceUrl` among the articles produced.
 
 ---
 
@@ -183,7 +209,7 @@ markup.
 | **The rewrite body cannot inject markup** | **Parser fed `<script>`, an `onerror` attribute and a `javascript:` link; all three come out as literal text** |
 | **Every state of the new screen** | **Harness fixtures, screenshotted; the history path clicked through in the browser** |
 
-**684 unit tests, `tsc` clean, `next build` clean, production deploy green.**
+**766 unit tests, `tsc` clean, `next build` clean, production deploy green.**
 All four schedules are in `vercel.json`: daily collection 09:00, weekly proposal 09:30,
 radar 06:00, email ingest 05:30.
 

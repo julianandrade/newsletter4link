@@ -144,3 +144,36 @@ the RSS case.
   makes the promote action possible.
 - Digest items store title, snippet and link, never the newsletter's HTML. A free
   subscription is not a republication licence, and the plan says so.
+
+---
+
+## Added 7 August 2026: `InboundEmail.claimedAt`, and what it means for a new consumer
+
+The ingest can now run in more than one invocation at a time, so a row carries a lease.
+
+**If you write anything new that reads `InboundEmail`, a row whose `claimedAt` is recent
+belongs to somebody.** Do not act on it. The lease is ten minutes, deliberately longer than
+the 300-second function ceiling: a lease that expires while its owner is still working is
+worse than no lease, because it produces exactly the double processing it exists to prevent.
+`claimCutoff()` in `lib/inbound/claim.ts` is the one place that decides what counts as
+stale, and every reader should go through it rather than computing its own window.
+
+Taking a row is a compare and swap, not a read followed by a write:
+
+```ts
+updateMany({ where: { id, status: "RECEIVED", OR: [{ claimedAt: null }, { claimedAt: { lte: cutoff } }] }, ... })
+```
+
+The returned count is the answer. A read then a write would leave a gap between them exactly
+wide enough for a second run to pass the same check.
+
+**A lease rather than a `PROCESSING` status**, for two reasons worth keeping. A status
+strands rows for ever when a run is killed mid flight, which is precisely what the function
+ceiling does, whereas a timestamp expires by itself. And `processedAt` already means
+something else: conflating two meanings in one column is the defect this requirement spent
+6 August 2026 removing from the extractor, and it was not going to be reintroduced one file
+away.
+
+Every terminal write, `PROCESSED`, `FAILED` and `IGNORED_UNKNOWN_SENDER`, clears the lease
+in the same statement that sets the status. Verified in production: zero terminal rows
+holding a claim after a full chained drain.
