@@ -40,8 +40,12 @@ email's window and only 19 match exactly one, so attributing the rest would inve
 
 **901 unit tests, `tsc` clean, `next build` clean.**
 
-**One thing without a screenshot:** the 390px fix to the collection band. The Playwright
-profile was held by another session when that change was made.
+**The 390px fix is verified.** The collection band's text block measured about sixty pixels
+wide at 390px, with its title over five lines; it is 286px and one line now, the chip and
+button wrap to their own row, and at 1440px the flex basis returns to `auto` with the chip
+back on the same row, so the desktop layout is unchanged. It also fixed a second finding
+recorded separately as a minor observation: "last topped up 1h ago" was being cut to "1h"
+by the same squeeze.
 
 ---
 
