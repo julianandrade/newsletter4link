@@ -224,7 +224,7 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
     .slice(0, 3)
     .map((article) => ({
       text: truncate(article.title, 110),
-      anchor: article.sourceUrl,
+      url: article.sourceUrl,
     }))
     .filter((bullet) => bullet.text.length > 0);
 

@@ -9,6 +9,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { config } from "@/lib/config";
 import {
   BLOCK_ANCHORS,
   BLOCK_POSITIONS,
@@ -17,7 +18,8 @@ import {
   renderProjectItemsHtml,
   type BlockPosition,
 } from "./edition-template";
-import { publicationName } from "./edition-data";
+import { buildEditionEmail, publicationName } from "./edition-data";
+import { editionMergeValues, renderMergeTags } from "./merge-tags";
 import { buildUnsubscribeUrl } from "./unsubscribe-token";
 
 export interface CustomBlock {
@@ -162,9 +164,22 @@ export function injectCustomBlocks(
 /**
  * Substitute template variables. Custom blocks bracket the articles and
  * projects sections at the same four positions the built-in edition uses.
+ *
+ * The accepted vocabulary comes from `lib/email/merge-tags.ts`, not from a regex written here.
+ * It used to be written here, and it had drifted from the browser preview's copy: this
+ * function accepted `{{articleCount}}` and the preview did not, so the tag worked in a real
+ * send and rendered as literal text on screen.
+ *
+ * `keepPerRecipient` leaves the three signed URLs standing so the send loop can resolve them
+ * once per subscriber. Without it a whole send gets one recipient's links, which is what used
+ * to happen.
  */
-export function renderTemplate(html: string, context: RenderContext): string {
-  const { articles, projects, week, year, subscriberId, customBlocks } = context;
+export function renderTemplate(
+  html: string,
+  context: RenderContext,
+  options: { keepPerRecipient?: boolean } = {}
+): string {
+  const { articles, projects, week, year, label, subscriberId, customBlocks } = context;
 
   const values: Record<string, string> = {
     articles:
@@ -180,14 +195,34 @@ export function renderTemplate(html: string, context: RenderContext): string {
     articleCount: String(articles.length),
     projectCount: String(projects.length),
     unsubscribe_url: buildUnsubscribeUrl(subscriberId),
+    // Unsigned fallbacks, for a preview or a test send that has no subscriber. A real send
+    // leaves these standing through keepPerRecipient and signs them inside its batch loop.
+    archive_url: `${config.app.url.replace(/\/$/, "")}/editions`,
+    portal_url: `${config.app.url.replace(/\/$/, "")}/editions`,
+    ...editionMergeValues(
+      buildEditionEmail({
+        articles: articles.map((article) => ({
+          title: article.title,
+          summary: article.summary,
+          sourceUrl: article.sourceUrl,
+          category: article.category,
+          relevanceScore: article.relevanceScore,
+        })),
+        projects: projects.map((project) => ({
+          name: project.name,
+          description: project.description,
+          team: project.team,
+          impact: project.impact,
+          projectDate: project.projectDate,
+        })),
+        week,
+        year,
+        label,
+      })
+    ),
   };
 
-  // One pass with a callback, so rendered content that happens to contain a
-  // placeholder is never substituted a second time.
-  return html.replace(
-    /\{\{(articles|projects|week|year|articleCount|projectCount|unsubscribe_url)\}\}/g,
-    (match, tag: string) => values[tag] ?? match
-  );
+  return renderMergeTags(html, values, options);
 }
 
 /** Kept as an alias: the preview route reads better with this name. */
@@ -217,13 +252,14 @@ export async function getTemplateById(templateId: string) {
 
 export async function renderTemplateById(
   templateId: string,
-  context: RenderContext
+  context: RenderContext,
+  options: { keepPerRecipient?: boolean } = {}
 ): Promise<{ html: string; templateName: string } | null> {
   const template = await getTemplateById(templateId);
   if (!template) return null;
 
   return {
-    html: renderTemplate(template.html, context),
+    html: renderTemplate(template.html, context, options),
     templateName: template.name,
   };
 }

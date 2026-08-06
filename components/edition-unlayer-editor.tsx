@@ -4,6 +4,7 @@ import { useRef, useCallback, useEffect, useImperativeHandle, forwardRef } from 
 import dynamic from "next/dynamic";
 import type { EditorRef, EmailEditorProps } from "react-email-editor";
 import { generateMergeTagSamples, type Article, type Project } from "@/lib/email/content-renderer";
+import { unlayerMergeTagOptions } from "@/lib/email/merge-tags";
 
 // Dynamically import react-email-editor to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), {
@@ -91,33 +92,10 @@ export const EditionUnlayerEditor = forwardRef<
       menu: { enabled: true },
       social: { enabled: true },
     },
-    mergeTags: {
-      articles: {
-        name: "Articles",
-        value: "{{articles}}",
-        sample: mergeTagSamples.articles,
-      },
-      projects: {
-        name: "Projects",
-        value: "{{projects}}",
-        sample: mergeTagSamples.projects,
-      },
-      week: {
-        name: "Week Number",
-        value: "{{week}}",
-        sample: mergeTagSamples.week,
-      },
-      year: {
-        name: "Year",
-        value: "{{year}}",
-        sample: mergeTagSamples.year,
-      },
-      unsubscribe_url: {
-        name: "Unsubscribe URL",
-        value: "{{unsubscribe_url}}",
-        sample: mergeTagSamples.unsubscribe_url,
-      },
-    },
+    // Derived from lib/email/merge-tags.ts rather than restated. This object used to list
+    // five tags by hand while the server renderer accepted seven, so a tag could be offered
+    // here and unresolved on send, or resolved on send and absent from the palette.
+    mergeTags: unlayerMergeTagOptions(mergeTagSamples),
   };
 
   // Load design when editor becomes ready

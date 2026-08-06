@@ -1,0 +1,135 @@
+/**
+ * Every merge tag the product understands, in one table.
+ *
+ * Two renderers used to keep their own list and they had already drifted:
+ * content-renderer.ts accepted five tags and template-renderer.ts accepted seven, so
+ * `{{articleCount}}` worked in a real send and rendered as literal text in the browser
+ * preview. Two components hardcoded a third and fourth copy for the Unlayer palette. With the
+ * vocabulary going from seven names to sixteen, four hand-maintained lists stop being a risk
+ * and become a certainty.
+ *
+ * Client-safe on purpose: content-renderer.ts is imported by client components, so nothing
+ * here may reach for Prisma or node crypto. Signed URLs arrive from the caller.
+ */
+
+import {
+  bulletsBlock,
+  escapeHtml,
+  internalBlock,
+  sectionBlock,
+  topStoryBlock,
+  trendBlock,
+} from "./edition-blocks";
+import type { EditionEmail } from "./edition-template";
+
+export interface MergeTag {
+  /** The name inside the braces. */
+  name: string;
+  /** What the Unlayer palette calls it. */
+  label: string;
+  /**
+   * True when the value is bound to one subscriber, so it cannot be computed once for a whole
+   * send. The three signed URLs are; everything else is shared.
+   */
+  perRecipient: boolean;
+}
+
+export const RADAR_MERGE_TAGS: readonly MergeTag[] = [
+  { name: "articles", label: "Articles", perRecipient: false },
+  { name: "projects", label: "Projects", perRecipient: false },
+  { name: "sections", label: "Topic sections", perRecipient: false },
+  { name: "top_story", label: "Top story", perRecipient: false },
+  { name: "trend_radar", label: "Trend radar", perRecipient: false },
+  { name: "internal", label: "Internal block", perRecipient: false },
+  { name: "tldr", label: "This week in 30 seconds", perRecipient: false },
+  { name: "edition_label", label: "Edition name", perRecipient: false },
+  { name: "date_range", label: "Week date range", perRecipient: false },
+  { name: "week", label: "Week Number", perRecipient: false },
+  { name: "year", label: "Year", perRecipient: false },
+  { name: "articleCount", label: "Article count", perRecipient: false },
+  { name: "projectCount", label: "Project count", perRecipient: false },
+  { name: "unsubscribe_url", label: "Unsubscribe URL", perRecipient: true },
+  { name: "archive_url", label: "This edition in the browser", perRecipient: true },
+  { name: "portal_url", label: "Edition index URL", perRecipient: true },
+] as const;
+
+const PER_RECIPIENT = new Set(
+  RADAR_MERGE_TAGS.filter((tag) => tag.perRecipient).map((tag) => tag.name)
+);
+
+export function isPerRecipientTag(name: string): boolean {
+  return PER_RECIPIENT.has(name);
+}
+
+function buildPattern(): RegExp {
+  const names = RADAR_MERGE_TAGS.map((tag) => tag.name).join("|");
+  return new RegExp(`\\{\\{(${names})\\}\\}`, "g");
+}
+
+/**
+ * Exported for tests and for anyone needing to detect tags without substituting.
+ *
+ * Callers that substitute go through `renderMergeTags`, which builds its own instance: a
+ * shared global RegExp carries `lastIndex` between calls, so the second call would start
+ * mid-string and miss.
+ */
+export const MERGE_TAG_PATTERN = buildPattern();
+
+/**
+ * Substitute merge tags in one pass.
+ *
+ * One pass with a callback, so rendered content that happens to contain a placeholder is never
+ * substituted a second time. A tag with no value is left literal rather than replaced with an
+ * empty string: a visible `{{tag}}` in a preview is a bug someone can see, and a silent gap is
+ * not.
+ *
+ * `keepPerRecipient` leaves the three signed URLs standing, so a send can render everything
+ * shared once and resolve those inside its batch loop, per subscriber.
+ */
+export function renderMergeTags(
+  html: string,
+  values: Record<string, string>,
+  options: { keepPerRecipient?: boolean } = {}
+): string {
+  return html.replace(buildPattern(), (match, name: string) => {
+    if (options.keepPerRecipient && PER_RECIPIENT.has(name)) return match;
+    return values[name] ?? match;
+  });
+}
+
+/** The mergeTags object the Unlayer editor options want, derived from the same table. */
+export function unlayerMergeTagOptions(
+  samples: Record<string, string>
+): Record<string, { name: string; value: string; sample: string }> {
+  const options: Record<string, { name: string; value: string; sample: string }> = {};
+
+  for (const tag of RADAR_MERGE_TAGS) {
+    options[tag.name] = {
+      name: tag.label,
+      value: `{{${tag.name}}}`,
+      sample: samples[tag.name] ?? `{{${tag.name}}}`,
+    };
+  }
+
+  return options;
+}
+
+/**
+ * The tags a built edition can supply on its own, rendered from the same fragments the code
+ * renderer uses.
+ *
+ * This is what stops a template built in Unlayer looking like a different product. An absent
+ * block renders as the empty string rather than a placeholder, so the optional row wrapping it
+ * can be dropped on export.
+ */
+export function editionMergeValues(edition: EditionEmail): Record<string, string> {
+  return {
+    edition_label: escapeHtml(edition.editionLabel),
+    date_range: escapeHtml(edition.dateLabel),
+    tldr: bulletsBlock(edition.bullets, edition.bulletsNote),
+    top_story: topStoryBlock(edition),
+    sections: edition.sections.map(sectionBlock).join("\n"),
+    trend_radar: trendBlock(edition.trends),
+    internal: internalBlock(edition.internal),
+  };
+}

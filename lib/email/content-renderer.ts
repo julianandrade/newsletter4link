@@ -16,7 +16,9 @@ import {
   renderArticleItemsHtml,
   renderProjectItemsHtml,
 } from "./edition-template";
-import { publicationName } from "./edition-data";
+import { buildEditionEmail, publicationName } from "./edition-data";
+import { editionMergeValues, renderMergeTags, RADAR_MERGE_TAGS } from "./merge-tags";
+import { weekRangeLabel } from "@/lib/radar/week";
 
 export interface Article {
   id: string;
@@ -40,6 +42,13 @@ export interface ContentRenderContext {
   projects: Project[];
   week: number;
   year: number;
+  /**
+   * RQ-008: what the edition is called, for the {{edition_label}} tag and the eyebrow.
+   *
+   * Optional, because the preview can be built from ad-hoc articles with no edition behind
+   * them, and there is nothing to name in that case.
+   */
+  label?: string;
   // Pre-built signed URL; must be generated server-side (this module is
   // imported by client components, so it cannot sign tokens itself)
   unsubscribeUrl?: string;
@@ -75,25 +84,46 @@ export function renderProjectsHtml(projects: Project[]): string {
  */
 export function replaceContentMergeTags(
   html: string,
-  context: ContentRenderContext
+  context: ContentRenderContext,
+  options: { keepPerRecipient?: boolean } = {}
 ): string {
-  const { articles, projects, week, year, unsubscribeUrl } = context;
+  const { articles, projects, week, year, label, unsubscribeUrl } = context;
+  const appUrl = config.app.url.replace(/\/$/, "");
 
-  // Replacements are computed first and applied with a function callback, so
-  // content that happens to contain "{{projects}}" is never re-substituted.
   const values: Record<string, string> = {
     articles: renderArticlesHtml(articles),
     projects: renderProjectsHtml(projects),
     week: String(week),
     year: String(year),
-    unsubscribe_url:
-      unsubscribeUrl || `${config.app.url.replace(/\/$/, "")}/unsubscribe`,
+    articleCount: String(articles.length),
+    projectCount: String(projects.length),
+    unsubscribe_url: unsubscribeUrl || `${appUrl}/unsubscribe`,
+    // Unsigned here. This module cannot mint HMAC tokens, so the browser preview shows where
+    // the links go and the send loop substitutes the signed ones per subscriber.
+    archive_url: `${appUrl}/editions`,
+    portal_url: `${appUrl}/editions`,
+    ...editionMergeValues(
+      buildEditionEmail({
+        articles: articles.map((article) => ({
+          title: article.title,
+          summary: article.summary,
+          sourceUrl: article.sourceUrl,
+          category: article.category,
+        })),
+        projects: projects.map((project) => ({
+          name: project.name,
+          description: project.description,
+          team: project.team,
+          impact: project.impact,
+        })),
+        week,
+        year,
+        label,
+      })
+    ),
   };
 
-  return html.replace(
-    /\{\{(articles|projects|week|year|unsubscribe_url)\}\}/g,
-    (match, tag: string) => values[tag] ?? match
-  );
+  return renderMergeTags(html, values, options);
 }
 
 /**
@@ -104,7 +134,8 @@ export function generateMergeTagSamples(
   articles: Article[],
   projects: Project[],
   week: number,
-  year: number
+  year: number,
+  label?: string
 ): Record<string, string> {
   const note = (
     count: number,
@@ -143,6 +174,47 @@ export function generateMergeTagSamples(
     ),
     week: String(week),
     year: String(year),
+    articleCount: String(articles.length),
+    projectCount: String(projects.length),
     unsubscribe_url: "#unsubscribe-preview",
+    archive_url: "#this-edition-preview",
+    portal_url: "#edition-index-preview",
+    edition_label: label ?? `Week ${week}`,
+    date_range: weekRangeLabel(week, year),
+    tldr: note(
+      Math.min(articles.length, 3),
+      "headline",
+      articles.map((article) => article.title),
+      "No headlines yet."
+    ),
+    top_story: note(
+      articles.length > 0 ? 1 : 0,
+      "lead story",
+      articles.slice(0, 1).map((article) => article.title),
+      "No lead story yet."
+    ),
+    sections: note(
+      articles.length,
+      "article",
+      articles.map((article) => article.title),
+      "No topic sections yet."
+    ),
+    trend_radar: note(0, "trend", [], "The trend radar renders here when topics accelerate."),
+    internal: note(
+      projects.length > 0 ? 1 : 0,
+      "internal item",
+      projects.slice(0, 1).map((project) => project.name),
+      "No internal work selected yet."
+    ),
   };
+}
+
+/**
+ * Every tag has a sample, so the Unlayer palette never shows a name the canvas cannot preview.
+ *
+ * Asserted by a test rather than trusted: the palette is built from RADAR_MERGE_TAGS, so a tag
+ * added to the table with no sample here would silently show its own literal `{{name}}`.
+ */
+export function mergeTagSampleNames(): string[] {
+  return RADAR_MERGE_TAGS.map((tag) => tag.name);
 }

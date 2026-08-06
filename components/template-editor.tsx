@@ -2,6 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import EmailEditor, { EditorRef, EmailEditorProps } from "react-email-editor";
+import { unlayerMergeTagOptions } from "@/lib/email/merge-tags";
 
 export interface TemplateEditorProps {
   onReady?: () => void;
@@ -41,34 +42,10 @@ const options: EmailEditorProps["options"] = {
     menu: { enabled: true },
     social: { enabled: true },
   },
-  // Merge tags for variable substitution
-  mergeTags: {
-    articles: {
-      name: "Articles",
-      value: "{{articles}}",
-      sample: "[Articles will be inserted here]",
-    },
-    projects: {
-      name: "Projects",
-      value: "{{projects}}",
-      sample: "[Projects will be inserted here]",
-    },
-    week: {
-      name: "Week Number",
-      value: "{{week}}",
-      sample: "1",
-    },
-    year: {
-      name: "Year",
-      value: "{{year}}",
-      sample: "2026",
-    },
-    unsubscribe_url: {
-      name: "Unsubscribe URL",
-      value: "{{unsubscribe_url}}",
-      sample: "https://example.com/unsubscribe",
-    },
-  },
+  // Merge tags for variable substitution, derived from lib/email/merge-tags.ts rather than
+  // restated. No samples: this editor builds a template with no edition selected, so there is
+  // no content to preview and each tag shows its own name on the canvas.
+  mergeTags: unlayerMergeTagOptions({}),
 };
 
 export function TemplateEditor({

@@ -86,7 +86,14 @@ export interface EditionEmail {
   dateLabel: string;
   previewText: string;
   subject: string;
-  bullets: Array<{ text: string; anchor: string }>;
+  /**
+   * The TL;DR headlines and where each one goes.
+   *
+   * The field was called `anchor` and always held the article's own URL, while the real
+   * anchors (`#top-story`, `topic-*`) existed and nothing used them. The value is right: an
+   * in-document anchor is not reliable in email, since Gmail strips `id`. The name was wrong.
+   */
+  bullets: Array<{ text: string; url: string }>;
   /** Italic caption under the TL;DR heading, used to explain a thin week. */
   bulletsNote?: string;
   topStory?: EmailArticle;

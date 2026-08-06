@@ -23,8 +23,8 @@ const fixture: EditionEmail = {
   previewText: "A quiet week with one loud release.",
   subject: "AI Radar Weekly - Week 32, 2026",
   bullets: [
-    { text: "Anthropic ships an agent runtime", anchor: "https://anthropic.com/a" },
-    { text: "EU AI Act timeline slips", anchor: "https://reuters.com/b" },
+    { text: "Anthropic ships an agent runtime", url: "https://anthropic.com/a" },
+    { text: "EU AI Act timeline slips", url: "https://reuters.com/b" },
   ],
   bulletsNote: "A quieter week: we held back thin items rather than pad the brief.",
   topStory: {

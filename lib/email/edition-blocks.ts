@@ -86,11 +86,11 @@ export function link(url: string | undefined, label: string, style: string): str
 
 /* ------------------------------------------------------------------ fragments */
 
-export function bulletRow(bullet: { text: string; anchor: string }): string {
+export function bulletRow(bullet: { text: string; url: string }): string {
   return `<tr>
         <td width="18" valign="top" style="width:18px; padding:7px 0 0 0; font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${ACCENT}; font-weight:bold;">&#8250;</td>
         <td valign="top" style="padding:6px 0 0 0; font-family:${SANS}; font-size:15px; line-height:23px; mso-line-height-rule:exactly; color:#22282a;" class="t-body">${link(
-          bullet.anchor,
+          bullet.url,
           bullet.text,
           "color:#22282a; text-decoration:none; border-bottom:1px solid #b9c3c1;"
         )}</td>
@@ -104,7 +104,7 @@ export function bulletRow(bullet: { text: string; anchor: string }): string {
  * merge tag and get the same box, note included.
  */
 export function bulletsBlock(
-  bullets: Array<{ text: string; anchor: string }>,
+  bullets: Array<{ text: string; url: string }>,
   note: string | undefined
 ): string {
   if (bullets.length === 0) return "";
