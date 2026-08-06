@@ -69,6 +69,10 @@ export const DARK_MODE_RULES = `  @media (prefers-color-scheme: dark) {
     .t-body, .t-body a { color: #c3cbc9 !important; }
     .t-muted { color: #94a09d !important; }
     .rule { border-color: #303a3b !important; }
+    /* A rule drawn as a filled cell rather than a border, which the line above cannot reach.
+       Without this the hairline beside the accent stayed light and cut a bright line across the
+       dark card. Present in the code renderer since before the Unlayer variants existed. */
+    .hairline { background-color: #303a3b !important; }
     .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
     .trend-figure { color: #8fb8ad !important; }
     /* The primary teal is a light-card colour; on the dark card it reads as
@@ -86,6 +90,7 @@ export const DARK_MODE_RULES = `  @media (prefers-color-scheme: dark) {
   [data-ogsc] .t-body, [data-ogsc] .t-body a { color: #c3cbc9 !important; }
   [data-ogsc] .t-muted { color: #94a09d !important; }
   [data-ogsc] .rule { border-color: #303a3b !important; }
+  [data-ogsc] .hairline { background-color: #303a3b !important; }
   [data-ogsc] .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
   [data-ogsc] .trend-figure { color: #8fb8ad !important; }
   [data-ogsc] .link-strong, [data-ogsc] .link-strong a { color: #8fb8ad !important; }`;
@@ -170,6 +175,17 @@ export interface HeadingOption {
   heading?: boolean;
 }
 
+/**
+ * The block's own top padding, dropped when the heading moved out.
+ *
+ * With the eyebrow lifted into a row of its own, that row brings the space above the block, and
+ * keeping the block's own gap too doubled it. Visible in the first render of v3: every lifted
+ * heading floated well clear of the thing it labelled.
+ */
+function topPadding(heading: boolean, whenHeaded: string): string {
+  return heading ? whenHeaded : "0";
+}
+
 export function bulletsBlock(
   bullets: Array<{ text: string; url: string }>,
   note: string | undefined,
@@ -179,12 +195,12 @@ export function bulletsBlock(
 
   const heading = options.heading !== false;
 
-  return `<tr><td class="px" style="padding:28px 40px 0 40px;">
+  return `<tr><td class="px" style="padding:${topPadding(heading, "28px")} 40px 0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT};">
   ${
     heading
       ? `<tr><td style="padding:22px 24px 8px 24px; font-family:${SANS}; font-size:12px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">This week in 30 seconds</td></tr>`
-      : `<tr><td style="padding:14px 24px 0 24px; font-size:0; line-height:0;">&nbsp;</td></tr>`
+      : `<tr><td style="padding:18px 24px 0 24px; font-size:0; line-height:0;">&nbsp;</td></tr>`
   }
   ${
     note
@@ -285,7 +301,7 @@ export function trendBlock(trends: EmailTrend[], options: HeadingOption = {}): s
 
   const heading = options.heading !== false;
 
-  return `<tr><td class="px" id="radar" style="padding:30px 40px 0 40px;">
+  return `<tr><td class="px" id="radar" style="padding:${topPadding(heading, "30px")} 40px 0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT};">
   <tr><td height="3" style="height:3px; background-color:${PRIMARY}; font-size:0; line-height:3px;">&nbsp;</td></tr>
   ${
@@ -293,7 +309,7 @@ export function trendBlock(trends: EmailTrend[], options: HeadingOption = {}): s
       ? `<tr><td style="padding:20px 24px 4px 24px;">
     <div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${PRIMARY}; text-transform:uppercase;" class="t-strong">Trend radar &nbsp;·&nbsp; accelerating this week</div>
   </td></tr>`
-      : `<tr><td style="padding:14px 24px 0 24px; font-size:0; line-height:0;">&nbsp;</td></tr>`
+      : `<tr><td style="padding:18px 24px 0 24px; font-size:0; line-height:0;">&nbsp;</td></tr>`
   }
   <tr><td style="padding:0 24px 22px 24px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -312,7 +328,7 @@ export function topStoryBlock(data: EditionEmail, options: HeadingOption = {}): 
   const meta = story.source ? `Lead: ${story.source}` : "";
   const heading = options.heading !== false;
 
-  return `<tr><td class="px" id="top-story" style="padding:34px 40px 0 40px;">
+  return `<tr><td class="px" id="top-story" style="padding:${topPadding(heading, "34px")} 40px 0 40px;">
   ${
     heading
       ? `<div style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.6px; color:${ACCENT}; text-transform:uppercase; padding-bottom:10px;">Top story</div>`
@@ -381,7 +397,7 @@ export function internalBlock(
 
   const heading = options.heading !== false;
 
-  return `<tr><td class="px" style="padding:30px 40px 0 40px;">
+  return `<tr><td class="px" style="padding:${topPadding(heading, "30px")} 40px 0 40px;">
   ${
     heading
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>

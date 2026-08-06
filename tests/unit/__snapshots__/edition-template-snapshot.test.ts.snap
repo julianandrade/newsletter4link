@@ -44,6 +44,10 @@ exports[`an edition with nothing optional in it > renders the same HTML 1`] = `
     .t-body, .t-body a { color: #c3cbc9 !important; }
     .t-muted { color: #94a09d !important; }
     .rule { border-color: #303a3b !important; }
+    /* A rule drawn as a filled cell rather than a border, which the line above cannot reach.
+       Without this the hairline beside the accent stayed light and cut a bright line across the
+       dark card. Present in the code renderer since before the Unlayer variants existed. */
+    .hairline { background-color: #303a3b !important; }
     .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
     .trend-figure { color: #8fb8ad !important; }
     /* The primary teal is a light-card colour; on the dark card it reads as
@@ -61,6 +65,7 @@ exports[`an edition with nothing optional in it > renders the same HTML 1`] = `
   [data-ogsc] .t-body, [data-ogsc] .t-body a { color: #c3cbc9 !important; }
   [data-ogsc] .t-muted { color: #94a09d !important; }
   [data-ogsc] .rule { border-color: #303a3b !important; }
+  [data-ogsc] .hairline { background-color: #303a3b !important; }
   [data-ogsc] .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
   [data-ogsc] .trend-figure { color: #8fb8ad !important; }
   [data-ogsc] .link-strong, [data-ogsc] .link-strong a { color: #8fb8ad !important; }
@@ -97,7 +102,7 @@ exports[`an edition with nothing optional in it > renders the same HTML 1`] = `
 <tr><td class="px" style="padding:0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
     <td width="64" height="3" style="width:64px; height:3px; background-color:#ff7901; line-height:3px; font-size:0;">&nbsp;</td>
-    <td height="3" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
+    <td height="3" class="hairline" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
   </tr></table>
 </td></tr>
 
@@ -192,6 +197,10 @@ exports[`the edition email is byte stable across the block extraction > renders 
     .t-body, .t-body a { color: #c3cbc9 !important; }
     .t-muted { color: #94a09d !important; }
     .rule { border-color: #303a3b !important; }
+    /* A rule drawn as a filled cell rather than a border, which the line above cannot reach.
+       Without this the hairline beside the accent stayed light and cut a bright line across the
+       dark card. Present in the code renderer since before the Unlayer variants existed. */
+    .hairline { background-color: #303a3b !important; }
     .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
     .trend-figure { color: #8fb8ad !important; }
     /* The primary teal is a light-card colour; on the dark card it reads as
@@ -209,6 +218,7 @@ exports[`the edition email is byte stable across the block extraction > renders 
   [data-ogsc] .t-body, [data-ogsc] .t-body a { color: #c3cbc9 !important; }
   [data-ogsc] .t-muted { color: #94a09d !important; }
   [data-ogsc] .rule { border-color: #303a3b !important; }
+  [data-ogsc] .hairline { background-color: #303a3b !important; }
   [data-ogsc] .badge { background-color: #2b3436 !important; color: #cdd5d3 !important; }
   [data-ogsc] .trend-figure { color: #8fb8ad !important; }
   [data-ogsc] .link-strong, [data-ogsc] .link-strong a { color: #8fb8ad !important; }
@@ -245,7 +255,7 @@ exports[`the edition email is byte stable across the block extraction > renders 
 <tr><td class="px" style="padding:0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
     <td width="64" height="3" style="width:64px; height:3px; background-color:#ff7901; line-height:3px; font-size:0;">&nbsp;</td>
-    <td height="3" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
+    <td height="3" class="hairline" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
   </tr></table>
 </td></tr>
 

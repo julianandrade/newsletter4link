@@ -229,7 +229,7 @@ ${DARK_MODE_RULES}
 <tr><td class="px" style="padding:0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
     <td width="64" height="3" style="width:64px; height:3px; background-color:${ACCENT}; line-height:3px; font-size:0;">&nbsp;</td>
-    <td height="3" style="height:3px; background-color:${RULE}; line-height:3px; font-size:0;">&nbsp;</td>
+    <td height="3" class="hairline" style="height:3px; background-color:${RULE}; line-height:3px; font-size:0;">&nbsp;</td>
   </tr></table>
 </td></tr>
 

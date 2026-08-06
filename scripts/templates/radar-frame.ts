@@ -248,7 +248,7 @@ export function createRadarFrameTemplate(branding: Branding): {
               "accent-rule-html",
               `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
   <td width="64" height="3" style="width:64px; height:3px; background-color:${ACCENT}; line-height:3px; font-size:0;">&nbsp;</td>
-  <td height="3" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
+  <td height="3" class="hairline" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
 </tr></table>`,
               "0px 40px"
             ),
@@ -461,14 +461,14 @@ ${
     : // The Linkroad pair, swapped by the media query the hardening pass injects. The dark one is
       // wrapped by wrapMsoLogo on export so Word-engine Outlook does not show both.
       `  <div style="text-align:right; padding-bottom:10px;"><img class="logo-light" src="${assetBase()}/linkroad-h-on-light.png" width="130" height="17" alt="Linkroad" style="display:inline-block; border:0; width:130px; height:17px;"><img class="logo-dark" src="${assetBase()}/linkroad-h-on-dark.png" width="130" height="17" alt="Linkroad" style="display:none; max-height:0; overflow:hidden; mso-hide:all; border:0; width:130px; height:17px;"></div>\n`
-}  <div style="font-family:${SANS}; font-size:20px; line-height:24px; font-weight:bold; letter-spacing:2px; color:${PRIMARY};">AI&nbsp;RADAR<span style="color:${ACCENT};">.</span></div>
+}  <div class="t-strong" style="font-family:${SANS}; font-size:20px; line-height:24px; font-weight:bold; letter-spacing:2px; color:${PRIMARY};">AI&nbsp;RADAR<span style="color:${ACCENT};">.</span></div>
   <div class="t-muted" style="padding-top:6px; padding-bottom:18px; font-family:${SANS}; font-size:11px; line-height:14px; letter-spacing:1.2px; color:${MUTED}; text-transform:uppercase;">{{edition_label}} &nbsp;·&nbsp; {{date_range}}</div>
 </td></tr>
 
 <tr><td class="px rule" style="padding:0 40px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
     <td width="64" height="3" style="width:64px; height:3px; background-color:${ACCENT}; line-height:3px; font-size:0;">&nbsp;</td>
-    <td height="3" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
+    <td height="3" class="hairline" style="height:3px; background-color:#dfe3e2; line-height:3px; font-size:0;">&nbsp;</td>
   </tr></table>
 </td></tr>
 
