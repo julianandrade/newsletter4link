@@ -184,8 +184,16 @@ hoisted above top-level statements, so `lib/config.ts` had already read the old 
 second batch of three, not the first.**
 
 Built from the 35 approved articles rather than the edition in the database, which has none. Eight
-stories, real scores, real summaries. **No featured projects exist, so the internal block was not
-exercised in any of the six.**
+stories, real scores, real summaries.
+
+**Then three more, with the internal block.** No featured project existed, so one was created,
+sent, and deleted, with the project count verified back at its starting value. Rather than invent a
+plausible-looking Linkroad initiative and leave a made-up record where real ones live, it described
+this session's actual work. Present in all three: the heading, the project name and the impact line.
+
+One deliberate difference to expect between them: v1 renders `INTERNAL` as a dark chip, v3 as an
+orange eyebrow, because v3 lifted that heading into a text block styled like the section eyebrows
+above it. Arguably v3 is the more consistent of the two.
 
 **Local sending needed `node --use-system-ca`.** Node's fetch failed against Resend while
 PowerShell reached it fine, which is corporate TLS inspection: Windows trusts the company root CA
