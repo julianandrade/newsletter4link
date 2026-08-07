@@ -2,6 +2,40 @@
 
 import { DEFAULT_AI_MODEL, DEFAULT_EMBEDDING_MODEL } from "@/lib/ai-models";
 
+/**
+ * An environment value, cleaned of the two ways a `.env` file lies about it.
+ *
+ * Both have already cost real time on this project. `RESEND_API_KEY` ends with a newline inside
+ * its quotes, which Resend answers with `400 "API key is invalid"` and no hint that the key is
+ * fine: an hour of misdiagnosis on 6 August 2026. `FROM_EMAIL` and `FROM_NAME` carry the same
+ * thing, and a newline in an address is worse than useless, since it is where header injection
+ * lives.
+ *
+ * Whether the escape arrives expanded depends on who read the file: `--env-file` and dotenv
+ * expand `\n` inside double quotes, Vercel's dashboard does not. So both shapes are stripped, and
+ * the same value works whichever side it came from.
+ */
+function envValue(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const cleaned = raw.trim().replace(/(?:\\n|\\r|\\t)+$/, "").trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/**
+ * The first word of an environment value.
+ *
+ * `EMAIL_PROVIDER` is set to `"resend  # resend (default) or graph (Microsoft Graph API)"`, with
+ * the comment inside the quotes, so the value is that whole sentence. It happens to work, because
+ * the sender only checks whether the provider is `graph` and falls through to Resend for anything
+ * else, which means a genuine misconfiguration would also silently send through Resend.
+ */
+function envToken(raw: string | undefined): string | undefined {
+  const cleaned = envValue(raw);
+  if (!cleaned) return undefined;
+  const [first] = cleaned.split(/[\s#]/, 1);
+  return first || undefined;
+}
+
 export const config = {
   // Application
   app: {
@@ -30,9 +64,9 @@ export const config = {
 
   // Email
   email: {
-    provider: (process.env.EMAIL_PROVIDER || "resend") as "resend" | "graph",
+    provider: (envToken(process.env.EMAIL_PROVIDER) || "resend") as "resend" | "graph",
     resend: {
-      apiKey: process.env.RESEND_API_KEY!,
+      apiKey: envValue(process.env.RESEND_API_KEY)!,
       webhookSecret: process.env.RESEND_WEBHOOK_SECRET,
       // RQ-007: the email.received webhook has its own signing secret, separate from the
       // send-events one, because they are separate webhooks on Resend's side.
@@ -45,8 +79,8 @@ export const config = {
       senderEmail: process.env.GRAPH_SENDER_EMAIL,
     },
     from: {
-      email: process.env.FROM_EMAIL || "newsletter@linkconsulting.com",
-      name: process.env.FROM_NAME || "AI Radar",
+      email: envValue(process.env.FROM_EMAIL) || "newsletter@linkconsulting.com",
+      name: envValue(process.env.FROM_NAME) || "AI Radar",
     },
     batchSize: 50, // Send emails in batches of 50
     rateLimitDelay: 1000, // Wait 1 second between batches
