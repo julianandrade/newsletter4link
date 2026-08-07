@@ -19,15 +19,24 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
+import { ArticleStateControls } from "@/components/article/article-state-controls";
 import { LinkTakeView, type LinkTakeNotice } from "@/components/article/link-take-view";
 import {
   PageHeading,
   RadarMain,
+  StatusChip,
   radarButtonClass,
 } from "@/components/radar/primitives";
 import { EmptyState, LoadError, SkeletonRows } from "@/components/radar/controls";
 import { useOrgRole } from "@/components/radar/use-role";
 import type { LinkTakePayload, RewriteHistoryEntry } from "@/lib/rewrite/view";
+
+/** The two fields `nextActionsFor` and the state chip need, read separately from the
+ * Link Take payload above: that payload comes from `/rewrite` and carries neither. */
+interface ArticleVerdictState {
+  status: string;
+  discardedAt: string | null;
+}
 
 type LoadState =
   | { phase: "loading" }
@@ -64,6 +73,7 @@ export default function ArticleDetailPage() {
   const [notice, setNotice] = useState<LinkTakeNotice | null>(null);
   const [history, setHistory] = useState<RewriteHistoryEntry[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<ArticleVerdictState | null>(null);
 
   /**
    * Read what exists.
@@ -101,6 +111,28 @@ export default function ArticleDetailPage() {
     [articleId]
   );
 
+  /**
+   * The article's own status and discard flag, read separately from `read` above.
+   *
+   * `GET /api/articles/:id` returns the whole row through `getArticleById`, which is
+   * where `status` and `discardedAt` live; the Link Take payload never carries either.
+   * Extracted so `ArticleStateControls` can call it back as `onChanged` after a verdict,
+   * rather than the screen reloading the Link Take it did not touch.
+   */
+  const loadVerdict = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/articles/${articleId}`);
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.success) return;
+
+      setVerdict({ status: json.data.status, discardedAt: json.data.discardedAt });
+    } catch {
+      // The state chip and its controls are supplementary to the Link Take: a failed
+      // read here should not turn into an error state for the rest of the screen.
+    }
+  }, [articleId]);
+
   useEffect(() => {
     // No guard on a missing id. In an App Router `[id]` route the param is always
     // there, so the guard would protect against nothing real, and it would stop the
@@ -117,10 +149,12 @@ export default function ArticleDetailPage() {
       });
     });
 
+    void loadVerdict();
+
     return () => {
       cancelled = true;
     };
-  }, [articleId, read]);
+  }, [articleId, read, loadVerdict]);
 
   /** Write one where none has ever been attempted. Any member may ask. */
   const handleGenerate = useCallback(async () => {
@@ -279,6 +313,31 @@ export default function ArticleDetailPage() {
   return (
     <>
       <AppHeader />
+      {/*
+        The screen's header, PageHeading and its title, lives inside LinkTakeView, which
+        this task does not touch. This strip sits immediately above it instead: same
+        width, same horizontal padding, so it reads as part of one header block rather
+        than a second one.
+      */}
+      {verdict ? (
+        <div className="mx-auto flex w-full max-w-[780px] flex-wrap items-center justify-between gap-3 px-4 pt-8 sm:px-6 lg:px-7">
+          {verdict.discardedAt ? (
+            <StatusChip tone="neutral">discarded</StatusChip>
+          ) : verdict.status === "APPROVED" ? (
+            <StatusChip tone="ok">approved</StatusChip>
+          ) : verdict.status === "REJECTED" ? (
+            <StatusChip tone="err">rejected</StatusChip>
+          ) : (
+            <StatusChip tone="warn">no verdict yet</StatusChip>
+          )}
+          <ArticleStateControls
+            article={{ status: verdict.status, discardedAt: verdict.discardedAt }}
+            articleId={articleId}
+            canEdit={atLeast("EDITOR")}
+            onChanged={() => void loadVerdict()}
+          />
+        </div>
+      ) : null}
       <LinkTakeView
         payload={load.payload}
         canEdit={atLeast("EDITOR")}
