@@ -23,7 +23,9 @@ import { ArticleStateControls } from "@/components/article/article-state-control
 import { LinkTakeView, type LinkTakeNotice } from "@/components/article/link-take-view";
 import {
   PageHeading,
+  RadarButton,
   RadarMain,
+  SkeletonBar,
   StatusChip,
   radarButtonClass,
 } from "@/components/radar/primitives";
@@ -43,6 +45,19 @@ type LoadState =
   | { phase: "missing" }
   | { phase: "failed"; message: string }
   | { phase: "ready"; payload: LinkTakePayload };
+
+/**
+ * Same three-way shape as `LoadState`, for the article's status and discard flag.
+ *
+ * A plain `ArticleVerdictState | null` looked the same whether the request was still in
+ * flight or had failed outright, so a broken `GET /api/articles/:id` left the strip
+ * silently empty forever, with no way to tell "still loading" from "will never arrive"
+ * and nothing to click. This follows `read()`'s own pattern instead of inventing one.
+ */
+type VerdictLoad =
+  | { phase: "loading" }
+  | { phase: "failed"; message: string }
+  | { phase: "ready"; verdict: ArticleVerdictState };
 
 /**
  * The frame the three pre-content states share.
@@ -73,7 +88,7 @@ export default function ArticleDetailPage() {
   const [notice, setNotice] = useState<LinkTakeNotice | null>(null);
   const [history, setHistory] = useState<RewriteHistoryEntry[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [verdict, setVerdict] = useState<ArticleVerdictState | null>(null);
+  const [verdictLoad, setVerdictLoad] = useState<VerdictLoad>({ phase: "loading" });
 
   /**
    * Read what exists.
@@ -118,18 +133,35 @@ export default function ArticleDetailPage() {
    * where `status` and `discardedAt` live; the Link Take payload never carries either.
    * Extracted so `ArticleStateControls` can call it back as `onChanged` after a verdict,
    * rather than the screen reloading the Link Take it did not touch.
+   *
+   * Mirrors `read()`: a failure sets an explicit `failed` phase with a message, rather
+   * than leaving the previous phase in place. An empty catch here left the strip
+   * indistinguishable from "still loading", for ever, with nothing to retry: exactly the
+   * gap this task exists to close, reopened for every role including EDITOR.
    */
   const loadVerdict = useCallback(async () => {
     try {
       const response = await fetch(`/api/articles/${articleId}`);
       const json = await response.json().catch(() => null);
 
-      if (!response.ok || !json?.success) return;
+      if (!response.ok || !json?.success) {
+        setVerdictLoad({
+          phase: "failed",
+          message:
+            json?.error ?? `The request came back with status ${response.status}.`,
+        });
+        return;
+      }
 
-      setVerdict({ status: json.data.status, discardedAt: json.data.discardedAt });
-    } catch {
-      // The state chip and its controls are supplementary to the Link Take: a failed
-      // read here should not turn into an error state for the rest of the screen.
+      setVerdictLoad({
+        phase: "ready",
+        verdict: { status: json.data.status, discardedAt: json.data.discardedAt },
+      });
+    } catch (cause) {
+      setVerdictLoad({
+        phase: "failed",
+        message: cause instanceof Error ? cause.message : "The request failed.",
+      });
     }
   }, [articleId]);
 
@@ -318,26 +350,46 @@ export default function ArticleDetailPage() {
         this task does not touch. This strip sits immediately above it instead: same
         width, same horizontal padding, so it reads as part of one header block rather
         than a second one.
+
+        Three phases, not one nullable value: a reader who sees nothing here cannot tell
+        a slow request from a broken one, and a broken one needs a way back that does not
+        involve reloading the page.
       */}
-      {verdict ? (
-        <div className="mx-auto flex w-full max-w-[780px] flex-wrap items-center justify-between gap-3 px-4 pt-8 sm:px-6 lg:px-7">
-          {verdict.discardedAt ? (
-            <StatusChip tone="neutral">discarded</StatusChip>
-          ) : verdict.status === "APPROVED" ? (
-            <StatusChip tone="ok">approved</StatusChip>
-          ) : verdict.status === "REJECTED" ? (
-            <StatusChip tone="err">rejected</StatusChip>
-          ) : (
-            <StatusChip tone="warn">no verdict yet</StatusChip>
-          )}
-          <ArticleStateControls
-            article={{ status: verdict.status, discardedAt: verdict.discardedAt }}
-            articleId={articleId}
-            canEdit={atLeast("EDITOR")}
-            onChanged={() => void loadVerdict()}
-          />
-        </div>
-      ) : null}
+      <div className="mx-auto flex w-full max-w-[780px] flex-wrap items-center justify-between gap-3 px-4 pt-8 sm:px-6 lg:px-7">
+        {verdictLoad.phase === "loading" ? (
+          <SkeletonBar width={112} height={20} className="rounded-full" />
+        ) : verdictLoad.phase === "failed" ? (
+          <>
+            <p className="m-0 text-[12.5px] text-radar-err">
+              {`This story's state could not be loaded: ${verdictLoad.message}`}
+            </p>
+            <RadarButton size="sm" onClick={() => void loadVerdict()}>
+              Try again
+            </RadarButton>
+          </>
+        ) : (
+          <>
+            {verdictLoad.verdict.discardedAt ? (
+              <StatusChip tone="neutral">discarded</StatusChip>
+            ) : verdictLoad.verdict.status === "APPROVED" ? (
+              <StatusChip tone="ok">approved</StatusChip>
+            ) : verdictLoad.verdict.status === "REJECTED" ? (
+              <StatusChip tone="err">rejected</StatusChip>
+            ) : (
+              <StatusChip tone="warn">no verdict yet</StatusChip>
+            )}
+            <ArticleStateControls
+              article={{
+                status: verdictLoad.verdict.status,
+                discardedAt: verdictLoad.verdict.discardedAt,
+              }}
+              articleId={articleId}
+              canEdit={atLeast("EDITOR")}
+              onChanged={() => void loadVerdict()}
+            />
+          </>
+        )}
+      </div>
       <LinkTakeView
         payload={load.payload}
         canEdit={atLeast("EDITOR")}
