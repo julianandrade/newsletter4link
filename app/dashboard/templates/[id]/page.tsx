@@ -31,6 +31,7 @@ import {
   SkeletonRows,
 } from "@/components/radar/controls";
 import type { EditorRef, EmailEditorProps } from "react-email-editor";
+import { RADAR_MERGE_TAGS, unlayerMergeTagOptions } from "@/lib/email/merge-tags";
 
 // Dynamically import the email editor to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), {
@@ -49,65 +50,18 @@ const editorOptions: EmailEditorProps["options"] = {
       spellChecker: true,
     },
   },
-  mergeTags: {
-    articles: {
-      name: "Articles",
-      value: "{{articles}}",
-      sample: "[Articles will be inserted here]",
-    },
-    projects: {
-      name: "Projects",
-      value: "{{projects}}",
-      sample: "[Projects will be inserted here]",
-    },
-    week: {
-      name: "Week Number",
-      value: "{{week}}",
-      sample: "1",
-    },
-    year: {
-      name: "Year",
-      value: "{{year}}",
-      sample: "2026",
-    },
-    unsubscribe_url: {
-      name: "Unsubscribe URL",
-      value: "{{unsubscribe_url}}",
-      sample: "https://example.com/unsubscribe",
-    },
-  },
+  // Derived from lib/email/merge-tags.ts. This object listed five tags by hand while the sender
+  // understood sixteen, so the palette offered a fraction of the vocabulary and the copy panel
+  // below offered a different fraction again.
+  mergeTags: unlayerMergeTagOptions({}),
 };
 
-// Merge tags documentation for the info panel
-const mergeTagsDocs = [
-  {
-    tag: "{{articles}}",
-    name: "Articles",
-    description:
-      "The curated stories, with titles, summaries, topics and links.",
-  },
-  {
-    tag: "{{projects}}",
-    name: "Projects",
-    description:
-      "Featured internal projects, with images, teams and impact lines.",
-  },
-  {
-    tag: "{{week}}",
-    name: "Week number",
-    description: "ISO week of the send, 1 to 52.",
-  },
-  {
-    tag: "{{year}}",
-    name: "Year",
-    description: "Year of the send.",
-  },
-  {
-    tag: "{{unsubscribe_url}}",
-    name: "Unsubscribe URL",
-    description: "Each reader's own unsubscribe link. Required in every send.",
-  },
-];
+// Merge tags for the copy panel, derived from the same table as the palette above.
+const mergeTagsDocs = RADAR_MERGE_TAGS.map((tag) => ({
+  tag: `{{${tag.name}}}`,
+  name: tag.label,
+  description: tag.description,
+}));
 
 // Sample project data for preview
 const sampleProjects = [

@@ -15,6 +15,7 @@ import {
 } from "@/components/radar/primitives";
 import { RadarField, RadarInput, RadarTextarea } from "@/components/radar/controls";
 import type { EditorRef, EmailEditorProps } from "react-email-editor";
+import { RADAR_MERGE_TAGS, unlayerMergeTagOptions } from "@/lib/email/merge-tags";
 
 // Dynamically import the email editor to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), {
@@ -33,42 +34,11 @@ const editorOptions: EmailEditorProps["options"] = {
       spellChecker: true,
     },
   },
-  mergeTags: {
-    articles: {
-      name: "Articles",
-      value: "{{articles}}",
-      sample: "[Articles will be inserted here]",
-    },
-    projects: {
-      name: "Projects",
-      value: "{{projects}}",
-      sample: "[Projects will be inserted here]",
-    },
-    week: {
-      name: "Week Number",
-      value: "{{week}}",
-      sample: "1",
-    },
-    year: {
-      name: "Year",
-      value: "{{year}}",
-      sample: "2026",
-    },
-    unsubscribe_url: {
-      name: "Unsubscribe URL",
-      value: "{{unsubscribe_url}}",
-      sample: "https://example.com/unsubscribe",
-    },
-  },
+  // Derived from lib/email/merge-tags.ts, like every other place that lists these.
+  mergeTags: unlayerMergeTagOptions({}),
 };
 
-const MERGE_TAGS = [
-  "{{articles}}",
-  "{{projects}}",
-  "{{week}}",
-  "{{year}}",
-  "{{unsubscribe_url}}",
-];
+const MERGE_TAGS = RADAR_MERGE_TAGS.map((tag) => `{{${tag.name}}}`);
 
 export default function NewTemplatePage() {
   const router = useRouter();

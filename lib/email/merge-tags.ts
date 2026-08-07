@@ -45,6 +45,13 @@ export interface MergeTag {
   /** What the Unlayer palette calls it. */
   label: string;
   /**
+   * One sentence for the editor, shown on the template screen's copy-a-tag panel.
+   *
+   * Here rather than on the screen because that panel was a fifth hand-written list of the same
+   * vocabulary, and it had drifted to five tags while the sender understood sixteen.
+   */
+  description: string;
+  /**
    * True when the value is bound to one subscriber, so it cannot be computed once for a whole
    * send. The three signed URLs are; everything else is shared.
    */
@@ -52,22 +59,99 @@ export interface MergeTag {
 }
 
 export const RADAR_MERGE_TAGS: readonly MergeTag[] = [
-  { name: "articles", label: "Articles", perRecipient: false },
-  { name: "projects", label: "Projects", perRecipient: false },
-  { name: "sections", label: "Topic sections", perRecipient: false },
-  { name: "top_story", label: "Top story", perRecipient: false },
-  { name: "trend_radar", label: "Trend radar", perRecipient: false },
-  { name: "internal", label: "Internal block", perRecipient: false },
-  { name: "tldr", label: "This week in 30 seconds", perRecipient: false },
-  { name: "edition_label", label: "Edition name", perRecipient: false },
-  { name: "date_range", label: "Week date range", perRecipient: false },
-  { name: "week", label: "Week Number", perRecipient: false },
-  { name: "year", label: "Year", perRecipient: false },
-  { name: "articleCount", label: "Article count", perRecipient: false },
-  { name: "projectCount", label: "Project count", perRecipient: false },
-  { name: "unsubscribe_url", label: "Unsubscribe URL", perRecipient: true },
-  { name: "archive_url", label: "This edition in the browser", perRecipient: true },
-  { name: "portal_url", label: "Edition index URL", perRecipient: true },
+  {
+    name: "articles",
+    label: "Articles",
+    description: "Every selected story as one list, with titles, summaries, sources and links.",
+    perRecipient: false,
+  },
+  {
+    name: "projects",
+    label: "Projects",
+    description: "The featured internal projects, with teams and impact lines.",
+    perRecipient: false,
+  },
+  {
+    name: "sections",
+    label: "Topic sections",
+    description:
+      "The stories grouped under their topics, each with its own heading. A topic with nothing in it does not render.",
+    perRecipient: false,
+  },
+  {
+    name: "top_story",
+    label: "Top story",
+    description:
+      "The lead story in the large editorial layout, with its picture when the feed carried one.",
+    perRecipient: false,
+  },
+  {
+    name: "trend_radar",
+    label: "Trend radar",
+    description: "The topics that accelerated, with the figures. Renders nothing on a quiet week.",
+    perRecipient: false,
+  },
+  {
+    name: "internal",
+    label: "Internal block",
+    description: "The internal work worth spotlighting. Renders nothing when no project is picked.",
+    perRecipient: false,
+  },
+  {
+    name: "tldr",
+    label: "This week in 30 seconds",
+    description: "The headline bullets, and the caption that explains a thin week.",
+    perRecipient: false,
+  },
+  {
+    name: "edition_label",
+    label: "Edition name",
+    description: "What this edition is called: its title, or the week when it has none.",
+    perRecipient: false,
+  },
+  {
+    name: "date_range",
+    label: "Week date range",
+    description: "The days the edition covers, as in 3-9 Aug 2026.",
+    perRecipient: false,
+  },
+  {
+    name: "week",
+    label: "Week Number",
+    description: "ISO week of the send, 1 to 53.",
+    perRecipient: false,
+  },
+  { name: "year", label: "Year", description: "Year of the send.", perRecipient: false },
+  {
+    name: "articleCount",
+    label: "Article count",
+    description: "How many stories this edition carries.",
+    perRecipient: false,
+  },
+  {
+    name: "projectCount",
+    label: "Project count",
+    description: "How many internal projects this edition carries.",
+    perRecipient: false,
+  },
+  {
+    name: "unsubscribe_url",
+    label: "Unsubscribe URL",
+    description: "Each reader's own signed unsubscribe link. Required in every send.",
+    perRecipient: true,
+  },
+  {
+    name: "archive_url",
+    label: "This edition in the browser",
+    description: "A signed link to this edition's own page, for a View in browser line.",
+    perRecipient: true,
+  },
+  {
+    name: "portal_url",
+    label: "Edition index URL",
+    description: "A signed link to every edition this reader has received.",
+    perRecipient: true,
+  },
 ] as const;
 
 const PER_RECIPIENT = new Set(

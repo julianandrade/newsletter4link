@@ -49,6 +49,16 @@ describe("the merge-tag table", () => {
       expect(tag.label.length).toBeGreaterThan(0);
     }
   });
+
+  it("gives every tag a description, because a screen shows them to editors", () => {
+    // The template screen's copy-a-tag panel was a fifth hand-written list and had drifted to
+    // five tags. It derives from here now, so a tag added without a description would ship a
+    // blank card.
+    for (const tag of RADAR_MERGE_TAGS) {
+      expect(tag.description.length, tag.name).toBeGreaterThan(10);
+      expect(tag.description.trim().endsWith("."), tag.name).toBe(true);
+    }
+  });
 });
 
 describe("renderMergeTags", () => {
