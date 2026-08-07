@@ -732,6 +732,20 @@ export default function EditionDetailPage() {
     setSendResult(null);
 
     try {
+      /**
+       * Persist the selection before sending, the way finalizing already did.
+       *
+       * The route builds the edition from the stored `EditionArticle` rows, and the
+       * snapshot it freezes is built from that same object. The editor, meanwhile, renders
+       * from `selectedArticles` in local state. With an unsaved reorder or removal those
+       * two disagree, so the mail carried one story list while the record of what was
+       * mailed held another, and the SharePoint page and the sent-edition screen then both
+       * published the list nobody received. Saving first is what makes them the same list.
+       */
+      if (isDirty) {
+        await handleSaveDraft();
+      }
+
       // Build request body based on recipient mode
       const requestBody: Record<string, unknown> = {
         editionId,
