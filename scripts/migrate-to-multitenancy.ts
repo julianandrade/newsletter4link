@@ -221,6 +221,8 @@ async function main() {
   console.log("\n✅ Migration complete!\n");
 
   const stats = {
+    // Raw prisma, so this counts discarded rows too. A migration report should say how many
+    // rows moved, not how many the product currently shows.
     articles: await prisma.article.count({ where: { organizationId: orgId } }),
     projects: await prisma.project.count({ where: { organizationId: orgId } }),
     editions: await prisma.edition.count({ where: { organizationId: orgId } }),

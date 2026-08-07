@@ -40,6 +40,9 @@ const APPLY = process.argv.includes("--apply");
 const INGESTION_WINDOW_SECONDS = 2;
 
 async function main() {
+  // Raw prisma, so discarded rows are counted and backfilled too. That is what a backfill
+  // wants: a discarded article is hidden from the product, not absent from the table, and
+  // leaving its capturedAt on the migration default would strand it if it is ever restored.
   const total = await prisma.article.count();
 
   /**

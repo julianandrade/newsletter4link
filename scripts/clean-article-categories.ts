@@ -35,6 +35,9 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool), log: ["error"] })
 const APPLY = process.argv.includes("--apply");
 
 async function main() {
+  // Raw prisma, so discarded rows are cleaned too. Deliberate: a discarded article keeps
+  // its row and can be restored, and restoring one with categories this script would have
+  // fixed everywhere else is how the two drift apart.
   const articles = await prisma.article.findMany({
     select: { id: true, title: true, category: true },
   });
