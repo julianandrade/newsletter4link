@@ -313,12 +313,22 @@ export async function PATCH(
       updateData.weeklySlot = fields.weeklySlot;
     }
 
+    /**
+     * SENT is not a status this route will write, and the refusal is deliberate.
+     *
+     * Marking an edition sent is `lib/queries.ts`'s `markEditionAsSent`, which writes the
+     * frozen snapshot of what went out in the same statement. This handler wrote `status`
+     * and `sentAt` on their own, so a second way in was a way to reach SENT with no record
+     * of what the edition contained, which is exactly the state the snapshot exists to make
+     * unreachable. No screen posts SENT here: the only values any of them send are
+     * FINALIZED and DRAFT.
+     */
     if (status !== undefined) {
-      if (!["DRAFT", "FINALIZED", "SENT"].includes(status)) {
+      if (!["DRAFT", "FINALIZED"].includes(status)) {
         return NextResponse.json(
           {
             success: false,
-            error: "Invalid status. Must be DRAFT, FINALIZED, or SENT",
+            error: "Invalid status. Must be DRAFT or FINALIZED",
           },
           { status: 400 }
         );
@@ -329,11 +339,6 @@ export async function PATCH(
       // existingEdition.status is DRAFT or FINALIZED here: SENT returned above.
       if (status === "FINALIZED" && existingEdition.status === "DRAFT") {
         updateData.finalizedAt = new Date();
-      } else if (status === "SENT") {
-        updateData.sentAt = new Date();
-        if (!existingEdition.finalizedAt) {
-          updateData.finalizedAt = new Date();
-        }
       } else if (status === "DRAFT") {
         updateData.finalizedAt = null;
       }
