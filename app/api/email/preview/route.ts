@@ -35,6 +35,31 @@ interface CustomData {
   year: number;
 }
 
+/** Which of the three bodies a preview of a real edition renders. */
+export type PreviewSourceChoice = "frozen" | "approved-draft" | "live";
+
+/**
+ * The precedence between the frozen record of a send and an approved draft.
+ *
+ * Frozen wins, and it wins first. A draft approved after the edition went out would
+ * otherwise take the draft branch and pair its titles with categories read from the
+ * current article rows, producing the half-frozen edition
+ * `lib/editions/sent-snapshot.ts` warns against: historical text, live metadata, and no
+ * way for a reader to tell which is which. Once an edition is sent its preview is the
+ * record of what went out, full stop.
+ *
+ * Pure and exported so the ordering is covered without a route harness, which this repo
+ * does not have. Keep the handler's branches in this order and reading from this value.
+ */
+export function previewSourceChoice(input: {
+  frozen: boolean;
+  approvedDraftSections: number;
+}): PreviewSourceChoice {
+  if (input.frozen) return "frozen";
+  if (input.approvedDraftSections > 0) return "approved-draft";
+  return "live";
+}
+
 /**
  * POST /api/email/preview
  * Generate preview HTML for the newsletter
@@ -168,15 +193,13 @@ export async function POST(request: Request) {
         }
       }
 
-      if (source.frozen) {
-        /**
-         * The snapshot wins whenever there is one, and there is no merging.
-         *
-         * A draft approved after the send would otherwise take this branch below and mix
-         * its titles with categories read from the current article rows, half-frozen the
-         * way lib/editions/sent-snapshot.ts warns against. Once an edition is sent, its
-         * preview is the record of what went out, full stop.
-         */
+      // The ordering itself lives in previewSourceChoice, where a unit test can reach it.
+      const choice = previewSourceChoice({
+        frozen: source.frozen,
+        approvedDraftSections: approvedDraft?.content?.sections?.length ?? 0,
+      });
+
+      if (choice === "frozen") {
         emailData = {
           // Template's Article requires summary as string | null; SourceArticle
           // leaves it optional, so the shape needs pinning down field by field.
@@ -193,7 +216,7 @@ export async function POST(request: Request) {
           year: source.year,
           label: source.label,
         };
-      } else if (approvedDraft?.content?.sections?.length) {
+      } else if (choice === "approved-draft" && approvedDraft?.content?.sections) {
         const articleById = new Map(
           edition.articles.map((ea: any) => [ea.article.id, ea.article])
         );
