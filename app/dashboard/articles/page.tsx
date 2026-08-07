@@ -389,8 +389,8 @@ export default function AllArticlesPage() {
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search titles"
-              aria-label="Search article titles"
+              placeholder="Search titles and summaries"
+              aria-label="Search article titles and summaries"
             />
           </div>
         </div>
@@ -418,7 +418,7 @@ export default function AllArticlesPage() {
               }
             >
               {hasSearch
-                ? `No title under this filter contains "${search}". Clearing it, or moving to All, will widen the list.`
+                ? `No title or summary under this filter contains "${search}". Clearing it, or moving to All, will widen the list.`
                 : empty.body}
             </EmptyState>
           )}

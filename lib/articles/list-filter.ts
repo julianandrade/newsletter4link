@@ -43,7 +43,13 @@ export function articleListWhere(params: {
 
   const search = params.search?.trim();
   if (search) {
-    where.title = { contains: search, mode: "insensitive" };
+    // Title or summary, which is what `app/api/articles/pending/route.ts` has always
+    // searched. This searched titles alone, so the same word gave two different sets in two
+    // article lists, and the narrower one was the screen advertised as showing everything.
+    where.OR = [
+      { title: { contains: search, mode: "insensitive" } },
+      { summary: { contains: search, mode: "insensitive" } },
+    ];
   }
 
   return where;

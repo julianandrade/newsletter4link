@@ -35,17 +35,38 @@ describe("articleListWhere", () => {
     expect(articleListWhere({ state: "all", search: null })).toEqual({});
   });
 
-  it("searches the title, case insensitively, and ignores a blank search", () => {
+  it("searches the title and the summary, case insensitively, ignoring a blank search", () => {
+    // The same two fields `GET /api/articles/pending` searches. A word that found a story
+    // in the queue and not in the archive was the divergence, and the archive is the list
+    // that claims to show everything.
     expect(articleListWhere({ state: null, search: "  agents  " })).toEqual({
-      title: { contains: "agents", mode: "insensitive" },
+      OR: [
+        { title: { contains: "agents", mode: "insensitive" } },
+        { summary: { contains: "agents", mode: "insensitive" } },
+      ],
     });
     expect(articleListWhere({ state: null, search: "   " })).toEqual({});
   });
 
   it("combines a state and a search", () => {
+    // The state stays a top-level condition rather than joining the OR, so a search on the
+    // Rejected filter cannot return an approved story whose summary matches.
     expect(articleListWhere({ state: "rejected", search: "agents" })).toEqual({
       status: "REJECTED",
-      title: { contains: "agents", mode: "insensitive" },
+      OR: [
+        { title: { contains: "agents", mode: "insensitive" } },
+        { summary: { contains: "agents", mode: "insensitive" } },
+      ],
+    });
+  });
+
+  it("keeps the discard filter out of the OR, so it cannot be widened by a search", () => {
+    expect(articleListWhere({ state: "discarded", search: "agents" })).toEqual({
+      discardedAt: { not: null },
+      OR: [
+        { title: { contains: "agents", mode: "insensitive" } },
+        { summary: { contains: "agents", mode: "insensitive" } },
+      ],
     });
   });
 });
