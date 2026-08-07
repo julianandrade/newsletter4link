@@ -24,6 +24,12 @@ export async function isDuplicateByUrl(url: string, organizationId: string): Pro
 
 /**
  * Find similar articles based on embedding similarity (within an organization)
+ *
+ * Sees discarded articles on purpose, for the same reason `isDuplicateByUrl` above does. A
+ * discard means "never show me this again", and the two checks are one gate: a story whose
+ * URL has changed but whose text has not would slip past the URL lookup and be recreated on
+ * the next collection run, every run, for ever. Adding `discardedAt: null` to this where
+ * clause reads like an oversight being tidied up and is the trap.
  */
 export async function findSimilarArticles(
   embedding: number[],
