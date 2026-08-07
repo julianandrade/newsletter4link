@@ -12,6 +12,7 @@ import {
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { isoWeekAndYear } from "@/lib/radar/week";
 import { editionEmailLabel } from "@/lib/editions/identity";
+import { renderSourceFor, type RenderSource } from "@/lib/editions/sent-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,10 @@ export async function POST(request: Request) {
     const ctx = await requireOrgContext();
 
     let emailData: TemplateData;
+    // Set only on the real-edition path, so the response can report whether this
+    // preview is the frozen record of a send or a live render. Stays null for the
+    // customData branch, which has no edition and therefore no snapshot.
+    let source: RenderSource | null = null;
 
     // Use custom data if provided (from editor), otherwise fetch from database
     if (customData) {
@@ -131,6 +136,17 @@ export async function POST(request: Request) {
         );
       }
 
+      /**
+       * A sent edition previews as it was sent.
+       *
+       * Same reasoning as the subscriber archive: this screen is how an editor checks what
+       * went out, and rebuilding it from the current article rows makes it a preview of
+       * what would go out today instead. `edition` also covers the ad-hoc, no-editionId
+       * case built above from live rows; that object never carries a `sentSnapshot`, so it
+       * always resolves to `frozen: false` and the branches below leave it untouched.
+       */
+      source = renderSourceFor(edition as never);
+
       // Draft-aware preview (optional)
       let approvedDraft: { content: GeneratedNewsletter } | null = null;
       if (draftId) {
@@ -152,18 +168,43 @@ export async function POST(request: Request) {
         }
       }
 
-      if (approvedDraft?.content?.sections?.length) {
+      if (source.frozen) {
+        /**
+         * The snapshot wins whenever there is one, and there is no merging.
+         *
+         * A draft approved after the send would otherwise take this branch below and mix
+         * its titles with categories read from the current article rows, half-frozen the
+         * way lib/editions/sent-snapshot.ts warns against. Once an edition is sent, its
+         * preview is the record of what went out, full stop.
+         */
+        emailData = {
+          // Template's Article requires summary as string | null; SourceArticle
+          // leaves it optional, so the shape needs pinning down field by field.
+          articles: source.articles.map((article) => ({
+            title: article.title,
+            summary: article.summary ?? null,
+            sourceUrl: article.sourceUrl,
+            category: article.category,
+            relevanceScore: article.relevanceScore,
+            content: article.content,
+          })),
+          projects: source.projects,
+          week: source.week,
+          year: source.year,
+          label: source.label,
+        };
+      } else if (approvedDraft?.content?.sections?.length) {
         const articleById = new Map(
           edition.articles.map((ea: any) => [ea.article.id, ea.article])
         );
         const draftArticles = approvedDraft.content.sections.flatMap((section) =>
           section.articles.map((article) => {
-            const source = articleById.get(article.id);
+            const matched = articleById.get(article.id);
             return {
               title: article.title,
               summary: article.summary,
               sourceUrl: article.sourceUrl,
-              category: source?.category || [],
+              category: matched?.category || [],
             };
           })
         );
@@ -270,6 +311,8 @@ export async function POST(request: Request) {
       html,
       data: emailData,
       template: usedTemplate,
+      // So the screen can label the preview "as sent" rather than implying it is live.
+      frozen: source?.frozen ?? false,
     });
   } catch (error) {
     console.error("Error generating preview:", error);
