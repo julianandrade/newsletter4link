@@ -45,6 +45,9 @@ const WORKSPACE = [
   // "Review queue" was here, pointing at a second copy of the same list. It is
   // gone deliberately: two entries leading to one list under two names is what
   // RQ-005 AC-4.4 forbids. The queue lives at /dashboard?view=queue.
+  // Every article, in every state. The only route to a rejected or discarded story, and
+  // therefore the only way to undo either without an API call.
+  { href: "/dashboard/articles", label: "Articles" },
   { href: "/dashboard/projects", label: "Projects" },
   { href: "/dashboard/curation", label: "Curation jobs" },
   { href: "/dashboard/generate", label: "Ghost Writer" },
