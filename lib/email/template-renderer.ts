@@ -36,6 +36,8 @@ interface Article {
   sourceUrl: string;
   category?: string[];
   relevanceScore?: number | null;
+  /** Read only to find the lead story's image. See lib/email/content-image.ts. */
+  content?: string | null;
 }
 
 interface Project {
@@ -209,6 +211,9 @@ export function renderTemplate(
           sourceUrl: article.sourceUrl,
           category: article.category,
           relevanceScore: article.relevanceScore,
+          // Dropped here once, which meant the top story's image reached the built-in edition and
+          // not a single stored template. Only the lead's is read.
+          content: article.content,
         })),
         projects: projects.map((project) => ({
           name: project.name,

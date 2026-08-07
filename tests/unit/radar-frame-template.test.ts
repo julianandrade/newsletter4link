@@ -20,6 +20,7 @@ const articles = [
     sourceUrl: "https://www.anthropic.com/news/runtime",
     category: ["Models & research"],
     relevanceScore: 9.4,
+    content: `<img src="https://cdn.anthropic.com/lead.jpg" width="1200" height="675">`,
   },
   {
     title: "EU AI Act enforcement timeline slips again",
@@ -155,6 +156,12 @@ describe("the v2 html through a real send", () => {
 
   it("signs the unsubscribe link", () => {
     expect(sent()).toMatch(/\/unsubscribe\?token=[^"]+/);
+  });
+
+  it("carries the top story's image through, which a stored template used to drop", () => {
+    // renderTemplate rebuilt the edition without the article's content, so the image reached the
+    // built-in edition and no stored template. Found only by rendering a seeded row.
+    expect(sent()).toContain("https://cdn.anthropic.com/lead.jpg");
   });
 
   it("drops the trend radar row on a week with no trends", () => {

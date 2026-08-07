@@ -31,6 +31,8 @@ export interface Article {
   summary: string | null;
   sourceUrl: string;
   category: string[];
+  /** Read only to find the lead story's image. See lib/email/content-image.ts. */
+  content?: string | null;
 }
 
 export interface Project {
@@ -114,6 +116,8 @@ export function replaceContentMergeTags(
           summary: article.summary,
           sourceUrl: article.sourceUrl,
           category: article.category,
+          // Only the lead's is read, to find the top story's image.
+          content: article.content,
         })),
         projects: projects.map((project) => ({
           name: project.name,
