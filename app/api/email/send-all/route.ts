@@ -25,6 +25,7 @@ import {
   weeklySlotFor,
 } from "@/lib/editions/identity";
 import { personalizeHtml } from "@/lib/email/personalize";
+import { buildSentSnapshot } from "@/lib/editions/sent-snapshot";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -485,12 +486,29 @@ export async function POST(request: Request) {
 
     // Mark edition and draft as sent/used
     if (result.sent > 0) {
+      /**
+       * The snapshot is built from `emailData`, which is exactly what the renderer was
+       * given, whichever of the three branches above produced it: custom data from the
+       * editor, an approved draft, or the edition's own rows. Rebuilding it from the
+       * database here would record something other than what went out on two of those
+       * three paths.
+       */
+      const snapshot = buildSentSnapshot({
+        articles: emailData.articles ?? [],
+        projects: emailData.projects ?? [],
+        week: emailData.week,
+        year: emailData.year,
+        label: emailData.label ?? `Week ${emailData.week}`,
+        subject: newsletterSubject(emailData as any),
+        templateId: effectiveTemplateId,
+      });
+
       // RQ-005 BR-011: a sent edition must be able to say who approved the send
       // and when. The columns existed and nothing wrote them, so every edition
       // sent so far answers "unknown". Written in the same step that marks it
       // sent, and only if it is not already set, because an approval is a fact
       // about the first send rather than the latest one.
-      await markEditionAsSent(edition.id);
+      await markEditionAsSent(edition.id, snapshot);
       await db.edition.updateMany({
         where: { id: edition.id, approvedAt: null },
         data: {
