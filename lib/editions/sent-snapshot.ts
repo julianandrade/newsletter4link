@@ -56,14 +56,31 @@ export interface SentSnapshot {
   /**
    * Which stored template rendered it. Null means the built-in edition.
    *
-   * Informational, a record and not an input: nothing reads this back. Every preview of a
-   * sent edition re-resolves the template from the request or from whichever template is
-   * currently active, so switching the active template re-frames a sent edition's preview
-   * even though this field says which one framed it at the time. That is a known gap and
-   * feeding this value into template resolution would be a behaviour change on its own,
-   * not a tidy-up. Read it when you need to know what was used; do not route on it.
+   * Read back when previewing a frozen edition that names no template of its own, so a
+   * sent edition keeps the frame it was sent in rather than borrowing whichever template
+   * happens to be active today. An explicit `templateId` on the request still wins, which
+   * is what lets someone ask "how would this edition look in the new template".
    */
   templateId: string | null;
+  /**
+   * Blocks the editor injected on top of the rendered template, when the send carried
+   * custom data. Absent on every other send.
+   */
+  customBlocks?: unknown[] | null;
+  /**
+   * The finished HTML, for a send that was hand-edited in the Unlayer editor.
+   *
+   * The rest of this record is data, deliberately, so the three subscriber-bound URLs can
+   * resolve per reader at read time. That works because data re-renders. Hand-edited HTML
+   * does not: no article list reproduces a frame somebody moved around by hand, so for
+   * that one path the bytes are the only faithful record.
+   *
+   * Still carries `{{unsubscribe_url}}`, `{{archive_url}}` and `{{portal_url}}` unresolved,
+   * exactly as the send loop received it, so a reader personalises it the same way the
+   * send did. Storing it already resolved would hand every later reader the first
+   * recipient's signed links.
+   */
+  frozenHtml?: string | null;
 }
 
 export interface BuildSnapshotInput {
@@ -74,6 +91,8 @@ export interface BuildSnapshotInput {
   label: string;
   subject: string;
   templateId: string | null;
+  customBlocks?: unknown[] | null;
+  frozenHtml?: string | null;
 }
 
 function toSnapshotArticle(
@@ -114,7 +133,39 @@ export function buildSentSnapshot(input: BuildSnapshotInput): SentSnapshot {
     label: input.label,
     subject: input.subject,
     templateId: input.templateId,
+    // Null rather than absent, so a reader can tell "this send had none" from an older
+    // snapshot written before these two existed.
+    customBlocks: input.customBlocks?.length ? input.customBlocks : null,
+    frozenHtml: input.frozenHtml || null,
   };
+}
+
+/**
+ * The finished bytes a sent edition should be shown as, when there are any.
+ *
+ * Only a hand-edited send has them. Every other sent edition re-renders from the snapshot's
+ * data, which is the arrangement that lets one template change reach the archive.
+ *
+ * The caller still has to personalise what comes back: the three subscriber-bound tags are
+ * deliberately left standing in the stored bytes.
+ */
+export function frozenHtmlFor(sentSnapshot: unknown): string | null {
+  if (!isSentSnapshot(sentSnapshot)) return null;
+  const html = sentSnapshot.frozenHtml;
+  return typeof html === "string" && html.trim().length > 0 ? html : null;
+}
+
+/** The template a frozen edition was sent in, or null for the built-in one. */
+export function frozenTemplateIdFor(sentSnapshot: unknown): string | null {
+  if (!isSentSnapshot(sentSnapshot)) return null;
+  return typeof sentSnapshot.templateId === "string" ? sentSnapshot.templateId : null;
+}
+
+/** Blocks the editor injected on top of the template, for a frozen edition. */
+export function frozenCustomBlocksFor(sentSnapshot: unknown): unknown[] | null {
+  if (!isSentSnapshot(sentSnapshot)) return null;
+  const blocks = sentSnapshot.customBlocks;
+  return Array.isArray(blocks) && blocks.length > 0 ? blocks : null;
 }
 
 /**

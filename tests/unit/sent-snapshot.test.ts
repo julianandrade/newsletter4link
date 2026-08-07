@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   SENT_SNAPSHOT_VERSION,
   buildSentSnapshot,
+  frozenCustomBlocksFor,
+  frozenHtmlFor,
+  frozenTemplateIdFor,
   isSentSnapshot,
   renderSourceFor,
 } from "@/lib/editions/sent-snapshot";
@@ -97,6 +100,66 @@ describe("buildSentSnapshot", () => {
     const snapshot = buildSentSnapshot(snapshotInput());
 
     expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot);
+  });
+});
+
+describe("what a hand-edited send records", () => {
+  const roundTrip = (over: Record<string, unknown>) =>
+    JSON.parse(JSON.stringify(buildSentSnapshot({ ...snapshotInput(), ...over })));
+
+  it("keeps the finished bytes when the send was hand-edited", () => {
+    const html = "<html><body>hand arranged {{unsubscribe_url}}</body></html>";
+
+    expect(frozenHtmlFor(roundTrip({ frozenHtml: html }))).toBe(html);
+  });
+
+  it("leaves the three subscriber-bound tags standing in what it stored", () => {
+    // Storing them resolved would hand every later reader the first recipient's signed
+    // links, which is the defect the send loop already exists to avoid.
+    const stored = frozenHtmlFor(
+      roundTrip({
+        frozenHtml: "<p>{{unsubscribe_url}} {{archive_url}} {{portal_url}}</p>",
+      })
+    );
+
+    expect(stored).toContain("{{unsubscribe_url}}");
+    expect(stored).toContain("{{archive_url}}");
+    expect(stored).toContain("{{portal_url}}");
+  });
+
+  it("answers null for a send that was not hand-edited", () => {
+    expect(frozenHtmlFor(roundTrip({}))).toBeNull();
+    expect(frozenHtmlFor(roundTrip({ frozenHtml: "" }))).toBeNull();
+    expect(frozenHtmlFor(roundTrip({ frozenHtml: "   " }))).toBeNull();
+  });
+
+  it("answers null for anything that is not a snapshot", () => {
+    expect(frozenHtmlFor(null)).toBeNull();
+    expect(frozenHtmlFor({ frozenHtml: "<p>not a snapshot</p>" })).toBeNull();
+    expect(frozenTemplateIdFor(null)).toBeNull();
+    expect(frozenCustomBlocksFor(null)).toBeNull();
+  });
+
+  it("records the template the edition was actually sent in", () => {
+    expect(frozenTemplateIdFor(roundTrip({ templateId: "tmpl-7" }))).toBe("tmpl-7");
+    expect(frozenTemplateIdFor(roundTrip({ templateId: null }))).toBeNull();
+  });
+
+  it("records the blocks the editor injected, and null when there were none", () => {
+    expect(
+      frozenCustomBlocksFor(roundTrip({ customBlocks: [{ id: "b1", html: "<p>x</p>" }] }))
+    ).toEqual([{ id: "b1", html: "<p>x</p>" }]);
+    expect(frozenCustomBlocksFor(roundTrip({ customBlocks: [] }))).toBeNull();
+    expect(frozenCustomBlocksFor(roundTrip({}))).toBeNull();
+  });
+
+  it("writes null rather than dropping the keys, so an older snapshot is tellable apart", () => {
+    const snapshot = roundTrip({});
+
+    expect("frozenHtml" in snapshot).toBe(true);
+    expect("customBlocks" in snapshot).toBe(true);
+    expect(snapshot.frozenHtml).toBeNull();
+    expect(snapshot.customBlocks).toBeNull();
   });
 });
 
