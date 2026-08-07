@@ -92,6 +92,15 @@ export function ArticleListRow({
         <h3 className="font-editorial m-0 text-[15.5px] font-medium leading-[1.3] text-radar-ink text-pretty">
           <ArticleTitleLink articleId={article.id} title={article.title} />
         </h3>
+        {/*
+          Rendered rather than dropped from the interface and the select. The field is one of
+          the six an editor can now change, and it reaches the newsletter, so a screen that
+          claims to show every article should show the value it is asking people to correct.
+          Same line and same wording as the queue at `components/proposal/queue-view.tsx`.
+        */}
+        {article.author && (
+          <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3">by {article.author}</p>
+        )}
         {article.summary && (
           <p className="mt-1.5 mb-0 line-clamp-2 max-w-[80ch] text-[12.5px] text-radar-ink2 text-pretty">
             {article.summary}
