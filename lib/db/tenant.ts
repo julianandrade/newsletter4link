@@ -21,6 +21,10 @@ import { Prisma } from "@prisma/client";
  * Prisma accepts a non-unique field alongside the unique one in `update` and `delete`,
  * which is what makes this possible: a row in another organization raises P2025 rather
  * than being written. Verified against the database, not assumed.
+ *
+ * The `article` model carries a second rule: `findMany` and `count` exclude discarded rows.
+ * `findFirst`, `findUnique` and `updateMany` do not, because a lookup by id is not a list
+ * and restoring a discarded article means writing to one.
  */
 
 export type TenantScopedModels =
@@ -50,10 +54,21 @@ export function createTenantClient(organizationId: string) {
 
     // ==================== ARTICLES ====================
     article: {
+      /**
+       * Discarded rows are out, unless the caller asks for them by name.
+       *
+       * Applied *before* the caller's where, which is the opposite of `organizationId`
+       * below it. The organization is not the caller's to widen, so it goes last and wins;
+       * the discard view is exactly what a "show me what I threw away" screen has to ask
+       * for, so it goes first and loses to an explicit `discardedAt`.
+       *
+       * Here rather than at the twenty article reads across the codebase, because that is
+       * twenty chances to forget and one of them is the send route.
+       */
       findMany: <T extends Prisma.ArticleFindManyArgs>(args?: T) =>
         prisma.article.findMany({
           ...args,
-          where: { ...args?.where, organizationId },
+          where: { discardedAt: null, ...args?.where, organizationId },
         } as T),
 
       findFirst: <T extends Prisma.ArticleFindFirstArgs>(args?: T) =>
@@ -94,7 +109,7 @@ export function createTenantClient(organizationId: string) {
       count: <T extends Prisma.ArticleCountArgs>(args?: T) =>
         prisma.article.count({
           ...args,
-          where: { ...args?.where, organizationId },
+          where: { discardedAt: null, ...args?.where, organizationId },
         } as T),
     },
 

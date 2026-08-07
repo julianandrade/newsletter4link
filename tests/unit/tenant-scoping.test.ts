@@ -161,3 +161,48 @@ describe("what already worked keeps working", () => {
     expect(lastCall("update").args.data).toEqual({ summary: "edited" });
   });
 });
+
+describe("discarded articles are out of every list", () => {
+  it("findMany excludes them by default", async () => {
+    await db().article.findMany({ where: { status: "APPROVED" } });
+
+    expect(lastCall("findMany").args.where).toEqual({
+      discardedAt: null,
+      status: "APPROVED",
+      organizationId: "org-1",
+    });
+  });
+
+  it("count excludes them by default, so the counts match the lists", async () => {
+    await db().article.count({ where: { status: "APPROVED" } });
+
+    expect(lastCall("count").args.where).toEqual({
+      discardedAt: null,
+      status: "APPROVED",
+      organizationId: "org-1",
+    });
+  });
+
+  it("a caller that asks for them by name wins", async () => {
+    // The discard filter is applied before the caller's where, unlike organizationId which
+    // is applied after. The scope is not the caller's to widen; the discard view is.
+    await db().article.findMany({ where: { discardedAt: { not: null } } });
+
+    expect(lastCall("findMany").args.where.discardedAt).toEqual({ not: null });
+    expect(lastCall("findMany").args.where.organizationId).toBe("org-1");
+  });
+
+  it("findFirst and findUnique still find one, so a discarded article can be restored", async () => {
+    // The detail screen has to open a discarded article to offer Restore. A lookup by id is
+    // never a list, so it is never filtered.
+    await db().article.findFirst({ where: { id: "row-1" } });
+
+    expect("discardedAt" in lastCall("findFirst").args.where).toBe(false);
+  });
+
+  it("updateMany still reaches one, so restore can write to it", async () => {
+    await db().article.updateMany({ where: { id: { in: ["row-1"] } }, data: { x: 1 } });
+
+    expect("discardedAt" in lastCall("updateMany").args.where).toBe(false);
+  });
+});

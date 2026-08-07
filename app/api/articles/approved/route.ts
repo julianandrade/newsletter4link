@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
     const articles = await db.$raw.article.findMany({
       where: {
         organizationId: db.organizationId,
+        // Discarded rows are out. This query uses the raw client for its `_count`, so the
+        // tenant wrapper's rule does not reach it and the filter is mine to carry.
+        discardedAt: null,
         status: "APPROVED",
         ...(search && {
           title: {

@@ -96,8 +96,9 @@ export async function POST(request: Request) {
       year = customData.year;
     } else {
       // Get approved articles
+      // Discarded rows are out. See lib/db/tenant.ts.
       const articles = await prisma.article.findMany({
-        where: { status: "APPROVED" },
+        where: { discardedAt: null, status: "APPROVED" },
         orderBy: [
           { relevanceScore: "desc" },
           // Finding C1: nulls last, so an undated article does not head the list.

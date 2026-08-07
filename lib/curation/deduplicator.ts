@@ -4,6 +4,10 @@ import { config } from "@/lib/config";
 
 /**
  * Check if an article is a duplicate based on URL (within an organization)
+ *
+ * Sees discarded articles on purpose. A discard means "never show me this again", and it is
+ * soft precisely so this lookup keeps matching: filtering here would recreate the story on
+ * the next collection run, every run, for ever.
  */
 export async function isDuplicateByUrl(url: string, organizationId: string): Promise<boolean> {
   const existing = await prisma.article.findUnique({

@@ -53,8 +53,10 @@ export async function POST(request: NextRequest) {
     // Get articles - either specified or all approved for edition
     let articles;
     if (articleIds && articleIds.length > 0) {
+      // Discarded rows are out. See lib/db/tenant.ts.
       articles = await prisma.article.findMany({
         where: {
+          discardedAt: null,
           id: { in: articleIds },
           organizationId: edition.organizationId,
         },

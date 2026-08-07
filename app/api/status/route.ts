@@ -21,9 +21,10 @@ export async function GET() {
       totalSubscribers,
       activeSubscribers,
     ] = await Promise.all([
-      prisma.article.count(),
-      prisma.article.count({ where: { status: "PENDING_REVIEW" } }),
-      prisma.article.count({ where: { status: "APPROVED" } }),
+      // Discarded rows are out. See lib/db/tenant.ts.
+      prisma.article.count({ where: { discardedAt: null } }),
+      prisma.article.count({ where: { discardedAt: null, status: "PENDING_REVIEW" } }),
+      prisma.article.count({ where: { discardedAt: null, status: "APPROVED" } }),
       prisma.project.count(),
       prisma.subscriber.count(),
       prisma.subscriber.count({ where: { active: true } }),

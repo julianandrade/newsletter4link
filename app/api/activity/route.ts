@@ -65,8 +65,10 @@ export async function GET() {
     }
 
     // Get recently approved/rejected articles (last 20)
+    // Discarded rows are out. See lib/db/tenant.ts.
     const recentArticles = await prisma.article.findMany({
       where: {
+        discardedAt: null,
         status: { in: ["APPROVED", "REJECTED"] },
       },
       orderBy: { updatedAt: "desc" },

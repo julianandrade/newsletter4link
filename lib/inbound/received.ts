@@ -174,8 +174,9 @@ export async function getEmailArticles(
   // are different answers and the caller has to be able to tell them apart.
   if (!email) return null;
 
+  // Discarded rows are out. See lib/db/tenant.ts.
   const articles = await prisma.article.findMany({
-    where: { inboundEmailId: emailId, organizationId },
+    where: { discardedAt: null, inboundEmailId: emailId, organizationId },
     orderBy: [{ relevanceScore: { sort: "desc", nulls: "last" } }, { capturedAt: "desc" }],
     select: {
       id: true,
