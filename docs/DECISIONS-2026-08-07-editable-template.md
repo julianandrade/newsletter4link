@@ -269,12 +269,10 @@ their own native unsubscribe button. Not implemented. Worth doing, and it helps 
    all three templates, twice. Read the second batch: the first three carry `localhost` links. See
    §13. The route's own auth wrapper and its data assembly are still unexercised, because the route
    needs a session with MFA.
-2. **Outlook desktop.** The MSO conditionals and `mso-line-height-rule` declarations exist for the
-   Word rendering engine and I cannot drive it. This is the check I would most want you to do:
-   send a test of each of the three templates to an Outlook desktop client.
-3. **The Unlayer editor itself.** The design JSON is unvalidated by Unlayer. It follows the shape
-   of the six templates already seeded, but "the editor loads it without complaint" is unproven,
-   and requires a logged-in browser session with MFA.
+2. ~~**Outlook desktop.**~~ **You checked the delivered emails and reported them fine.**
+3. ~~**The Unlayer editor itself.**~~ **You opened it and the design JSON loads.** This was the
+   riskiest unknown in the whole piece, because the design is hand-authored rather than exported
+   from Unlayer, and an editor that refused it would have made both variants useless.
 4. ~~**The seed script has not been run.**~~ **You ran it.** v2 and v3 now exist for both
    organizations, Link Consulting and Experience. All four rows were then verified against the
    database through the real send path, and that found a bug nothing else had: `renderTemplate`
@@ -286,7 +284,16 @@ their own native unsubscribe button. Not implemented. Worth doing, and it helps 
    use that single asset and it will not swap in dark mode. Experience has none, so it gets the
    Linkroad light and dark pair. Uploading light-on-transparent artwork is the fix, the same as
    for the built-in edition.
-5. **Gmail, Apple Mail, mobile.** Same reason as Outlook.
+5. **Gmail, Apple Mail, mobile.** Not opened in any of them. Lower risk than Outlook, which is the
+   one the MSO conditionals exist for and which you have now checked.
+6. **The send route's own auth wrapper and data assembly.** The nine sends went through everything
+   below it, using the same library functions, but the route itself needs a session with MFA and was
+   never called. What is unexercised is the assembly of `emailData` from an edition's own articles,
+   which is the one path that differs from what the scripts did.
+7. **A send to more than one recipient.** Every send tonight had a single-element recipient list, on
+   purpose. The batching, the rate-limit delay between batches, and the per-recipient loop running
+   more than once are therefore untested against Resend, even though the substitution inside the
+   loop has unit coverage.
 
 ## Findings I did not act on
 
