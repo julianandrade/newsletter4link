@@ -93,3 +93,38 @@ export function bulkActionsForFilter(state: string): BulkAction[] {
       return ["approve", "reject", "reset", "discard"];
   }
 }
+
+/** Which bulk actions stop for a confirmation, and which run on the click. */
+export const CONFIRMED_BULK_ACTIONS: BulkAction[] = ["reject", "discard"];
+
+export interface BulkActionDescriptor {
+  id: BulkAction;
+  /** True when the action opens the confirmation dialog instead of running. */
+  confirms: boolean;
+}
+
+/**
+ * The bar's actions for a filter, each carrying whether it asks first.
+ *
+ * The asymmetry is on the record and is the reason this is a function rather than a `?:` in
+ * the screen: bulk reject shipped without a confirmation and 23 curated stories were lost to
+ * one click. Reject and Discard therefore ask; Approve, Back to the queue and Restore do
+ * not, because all three either move work forward or put something back, and all three are
+ * undoable from the same screen.
+ *
+ * It was protected only by a prose comment inside a 530-line client component, which is
+ * exactly the protection that failed for `reset`. `tests/unit/article-list-filter.test.ts`
+ * now asserts both halves, and the VIEWER case with them: a reader who decides nothing gets
+ * no actions at all, so the bar renders nothing rather than buttons that answer 403.
+ */
+export function bulkActionDescriptors(
+  state: string,
+  canEdit: boolean
+): BulkActionDescriptor[] {
+  if (!canEdit) return [];
+
+  return bulkActionsForFilter(state).map((id) => ({
+    id,
+    confirms: CONFIRMED_BULK_ACTIONS.includes(id),
+  }));
+}

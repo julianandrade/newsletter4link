@@ -50,7 +50,7 @@ import {
 } from "@/components/radar/selection";
 import { useOrgRole } from "@/components/radar/use-role";
 import {
-  bulkActionsForFilter,
+  bulkActionDescriptors,
   type ArticleListState,
 } from "@/lib/articles/list-filter";
 import type { BulkAction } from "@/lib/articles/bulk-action";
@@ -135,9 +135,12 @@ export default function AllArticlesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [bulkBusy, setBulkBusy] = useState<BulkAction | null>(null);
-  /** Set only by the two actions that ask first. Carries which one, so one dialog serves both. */
+  /**
+   * Set only by the actions `bulkActionDescriptors` marks as confirming. Carries which one,
+   * so one dialog serves both.
+   */
   const [pendingBulk, setPendingBulk] = useState<{
-    action: "reject" | "discard";
+    action: BulkAction;
     ids: string[];
   } | null>(null);
 
@@ -277,25 +280,26 @@ export default function AllArticlesPage() {
    * reset and discard all match nothing, so pressing Discard on forty stories produced a
    * confirmation dialog and then "Nothing changed".
    *
-   * Reject and Discard ask first; Approve, Back to the queue and Restore do not. The
-   * asymmetry is on the record. Bulk reject shipped without a confirmation and 23 curated
-   * stories were lost to one click. The three that are not guarded either move work forward
-   * or put something back, and all three are undoable from this very screen.
+   * Which of them ask first, and the VIEWER's empty list, are `bulkActionDescriptors`'
+   * answer rather than a `?:` here. The asymmetry is on the record, bulk reject shipped
+   * without a confirmation and 23 curated stories were lost to one click, and it was
+   * protected only by this comment until a test was put behind it. What is left here is the
+   * wiring: a label, and a click that either confirms or runs.
    */
-  const bulkActions: BulkBarAction[] = canEdit
-    ? bulkActionsForFilter(state).map((action) => ({
-        id: action,
-        label: BULK_LABELS[action],
-        destructive: action === "reject" || action === "discard",
-        onRun: (ids: string[]) => {
-          if (action === "reject" || action === "discard") {
-            setPendingBulk({ action, ids });
-          } else {
-            void runBulk(action, ids);
-          }
-        },
-      }))
-    : [];
+  const bulkActions: BulkBarAction[] = bulkActionDescriptors(state, canEdit).map(
+    ({ id, confirms }) => ({
+      id,
+      label: BULK_LABELS[id],
+      destructive: confirms,
+      onRun: (ids: string[]) => {
+        if (confirms) {
+          setPendingBulk({ action: id, ids });
+        } else {
+          void runBulk(id, ids);
+        }
+      },
+    })
+  );
 
   const renderRows = () => (
     <div className="border-t border-radar-line">

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   articleListPage,
   articleListWhere,
+  bulkActionDescriptors,
   bulkActionsForFilter,
 } from "@/lib/articles/list-filter";
 
@@ -113,5 +114,63 @@ describe("bulkActionsForFilter", () => {
     ]);
     expect(bulkActionsForFilter("all")).not.toContain("restore");
     expect(bulkActionsForFilter("banana")).not.toContain("restore");
+  });
+});
+
+/**
+ * The confirmation asymmetry, pinned.
+ *
+ * It is on the record for a reason: bulk reject shipped without a confirmation and 23
+ * curated stories were lost to one click. Until now the only thing holding it in place was a
+ * prose comment inside a 530-line client component, which is exactly the protection that
+ * failed for `reset`. Both halves are asserted, because either one silently flipping is a
+ * defect: losing the dialog costs stories, and adding one to Approve or Restore puts a modal
+ * in front of the actions the screen exists to make easy.
+ */
+describe("bulkActionDescriptors", () => {
+  const confirmsFor = (state: string) =>
+    Object.fromEntries(
+      bulkActionDescriptors(state, true).map(({ id, confirms }) => [id, confirms])
+    );
+
+  it("makes reject and discard ask first, on every filter that offers them", () => {
+    for (const state of ["all", "pending", "approved", "rejected", "discarded"]) {
+      const confirms = confirmsFor(state);
+      if ("reject" in confirms) expect(confirms.reject).toBe(true);
+      if ("discard" in confirms) expect(confirms.discard).toBe(true);
+    }
+
+    // Both are reachable somewhere, or the loop above would assert nothing at all.
+    expect(confirmsFor("pending").reject).toBe(true);
+    expect(confirmsFor("approved").discard).toBe(true);
+  });
+
+  it("lets approve, reset and restore run on the click", () => {
+    for (const state of ["all", "pending", "approved", "rejected", "discarded"]) {
+      const confirms = confirmsFor(state);
+      if ("approve" in confirms) expect(confirms.approve).toBe(false);
+      if ("reset" in confirms) expect(confirms.reset).toBe(false);
+      if ("restore" in confirms) expect(confirms.restore).toBe(false);
+    }
+
+    expect(confirmsFor("pending").approve).toBe(false);
+    expect(confirmsFor("approved").reset).toBe(false);
+    expect(confirmsFor("discarded").restore).toBe(false);
+  });
+
+  it("gives a VIEWER no actions at all", () => {
+    // RQ-005 AC-6.8. An empty list is what makes the bar render nothing, rather than buttons
+    // that would answer 403 from a route requiring EDITOR.
+    for (const state of ["all", "pending", "approved", "rejected", "discarded"]) {
+      expect(bulkActionDescriptors(state, false)).toEqual([]);
+    }
+  });
+
+  it("offers an EDITOR exactly what the filter allows, in the same order", () => {
+    for (const state of ["all", "pending", "approved", "rejected", "discarded", "banana"]) {
+      expect(bulkActionDescriptors(state, true).map(({ id }) => id)).toEqual(
+        bulkActionsForFilter(state)
+      );
+    }
   });
 });
