@@ -30,6 +30,44 @@ import { buildSentSnapshot } from "@/lib/editions/sent-snapshot";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
 
+export type SendRenderChoice = "hand-edited" | "stored-template" | "built-in";
+
+/**
+ * Which HTML a send goes out as, and which template the snapshot should record.
+ *
+ * Extracted so a unit test can reach it, for one specific reason: the defect this replaces
+ * was `customHtml` arriving on the request body and never being destructured, so every
+ * hand-edited send silently delivered the built-in edition instead. Nothing failed, and no
+ * test could have noticed. A rule that lives in a pure function can be asserted; a rule
+ * that lives in a destructuring statement cannot.
+ *
+ * Hand-edited bytes win over everything. They are the stored template, already rendered and
+ * then rearranged by hand, so falling back to re-rendering the template would throw away
+ * the edit the sender just made.
+ */
+export function sendRenderChoice(input: {
+  customHtml: unknown;
+  effectiveTemplateId: string | null;
+}): {
+  use: SendRenderChoice;
+  /** The hand-edited bytes, narrowed to a string here so no caller has to cast. */
+  html: string | null;
+  snapshotTemplateId: string | null;
+} {
+  if (typeof input.customHtml === "string" && input.customHtml.trim().length > 0) {
+    // Null template on this path: no stored template framed what actually went out.
+    return { use: "hand-edited", html: input.customHtml, snapshotTemplateId: null };
+  }
+  if (input.effectiveTemplateId) {
+    return {
+      use: "stored-template",
+      html: null,
+      snapshotTemplateId: input.effectiveTemplateId,
+    };
+  }
+  return { use: "built-in", html: null, snapshotTemplateId: null };
+}
+
 interface CustomData {
   articles: Array<{
     title: string;
@@ -429,20 +467,17 @@ export async function POST(request: Request) {
     }
 
     /**
-     * HTML arranged by hand in the editor wins over every template.
+     * The rule itself lives in sendRenderChoice, where a unit test can reach it.
      *
-     * The send screen has always built this and put it on the request as `customHtml`, and
-     * this handler never destructured it, so the whole Unlayer edit-mode send was discarded
-     * in silence and the built-in edition went out instead. It arrives with the three
-     * subscriber-bound tags still standing, so it takes exactly the same path a stored
-     * template's HTML takes and is personalised per recipient in the batch loop.
+     * Hand-edited HTML arrives with the three subscriber-bound tags still standing, so it
+     * takes exactly the same path a stored template's HTML takes and is personalised per
+     * recipient inside the batch loop.
      */
-    const handEditedHtml =
-      typeof customHtml === "string" && customHtml.trim().length > 0 ? customHtml : null;
+    const choice = sendRenderChoice({ customHtml, effectiveTemplateId });
 
-    if (handEditedHtml) {
-      templateHtml = handEditedHtml;
-    } else if (effectiveTemplateId) {
+    if (choice.html) {
+      templateHtml = choice.html;
+    } else if (choice.use === "stored-template" && effectiveTemplateId) {
       // keepPerRecipient: the three signed URLs stay as merge tags here and are resolved once
       // per subscriber inside the batch loop. Rendering them now would give every recipient
       // the same links, which is the bug this replaces.
@@ -523,15 +558,14 @@ export async function POST(request: Request) {
         year: emailData.year,
         label: emailData.label ?? `Week ${emailData.week}`,
         subject: newsletterSubject(emailData as any),
-        // Null when the send was hand-edited: no stored template framed it.
-        templateId: handEditedHtml ? null : effectiveTemplateId,
+        templateId: choice.snapshotTemplateId,
         customBlocks: emailData.customBlocks ?? null,
         /**
          * The bytes, but only for the one path whose data cannot reproduce them. A frame
          * somebody rearranged by hand is not recoverable from an article list, so the
          * archive would otherwise show a different newsletter than the one delivered.
          */
-        frozenHtml: handEditedHtml,
+        frozenHtml: choice.html,
       });
 
       // RQ-005 BR-011: a sent edition must be able to say who approved the send
