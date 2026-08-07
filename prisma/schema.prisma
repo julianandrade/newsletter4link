@@ -249,6 +249,21 @@ model Article {
   // Status tracking
   status ArticleStatus @default(PENDING_REVIEW)
 
+  /**
+   * When an editor said they did not want this at all. Null means they did not.
+   *
+   * A column rather than a fourth ArticleStatus, for two reasons. Restoring returns the
+   * article to the verdict it already had, which a status would have overwritten and lost.
+   * And the two questions are genuinely independent: an approved article can be discarded,
+   * and it is still an approved article when it comes back.
+   *
+   * A soft discard rather than a DELETE, because deduplication is by
+   * `@@unique([sourceUrl, organizationId])` and `lib/curation/deduplicator.ts` looks the row
+   * up on that key. A deleted row stops matching, so the next collection run recreates the
+   * article and the same unwanted story arrives every week for ever.
+   */
+  discardedAt DateTime?
+
   // Multi-tenant
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationId String
@@ -261,6 +276,7 @@ model Article {
 
   @@unique([sourceUrl, organizationId]) // Same article can exist in different orgs
   @@index([status])
+  @@index([discardedAt])
   @@index([relevanceScore(sort: Desc)])
   @@index([publishedAt(sort: Desc)])
   @@index([organizationId])
