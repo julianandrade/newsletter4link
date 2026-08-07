@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { buildEditionEmail } from "@/lib/email/edition-data";
 import { renderEditionEmail } from "@/lib/email/edition-template";
-import { renderSourceFor } from "@/lib/editions/sent-snapshot";
+import { frozenHtmlFor, renderSourceFor } from "@/lib/editions/sent-snapshot";
+import { personalizeHtml } from "@/lib/email/personalize";
 import { resolveArchiveAccess } from "@/lib/email/archive-access";
 import { buildArchiveUrl, buildEditionIndexUrl } from "@/lib/email/archive-url";
 import { buildUnsubscribeUrl } from "@/lib/email/unsubscribe-token";
@@ -100,6 +101,16 @@ export default async function EditionArchivePage({
   if (!edition) notFound();
 
   /**
+   * A hand-edited send is served as the bytes that went out.
+   *
+   * Nothing re-renders it, because nothing can: the frame was arranged in the editor and no
+   * article list reproduces it. `personalizeHtml` resolves the three subscriber-bound tags
+   * here, per reader, exactly as the send loop did per recipient, which is why the stored
+   * copy keeps them unresolved.
+   */
+  const frozen = frozenHtmlFor(edition.sentSnapshot);
+
+  /**
    * The snapshot wins whenever there is one.
    *
    * Without this the archive re-rendered from the live `Article` rows, so an edit to a
@@ -119,6 +130,10 @@ export default async function EditionArchivePage({
     portalUrl: buildEditionIndexUrl(subscriberId),
   });
 
+  const html = frozen
+    ? personalizeHtml(frozen, { subscriberId, editionId: edition.id })
+    : renderEditionEmail(email);
+
   /**
    * The email's own HTML, in an iframe.
    *
@@ -131,7 +146,7 @@ export default async function EditionArchivePage({
     <main className="min-h-screen bg-[#eceeed]">
       <iframe
         title="This edition"
-        srcDoc={renderEditionEmail(email)}
+        srcDoc={html}
         sandbox="allow-popups allow-popups-to-escape-sandbox"
         className="h-screen w-full border-0"
       />

@@ -12,7 +12,14 @@ import {
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { isoWeekAndYear } from "@/lib/radar/week";
 import { editionEmailLabel } from "@/lib/editions/identity";
-import { renderSourceFor, type RenderSource } from "@/lib/editions/sent-snapshot";
+import {
+  frozenCustomBlocksFor,
+  frozenHtmlFor,
+  frozenTemplateIdFor,
+  renderSourceFor,
+  type RenderSource,
+} from "@/lib/editions/sent-snapshot";
+import { personalizeHtml } from "@/lib/email/personalize";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +87,11 @@ export async function POST(request: Request) {
     // preview is the frozen record of a send or a live render. Stays null for the
     // customData branch, which has no edition and therefore no snapshot.
     let source: RenderSource | null = null;
+    /** What a frozen edition recorded about how it was rendered. Null when it was not sent. */
+    let frozenBytes: string | null = null;
+    let frozenTemplateId: string | null = null;
+    let frozenBlocks: unknown[] | null = null;
+    let frozenEditionId = "";
 
     // Use custom data if provided (from editor), otherwise fetch from database
     if (customData) {
@@ -171,6 +183,17 @@ export async function POST(request: Request) {
        * always resolves to `frozen: false` and the branches below leave it untouched.
        */
       source = renderSourceFor(edition as never);
+
+      /**
+       * Lifted out of this block because `edition` is scoped to it and the rendering
+       * decisions below are not. Both are null for an edition that was never sent, and for
+       * the ad-hoc object built above, which carries no snapshot.
+       */
+      const snapshot = (edition as never as { sentSnapshot?: unknown }).sentSnapshot;
+      frozenBytes = frozenHtmlFor(snapshot);
+      frozenTemplateId = frozenTemplateIdFor(snapshot);
+      frozenBlocks = frozenCustomBlocksFor(snapshot);
+      frozenEditionId = (edition as never as { id?: string }).id ?? "";
 
       // Draft-aware preview (optional)
       let approvedDraft: { content: GeneratedNewsletter } | null = null;
@@ -284,6 +307,27 @@ export async function POST(request: Request) {
     let usedTemplate: { id: string; name: string } | null = null;
 
     /**
+     * A hand-edited send previews as the bytes that went out.
+     *
+     * Same reasoning as the subscriber archive: no article list reproduces a frame somebody
+     * arranged in the editor, so re-rendering here would show a different newsletter than
+     * the one delivered. The three subscriber-bound tags are resolved to their unsigned
+     * form, which is correct for a preview: there is no subscriber to sign for.
+     */
+    if (frozenBytes) {
+      return NextResponse.json({
+        success: true,
+        html: personalizeHtml(frozenBytes, {
+          subscriberId: "",
+          editionId: frozenEditionId,
+        }),
+        data: emailData,
+        template: null,
+        frozen: true,
+      });
+    }
+
+    /**
      * RQ-003: honour which template is active.
      *
      * A send that names no template used the built-in edition unconditionally,
@@ -292,7 +336,21 @@ export async function POST(request: Request) {
      * none is active, and when the built-in is explicitly named.
      */
     let effectiveTemplateId: string | null = templateId ?? null;
-    if (!effectiveTemplateId) {
+
+    /**
+     * A sent edition keeps the frame it was sent in.
+     *
+     * The snapshot records which template rendered it, and until now nothing read that
+     * back: switching the active template silently re-framed every past edition's preview,
+     * so the screen showed a newsletter nobody ever received. An explicit `templateId` on
+     * the request still wins, which is what lets someone ask how an old edition would look
+     * in a new template.
+     */
+    if (!effectiveTemplateId && source?.frozen) {
+      effectiveTemplateId = frozenTemplateId;
+    }
+
+    if (!effectiveTemplateId && !source?.frozen) {
       const active = await ctx.db.emailTemplate.findFirst({
         where: { isActive: true },
         select: { id: true },
@@ -322,10 +380,12 @@ export async function POST(request: Request) {
       usedTemplate = { id: template.id, name: template.name };
     } else {
       // The built-in AI Radar edition, with any custom blocks placed at the
-      // template's anchor points.
+      // template's anchor points. A frozen edition uses the blocks it was sent with:
+      // the snapshot carries them, and re-rendering without them showed an edition
+      // missing content the recipients actually got.
       html = injectCustomBlocks(
         await renderNewsletterEmail(emailData),
-        emailData.customBlocks
+        emailData.customBlocks ?? (frozenBlocks as never)
       );
     }
 
