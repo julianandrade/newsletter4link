@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { buildEditionEmail } from "@/lib/email/edition-data";
 import { renderEditionEmail } from "@/lib/email/edition-template";
-import { editionEmailLabel } from "@/lib/editions/identity";
+import { renderSourceFor } from "@/lib/editions/sent-snapshot";
 import { resolveArchiveAccess } from "@/lib/email/archive-access";
 import { buildArchiveUrl, buildEditionIndexUrl } from "@/lib/email/archive-url";
 import { buildUnsubscribeUrl } from "@/lib/email/unsubscribe-token";
@@ -69,6 +69,9 @@ export default async function EditionArchivePage({
       title: true,
       week: true,
       year: true,
+      // The frozen copy. When it is there it is the whole answer, and the joins below are
+      // read only for editions sent before this column existed.
+      sentSnapshot: true,
       articles: {
         orderBy: { order: "asc" },
         select: {
@@ -96,24 +99,21 @@ export default async function EditionArchivePage({
   });
   if (!edition) notFound();
 
+  /**
+   * The snapshot wins whenever there is one.
+   *
+   * Without this the archive re-rendered from the live `Article` rows, so an edit to a
+   * summary rewrote a newsletter that had already been delivered, and discarding an
+   * article removed the story from it entirely.
+   */
+  const source = renderSourceFor(edition);
+
   const email = buildEditionEmail({
-    articles: edition.articles.map((row) => ({
-      title: row.article.title,
-      summary: row.article.summary,
-      sourceUrl: row.article.sourceUrl,
-      category: row.article.category,
-      relevanceScore: row.article.relevanceScore,
-      content: row.article.content,
-    })),
-    projects: edition.projects.map((row) => ({
-      name: row.project.name,
-      description: row.project.description,
-      team: row.project.team,
-      impact: row.project.impact,
-    })),
-    week: edition.week,
-    year: edition.year,
-    label: editionEmailLabel(edition),
+    articles: source.articles,
+    projects: source.projects,
+    week: source.week,
+    year: source.year,
+    label: source.label,
     unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
     archiveUrl: buildArchiveUrl(edition.id, subscriberId),
     portalUrl: buildEditionIndexUrl(subscriberId),
