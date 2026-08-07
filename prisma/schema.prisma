@@ -386,6 +386,15 @@ model Edition {
   finalizedAt   DateTime?
   sentAt        DateTime?
 
+  /**
+   * What actually went out, frozen at the send. See lib/editions/sent-snapshot.ts.
+   *
+   * Null on every edition sent before this existed, and on every edition not yet sent.
+   * A reader must handle null by falling back to the live rows, which is what
+   * `renderSourceFor` does.
+   */
+  sentSnapshot Json?
+
   // RQ-005 action 8, D5: archive is what happens to a sent edition. Absence of
   // the marker is the default, visible state, so nothing has to be backfilled.
   archivedAt DateTime?

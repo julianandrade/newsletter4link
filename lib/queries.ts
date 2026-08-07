@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db";
 import { TenantClient } from "@/lib/db/tenant";
-import { ArticleStatus } from "@prisma/client";
+import { ArticleStatus, Prisma } from "@prisma/client";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
 import { editionWriteFields, weeklySlotFor } from "@/lib/editions/identity";
+import type { SentSnapshot } from "@/lib/editions/sent-snapshot";
 
 // ==================== Article Queries ====================
 
@@ -158,13 +159,25 @@ export async function finalizeEdition(editionId: string) {
 
 /**
  * Mark edition as sent (uses raw prisma - verify ownership before calling)
+ *
+ * The snapshot goes in the same statement, so an edition can never be SENT without the
+ * record of what it contained. See lib/editions/sent-snapshot.ts for why that record has
+ * to exist at all.
  */
-export async function markEditionAsSent(editionId: string) {
+export async function markEditionAsSent(
+  editionId: string,
+  sentSnapshot?: SentSnapshot
+) {
   return await prisma.edition.update({
     where: { id: editionId },
     data: {
       status: "SENT",
       sentAt: new Date(),
+      // Omitted rather than set to null when absent: a caller with nothing to record
+      // must not erase a snapshot that is already there.
+      ...(sentSnapshot === undefined
+        ? {}
+        : { sentSnapshot: sentSnapshot as unknown as Prisma.InputJsonValue }),
     },
   });
 }
