@@ -78,7 +78,16 @@ export async function POST(request: Request) {
     requireRole(ctx, "EDITOR");
 
     const body = await request.json();
-    const { editionId, templateId, customData, subscriberIds, emails, provider, draftId } = body;
+    const {
+      editionId,
+      templateId,
+      customData,
+      customHtml,
+      subscriberIds,
+      emails,
+      provider,
+      draftId,
+    } = body;
 
     // Validate provider if specified
     if (provider && !["resend", "graph"].includes(provider)) {
@@ -419,7 +428,21 @@ export async function POST(request: Request) {
       effectiveTemplateId = null;
     }
 
-    if (effectiveTemplateId) {
+    /**
+     * HTML arranged by hand in the editor wins over every template.
+     *
+     * The send screen has always built this and put it on the request as `customHtml`, and
+     * this handler never destructured it, so the whole Unlayer edit-mode send was discarded
+     * in silence and the built-in edition went out instead. It arrives with the three
+     * subscriber-bound tags still standing, so it takes exactly the same path a stored
+     * template's HTML takes and is personalised per recipient in the batch loop.
+     */
+    const handEditedHtml =
+      typeof customHtml === "string" && customHtml.trim().length > 0 ? customHtml : null;
+
+    if (handEditedHtml) {
+      templateHtml = handEditedHtml;
+    } else if (effectiveTemplateId) {
       // keepPerRecipient: the three signed URLs stay as merge tags here and are resolved once
       // per subscriber inside the batch loop. Rendering them now would give every recipient
       // the same links, which is the bug this replaces.
@@ -500,7 +523,15 @@ export async function POST(request: Request) {
         year: emailData.year,
         label: emailData.label ?? `Week ${emailData.week}`,
         subject: newsletterSubject(emailData as any),
-        templateId: effectiveTemplateId,
+        // Null when the send was hand-edited: no stored template framed it.
+        templateId: handEditedHtml ? null : effectiveTemplateId,
+        customBlocks: emailData.customBlocks ?? null,
+        /**
+         * The bytes, but only for the one path whose data cannot reproduce them. A frame
+         * somebody rearranged by hand is not recoverable from an article list, so the
+         * archive would otherwise show a different newsletter than the one delivered.
+         */
+        frozenHtml: handEditedHtml,
       });
 
       // RQ-005 BR-011: a sent edition must be able to say who approved the send

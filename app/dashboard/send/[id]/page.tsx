@@ -763,13 +763,26 @@ export default function EditionDetailPage() {
           imageUrl: p.imageUrl,
         }));
 
-        // Replace merge tags with actual content
-        const finalHtml = replaceContentMergeTags(exportedHtml, {
-          articles: contentArticles,
-          projects: contentProjects,
-          week: edition.week,
-          year: edition.year,
-        });
+        /**
+         * keepPerRecipient, because this HTML is about to be sent.
+         *
+         * Everything shared is substituted here, once. The three subscriber-bound URLs are
+         * left standing so the send loop resolves them per subscriber, exactly as it does
+         * for a stored template. Resolving them here would give every recipient the generic
+         * unsubscribe page, which is the defect `lib/email/personalize.ts` exists to
+         * prevent. The preview path below still resolves them, since a preview has no
+         * subscriber to sign for.
+         */
+        const finalHtml = replaceContentMergeTags(
+          exportedHtml,
+          {
+            articles: contentArticles,
+            projects: contentProjects,
+            week: edition.week,
+            year: edition.year,
+          },
+          { keepPerRecipient: true }
+        );
 
         requestBody.customHtml = finalHtml;
 
