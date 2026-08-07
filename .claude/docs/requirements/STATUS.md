@@ -1,11 +1,75 @@
 # Where we are, and how to pick this up
 
-Written 6 August 2026, updated late morning. Everything is committed and pushed,
+Written 6 August 2026, updated 7 August at 01:00. Everything is committed and pushed,
 production is deployed and healthy, and nothing is left running.
 
 Read this file, then
 [DECISIONS-2026-08-06.md](DECISIONS-2026-08-06.md) for the calls made overnight without
 you, and [ROADMAP.md](ROADMAP.md) for the longer view.
+
+---
+
+## The edition template is editable, and here is what is still open
+
+**Done 7 August 2026, overnight.** 25 commits, deployed as `25ac54f`, production verified as
+serving the new build. 1080 unit tests, `tsc` clean, `next build` clean.
+
+Full record in [docs/DECISIONS-2026-08-07-editable-template.md](../../../docs/DECISIONS-2026-08-07-editable-template.md),
+the plan in [docs/superpowers/plans/2026-08-06-editable-radar-template.md](../../../docs/superpowers/plans/2026-08-06-editable-radar-template.md),
+and what to build next in [docs/IDEAS-2026-08-07-what-to-build-next.md](../../../docs/IDEAS-2026-08-07-what-to-build-next.md).
+
+**What shipped.** Two editable copies of the built-in edition, seeded for both organizations:
+`AI Radar Weekly - editable frame` and `- Unlayer`. The masthead prints the year once and carries
+the week's date range. A named edition no longer breaks it at 320px. Six merge-tag lists became
+one table. The two-column top story renders for the first time, from the image the feed already
+sent. A signed per-subscriber archive at `/editions`. Nine real emails to
+julian.andrade@linkconsulting.com, all delivered, all three templates, Outlook and the Unlayer
+editor both checked by Julian.
+
+### Open, in the order I would take them
+
+**1. The tracking webhook does not arrive.** Resend reports all nine sends delivered and clicked.
+`EmailEvent` holds only the nine `SENT` rows written by the send itself: no `DELIVERED`, `OPENED`
+or `CLICKED`. So the pipeline works up to the point where Resend calls us and stops there. Check
+the webhook URL configured on Resend's side and whether `RESEND_WEBHOOK_SECRET` matches, because
+`lib/webhooks/verify.ts` fails closed. Until this is fixed every engagement number on the
+Analytics screen is unmeasurable, which makes it the thing blocking the most.
+
+**2. `List-Unsubscribe-Post` is missing.** The unsubscribe page now asks before acting, which it
+did not before, so the frictionless path has to come from the header that mail clients turn into
+their own native button. It also helps deliverability. This went from an improvement to a gap the
+moment the page started asking.
+
+**3. Mail scanners click every link.** All nine sends came back "clicked" within seconds, none of
+it human. Whenever click tracking starts working its numbers will be inflated by Linkroad's own
+security appliance unless something filters them, or the Analytics screen will report a scanner as
+engagement.
+
+**4. `Subscriber` has no `unsubscribedAt`.** Nothing records when somebody left. It made the
+unsubscribe investigation harder and would make a real incident impossible to reconstruct.
+
+**5. The send route itself is unexercised.** The nine sends went through everything below it,
+using the same library functions, but the route needs a session with MFA and was never called.
+What is untested is its assembly of `emailData` from an edition's own articles. Related: every send
+had a single-element recipient list on purpose, so the batching and the delay between batches have
+never run against Resend more than once.
+
+**6. Four dashboard screens log a React hydration mismatch** (projects, sources, analytics,
+settings). Pre-existing, harmless today, the kind of thing that becomes a real bug later.
+
+### Two things that are not defects but will look like them
+
+**The archive cannot be verified from a laptop.** `/editions` links are signed with
+`UNSUBSCRIBE_SECRET`, and production holds a value this machine does not. A token minted locally
+answers 404 there, correctly. Production is internally consistent: it signs and verifies with its
+own secret, so the archive works for anything sent from the dashboard. The nine emails sent from
+local carry links production will refuse, which is also why the scanner's clicks on them were
+harmless twice over.
+
+**Local sending needs `node --use-system-ca`.** Node's fetch cannot reach api.resend.com from
+Windows while PowerShell can: corporate TLS inspection, Windows trusts the company root CA and
+Node ships its own bundle. Same cause as `npx playwright install` being unable to download
+browsers here, which is why the project's Playwright config has no browsers installed.
 
 ---
 
