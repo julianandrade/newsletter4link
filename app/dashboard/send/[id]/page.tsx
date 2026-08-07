@@ -124,6 +124,28 @@ interface EditionDetail {
   projectCount: number;
   editorDesignJson: object | null;
   templateId: string | null;
+  /**
+   * What this edition contained when it went out, as the API resolved it.
+   *
+   * Null unless the edition was sent with a snapshot. The `articles` and `projects` above
+   * are the current rows and can have been edited since the send, so the read-only view of
+   * a sent edition renders these instead whenever they are there. No ids: the snapshot
+   * records what was said, not which rows said it.
+   */
+  frozen: boolean;
+  sentArticles: Array<{
+    title: string;
+    summary?: string | null;
+    sourceUrl: string;
+    category?: string[];
+    relevanceScore?: number | null;
+  }> | null;
+  sentProjects: Array<{
+    name: string;
+    description: string;
+    team?: string;
+    impact?: string | null;
+  }> | null;
   // SharePoint fields
   sharePointUrl: string | null;
   sharePointPageId: string | null;
@@ -827,6 +849,16 @@ export default function EditionDetailPage() {
   const isFinalized = edition?.status === "FINALIZED";
   const isSent = edition?.status === "SENT";
 
+  /**
+   * What the read-only view of a sent edition lists.
+   *
+   * The frozen copy when the send recorded one, the current rows otherwise. Without this
+   * the screen printed "the content below is read-only" above a list rebuilt from articles
+   * an editor may have changed since, which is the one claim it must not make falsely.
+   */
+  const sentArticleList = edition?.sentArticles ?? null;
+  const sentProjectList = edition?.sentProjects ?? null;
+
   // Filtered subscribers for search
   const filteredSubscribers = subscribers.filter((s) => {
     const searchLower = subscriberSearch.toLowerCase();
@@ -1144,7 +1176,10 @@ export default function EditionDetailPage() {
                   This edition has been sent
                 </p>
                 <p className="text-sm text-radar-ink2">
-                  Sent on {formatDate(edition.sentAt)}. The content below is read-only.
+                  Sent on {formatDate(edition.sentAt)}.{" "}
+                  {sentArticleList
+                    ? "The content below is what went out, exactly as subscribers received it."
+                    : "The content below is read-only."}
                 </p>
               </div>
             </div>
@@ -1887,11 +1922,11 @@ export default function EditionDetailPage() {
             <TabsList>
               <TabsTrigger value="articles" className="gap-2">
                 <FileText className="w-4 h-4" />
-                Articles ({selectedArticleIds.length})
+                Articles ({(sentArticleList ?? selectedArticleIds).length})
               </TabsTrigger>
               <TabsTrigger value="projects" className="gap-2">
                 <Briefcase className="w-4 h-4" />
-                Projects ({selectedProjectIds.length})
+                Projects ({(sentProjectList ?? selectedProjectIds).length})
               </TabsTrigger>
             </TabsList>
 
@@ -1908,13 +1943,13 @@ export default function EditionDetailPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {selectedArticles.length === 0 ? (
+                  {(sentArticleList ?? selectedArticles).length === 0 ? (
                     <p className="text-sm text-radar-ink2">No articles were included.</p>
                   ) : (
                     <div className="space-y-3">
-                      {selectedArticles.map((article, index) => (
+                      {(sentArticleList ?? selectedArticles).map((article, index) => (
                         <div
-                          key={article.id}
+                          key={`${index}-${article.sourceUrl}`}
                           className="flex items-start gap-3 p-3 rounded-lg border bg-radar-surface"
                         >
                           <div className="flex items-center justify-center h-6 w-6 rounded-full bg-radar-surface2 text-radar-accent text-xs font-medium shrink-0">
@@ -1925,12 +1960,12 @@ export default function EditionDetailPage() {
                               {article.title}
                             </h4>
                             <div className="flex items-center gap-2 mt-1 text-xs text-radar-ink2">
-                              {article.relevanceScore && (
+                              {article.relevanceScore ? (
                                 <Badge variant="secondary" className="text-xs">
                                   Score: {article.relevanceScore.toFixed(1)}
                                 </Badge>
-                              )}
-                              {article.category.slice(0, 2).map((cat) => (
+                              ) : null}
+                              {(article.category ?? []).slice(0, 2).map((cat) => (
                                 <Badge key={cat} variant="outline" className="text-xs">
                                   {cat}
                                 </Badge>
@@ -1966,22 +2001,30 @@ export default function EditionDetailPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {selectedProjects.length === 0 ? (
+                  {(sentProjectList ?? selectedProjects).length === 0 ? (
                     <p className="text-sm text-radar-ink2">No projects were included.</p>
                   ) : (
                     <div className="space-y-3">
-                      {selectedProjects.map((project, index) => (
+                      {(sentProjectList ?? selectedProjects).map((project, index) => {
+                        // The snapshot never captured project images, so a frozen row has
+                        // none to show. Matched by name against the current rows, which is
+                        // the same best effort the SharePoint republish makes.
+                        const imageUrl = selectedProjects.find(
+                          (candidate) => candidate.name === project.name
+                        )?.imageUrl;
+
+                        return (
                         <div
-                          key={project.id}
+                          key={`${index}-${project.name}`}
                           className="flex items-start gap-3 p-3 rounded-lg border bg-radar-surface"
                         >
                           <div className="flex items-center justify-center h-6 w-6 rounded-full bg-radar-surface2 text-radar-accent text-xs font-medium shrink-0">
                             {index + 1}
                           </div>
-                          {project.imageUrl && (
+                          {imageUrl && (
                             <div className="w-10 h-10 rounded-md overflow-hidden bg-radar-surface2 shrink-0">
                               <img
-                                src={project.imageUrl}
+                                src={imageUrl}
                                 alt={project.name}
                                 className="w-full h-full object-cover"
                               />
@@ -1999,7 +2042,8 @@ export default function EditionDetailPage() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>

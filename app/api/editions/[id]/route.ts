@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { deleteNeverSentEditions } from "@/lib/editions/lifecycle";
 import { editionLabel, editionWriteFields } from "@/lib/editions/identity";
+import { renderSourceFor } from "@/lib/editions/sent-snapshot";
 import { EditionStatus, Prisma } from "@prisma/client";
 
 const MAX_TITLE = 120;
@@ -109,6 +110,20 @@ type EditionWithContents = Prisma.EditionGetPayload<{
 }>;
 
 function transformEdition(edition: EditionWithContents) {
+  /**
+   * What the edition actually contained when it went out, alongside the live rows.
+   *
+   * `articles` and `projects` below stay exactly as they were: they carry the row ids the
+   * builder needs to seed its pickers and to write a reorder back through PATCH, and the
+   * snapshot has no ids to give. So the frozen copy is added rather than substituted. A
+   * screen that labels a sent edition read-only should render `sentArticles` when it is
+   * there, because the live rows can have been edited since the send.
+   *
+   * Null on an unsent edition and on the editions sent before the snapshot column existed,
+   * which is the signal to fall back to the live rows.
+   */
+  const source = renderSourceFor(edition);
+
   return {
     id: edition.id,
     week: edition.week,
@@ -145,6 +160,10 @@ function transformEdition(edition: EditionWithContents) {
     })),
     articleCount: edition.articles.length,
     projectCount: edition.projects.length,
+    // True when the two fields below are the record of a send rather than nothing.
+    frozen: source.frozen,
+    sentArticles: source.frozen ? source.articles : null,
+    sentProjects: source.frozen ? source.projects : null,
   };
 }
 
