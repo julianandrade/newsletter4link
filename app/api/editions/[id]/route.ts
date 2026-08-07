@@ -384,8 +384,34 @@ export async function PATCH(
       const missing = articleIds.filter((articleId: string) => !foundIds.has(articleId));
 
       if (missing.length > 0) {
+        // The lookup above is a list read, so `lib/db/tenant.ts` keeps discarded rows out of
+        // it and a discarded id lands here. Refusing it is right, a story an editor threw
+        // away must not be re-attached to an edition. Saying "not found" about a row they
+        // can see on the Discarded filter, and whose Restore button is right there, is not:
+        // it reads as a bug and sends the reader looking for a missing article.
+        const discarded = await db.article.findMany({
+          where: { id: { in: missing }, discardedAt: { not: null } },
+          select: { id: true },
+        });
+        const discardedIds = discarded.map((a) => a.id);
+        const unknownIds = missing.filter(
+          (articleId: string) => !discardedIds.includes(articleId)
+        );
+
+        const parts: string[] = [];
+        if (discardedIds.length > 0) {
+          parts.push(
+            `Discarded articles cannot be added to an edition: ${discardedIds.join(
+              ", "
+            )}. Restore them first, from the Discarded filter on the articles screen.`
+          );
+        }
+        if (unknownIds.length > 0) {
+          parts.push(`Articles not found: ${unknownIds.join(", ")}`);
+        }
+
         return NextResponse.json(
-          { success: false, error: `Articles not found: ${missing.join(", ")}` },
+          { success: false, error: parts.join(" ") },
           { status: 404 }
         );
       }
