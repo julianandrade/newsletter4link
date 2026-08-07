@@ -204,9 +204,17 @@ unverified. It is one row, in a table that had none, deleted and verified within
 3. **The Unlayer editor itself.** The design JSON is unvalidated by Unlayer. It follows the shape
    of the six templates already seeded, but "the editor loads it without complaint" is unproven,
    and requires a logged-in browser session with MFA.
-4. **The seed script has not been run.** v2 and v3 are not in your database. Run
-   `npx tsx scripts/create-unlayer-templates.ts` when you want them, which also refreshes the six
-   existing ones.
+4. ~~**The seed script has not been run.**~~ **You ran it.** v2 and v3 now exist for both
+   organizations, Link Consulting and Experience. All four rows were then verified against the
+   database through the real send path, and that found a bug nothing else had: `renderTemplate`
+   and `replaceContentMergeTags` rebuild the edition from their own `Article` shape and neither
+   carried `content`, so **the top story's image reached the built-in edition and not one stored
+   template**. Fixed, with the v2 fixture updated so the suite covers it.
+
+   Worth knowing about the seeded rows: Link Consulting has an uploaded logo, so its v2 and v3
+   use that single asset and it will not swap in dark mode. Experience has none, so it gets the
+   Linkroad light and dark pair. Uploading light-on-transparent artwork is the fix, the same as
+   for the built-in edition.
 5. **Gmail, Apple Mail, mobile.** Same reason as Outlook.
 
 ## Findings I did not act on
