@@ -87,7 +87,12 @@ export async function POST(request: Request) {
     // preview is the frozen record of a send or a live render. Stays null for the
     // customData branch, which has no edition and therefore no snapshot.
     let source: RenderSource | null = null;
-    /** What a frozen edition recorded about how it was rendered. Null when it was not sent. */
+    /**
+     * What a frozen edition recorded about how it was rendered. The three nullable ones
+     * stay null for an edition that was never sent and for the customData branch. The id
+     * stays empty on those same paths, and is only read when frozenBytes is non-null,
+     * which cannot happen without an edition.
+     */
     let frozenBytes: string | null = null;
     let frozenTemplateId: string | null = null;
     let frozenBlocks: unknown[] | null = null;
@@ -186,8 +191,8 @@ export async function POST(request: Request) {
 
       /**
        * Lifted out of this block because `edition` is scoped to it and the rendering
-       * decisions below are not. Both are null for an edition that was never sent, and for
-       * the ad-hoc object built above, which carries no snapshot.
+       * decisions below are not. All four resolve to their empty value for an edition that
+       * was never sent, and for the ad-hoc object built above, which carries no snapshot.
        */
       const snapshot = (edition as never as { sentSnapshot?: unknown }).sentSnapshot;
       frozenBytes = frozenHtmlFor(snapshot);
@@ -361,20 +366,27 @@ export async function POST(request: Request) {
       effectiveTemplateId = null;
     }
 
-    if (effectiveTemplateId) {
-      // Use a custom database template
-      const template = await prisma.emailTemplate.findUnique({
-        where: { id: effectiveTemplateId },
-        select: { id: true, name: true, html: true },
-      });
+    const template = effectiveTemplateId
+      ? await prisma.emailTemplate.findUnique({
+          where: { id: effectiveTemplateId },
+          select: { id: true, name: true, html: true },
+        })
+      : null;
 
-      if (!template) {
-        return NextResponse.json(
-          { success: false, error: "Template not found" },
-          { status: 404 }
-        );
-      }
+    /**
+     * A named template that does not exist is an error. A recorded one that has since been
+     * deleted is not: templates are hard-deletable while inactive, so a sent edition can
+     * outlive the template that framed it, and answering 404 would make an old edition
+     * unpreviewable for ever. It falls through to the built-in instead.
+     */
+    if (effectiveTemplateId && !template && !source?.frozen) {
+      return NextResponse.json(
+        { success: false, error: "Template not found" },
+        { status: 404 }
+      );
+    }
 
+    if (template) {
       // Replace placeholders in template HTML with actual data
       html = renderTemplateWithData(template.html, emailData);
       usedTemplate = { id: template.id, name: template.name };

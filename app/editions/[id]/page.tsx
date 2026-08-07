@@ -111,28 +111,26 @@ export default async function EditionArchivePage({
   const frozen = frozenHtmlFor(edition.sentSnapshot);
 
   /**
-   * The snapshot wins whenever there is one.
-   *
-   * Without this the archive re-rendered from the live `Article` rows, so an edit to a
-   * summary rewrote a newsletter that had already been delivered, and discarding an
-   * article removed the story from it entirely.
+   * Built only when it is going to be used. Rendering the edition costs three token
+   * signings and a full pass over the blocks, and the frozen path throws all of it away.
    */
-  const source = renderSourceFor(edition);
-
-  const email = buildEditionEmail({
-    articles: source.articles,
-    projects: source.projects,
-    week: source.week,
-    year: source.year,
-    label: source.label,
-    unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
-    archiveUrl: buildArchiveUrl(edition.id, subscriberId),
-    portalUrl: buildEditionIndexUrl(subscriberId),
-  });
-
   const html = frozen
     ? personalizeHtml(frozen, { subscriberId, editionId: edition.id })
-    : renderEditionEmail(email);
+    : renderEditionEmail(
+        buildEditionEmail({
+          /**
+           * The snapshot wins whenever there is one.
+           *
+           * Without this the archive re-rendered from the live `Article` rows, so an edit
+           * to a summary rewrote a newsletter that had already been delivered, and
+           * discarding an article removed the story from it entirely.
+           */
+          ...renderSourceFor(edition),
+          unsubscribeUrl: buildUnsubscribeUrl(subscriberId),
+          archiveUrl: buildArchiveUrl(edition.id, subscriberId),
+          portalUrl: buildEditionIndexUrl(subscriberId),
+        })
+      );
 
   /**
    * The email's own HTML, in an iframe.

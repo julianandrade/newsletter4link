@@ -21,7 +21,14 @@ import type { SourceArticle, SourceProject } from "@/lib/email/edition-data";
  * writes it, and the read surfaces choose between it and the live rows.
  */
 
-/** Bumped only if the stored shape changes in a way a reader must notice. */
+/**
+ * Bumped only if the stored shape changes in a way a reader must notice.
+ *
+ * Deliberately still 1 after `customBlocks` and `frozenHtml` were added: both are optional
+ * and every reader treats absence as "this send had none", which is the right answer for a
+ * snapshot written before they existed. A bump would imply older records need handling
+ * they do not need.
+ */
 export const SENT_SNAPSHOT_VERSION = 1;
 
 export interface SentSnapshotArticle {
