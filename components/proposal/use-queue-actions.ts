@@ -54,12 +54,34 @@ export function useQueueActions(options: {
           throw new Error(json?.error || "That decision could not be undone");
         }
 
+        /**
+         * What came back, not what was asked for.
+         *
+         * `reset` carries a guard, so a story another reviewer moved in between matches
+         * nothing and the route answers `affected: 0` with `success: true`. Dispatching on
+         * that puts the rows and the counts back in the UI over a database that never
+         * changed, and the reader is told an undo worked that did not. The per-article
+         * controls and the all-articles screen both branch on this; this path did not.
+         */
+        const affected: number = json.affected ?? ids.length;
+
+        if (affected === 0) {
+          toast.info("Nothing to undo. Somebody else changed those stories first.");
+          await reloadQueue();
+          return;
+        }
+
         dispatch({ type: "decisionUndone" });
         toast.success(
-          ids.length === 1
+          affected === 1
             ? "Back in the queue, awaiting a decision"
-            : `${ids.length} stories are back in the queue`
+            : `${affected} stories are back in the queue`
         );
+
+        // A partial undo leaves the reducer's restored rows and the database disagreeing,
+        // because `decisionUndone` puts back everything it holds. Refetching is the cheap
+        // way to make the list true again, and this is the rare path.
+        if (affected < ids.length) await reloadQueue();
       } catch (cause) {
         toast.error(
           cause instanceof Error
