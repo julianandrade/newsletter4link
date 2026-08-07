@@ -80,16 +80,34 @@ export interface BulkWrite {
  * `affected` is what actually changed, `skipped` is what somebody else had already
  * decided, and an undo built on `affected` cannot reopen their verdict.
  *
+ * A guard names every state the action can legitimately move *from*, never only the state
+ * the queue happens to show. `approve` and `reject` started out guarding
+ * `status: "PENDING_REVIEW"` alone, which quietly made two offered controls impossible:
+ * `nextActionsFor` offers Reject on an approved article and Approve on a rejected one, and
+ * both matched nothing, so the click reported "somebody else changed this first" about an
+ * article nobody had touched. Each verdict therefore accepts the other verdict as a source,
+ * and refuses only the state it would write, which is what keeps a no-op reported as
+ * skipped rather than as a phantom success.
+ *
  * `reset` accepts exactly the two states the verdicts produce. Resetting something already
  * awaiting a decision is a no-op rather than an error, because a double-clicked Undo must
  * not read as a failure.
+ *
+ * `tests/unit/article-state-contract.test.ts` walks every action every screen offers back
+ * through these guards, so a control that cannot fire fails a test rather than a user.
  */
 export function writeForAction(action: BulkAction, now: Date): BulkWrite {
   switch (action) {
     case "approve":
-      return { where: { status: "PENDING_REVIEW" }, data: { status: "APPROVED" } };
+      return {
+        where: { status: { in: ["PENDING_REVIEW", "REJECTED"] } },
+        data: { status: "APPROVED" },
+      };
     case "reject":
-      return { where: { status: "PENDING_REVIEW" }, data: { status: "REJECTED" } };
+      return {
+        where: { status: { in: ["PENDING_REVIEW", "APPROVED"] } },
+        data: { status: "REJECTED" },
+      };
     case "reset":
       return {
         where: { status: { in: ["APPROVED", "REJECTED"] } },

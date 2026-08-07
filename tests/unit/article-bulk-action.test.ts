@@ -72,17 +72,35 @@ describe("parseBulkRequest", () => {
 describe("writeForAction", () => {
   const now = new Date("2026-08-07T10:00:00.000Z");
 
-  it("approve and reject only touch what is still awaiting a decision", () => {
-    // Without the guard a stale selection flips an article another reviewer has already
-    // decided, and the reported count hides it.
+  it("each verdict accepts the other verdict as a source, and refuses its own", () => {
+    // The guard exists so a stale selection cannot flip an article another reviewer has
+    // already decided while reporting it as changed. What it must not do is refuse a
+    // transition the product offers: the screens put Reject on an approved article and
+    // Approve on a rejected one, and a guard of PENDING_REVIEW alone made both dead
+    // buttons. Refusing only the state the action would write keeps the "nothing to do"
+    // case honest, which is the whole point of the guard.
     expect(writeForAction("approve", now)).toEqual({
-      where: { status: "PENDING_REVIEW" },
+      where: { status: { in: ["PENDING_REVIEW", "REJECTED"] } },
       data: { status: "APPROVED" },
     });
     expect(writeForAction("reject", now)).toEqual({
-      where: { status: "PENDING_REVIEW" },
+      where: { status: { in: ["PENDING_REVIEW", "APPROVED"] } },
       data: { status: "REJECTED" },
     });
+  });
+
+  it("no verdict names the status it writes, so an already-decided article is skipped", () => {
+    // The half of the protection that widening must not cost: approving an APPROVED article
+    // still matches nothing, so `applyBulk` reports it as skipped rather than as affected.
+    for (const [action, written] of [
+      ["approve", "APPROVED"],
+      ["reject", "REJECTED"],
+      ["reset", "PENDING_REVIEW"],
+    ] as const) {
+      const { where, data } = writeForAction(action, now);
+      expect(data.status).toBe(written);
+      expect((where.status as { in: string[] }).in).not.toContain(written);
+    }
   });
 
   it("reset takes a decided article back to awaiting a decision", () => {

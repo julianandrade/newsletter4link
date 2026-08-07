@@ -66,7 +66,7 @@ describe("applyBulk", () => {
 
     expect(calls.articleFindMany.where).toEqual({
       id: { in: ["a", "b"] },
-      status: "PENDING_REVIEW",
+      status: { in: ["PENDING_REVIEW", "REJECTED"] },
     });
     expect(calls.articleUpdateMany.where).toEqual({ id: { in: ["a"] } });
     expect(calls.articleUpdateMany.data).toEqual({ status: "APPROVED" });
