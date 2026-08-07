@@ -1,92 +1,58 @@
 import { NextResponse } from "next/server";
-import { requireOrgContext } from "@/lib/auth/context";
-
-/** Above this, a single request is doing too much to stay inside a timeout. */
-const MAX_IDS = 1000;
-
-type BulkAction = "approve" | "reject";
-
-const ACTIONS: BulkAction[] = ["approve", "reject"];
+import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { parseBulkRequest } from "@/lib/articles/bulk-action";
+import { applyBulk } from "@/lib/articles/bulk-apply";
 
 /**
  * PATCH /api/articles/bulk
  *
- * Approve or reject a whole selection of the review queue in one statement,
- * rather than one POST per article. A queue after a big collection run is
- * hundreds of items long, and deciding them individually is the reason the
- * queue never gets cleared.
+ * Approve, reject, reset, discard or restore a whole selection in one request. A queue
+ * after a big collection run is hundreds of items long, and deciding them individually is
+ * the reason the queue never gets cleared.
  *
- * Body: { action: "approve" | "reject", ids: string[] }
+ * Body: { action: "approve" | "reject" | "reset" | "discard" | "restore", ids: string[] }
+ *
+ * Two defects this replaces. `reset` was specified by RQ-005, implemented on the client and
+ * never added here, so every Undo in the product answered 400 from the day it shipped. And
+ * the route required only organization membership, so a VIEWER, whose whole definition is
+ * that they decide nothing, could approve or reject the entire queue.
+ *
+ * The vocabulary and the writes live in `lib/articles/bulk-action.ts` and
+ * `lib/articles/bulk-apply.ts`, where they are unit tested. This handler is the HTTP shell.
  */
 export async function PATCH(request: Request) {
   try {
     const ctx = await requireOrgContext();
-    const { db } = ctx;
+    requireRole(ctx, "EDITOR");
 
-    const body = await request.json();
-    const { action, ids } = body ?? {};
+    const body = await request.json().catch(() => null);
+    const parsed = parseBulkRequest(body);
 
-    if (!ACTIONS.includes(action)) {
-      return NextResponse.json(
-        { error: `action must be one of ${ACTIONS.join(", ")}` },
-        { status: 400 }
-      );
+    if ("error" in parsed) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "ids must be a non-empty array" },
-        { status: 400 }
-      );
-    }
-
-    if (!ids.every((id) => typeof id === "string" && id.length > 0)) {
-      return NextResponse.json(
-        { error: "every id must be a non-empty string" },
-        { status: 400 }
-      );
-    }
-
-    const unique = [...new Set<string>(ids)];
-
-    if (unique.length > MAX_IDS) {
-      return NextResponse.json(
-        { error: `Cannot act on more than ${MAX_IDS} articles at once` },
-        { status: 400 }
-      );
-    }
-
-    const status = action === "approve" ? "APPROVED" : "REJECTED";
-
-    /**
-     * Only articles still awaiting a decision are touched. Without the status
-     * guard, a stale selection could flip an article that another reviewer has
-     * already decided, and the reported count would hide it.
-     *
-     * The tenant client scopes this to the organization, so ids from elsewhere
-     * never match and are reported as skipped.
-     */
-    const result = await db.article.updateMany({
-      where: { id: { in: unique }, status: "PENDING_REVIEW" },
-      data: { status },
-    });
+    const outcome = await applyBulk(ctx.db, parsed, new Date());
 
     return NextResponse.json({
       success: true,
-      action,
-      requested: unique.length,
-      affected: result.count,
-      skipped: unique.length - result.count,
+      action: parsed.action,
+      requested: parsed.ids.length,
+      ...outcome,
     });
   } catch (error) {
     console.error("Error applying bulk article action:", error);
 
     if (error instanceof Error && error.message.startsWith("Unauthorized")) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return NextResponse.json({ success: false, error: error.message }, { status: 401 });
+    }
+
+    if (error instanceof Error && error.message.startsWith("Forbidden")) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 403 });
     }
 
     return NextResponse.json(
-      { error: "Failed to apply the bulk action" },
+      { success: false, error: "Failed to apply the bulk action" },
       { status: 500 }
     );
   }
