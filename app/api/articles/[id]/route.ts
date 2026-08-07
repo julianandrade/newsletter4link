@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getArticleById } from "@/lib/queries";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { parseArticlePatch } from "@/lib/articles/patch-input";
 
 /**
  * GET /api/articles/:id
@@ -46,7 +47,11 @@ export async function GET(
 /**
  * PATCH /api/articles/:id
  *
- * Update an article's summary and categories. EDITOR or above, this organization only.
+ * Update an article's editable fields. EDITOR or above, this organization only.
+ *
+ * Six fields, not the two it started with: title, summary, sourceUrl, author, publishedAt
+ * and category. All six reach the newsletter, and none of the four added here was editable
+ * anywhere in the product. Validation lives in `lib/articles/patch-input.ts`.
  *
  * This handler had neither guard. It called no auth at all and wrote with the bare
  * `prisma` client, so any authenticated member of any organization could rewrite the
@@ -67,29 +72,11 @@ export async function PATCH(
     const { db } = ctx;
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    const parsed = parseArticlePatch(body);
 
-    const { summary, category } = body;
-
-    // Build update data
-    const updateData: { summary?: string; category?: string[] } = {};
-
-    if (typeof summary === "string") {
-      updateData.summary = summary;
-    }
-
-    if (Array.isArray(category)) {
-      updateData.category = category;
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No valid fields to update. Provide summary (string) or category (array).",
-        },
-        { status: 400 }
-      );
+    if ("error" in parsed) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
 
     /**
@@ -112,7 +99,7 @@ export async function PATCH(
 
     const article = await db.article.update({
       where: { id },
-      data: updateData,
+      data: parsed.data,
     });
 
     return NextResponse.json({
