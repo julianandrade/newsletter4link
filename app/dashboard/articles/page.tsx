@@ -25,21 +25,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ArticleStateControls } from "@/components/article/article-state-controls";
-import { ArticleTitleLink } from "@/components/article/article-title-link";
+import {
+  ArticleListRow,
+  type ListArticle,
+} from "@/components/article/article-list-row";
 import {
   Num,
   PageHeading,
   RadarButton,
   RadarMain,
-  ScoreMeter,
-  SourceStamp,
-  StatusChip,
-  Tag,
 } from "@/components/radar/primitives";
 import {
   EmptyState,
   LoadError,
+  Pagination,
   RadarInput,
   SkeletonRows,
 } from "@/components/radar/controls";
@@ -50,24 +49,11 @@ import {
   type BulkAction as BulkBarAction,
 } from "@/components/radar/selection";
 import { useOrgRole } from "@/components/radar/use-role";
-import type { ArticleListState } from "@/lib/articles/list-filter";
+import {
+  bulkActionsForFilter,
+  type ArticleListState,
+} from "@/lib/articles/list-filter";
 import type { BulkAction } from "@/lib/articles/bulk-action";
-import { cn } from "@/lib/utils";
-
-/** Exactly the columns `GET /api/articles` selects. */
-interface ListArticle {
-  id: string;
-  title: string;
-  sourceUrl: string;
-  author: string | null;
-  publishedAt: string | null;
-  capturedAt: string;
-  relevanceScore: number | null;
-  summary: string | null;
-  category: string[];
-  status: string;
-  discardedAt: string | null;
-}
 
 const FILTERS: { value: ArticleListState; label: string }[] = [
   { value: "all", label: "All" },
@@ -76,6 +62,15 @@ const FILTERS: { value: ArticleListState; label: string }[] = [
   { value: "rejected", label: "Rejected" },
   { value: "discarded", label: "Discarded" },
 ];
+
+/** Present tense, for the button. Same wording as the per-row controls. */
+const BULK_LABELS: Record<BulkAction, string> = {
+  approve: "Approve",
+  reject: "Reject",
+  reset: "Back to the queue",
+  discard: "Discard",
+  restore: "Restore",
+};
 
 /** Past tense, for reporting what a finished bulk action did. */
 const BULK_DONE: Record<BulkAction, string> = {
@@ -116,14 +111,6 @@ const EMPTY_COPY: Record<ArticleListState, { title: string; body: string }> = {
   },
 };
 
-/** The state an article is in, as one chip. Same mapping as the detail screen. */
-function StateChip({ article }: { article: ListArticle }) {
-  if (article.discardedAt) return <StatusChip tone="neutral">discarded</StatusChip>;
-  if (article.status === "APPROVED") return <StatusChip tone="ok">approved</StatusChip>;
-  if (article.status === "REJECTED") return <StatusChip tone="err">rejected</StatusChip>;
-  return <StatusChip tone="warn">no verdict yet</StatusChip>;
-}
-
 export default function AllArticlesPage() {
   const { atLeast } = useOrgRole();
   const canEdit = atLeast("EDITOR");
@@ -132,7 +119,18 @@ export default function AllArticlesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
 
+  const [page, setPage] = useState(1);
+
   const [articles, setArticles] = useState<ListArticle[]>([]);
+  /**
+   * The population under the current filter, from the server, not `articles.length`.
+   *
+   * The two are different whenever the filter holds more than one page, and presenting the
+   * page size as the count is what let a screen say "200 stories" over a filter holding 340,
+   * with no route to the rest.
+   */
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,8 +142,15 @@ export default function AllArticlesPage() {
   } | null>(null);
 
   // Typing is not a query. The list reloads a beat after the last keystroke.
+  //
+  // The page goes back to one in the same batch, rather than in an effect watching `search`:
+  // a new search is a new population, so page 4 of the old one means nothing, and doing it
+  // here means React commits both changes together and `load` runs once instead of twice.
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -163,7 +168,7 @@ export default function AllArticlesPage() {
     setLoading(true);
 
     try {
-      const params = new URLSearchParams({ state });
+      const params = new URLSearchParams({ state, page: String(page) });
       if (search) params.set("search", search);
 
       const response = await fetch(`/api/articles?${params.toString()}`);
@@ -179,6 +184,8 @@ export default function AllArticlesPage() {
       }
 
       setArticles(json.data as ListArticle[]);
+      setTotal(json.total as number);
+      setPageSize(json.pageSize as number);
       setError(null);
     } catch (cause) {
       if (seq !== requestSeq.current) return;
@@ -186,11 +193,18 @@ export default function AllArticlesPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [state, search]);
+  }, [state, search, page]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A page can empty out underneath you: discarding everything on the last page leaves the
+  // reader past the end of a filter that still has rows, looking at an empty state that is
+  // not true. Page one is always valid, so that is where it goes.
+  useEffect(() => {
+    if (!loading && !error && articles.length === 0 && page > 1) setPage(1);
+  }, [loading, error, articles.length, page]);
 
   /** Ids in render order, so shift-click ranges follow what is on screen. */
   const selection = useSelection(articles.map((article) => article.id));
@@ -256,104 +270,64 @@ export default function AllArticlesPage() {
   );
 
   /**
-   * Reject and Discard ask first; Approve, Back to the queue and Restore do not.
+   * The bar's actions, derived from the filter rather than fixed at five.
    *
-   * The asymmetry is on the record. Bulk reject shipped without a confirmation and 23
-   * curated stories were lost to one click. The three that are not guarded either move work
-   * forward or put something back, and all three are undoable from this very screen.
+   * `bulkActionsForFilter` is the per-filter twin of `nextActionsFor`, and it exists because
+   * the fixed list offered actions that could not do anything: on Discarded, approve, reject,
+   * reset and discard all match nothing, so pressing Discard on forty stories produced a
+   * confirmation dialog and then "Nothing changed".
+   *
+   * Reject and Discard ask first; Approve, Back to the queue and Restore do not. The
+   * asymmetry is on the record. Bulk reject shipped without a confirmation and 23 curated
+   * stories were lost to one click. The three that are not guarded either move work forward
+   * or put something back, and all three are undoable from this very screen.
    */
   const bulkActions: BulkBarAction[] = canEdit
-    ? [
-        { id: "approve", label: "Approve", onRun: (ids) => void runBulk("approve", ids) },
-        {
-          id: "reset",
-          label: "Back to the queue",
-          onRun: (ids) => void runBulk("reset", ids),
+    ? bulkActionsForFilter(state).map((action) => ({
+        id: action,
+        label: BULK_LABELS[action],
+        destructive: action === "reject" || action === "discard",
+        onRun: (ids: string[]) => {
+          if (action === "reject" || action === "discard") {
+            setPendingBulk({ action, ids });
+          } else {
+            void runBulk(action, ids);
+          }
         },
-        { id: "restore", label: "Restore", onRun: (ids) => void runBulk("restore", ids) },
-        {
-          id: "reject",
-          label: "Reject",
-          destructive: true,
-          onRun: (ids) => setPendingBulk({ action: "reject", ids }),
-        },
-        {
-          id: "discard",
-          label: "Discard",
-          destructive: true,
-          onRun: (ids) => setPendingBulk({ action: "discard", ids }),
-        },
-      ]
+      }))
     : [];
 
   const renderRows = () => (
     <div className="border-t border-radar-line">
       {articles.map((article) => (
-        <article
+        <ArticleListRow
           key={article.id}
-          className={cn(
-            "flex flex-col gap-3 border-b border-radar-line2 py-4 transition-colors sm:flex-row sm:items-start sm:gap-5",
-            selection.isSelected(article.id)
-              ? "bg-radar-surface2"
-              : "hover:bg-radar-surface2"
-          )}
-        >
-          {canEdit && (
-            <SelectCheckbox
-              checked={selection.isSelected(article.id)}
-              onToggle={(modifiers) => selection.toggle(article.id, modifiers)}
-              label={`Select ${article.title}`}
-              className="mt-1 shrink-0"
-            />
-          )}
-
-          <div className="min-w-0 flex-1">
-            <SourceStamp
-              sourceUrl={article.sourceUrl}
-              publishedAt={article.publishedAt}
-              capturedAt={article.capturedAt}
-              href={article.sourceUrl}
-            />
-            <h3 className="font-editorial m-0 text-[15.5px] font-medium leading-[1.3] text-radar-ink text-pretty">
-              <ArticleTitleLink articleId={article.id} title={article.title} />
-            </h3>
-            {article.summary && (
-              <p className="mt-1.5 mb-0 line-clamp-2 max-w-[80ch] text-[12.5px] text-radar-ink2 text-pretty">
-                {article.summary}
-              </p>
-            )}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <StateChip article={article} />
-              {article.category.slice(0, 3).map((cat) => (
-                <Tag key={cat}>{cat}</Tag>
-              ))}
-              {article.category.length > 3 && (
-                <Tag>+{article.category.length - 3}</Tag>
-              )}
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
-            <ScoreMeter score={article.relevanceScore} />
-            {/*
-              The per-row controls are `ArticleStateControls`, unchanged: which actions an
-              article offers is `nextActionsFor`'s rule and belongs in one place, or a
-              discarded article grows an Approve button on the one screen that can show it.
-            */}
-            <ArticleStateControls
-              article={{ status: article.status, discardedAt: article.discardedAt }}
-              articleId={article.id}
-              canEdit={canEdit}
-              onChanged={() => void load()}
-            />
-          </div>
-        </article>
+          article={article}
+          selected={selection.isSelected(article.id)}
+          onToggleSelected={(modifiers) => selection.toggle(article.id, modifiers)}
+          canEdit={canEdit}
+          onChanged={() => void load()}
+        />
       ))}
     </div>
   );
 
   const empty = EMPTY_COPY[state];
   const hasSearch = search.length > 0;
+
+  /**
+   * Everything the screen is allowed to say about size, in one place.
+   *
+   * `total` is the population under the filter and `articles.length` is this page of it.
+   * Every label below picks the right one deliberately: a select-all that says "all" when it
+   * means "the 200 of 340 currently on screen" is a trap, and it is the same trap as a
+   * subtitle claiming a page size is a count.
+   */
+  const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 1;
+  const paged = totalPages > 1;
+  const selectAllLabel = paged
+    ? `Select the ${articles.length} stories on this page, of ${total}`
+    : `Select all ${articles.length} stories`;
 
   return (
     <>
@@ -368,27 +342,47 @@ export default function AllArticlesPage() {
               "Reading the archive."
             ) : (
               <>
-                <Num>{articles.length}</Num>{" "}
-                {articles.length === 1 ? "story" : "stories"} under this filter. A
-                verdict here is reversible: rejecting, resetting and discarding all have a
-                way back.
+                <Num>{total}</Num> {total === 1 ? "story" : "stories"} under this filter
+                {paged && (
+                  <>
+                    , showing <Num>{articles.length}</Num> on page <Num>{page}</Num> of{" "}
+                    <Num>{totalPages}</Num>
+                  </>
+                )}
+                . A verdict here is reversible: rejecting, resetting and discarding all
+                have a way back.
               </>
             )
           }
         />
 
         <div className="flex flex-wrap items-center gap-2">
-          {FILTERS.map((filter) => (
-            <RadarButton
-              key={filter.value}
-              size="sm"
-              variant={state === filter.value ? "accent" : "outline"}
-              aria-pressed={state === filter.value}
-              onClick={() => setState(filter.value)}
-            >
-              {filter.label}
-            </RadarButton>
-          ))}
+          {/*
+            A group with a name, not five loose toggles. Read one at a time, "Rejected,
+            pressed" says nothing about what the other four are or that picking one unpicks
+            the rest; the group label is what makes the set legible.
+          */}
+          <div
+            role="group"
+            aria-label="Filter by state"
+            className="flex flex-wrap items-center gap-2"
+          >
+            {FILTERS.map((filter) => (
+              <RadarButton
+                key={filter.value}
+                size="sm"
+                variant={state === filter.value ? "accent" : "outline"}
+                aria-pressed={state === filter.value}
+                onClick={() => {
+                  setState(filter.value);
+                  // A new filter is a new population; page 4 of the old one means nothing.
+                  setPage(1);
+                }}
+              >
+                {filter.label}
+              </RadarButton>
+            ))}
+          </div>
 
           <div className="ml-auto w-full sm:w-[260px]">
             <RadarInput
@@ -449,16 +443,12 @@ export default function AllArticlesPage() {
                     onToggle={() =>
                       selection.allSelected ? selection.clear() : selection.selectAll()
                     }
-                    label={
-                      selection.allSelected
-                        ? "Clear selection"
-                        : `Select all ${articles.length} stories`
-                    }
+                    label={selection.allSelected ? "Clear selection" : selectAllLabel}
                   />
                   <span className="text-[12.5px] text-radar-ink2">
                     {selection.count > 0
-                      ? `${selection.count} of ${articles.length} selected`
-                      : `Select all ${articles.length}`}
+                      ? `${selection.count} of ${articles.length} on this page selected`
+                      : selectAllLabel}
                   </span>
                   <span className="ml-auto text-[11.5px] text-radar-ink3">
                     Shift-click to select a range · Esc to clear
@@ -467,6 +457,23 @@ export default function AllArticlesPage() {
               )}
 
               {renderRows()}
+
+              {/*
+                Renders nothing at one page, which is the common case. It is here because a
+                ceiling with no way past it left the oldest rows of a large filter reachable
+                by nothing at all, search included, which is the unreachability this whole
+                screen exists to end.
+
+                Changing page changes the visible ids, and `useSelection` prunes a selection
+                to what is visible, so a bulk action can never reach a row on another page.
+              */}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPage={setPage}
+                busy={loading || bulkBusy !== null}
+                className="mt-5"
+              />
 
               {/* A VIEWER gets an empty action list, and the bar renders nothing for it. */}
               <BulkBar

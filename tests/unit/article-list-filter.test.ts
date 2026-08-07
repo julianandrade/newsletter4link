@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { articleListWhere } from "@/lib/articles/list-filter";
+import {
+  articleListPage,
+  articleListWhere,
+  bulkActionsForFilter,
+} from "@/lib/articles/list-filter";
 
 describe("articleListWhere", () => {
   it("defaults to everything that is not discarded", () => {
@@ -43,5 +47,50 @@ describe("articleListWhere", () => {
       status: "REJECTED",
       title: { contains: "agents", mode: "insensitive" },
     });
+  });
+});
+
+describe("articleListPage", () => {
+  it("defaults to the first page when nothing readable is asked for", () => {
+    // A stale or hand-edited URL lands on page one, never on a 400.
+    for (const raw of [null, "", "   ", "banana", "0", "-3", "NaN"]) {
+      expect(articleListPage(raw)).toBe(1);
+    }
+  });
+
+  it("reads the page that was asked for", () => {
+    expect(articleListPage("2")).toBe(2);
+    expect(articleListPage("17")).toBe(17);
+  });
+
+  it("takes the whole number out of a padded or fractional value", () => {
+    expect(articleListPage(" 3 ")).toBe(3);
+    expect(articleListPage("2.9")).toBe(2);
+  });
+});
+
+describe("bulkActionsForFilter", () => {
+  it("offers only Restore on the discarded filter", () => {
+    // The other four never name discardedAt, so the tenant wrapper's default excludes every
+    // row from the match query and the action reports "Nothing changed" after a confirmation.
+    expect(bulkActionsForFilter("discarded")).toEqual(["restore"]);
+  });
+
+  it("mirrors nextActionsFor for each decided state", () => {
+    expect(bulkActionsForFilter("approved")).toEqual(["reject", "reset", "discard"]);
+    expect(bulkActionsForFilter("rejected")).toEqual(["approve", "reset", "discard"]);
+    expect(bulkActionsForFilter("pending")).toEqual(["approve", "reject", "discard"]);
+  });
+
+  it("never offers Restore where discarded rows cannot appear", () => {
+    // `all` is the mixed list, and the tenant wrapper keeps discarded rows out of it.
+    expect(bulkActionsForFilter("all")).toEqual([
+      "approve",
+      "reject",
+      "reset",
+      "discard",
+    ]);
+    expect(bulkActionsForFilter("all")).not.toContain("restore");
+    expect(bulkActionsForFilter("banana")).not.toContain("restore");
   });
 });
