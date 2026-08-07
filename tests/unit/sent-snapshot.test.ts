@@ -202,4 +202,34 @@ describe("renderSourceFor", () => {
 
     expect(source.label).toBe("The agents issue");
   });
+
+  it("carries a live project's date through, when the caller selected one", () => {
+    // The snapshot always keeps projectDate, so the live path has to as well. Without it
+    // the SharePoint republish saw a date on a sent edition and none on a draft, purely
+    // because of which branch it went down.
+    const source = renderSourceFor({
+      ...live,
+      projects: [
+        {
+          project: {
+            name: "Live project",
+            description: "d",
+            team: "Delivery",
+            impact: null,
+            projectDate: new Date("2026-07-20T00:00:00.000Z"),
+          },
+        },
+      ],
+    });
+
+    expect(source.projects[0].projectDate).toEqual(
+      new Date("2026-07-20T00:00:00.000Z")
+    );
+  });
+
+  it("omits the date entirely when the caller did not select one", () => {
+    // Absent rather than null: SourceProject's field is optional, and an explicit null
+    // would make every caller that formats a date handle a value it never sees today.
+    expect("projectDate" in renderSourceFor(live).projects[0]).toBe(false);
+  });
 });

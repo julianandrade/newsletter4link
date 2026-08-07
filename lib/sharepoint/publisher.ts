@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { renderSourceFor } from "@/lib/editions/sent-snapshot";
 import { isSharePointConfigured } from "./auth";
 import {
   createSitePage,
@@ -61,24 +62,49 @@ export async function publishToSharePoint(editionId: string): Promise<PublishRes
       };
     }
 
+    /**
+     * The snapshot wins whenever there is one, as it does in the subscriber archive.
+     *
+     * This function is reachable from the Retry button, which only a sent edition shows.
+     * Rebuilding from the current `Article` rows meant an editor could change a summary,
+     * click Retry, and have the published page say something the mailed newsletter never
+     * said. `include` above returns every scalar column, so `sentSnapshot` already arrives
+     * with no change to the query.
+     */
+    const source = renderSourceFor(edition);
+
+    /**
+     * The image is still read from the live row, matched by name.
+     *
+     * The snapshot never captured project images, so there is no frozen answer to give;
+     * best effort from the current row is better than dropping every picture from a
+     * republished page. Absent when the project has since been renamed or deleted.
+     */
+    const imageByProjectName = new Map(
+      edition.projects.map((ep) => [ep.project.name, ep.project.imageUrl])
+    );
+
     // Build content for the page
     const content = {
-      articles: edition.articles.map((ea) => ({
-        title: ea.article.title,
-        summary: ea.article.summary || "",
-        sourceUrl: ea.article.sourceUrl,
-        category: ea.article.category,
+      articles: source.articles.map((article) => ({
+        title: article.title,
+        summary: article.summary || "",
+        sourceUrl: article.sourceUrl,
+        category: article.category ?? [],
       })),
-      projects: edition.projects.map((ep) => ({
-        name: ep.project.name,
-        description: ep.project.description,
-        team: ep.project.team,
-        impact: ep.project.impact || undefined,
-        projectDate: ep.project.projectDate.toISOString(),
-        imageUrl: ep.project.imageUrl || undefined,
+      projects: source.projects.map((project) => ({
+        name: project.name,
+        description: project.description,
+        team: project.team ?? "",
+        impact: project.impact || undefined,
+        projectDate:
+          project.projectDate instanceof Date
+            ? project.projectDate.toISOString()
+            : project.projectDate ?? "",
+        imageUrl: imageByProjectName.get(project.name) || undefined,
       })),
-      week: edition.week,
-      year: edition.year,
+      week: source.week,
+      year: source.year,
     };
 
     // Generate page details
