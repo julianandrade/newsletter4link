@@ -168,7 +168,68 @@ was back to zero rows and zero marked rows.
 you were asleep. The reasoning: the alternative was shipping the archive's only success path
 unverified. It is one row, in a table that had none, deleted and verified within two minutes.
 
-## 13. Not pushed
+## 13. Six real emails went to you, and the first three have broken links
+
+You authorised sending. What happened:
+
+**Six emails, all delivered.** Three per batch, one for each of v1 built-in, v2 editable frame and
+v3 Unlayer, subject-prefixed so you can tell them apart. Sent through the real path: assemble the
+data, render once with the per-recipient tags standing, then resolve and harden per subscriber.
+Not through the route, which is behind MFA and cannot be called from a script, but everything below
+the route's auth wrapper is the same code.
+
+**The first three have `localhost` links and are useless.** My mistake, and an instructive one: I
+set `NEXT_PUBLIC_APP_URL` in a statement at the top of the script, and ES module imports are
+hoisted above top-level statements, so `lib/config.ts` had already read the old value. **Read the
+second batch of three, not the first.**
+
+Built from the 35 approved articles rather than the edition in the database, which has none. Eight
+stories, real scores, real summaries. **No featured projects exist, so the internal block was not
+exercised in any of the six.**
+
+**Local sending needed `node --use-system-ca`.** Node's fetch failed against Resend while
+PowerShell reached it fine, which is corporate TLS inspection: Windows trusts the company root CA
+and Node ships its own bundle. Node 24 has the flag for exactly this. Worth knowing before anyone
+spends an hour on it, since the same cause explains why `npx playwright install` cannot download
+browsers on this machine.
+
+## 14. Tracking: Resend knows, the database does not
+
+The six sends were the first rows `EmailEvent` has ever had, so the pipeline finally had something
+to attach to. Asking Resend about each message:
+
+| | |
+|---|---|
+| Resend's `last_event` for all six | `clicked` |
+| Rows in `EmailEvent` | 6, all `SENT`, all written by my script |
+| `DELIVERED`, `OPENED` or `CLICKED` rows | **none** |
+
+So delivery and clicks are happening and **the webhook is not reaching the application**, or is
+being rejected. That is now a narrow, testable question rather than the vague one in the ideas
+document: check the webhook URL configured on Resend's side, and whether `RESEND_WEBHOOK_SECRET`
+matches, since `lib/webhooks/verify.ts` fails closed.
+
+## 15. The unsubscribe page was unsubscribing people on page load
+
+Found because of §14. All six came back "clicked" within seconds, which was Linkroad's mail scanner
+opening every link in the message, not you.
+
+`app/unsubscribe/unsubscribe-content.tsx` POSTed to `/api/unsubscribe` from a `useEffect`. The
+endpoint being POST-only looked like a safeguard and was not one: the page performed the POST for
+you, so opening the URL was enough.
+
+**Nobody was unsubscribed. All 17 are still active.** The only reason is that this scanner fetches
+without running JavaScript. A scanner that renders pages, or a browser prefetching a link, would
+have emptied the list quietly, and `Subscriber` has no `unsubscribedAt` column, so there would be
+no record of when.
+
+Fixed: the page asks, and does nothing until the button is pressed. Verified with Playwright that no
+POST is issued on load. One button is still one click.
+
+**The proper frictionless path is the `List-Unsubscribe-Post` header**, which mail clients turn into
+their own native unsubscribe button. Not implemented. Worth doing, and it helps deliverability.
+
+## 16. Not pushed
 
 `git push` triggers a production deploy on Vercel. You did not ask for one and I did not do it.
 20 commits are sitting on local `master`.
@@ -196,8 +257,10 @@ unverified. It is one row, in a table that had none, deleted and verified within
 
 ## What is NOT verified, and why
 
-1. **A real send.** Nothing was sent to a real inbox. The per-recipient substitution changes the
-   batch loop and has unit coverage but no live run.
+1. ~~**A real send.**~~ **Done.** Six emails to `julian.andrade@linkconsulting.com`, all delivered,
+   all three templates, twice. Read the second batch: the first three carry `localhost` links. See
+   §13. The route's own auth wrapper and its data assembly are still unexercised, because the route
+   needs a session with MFA.
 2. **Outlook desktop.** The MSO conditionals and `mso-line-height-rule` declarations exist for the
    Word rendering engine and I cannot drive it. This is the check I would most want you to do:
    send a test of each of the three templates to an Outlook desktop client.
@@ -219,9 +282,14 @@ unverified. It is one row, in a table that had none, deleted and verified within
 
 ## Findings I did not act on
 
-- **`EmailEvent` has zero rows.** Nothing has ever been recorded as sent. The Resend webhook looks
-  up a SENT event by messageId to attach opens and clicks to, so email tracking has never had
-  anything to correlate against. This is worth its own look.
+- ~~**`EmailEvent` has zero rows.**~~ It has six now, and §14 narrows the diagnosis: Resend reports
+  all six delivered and clicked, and not one delivery, open or click reached the database. The
+  webhook is the thing to check, not the correlation logic.
+- **`Subscriber` has no `unsubscribedAt`.** When someone leaves, nothing records when. It made §15
+  harder to investigate and it would make a real incident impossible to reconstruct.
+- **Mail scanners click every link.** Six sends, six "clicked" within seconds, none of them a human.
+  Whenever click tracking does start working, its numbers will be inflated by this and will need a
+  filter, or the analytics screen will report engagement that is a security appliance.
 - **Four dashboard screens log a React hydration mismatch** (projects, sources, analytics,
   settings). Pre-existing, in screens I did not touch. Harmless today, and the kind of thing that
   turns into a real bug later.
