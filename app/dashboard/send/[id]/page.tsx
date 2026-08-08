@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
+import { AsidePicker } from "@/components/aside-picker";
 import { EditionArticlePicker, Article } from "@/components/edition-article-picker";
 import { EditionProjectPicker, Project } from "@/components/edition-project-picker";
 import { EditionUnlayerEditor, EditionUnlayerEditorRef } from "@/components/edition-unlayer-editor";
@@ -124,6 +125,8 @@ interface EditionDetail {
   projectCount: number;
   editorDesignJson: object | null;
   templateId: string | null;
+  /** The closing "one more thing" block this edition will send, if it picked one. */
+  asideId?: string | null;
   /**
    * What this edition contained when it went out, as the API resolved it.
    *
@@ -1093,6 +1096,26 @@ export default function EditionDetailPage() {
           <Callout tone="warn" title="Not ready to send yet" className="mb-5">
             {sendBlockReason}
           </Callout>
+        )}
+
+        {/*
+          The closing block, above the readiness checklist rather than inside it.
+
+          It is not a readiness condition: an edition with no closing block is a complete
+          edition and sends without one. Putting it in the checklist would have said
+          otherwise.
+        */}
+        {edition && (
+          <div className="mb-6">
+            <AsidePicker
+              editionId={edition.id}
+              selectedId={edition.asideId ?? null}
+              readOnly={!isEditable && !isFinalized}
+              onChange={(asideId) =>
+                setEdition((current) => (current ? { ...current, asideId } : current))
+              }
+            />
+          </div>
         )}
 
         {/* Send Readiness */}

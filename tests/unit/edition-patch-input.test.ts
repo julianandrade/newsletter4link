@@ -86,3 +86,47 @@ describe("parseEditionPatch", () => {
     expect(parseEditionPatch(undefined)).toEqual({ ok: true, value: {} });
   });
 });
+
+/**
+ * The closing block on an edition.
+ *
+ * Absent and null are kept apart for the same reason the title keeps them apart: the send
+ * screen PATCHes partially, so an omitted field must never be read as "clear it".
+ */
+describe("parseEditionPatch and the closing aside", () => {
+  it("leaves the aside alone when the field is absent", () => {
+    const parsed = parseEditionPatch({ title: "A special" });
+
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect("asideId" in parsed.value).toBe(false);
+  });
+
+  it("accepts an id", () => {
+    const parsed = parseEditionPatch({ asideId: "as-1" });
+
+    expect(parsed).toEqual({ ok: true, value: { asideId: "as-1" } });
+  });
+
+  it("reads null as sending without one", () => {
+    expect(parseEditionPatch({ asideId: null })).toEqual({
+      ok: true,
+      value: { asideId: null },
+    });
+  });
+
+  it("reads an empty or blank string as null rather than looking up an empty id", () => {
+    expect(parseEditionPatch({ asideId: "" })).toEqual({
+      ok: true,
+      value: { asideId: null },
+    });
+    expect(parseEditionPatch({ asideId: "   " })).toEqual({
+      ok: true,
+      value: { asideId: null },
+    });
+  });
+
+  it("refuses anything that is not a string or null", () => {
+    expect(parseEditionPatch({ asideId: 7 }).ok).toBe(false);
+    expect(parseEditionPatch({ asideId: { id: "as-1" } }).ok).toBe(false);
+  });
+});

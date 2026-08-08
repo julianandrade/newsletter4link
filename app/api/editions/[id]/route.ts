@@ -11,6 +11,13 @@ export interface EditionPatchInput {
   /** Absent leaves the name alone. Null clears it back to the derived week label. */
   title?: string | null;
   publishDate?: Date;
+  /**
+   * The closing "one more thing" block. Null sends the edition without one.
+   *
+   * Same absent-versus-null rule as `title`, and for the same reason: the send screen
+   * PATCHes partially, so an omitted field must never mean "clear it".
+   */
+  asideId?: string | null;
 }
 
 export type ParsedPatch =
@@ -57,6 +64,17 @@ export function parseEditionPatch(body: unknown): ParsedPatch {
     }
 
     value.publishDate = parsed;
+  }
+
+  if ("asideId" in input) {
+    const raw = input.asideId;
+
+    if (raw !== null && typeof raw !== "string") {
+      return { ok: false, error: "asideId must be a string or null" };
+    }
+
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    value.asideId = trimmed.length > 0 ? trimmed : null;
   }
 
   return { ok: true, value };
@@ -140,6 +158,14 @@ function transformEdition(edition: EditionWithContents) {
     updatedAt: edition.updatedAt,
     editorDesignJson: edition.editorDesignJson,
     templateId: edition.templateId,
+    /**
+     * The closing "one more thing" block this edition will send.
+     *
+     * The id rather than the row: the send screen's picker fetches the offerable library
+     * anyway and matches on it, and returning the row here would give a second copy that
+     * could disagree with that list after an edit.
+     */
+    asideId: edition.asideId,
     // RQ-005 action 8 and BR-011: the archive marker and the approval record
     // travel with the edition, so a screen never has to guess either.
     archivedAt: edition.archivedAt,
@@ -312,6 +338,33 @@ export async function PATCH(
 
     if (patch.value.title !== undefined) {
       updateData.title = patch.value.title;
+    }
+
+    /**
+     * The closing block.
+     *
+     * The id is resolved through the tenant client first, so pointing an edition at
+     * another organization's aside answers 404 rather than sending it. Null disconnects,
+     * which is how the send screen says "no closing block this week".
+     */
+    if (patch.value.asideId !== undefined) {
+      if (patch.value.asideId === null) {
+        updateData.aside = { disconnect: true };
+      } else {
+        const aside = await db.aside.findFirst({
+          where: { id: patch.value.asideId },
+          select: { id: true },
+        });
+
+        if (!aside) {
+          return NextResponse.json(
+            { success: false, error: "Aside not found" },
+            { status: 404 }
+          );
+        }
+
+        updateData.aside = { connect: { id: aside.id } };
+      }
     }
 
     /**
