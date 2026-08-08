@@ -52,6 +52,8 @@ const WORKSPACE = [
   { href: "/dashboard/curation", label: "Curation jobs" },
   { href: "/dashboard/generate", label: "Ghost Writer" },
   { href: "/dashboard/templates", label: "Templates" },
+  // The closing slot's library: the joke, note or spotlight an edition ends on.
+  { href: "/dashboard/asides", label: "One more thing" },
   { href: "/dashboard/subscribers", label: "Subscribers" },
 ];
 

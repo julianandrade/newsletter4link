@@ -26,6 +26,7 @@ import SettingsPage from "@/app/dashboard/settings/page";
 import BuilderPage from "@/app/dashboard/send/[id]/page";
 import SourcesPage from "@/app/dashboard/sources/page";
 import ArticleDetailPage from "@/app/dashboard/articles/[id]/page";
+import AsidesPage from "@/app/dashboard/asides/page";
 import { editionLabel } from "@/lib/editions/identity";
 import { isoWeekStart } from "@/lib/radar/week";
 import type { User } from "@supabase/supabase-js";
@@ -1372,6 +1373,22 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       // the four is a URL rather than something to arrange by clicking.
       return json({ success: true, data: articleStateFromUrl() });
     }
+    /**
+     * The closing slot's library. Ahead of the catch-all, which would answer with an
+     * empty array and make every tab look like the empty state.
+     */
+    if (url.includes("/api/asides")) {
+      const method = (init?.method ?? "GET").toUpperCase();
+
+      if (method === "POST") {
+        return json({ success: true, data: { id: "as-new" }, message: "Saved." });
+      }
+      if (method === "PATCH") {
+        return json({ success: true, data: { id: "as-1" } });
+      }
+
+      return json({ success: true, data: asidesForUrl() });
+    }
     if (url.includes("/api/articles/approved")) {
       return json({ success: true, data: APPROVED, count: APPROVED.length });
     }
@@ -1672,6 +1689,126 @@ const ARTICLE_STATES = {
   },
 } as const;
 
+/* ------------------------------------------------------- closing slot fixtures */
+
+/**
+ * The closing slot's library, in each of its three states.
+ *
+ * The pending rows carry `source: "MODEL"` because that is the only way a model-written
+ * line ever exists here, and the screen has to show it: an editor approving a queue needs
+ * to know what wrote each line.
+ */
+const ASIDES_APPROVED = [
+  {
+    id: "as-1",
+    kind: "JOKE" as const,
+    status: "APPROVED" as const,
+    source: "HUMAN" as const,
+    text: "Revi um pull request de quatro mil linhas que nenhum humano escreveu. Aprovei em nove minutos. Os dois demos o nosso melhor.",
+    imageUrl: null,
+    attribution: null,
+    language: "pt-PT",
+    reusable: true,
+    lastUsedAt: null,
+    useCount: 0,
+    createdAt: iso(20),
+  },
+  {
+    id: "as-2",
+    kind: "JOKE" as const,
+    status: "APPROVED" as const,
+    source: "HUMAN" as const,
+    text: "Agêntico: adjetivo que transforma um cron job numa ronda de investimento.",
+    imageUrl: null,
+    attribution: null,
+    language: "pt-PT",
+    reusable: true,
+    lastUsedAt: iso(7),
+    useCount: 2,
+    createdAt: iso(40),
+  },
+  {
+    id: "as-3",
+    kind: "NOTE" as const,
+    status: "APPROVED" as const,
+    source: "HUMAN" as const,
+    text: "Uma semana curta, e mesmo assim três coisas mudaram de sítio. Boas leituras.",
+    imageUrl: null,
+    attribution: "Julian",
+    language: "pt-PT",
+    reusable: false,
+    lastUsedAt: iso(14),
+    useCount: 1,
+    createdAt: iso(14),
+  },
+];
+
+const ASIDES_PENDING = [
+  {
+    id: "as-4",
+    kind: "JOKE" as const,
+    status: "PENDING" as const,
+    source: "MODEL" as const,
+    text: "Já não escrevemos código. Escrevemos prompts, revemos código, e depois escrevemos o código.",
+    imageUrl: null,
+    attribution: null,
+    language: "pt-PT",
+    reusable: true,
+    lastUsedAt: null,
+    useCount: 0,
+    createdAt: iso(0, 1),
+  },
+  {
+    id: "as-5",
+    kind: "JOKE" as const,
+    status: "PENDING" as const,
+    source: "MODEL" as const,
+    text: "Slop é o nome que damos ao conteúdo gerado pelos outros.",
+    imageUrl: null,
+    attribution: null,
+    language: "pt-PT",
+    reusable: true,
+    lastUsedAt: null,
+    useCount: 0,
+    createdAt: iso(0, 1),
+  },
+];
+
+const ASIDES_RETIRED = [
+  {
+    id: "as-6",
+    kind: "JOKE" as const,
+    status: "RETIRED" as const,
+    source: "HUMAN" as const,
+    text: "Este ano vai ser o ano dos agentes. Como o ano passado, e o anterior.",
+    imageUrl: null,
+    attribution: null,
+    language: "pt-PT",
+    reusable: true,
+    lastUsedAt: iso(120),
+    useCount: 3,
+    createdAt: iso(200),
+  },
+];
+
+/**
+ * Which status the current URL is asking for, so each tab is a screenshot.
+ *
+ * Keyed on `?status=` rather than on the screen name, because that is the same parameter
+ * the real screen reads to choose its tab. Keying it on the screen name drove the fixture
+ * without driving the component, and the heading then said "approved" over a list of
+ * pending rows.
+ */
+function asidesForUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("screen") === "asides-empty") return [];
+
+  const status = params.get("status");
+  if (status === "PENDING") return ASIDES_PENDING;
+  if (status === "RETIRED") return ASIDES_RETIRED;
+  return ASIDES_APPROVED;
+}
+
 /** Which of the four the current URL is asking for. */
 function articleStateFromUrl() {
   const param = new URLSearchParams(window.location.search).get("screen") ?? "";
@@ -1700,6 +1837,10 @@ const SCREENS = {
   "article-refused": ArticleDetailPage,
   // Finding D4: the same screen with a link that could not be unwrapped.
   "article-wrapped": ArticleDetailPage,
+  // The closing slot's library. The tab comes from `?status=`, which is what the real
+  // screen reads, so ?screen=asides&status=PENDING is one URL per state.
+  asides: AsidesPage,
+  "asides-empty": AsidesPage,
   subscribers: SubscribersPage,
   templates: TemplatesPage,
   analytics: AnalyticsPage,
