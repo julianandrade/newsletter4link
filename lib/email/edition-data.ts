@@ -10,7 +10,13 @@
 import { config } from "@/lib/config";
 import { weekRangeLabel } from "@/lib/radar/week";
 import { firstContentImage } from "./content-image";
-import type { EditionEmail, EmailArticle, EmailSection, EmailTrend } from "./edition-template";
+import type {
+  EditionEmail,
+  EmailArticle,
+  EmailAside,
+  EmailSection,
+  EmailTrend,
+} from "./edition-template";
 import type { Trend } from "@/lib/trends/compute";
 
 export interface SourceArticle {
@@ -44,6 +50,14 @@ export interface EditionInput {
   year: number;
   /** Computed trends for the radar block; omitted means the block is not rendered. */
   trends?: EmailTrend[];
+  /**
+   * The closing "one more thing" block, already resolved from the edition's Aside row.
+   *
+   * Resolved by the caller rather than looked up here, for the same reason `label` is:
+   * this module is reachable from client components through content-renderer and must not
+   * import anything Prisma-facing.
+   */
+  oneMoreThing?: EmailAside;
   /** Retained for callers that pass the whole newsletter payload through. */
   subscriberId?: string;
   /** Absolute base URL. Defaults to config.app.url. */
@@ -297,6 +311,7 @@ export function buildEditionEmail(input: EditionInput): EditionEmail {
           url: undefined,
         }
       : undefined,
+    oneMoreThing: input.oneMoreThing,
     /**
      * The edition index, not /dashboard.
      *

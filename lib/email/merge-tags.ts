@@ -16,6 +16,7 @@ import {
   bulletsBlock,
   escapeHtml,
   internalBlock,
+  oneMoreThingBlock,
   sectionBlock,
   topStoryBlock,
   trendBlock,
@@ -95,6 +96,13 @@ export const RADAR_MERGE_TAGS: readonly MergeTag[] = [
     name: "internal",
     label: "Internal block",
     description: "The internal work worth spotlighting. Renders nothing when no project is picked.",
+    perRecipient: false,
+  },
+  {
+    name: "one_more_thing",
+    label: "One more thing",
+    description:
+      "The closing joke, note or spotlight, with its picture when there is one. Renders nothing when the edition chose none.",
     perRecipient: false,
   },
   {
@@ -244,6 +252,7 @@ export function editionMergeValues(
     sections: wrap(edition.sections.map(sectionBlock).join("\n")),
     trend_radar: wrap(trendBlock(edition.trends, heading)),
     internal: wrap(internalBlock(edition.internal, heading)),
+    one_more_thing: wrap(oneMoreThingBlock(edition.oneMoreThing, heading)),
   };
 }
 

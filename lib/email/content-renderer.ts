@@ -219,6 +219,12 @@ export function generateMergeTagSamples(
       projects.slice(0, 1).map((project) => project.name),
       "No internal work selected yet."
     ),
+    one_more_thing: note(
+      0,
+      "closing note",
+      [],
+      "The closing joke or note renders here when the edition picks one."
+    ),
   };
 }
 

@@ -25,6 +25,7 @@
 import type {
   EditionEmail,
   EmailArticle,
+  EmailAside,
   EmailInternal,
   EmailSection,
   EmailTrend,
@@ -415,5 +416,68 @@ export function internalBlock(
   <div class="t-body" style="font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${BODY_INK};">${escapeHtml(
     internal.body
   )}</div>
+</td></tr>`;
+}
+
+/**
+ * The closing block: a joke, an editor's note, or an internal spotlight.
+ *
+ * Two things here are deliberate rather than incidental.
+ *
+ * The image's alt is the aside's own text, never the empty string. `renderCustomBlocks` in
+ * template-renderer.ts emits `alt=""`, so a reader whose client blocks images loses the
+ * whole message. Many corporate clients block them by default, which is exactly the
+ * audience this newsletter has, so the text is required and it is also the alt.
+ *
+ * No colour is introduced. The `.tint`, `.t-body` and `.t-muted` classes already carry the
+ * `[data-ogsc]` mirror Outlook.com needs, so styling this block with its own hex values
+ * would make it the one light-only block in a dark email.
+ *
+ * 516px: the shell is 640px, the block sits inside 40px gutters, and the tinted cell adds
+ * 20px of its own on each side. An explicit width alongside `max-width:100%` so Outlook
+ * reserves the box before the image loads rather than reflowing when it arrives.
+ *
+ * Called adjacent to the `after-projects` anchor in edition-template.ts rather than on its
+ * own line, so an edition that picked no aside renders byte-identically to one from before
+ * this block existed. A template literal on its own line leaves a blank line behind when
+ * the value is the empty string, which is what the byte-stability snapshot caught.
+ */
+export function oneMoreThingBlock(
+  aside: EmailAside | undefined,
+  options: HeadingOption = {}
+): string {
+  if (!aside) return "";
+
+  const heading = options.heading !== false;
+  const image = safeUrl(aside.imageUrl);
+  const text = escapeHtml(aside.text);
+
+  return `<tr><td class="px" style="padding:${topPadding(heading, "30px")} 40px 0 40px;">
+  ${
+    heading
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td style="background-color:${PRIMARY}; padding:4px 8px; font-family:${SANS}; font-size:10px; line-height:14px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.4px; color:#ffffff; text-transform:uppercase;">One more thing</td>
+  </tr></table>`
+      : ""
+  }
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="tint" style="background-color:${TINT}; border-left:3px solid ${ACCENT}; margin-top:${
+    heading ? "12px" : "0"
+  };"><tr><td style="padding:16px 20px;">${
+    image
+      ? `
+  <img src="${escapeHtml(
+    image
+  )}" alt="${text}" width="516" style="display:block; width:100%; max-width:516px; height:auto; border:0; margin-bottom:12px;">`
+      : ""
+  }
+  <div class="t-body" style="font-family:${SANS}; font-size:15px; line-height:23px; mso-line-height-rule:exactly; color:${BODY_INK};">${text}</div>${
+    aside.attribution
+      ? `
+  <div class="t-muted" style="padding-top:8px; font-family:${SANS}; font-size:12px; line-height:18px; mso-line-height-rule:exactly; color:${MUTED};">${escapeHtml(
+    aside.attribution
+  )}</div>`
+      : ""
+  }
+  </td></tr></table>
 </td></tr>`;
 }

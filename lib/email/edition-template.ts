@@ -38,6 +38,7 @@ import {
   escapeHtml,
   internalBlock,
   link,
+  oneMoreThingBlock,
   safeUrl,
   sectionBlock,
   topStoryBlock,
@@ -82,6 +83,20 @@ export interface EmailInternal {
   url?: string;
 }
 
+/**
+ * The closing "one more thing" block: a joke, an editor's note, or an internal spotlight.
+ *
+ * `text` is required even when there is an image, because it is also the image's alt text.
+ * Many corporate mail clients block images until the reader loads them, so a meme whose
+ * joke lives only in the picture reaches those readers as an empty box.
+ */
+export interface EmailAside {
+  kind: "JOKE" | "NOTE" | "SPOTLIGHT";
+  text: string;
+  imageUrl?: string;
+  attribution?: string;
+}
+
 export interface EditionEmail {
   /** "Week 31 · 2026", shown in the masthead. */
   editionLabel: string;
@@ -102,6 +117,8 @@ export interface EditionEmail {
   sections: EmailSection[];
   trends: EmailTrend[];
   internal?: EmailInternal;
+  /** The closing block. Absent on an edition that chose none, and then nothing renders. */
+  oneMoreThing?: EmailAside;
   /** The index of editions this reader received, linked from the accent call to action. */
   portalUrl: string;
   /** This edition's own permalink, linked from "View in browser" above the masthead. */
@@ -242,7 +259,7 @@ ${BLOCK_ANCHORS["after-articles"]}
 ${trendBlock(data.trends)}
 ${BLOCK_ANCHORS["before-projects"]}
 ${internalBlock(data.internal)}
-${BLOCK_ANCHORS["after-projects"]}
+${BLOCK_ANCHORS["after-projects"]}${oneMoreThingBlock(data.oneMoreThing)}
 
 <!-- CTA -->
 <tr><td class="px" align="center" style="padding:30px 40px 34px 40px;">
