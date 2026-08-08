@@ -2,6 +2,7 @@
  * OPML Parser Utility
  * Parses OPML files to extract RSS feed information
  */
+import { fetchFeedXml } from "@/lib/curation/feed-fetch";
 
 import * as cheerio from "cheerio";
 
@@ -92,35 +93,27 @@ export function parseOPML(opmlContent: string): OPMLParseResult {
 
 /**
  * Fetch OPML content from a URL
+ *
+ * The URL comes from a form field, so it is an attacker-influenced address that this
+ * server is being asked to open. It used to be handed straight to `fetch` with
+ * `redirect` left at its default, so it followed a chain nobody checked. It goes through
+ * `fetchFeedXml` now, the same guarded fetcher the feeds use, which runs every hop past
+ * `checkUrlTarget`.
+ *
+ * The content-type check is gone with it. It was never a security control, since it ran
+ * after the request had already been made, and it rejected real OPML files served as
+ * `text/html` by a web server with no mapping for `.opml`. The parser rejects anything
+ * that is not OPML on the next line anyway, which is the check that means something.
+ *
  * @param url - URL to fetch OPML from
  * @returns OPML content as string
  */
 export async function fetchOPML(url: string): Promise<string> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/xml, text/xml, text/x-opml, */*",
-    },
-  });
+  const fetched = await fetchFeedXml(url);
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch OPML: ${response.status} ${response.statusText}`);
+  if (!fetched.ok) {
+    throw new Error(`Failed to fetch OPML: ${fetched.reason}`);
   }
 
-  const contentType = response.headers.get("content-type") || "";
-
-  // Allow common content types for OPML files
-  const validTypes = [
-    "application/xml",
-    "text/xml",
-    "text/x-opml",
-    "application/octet-stream",
-    "text/plain",
-  ];
-
-  const isValidType = validTypes.some((type) => contentType.includes(type));
-  if (!isValidType && !contentType.includes("xml")) {
-    throw new Error(`Unexpected content type: ${contentType}`);
-  }
-
-  return response.text();
+  return fetched.xml;
 }

@@ -100,6 +100,35 @@ export const config = {
    * two hundred links, a redirect chain that never ends, a batch that creates a thousand
    * articles from one bad parse.
    */
+  /**
+   * Fetching an RSS feed or an OPML file.
+   *
+   * Separate from `emailIngest` because the two paths answer to different pressures. A
+   * newsletter arrives a few times a day and its links are somebody else's tracking
+   * wrappers; a feed list can be 434 entries that a person imported in one click, and the
+   * collection has to fit a 300-second function whatever its length.
+   */
+  feeds: {
+    /** Feeds fetched at once. The work is a DNS lookup and a download, almost all waiting. */
+    concurrency: 6,
+    /**
+     * Wall clock one collection run may spend fetching, in milliseconds.
+     *
+     * The collection was a sequential `for` over every active feed, which is fine at
+     * fifteen and impossible at 434: 427 of this project's feeds are imported and dormant,
+     * and the day they are switched on the run cannot finish. A deadline makes a long list
+     * degrade into "as many as fitted" with a note, instead of a killed invocation that
+     * says nothing.
+     */
+    fetchBudgetMs: 150_000,
+    /** Redirects followed when fetching a feed. Every hop goes through the safety check. */
+    maxRedirectHops: 5,
+    /** Milliseconds allowed for one feed request. */
+    timeoutMs: 15_000,
+    /** Sanity bound on a feed document, in characters. */
+    maxBytes: 5_000_000,
+  },
+
   emailIngest: {
     /** Most items taken from one digest. */
     maxItemsPerDigest: 20,
