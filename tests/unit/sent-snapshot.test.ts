@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SENT_SNAPSHOT_VERSION,
   buildSentSnapshot,
+  frozenAsideFor,
   frozenCustomBlocksFor,
   frozenHtmlFor,
   frozenTemplateIdFor,
@@ -294,5 +295,101 @@ describe("renderSourceFor", () => {
     // Absent rather than null: SourceProject's field is optional, and an explicit null
     // would make every caller that formats a date handle a value it never sees today.
     expect("projectDate" in renderSourceFor(live).projects[0]).toBe(false);
+  });
+});
+
+/**
+ * The closing block.
+ *
+ * Frozen rather than followed through Edition.asideId, because the row can be edited or
+ * retired after the send and the archive has to show what was actually delivered.
+ */
+describe("what a send records about its closing block", () => {
+  it("keeps the aside it sent", () => {
+    const snapshot = buildSentSnapshot({
+      ...snapshotInput(),
+      aside: { kind: "JOKE", text: "The diff reviewed itself." },
+    });
+
+    expect(frozenAsideFor(snapshot)).toEqual({
+      kind: "JOKE",
+      text: "The diff reviewed itself.",
+    });
+  });
+
+  it("records null when the edition picked none", () => {
+    expect(frozenAsideFor(buildSentSnapshot(snapshotInput()))).toBeNull();
+  });
+
+  it("reads a snapshot written before the aside existed as having none", () => {
+    // The version is deliberately not bumped for this field: absence and null mean the
+    // same thing to every reader, so an older record needs no handling.
+    const older = { ...buildSentSnapshot(snapshotInput()) } as Record<string, unknown>;
+    delete older.aside;
+
+    expect(frozenAsideFor(older)).toBeNull();
+  });
+
+  it("survives a round trip through the Json column", () => {
+    const snapshot = buildSentSnapshot({
+      ...snapshotInput(),
+      aside: { kind: "NOTE", text: "A note.", imageUrl: "https://example.test/m.png" },
+    });
+
+    const roundTripped = JSON.parse(JSON.stringify(snapshot));
+
+    expect(frozenAsideFor(roundTripped)).toEqual({
+      kind: "NOTE",
+      text: "A note.",
+      imageUrl: "https://example.test/m.png",
+    });
+  });
+
+  it("returns null for anything that is not one of our snapshots", () => {
+    expect(frozenAsideFor(null)).toBeNull();
+    expect(frozenAsideFor({ nope: true })).toBeNull();
+  });
+});
+
+/**
+ * The stored aside is validated, not cast.
+ *
+ * It comes out of an untyped Json column and goes straight into an email whose text is
+ * also the image's alt text, so a record missing `text` would render an empty block with
+ * an empty alt: the one outcome the closing block exists to avoid.
+ */
+describe("a malformed stored aside", () => {
+  const withAside = (aside: unknown) => {
+    const snapshot = buildSentSnapshot(snapshotInput()) as Record<string, unknown>;
+    snapshot.aside = aside;
+    return snapshot;
+  };
+
+  it("is refused when the text is missing, empty or not a string", () => {
+    expect(frozenAsideFor(withAside({ kind: "JOKE" }))).toBeNull();
+    expect(frozenAsideFor(withAside({ kind: "JOKE", text: "" }))).toBeNull();
+    expect(frozenAsideFor(withAside({ kind: "JOKE", text: "   " }))).toBeNull();
+    expect(frozenAsideFor(withAside({ kind: "JOKE", text: 42 }))).toBeNull();
+  });
+
+  it("is refused when it is not an object at all", () => {
+    expect(frozenAsideFor(withAside("a joke"))).toBeNull();
+    expect(frozenAsideFor(withAside([]))).toBeNull();
+    expect(frozenAsideFor(withAside(null))).toBeNull();
+  });
+
+  it("falls back to JOKE for an unknown kind rather than refusing the whole block", () => {
+    // The kind only selects styling today. Losing a delivered joke over it would be a
+    // worse answer than showing it as a joke.
+    expect(frozenAsideFor(withAside({ kind: "MEME", text: "Still funny." }))).toEqual({
+      kind: "JOKE",
+      text: "Still funny.",
+    });
+  });
+
+  it("drops an image or attribution that is not a usable string", () => {
+    expect(
+      frozenAsideFor(withAside({ kind: "JOKE", text: "x", imageUrl: 7, attribution: "" }))
+    ).toEqual({ kind: "JOKE", text: "x" });
   });
 });

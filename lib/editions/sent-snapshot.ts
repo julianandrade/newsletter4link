@@ -1,5 +1,6 @@
 import { editionEmailLabel } from "@/lib/editions/identity";
 import type { SourceArticle, SourceProject } from "@/lib/email/edition-data";
+import type { EmailAside } from "@/lib/email/edition-template";
 
 /**
  * What actually went out, frozen at the send.
@@ -88,6 +89,15 @@ export interface SentSnapshot {
    * recipient's signed links.
    */
   frozenHtml?: string | null;
+  /**
+   * The closing "one more thing" block this send carried, frozen.
+   *
+   * Absent on every snapshot written before this existed and null on a send that chose
+   * none, which a reader must treat identically: both mean "this send had no closing
+   * block". Frozen rather than followed through `Edition.asideId`, because the row can be
+   * edited or retired afterwards and the archive has to show what was actually delivered.
+   */
+  aside?: unknown | null;
 }
 
 export interface BuildSnapshotInput {
@@ -100,6 +110,7 @@ export interface BuildSnapshotInput {
   templateId: string | null;
   customBlocks?: unknown[] | null;
   frozenHtml?: string | null;
+  aside?: unknown | null;
 }
 
 function toSnapshotArticle(
@@ -144,6 +155,7 @@ export function buildSentSnapshot(input: BuildSnapshotInput): SentSnapshot {
     // snapshot written before these two existed.
     customBlocks: input.customBlocks?.length ? input.customBlocks : null,
     frozenHtml: input.frozenHtml || null,
+    aside: input.aside ?? null,
   };
 }
 
@@ -173,6 +185,41 @@ export function frozenCustomBlocksFor(sentSnapshot: unknown): unknown[] | null {
   if (!isSentSnapshot(sentSnapshot)) return null;
   const blocks = sentSnapshot.customBlocks;
   return Array.isArray(blocks) && blocks.length > 0 ? blocks : null;
+}
+
+/**
+ * The closing block a frozen edition sent, or null.
+ *
+ * Null covers three cases a reader does not need to tell apart: a snapshot written before
+ * this field existed, a send that picked no aside, and a stored null.
+ *
+ * The shape is validated rather than cast. This comes out of an untyped Json column that a
+ * hand-written UPDATE can put anything into, and the value goes straight into an email
+ * whose `text` is also the image's alt: a missing `text` would render an empty block with
+ * an empty alt, which is the one outcome this whole feature exists to avoid.
+ */
+export function frozenAsideFor(sentSnapshot: unknown): EmailAside | null {
+  if (!isSentSnapshot(sentSnapshot)) return null;
+
+  const aside = sentSnapshot.aside;
+  if (typeof aside !== "object" || aside === null) return null;
+
+  const candidate = aside as Record<string, unknown>;
+  if (typeof candidate.text !== "string" || candidate.text.trim().length === 0) return null;
+
+  const kind =
+    candidate.kind === "NOTE" || candidate.kind === "SPOTLIGHT" ? candidate.kind : "JOKE";
+
+  return {
+    kind,
+    text: candidate.text,
+    ...(typeof candidate.imageUrl === "string" && candidate.imageUrl
+      ? { imageUrl: candidate.imageUrl }
+      : {}),
+    ...(typeof candidate.attribution === "string" && candidate.attribution
+      ? { attribution: candidate.attribution }
+      : {}),
+  };
 }
 
 /**

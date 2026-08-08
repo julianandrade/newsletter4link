@@ -26,6 +26,9 @@ import {
 } from "@/lib/editions/identity";
 import { personalizeHtml } from "@/lib/email/personalize";
 import { buildSentSnapshot } from "@/lib/editions/sent-snapshot";
+import { toEmailAside } from "@/lib/asides/select";
+import { markAsideUsed } from "@/lib/asides/mark-used";
+import type { EmailAside } from "@/lib/email/edition-template";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -440,6 +443,22 @@ export async function POST(request: Request) {
       };
     }
 
+    /**
+     * The closing block belongs to the edition, not to whichever of the three branches
+     * above produced the body, so it is attached once here rather than in each of them.
+     *
+     * Read through the tenant client, so an asideId pointing at another organization's row
+     * resolves to null rather than sending it.
+     */
+    let sentAside: EmailAside | null = null;
+    if (edition?.asideId) {
+      const aside = await db.aside.findUnique({ where: { id: edition.asideId } });
+      if (aside) {
+        sentAside = toEmailAside(aside);
+        emailData.oneMoreThing = sentAside;
+      }
+    }
+
     console.log(
       `Starting batch send to ${recipientCount} ${useAdHocEmails ? "ad-hoc emails" : "subscribers"} for Week ${emailData.week}, ${emailData.year}...`
     );
@@ -566,6 +585,12 @@ export async function POST(request: Request) {
          * archive would otherwise show a different newsletter than the one delivered.
          */
         frozenHtml: choice.html,
+        /**
+         * Frozen, rather than left to be followed through `Edition.asideId` later. The row
+         * can be edited or retired after the send, and the archive has to show what was
+         * actually delivered.
+         */
+        aside: sentAside,
       });
 
       // RQ-005 BR-011: a sent edition must be able to say who approved the send
@@ -588,6 +613,13 @@ export async function POST(request: Request) {
           data: { status: "USED" },
         });
       }
+
+      /**
+       * After the snapshot, not before: a send that dies between choosing and delivering
+       * must not burn the aside. Choosing one in the picker does not touch this either,
+       * or the least-recently-used ordering would reshuffle every time somebody browsed.
+       */
+      await markAsideUsed(db, edition.asideId);
     }
 
     // Publish to SharePoint (non-blocking - don't fail email send if SharePoint fails)

@@ -13,6 +13,7 @@ import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { isoWeekAndYear } from "@/lib/radar/week";
 import { editionEmailLabel } from "@/lib/editions/identity";
 import {
+  frozenAsideFor,
   frozenCustomBlocksFor,
   frozenHtmlFor,
   frozenTemplateIdFor,
@@ -20,6 +21,7 @@ import {
   type RenderSource,
 } from "@/lib/editions/sent-snapshot";
 import { personalizeHtml } from "@/lib/email/personalize";
+import { toEmailAside } from "@/lib/asides/select";
 
 export const dynamic = "force-dynamic";
 
@@ -304,6 +306,25 @@ export async function POST(request: Request) {
             week: edition.week,
           }),
         };
+      }
+
+      /**
+       * The closing block, from the same place the rest of the body came from.
+       *
+       * A sent edition previews the aside it actually sent, frozen in the snapshot, for
+       * the same reason it previews the articles it sent: this screen is how an editor
+       * checks what went out, and the row can have been edited or retired since. A draft
+       * edition previews the row it currently points at.
+       */
+      const frozenAside = frozenAsideFor(
+        (edition as never as { sentSnapshot?: unknown }).sentSnapshot
+      );
+
+      if (choice === "frozen" && frozenAside) {
+        emailData.oneMoreThing = frozenAside;
+      } else if (!source.frozen && edition?.asideId) {
+        const aside = await ctx.db.aside.findUnique({ where: { id: edition.asideId } });
+        if (aside) emailData.oneMoreThing = toEmailAside(aside);
       }
     }
 

@@ -4,6 +4,7 @@ import { buildEditionEmail } from "./edition-data";
 import {
   renderEditionEmail,
   renderEditionText,
+  type EmailAside,
   type EmailTrend,
 } from "./edition-template";
 import { buildUnsubscribeUrl } from "./unsubscribe-token";
@@ -41,6 +42,13 @@ interface NewsletterData {
   trends?: EmailTrend[];
   /** Shown in the footer as "from N tracked sources" when known. */
   sourceCount?: number;
+  /**
+   * The closing "one more thing" block, already resolved from the edition's Aside row.
+   *
+   * Resolved by the caller because this shape is shared with the preview, which has no
+   * edition behind it and correctly sends none.
+   */
+  oneMoreThing?: EmailAside;
 }
 
 /**

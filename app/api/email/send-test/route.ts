@@ -14,6 +14,7 @@ import {
 } from "@/lib/email/template-renderer";
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
 import { isoWeekAndYear } from "@/lib/radar/week";
+import { toEmailAside } from "@/lib/asides/select";
 
 export const dynamic = "force-dynamic";
 
@@ -40,9 +41,13 @@ interface CustomData {
  * POST /api/email/send-test
  * Send a test newsletter to a specific email address
  *
- * Body: { email: string, editionId?: string, templateId?: string, customData?: CustomData }
+ * Body: { email: string, editionId?: string, templateId?: string, customData?: CustomData,
+ *         asideId?: string }
  * - templateId: specific template to use (optional, uses React Email component if omitted)
  * - customData: custom edited data to use (optional, overrides database data)
+ * - asideId: a closing "one more thing" block to include, so an editor can read a joke in
+ *   a real inbox before it reaches eight hundred of them. This route builds from approved
+ *   articles rather than from an edition, so there is no asideId to inherit.
  */
 export async function POST(request: Request) {
   try {
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
     // separate pre-existing problem.
     const ctx = await requireOrgContext();
     const body = await request.json();
-    const { email, editionId, templateId, customData } = body;
+    const { email, editionId, templateId, customData, asideId } = body;
 
     if (!email) {
       return NextResponse.json(
@@ -151,6 +156,18 @@ export async function POST(request: Request) {
         week,
         year,
       };
+    }
+
+    /**
+     * The closing block, when the caller named one.
+     *
+     * Read through the tenant client, so an id belonging to another organization resolves
+     * to null rather than being sent. A test send never marks the aside as used: only a
+     * real send does, or testing a joke would push it to the back of the picker.
+     */
+    if (asideId) {
+      const aside = await ctx.db.aside.findUnique({ where: { id: asideId } });
+      if (aside) emailData.oneMoreThing = toEmailAside(aside);
     }
 
     // Send test email - use custom template if specified

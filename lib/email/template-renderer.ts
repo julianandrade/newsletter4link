@@ -17,6 +17,7 @@ import {
   renderArticleItemsHtml,
   renderProjectItemsHtml,
   type BlockPosition,
+  type EmailAside,
 } from "./edition-template";
 import { buildEditionEmail, publicationName } from "./edition-data";
 import { editionMergeValues, isHeadlessTemplate, renderMergeTags } from "./merge-tags";
@@ -64,6 +65,14 @@ interface RenderContext {
   label?: string;
   subscriberId?: string;
   customBlocks?: CustomBlock[];
+  /**
+   * The closing "one more thing" block.
+   *
+   * Dropped here once and it cost the whole feature on the path that matters most: a send
+   * uses the active stored template when there is one, so an aside would have rendered in
+   * the built-in edition and in nothing an editor had actually built.
+   */
+  oneMoreThing?: EmailAside;
 }
 
 /** The shape the preview route builds; a render context without a subscriber. */
@@ -181,7 +190,8 @@ export function renderTemplate(
   context: RenderContext,
   options: { keepPerRecipient?: boolean } = {}
 ): string {
-  const { articles, projects, week, year, label, subscriberId, customBlocks } = context;
+  const { articles, projects, week, year, label, subscriberId, customBlocks, oneMoreThing } =
+    context;
 
   const values: Record<string, string> = {
     articles:
@@ -225,6 +235,7 @@ export function renderTemplate(
         week,
         year,
         label,
+        oneMoreThing,
       }),
       // The template says whether it owns the block headings. v3 does; v2 and the hand-built
       // templates do not.
