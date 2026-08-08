@@ -5,6 +5,7 @@ import { resolveAiModels } from "@/lib/ai/model";
 import { curateArticle } from "@/lib/curation/curator";
 import { cleanUrl, unwrapUrl } from "@/lib/curation/unwrap-url";
 import { claimCutoff, claimEmail, shouldStop } from "@/lib/inbound/claim";
+import { essayUrl } from "@/lib/inbound/essay-url";
 import { extractNewsletterItems } from "@/lib/inbound/extract";
 import { classifyUnwrap } from "@/lib/inbound/link-outcome";
 import { matchSources, type MatchableSource } from "@/lib/inbound/match";
@@ -373,15 +374,15 @@ async function ingestForSource(
   }
 
   if (extracted.mode === "ESSAY") {
-    // The web version when the email gave one, and the source's own address otherwise. Never
-    // a constructed URL: a link that does not resolve is worse than no link.
-    const url = extracted.item.webVersionUrl ?? source.url ?? null;
+    // The web version when the email gave one, and the source's `url` only when that is
+    // actually a URL. See `essay-url.ts`: for an EMAIL source it is the sender address.
+    const url = essayUrl(extracted.item.webVersionUrl, source.url);
 
     if (!url) {
       return {
         created: 0,
         duplicates: 0,
-        note: `${email.id}: an essay with no web version and no source address, so nothing to link to`,
+        note: `${email.id}: an essay with no web version and no usable source URL, so nothing to link to`,
         failure: null,
       };
     }
