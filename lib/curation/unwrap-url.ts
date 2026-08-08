@@ -30,7 +30,100 @@ const TRACKING_PARAMS = [
   /^email$/i,
   /^r$/i,
   /^s$/i,
+  /**
+   * Substack's `?redirect=app-store`, which is not a campaign tag but a change of
+   * destination: the slug is the article's, and the parameter sends the reader to an app
+   * listing instead. Three production articles carried it and none of them opened the
+   * piece they were titled after.
+   */
+  /^redirect$/i,
 ];
+
+/**
+ * Wrappers whose own address is never an article.
+ *
+ * Narrow and explicit, because the cost of a false positive is a warning chip on a link
+ * that was fine, and the cost of a false negative is one wrong article. A host is only
+ * listed here if landing on it means the unwrapping did not finish.
+ */
+function isWrapperUrl(raw: string): boolean {
+  let url: URL;
+
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname;
+
+  // beehiiv's click trackers, which answer 200 and redirect in the browser.
+  if (/(^|\.)beehiiv\.com$/.test(host) && /^\/(ss|v2)\/c\//.test(path)) return true;
+  // Substack's, in both the decodable and the opaque spelling.
+  if (/(^|\.)substack\.com$/.test(host) && path.startsWith("/redirect/")) return true;
+
+  return false;
+}
+
+/**
+ * The target a Substack redirect carries in its own path.
+ *
+ * `substack.com/redirect/2/<base64url>` decodes to `{"e":"https://…"}`. No round trip, no
+ * guess, and it works even when the wrapper refuses us. The other spelling,
+ * `/redirect/<uuid>?j=…`, encodes the *subscriber* rather than the target and is not
+ * decodable, so it falls through to the network path.
+ */
+function decodeWrapper(raw: string): string | null {
+  let url: URL;
+
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  if (!/(^|\.)substack\.com$/.test(url.hostname.toLowerCase())) return null;
+
+  const match = url.pathname.match(/^\/redirect\/2\/([A-Za-z0-9_-]+)\/?$/);
+  if (!match) return null;
+
+  try {
+    const decoded = JSON.parse(Buffer.from(match[1], "base64url").toString("utf8"));
+    const target = typeof decoded?.e === "string" ? decoded.e : null;
+    // Validated as a URL here rather than trusted: this is attacker-influenced input, and
+    // the caller resolves it as a hop, which runs it through the safety check.
+    return target && /^https?:\/\//i.test(target) ? target : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A redirect expressed in the page rather than in a header.
+ *
+ * A tracking wrapper that answers 200 has not told us anything yet; the redirect is in the
+ * body, as a meta refresh or a `location` assignment. Both spellings are read, because
+ * beehiiv uses the second and plenty of others use the first.
+ *
+ * Only the prefix of the body is searched, which the fetch already bounds: a redirect stub
+ * is a few hundred bytes, and anything that needs more than that is a real page.
+ */
+export function inPageRedirect(body: string): string | null {
+  const meta = body.match(
+    /<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=\s*([^"'\s;]+)/i
+  );
+  if (meta?.[1]) return meta[1];
+
+  // `location = "x"`, `location.href = "x"`, `location.replace("x")`, `location.assign("x")`,
+  // with or without the `window.` prefix, which is how these stubs are actually written.
+  const script = body.match(
+    /location(?:\.href)?\s*(?:=|\.replace\s*\(|\.assign\s*\()\s*["']([^"']+)["']/i
+  );
+  if (script?.[1] && /^https?:\/\//i.test(script[1])) return script[1];
+
+  return null;
+}
 
 export interface UnwrapResult {
   /** The best URL found. The input, cleaned, when nothing better was reachable. */
@@ -85,7 +178,16 @@ export function cleanUrl(raw: string): string {
 export type HeadFetch = (
   url: string,
   method: "HEAD" | "GET"
-) => Promise<{ status: number; location: string | null }>;
+) => Promise<{ status: number; location: string | null; body?: string | null }>;
+
+/**
+ * How much of a wrapper's page is read looking for an in-page redirect.
+ *
+ * A redirect stub is a few hundred bytes and puts its target in the head. Anything past
+ * this is a real page, whose content we do not want and must not pay to download: the
+ * original design read no body at all precisely so a hop could not stream a gigabyte.
+ */
+const MAX_BODY_CHARS = 16_000;
 
 const realFetch: HeadFetch = async (url, method) => {
   const controller = new AbortController();
@@ -108,9 +210,34 @@ const realFetch: HeadFetch = async (url, method) => {
       },
     });
 
-    // The body is never read. Only the final URL is wanted, and a hop that starts streaming
-    // a gigabyte should cost nothing.
-    return { status: response.status, location: response.headers.get("location") };
+    /**
+     * The body is read only for a GET, and only a bounded prefix of it.
+     *
+     * HEAD still costs nothing, which is why it is still tried first. The GET happens on
+     * one path: a wrapper answered without a Location and the redirect can only be in the
+     * page. The stream is cancelled the moment enough has been seen.
+     */
+    let body: string | null = null;
+
+    if (method === "GET" && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let collected = "";
+
+      try {
+        while (collected.length < MAX_BODY_CHARS) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          collected += decoder.decode(value, { stream: true });
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+      }
+
+      body = collected.slice(0, MAX_BODY_CHARS);
+    }
+
+    return { status: response.status, location: response.headers.get("location"), body };
   } finally {
     clearTimeout(timer);
   }
@@ -136,6 +263,19 @@ export async function unwrapUrl(
   const fetchHead = options.fetchHead ?? realFetch;
   const maxHops = options.maxHops ?? config.emailIngest.maxRedirectHops;
 
+  /**
+   * Landing on a wrapper is not an answer.
+   *
+   * Applied to every exit from the loop rather than to one branch, because the loop can
+   * leave for six different reasons and five of them used to claim success. A URL still
+   * on a tracking host is the newsletter's link, not the publisher's, and saying so is
+   * what puts the warning on the row instead of quietly shipping it.
+   */
+  const finish = (result: UnwrapResult): UnwrapResult =>
+    result.unwrapped && isWrapperUrl(result.url)
+      ? { ...result, unwrapped: false, note: result.note ?? "stopped: still a tracking wrapper" }
+      : result;
+
   let current = raw;
   let hops = 0;
 
@@ -155,28 +295,45 @@ export async function unwrapUrl(
     const verdict = await checkUrlTarget(current, options.resolve);
 
     if (!verdict.safe) {
-      return {
+      return finish({
         // The last safe URL, or the caller's own input when the input was the problem: the
         // caller already has that one, so returning it reveals nothing new.
         url: cleanUrl(lastSafe ?? raw),
         unwrapped: false,
         hops,
         note: `stopped: ${verdict.reason}`,
-      };
+      });
     }
 
     lastSafe = current;
 
     if (hops >= maxHops) {
-      return {
+      return finish({
         url: cleanUrl(current),
         unwrapped: false,
         hops,
         note: `stopped after ${maxHops} hops`,
-      };
+      });
     }
 
-    let response: { status: number; location: string | null };
+    /**
+     * The wrapper that answers itself.
+     *
+     * Checked before any request, because a Substack redirect carries its target in its
+     * own path and asking the network for it would be slower, less reliable and no more
+     * correct. The target becomes an ordinary hop, so it goes through the safety check
+     * at the top of the next iteration like everything else.
+     */
+    const carried = decodeWrapper(current);
+
+    if (carried && !seen.has(carried)) {
+      seen.add(carried);
+      current = carried;
+      hops += 1;
+      continue;
+    }
+
+    let response: { status: number; location: string | null; body?: string | null };
 
     try {
       response = await fetchHead(current, "HEAD");
@@ -185,23 +342,58 @@ export async function unwrapUrl(
         response = await fetchHead(current, "GET");
       }
     } catch (error) {
-      return {
+      return finish({
         url: cleanUrl(current),
         unwrapped: hops > 0,
         hops,
         note: `stopped: ${error instanceof Error ? error.message : "request failed"}`,
-      };
+      });
     }
 
     if (!isRedirect(response.status) || !response.location) {
-      return {
+      /**
+       * A wrapper that answered without a Location has not finished talking.
+       *
+       * beehiiv's click trackers answer 200 with a page that redirects in the browser, so
+       * treating "not a 3xx" as "this is the destination" stored the wrapper as the
+       * article's own address, and asserted it had resolved it. Only wrappers get this
+       * second look: a publisher answering 200 is a page, and fetching its body to be told
+       * so would cost a download per article for nothing.
+       */
+      if (isWrapperUrl(current)) {
+        const body =
+          response.body ??
+          (await fetchHead(current, "GET").catch(() => null))?.body ??
+          "";
+        const target = inPageRedirect(body);
+
+        if (target) {
+          let resolved: string | null = null;
+
+          try {
+            resolved = new URL(target, current).toString();
+          } catch {
+            resolved = null;
+          }
+
+          if (resolved && !seen.has(resolved)) {
+            seen.add(resolved);
+            current = resolved;
+            hops += 1;
+            continue;
+          }
+        }
+      }
+
+      return finish({
         url: cleanUrl(current),
         // True once at least one hop was followed, or when the URL was never a wrapper and
-        // resolved to itself, which is the same fact: this is where it points.
+        // resolved to itself, which is the same fact: this is where it points. `finish`
+        // takes it back when the URL is still a wrapper.
         unwrapped: true,
         hops,
         note: null,
-      };
+      });
     }
 
     let next: string;
@@ -210,21 +402,21 @@ export async function unwrapUrl(
       // Resolved against the current URL, because a Location may be relative.
       next = new URL(response.location, current).toString();
     } catch {
-      return {
+      return finish({
         url: cleanUrl(current),
         unwrapped: hops > 0,
         hops,
         note: "stopped: the redirect target was not a URL",
-      };
+      });
     }
 
     if (seen.has(next)) {
-      return {
+      return finish({
         url: cleanUrl(current),
         unwrapped: false,
         hops,
         note: "stopped: the redirects loop",
-      };
+      });
     }
 
     seen.add(next);
