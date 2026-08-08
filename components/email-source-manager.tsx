@@ -97,6 +97,8 @@ export function EmailSourceManager() {
   const [draft, setDraft] = useState<NewSourceDraft>(emptyDraft);
   const [isCreating, setIsCreating] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  /** The source whose parse mode is in flight, so its toggle cannot be double-clicked. */
+  const [savingMode, setSavingMode] = useState<string | null>(null);
 
   const loadSources = useCallback(async () => {
     try {
@@ -258,6 +260,58 @@ export function EmailSourceManager() {
       }
     },
     [draft, unknown, loadSources, loadUnknown]
+  );
+
+  /**
+   * Change how a source's emails are read.
+   *
+   * Optimistic, and rolled back on failure rather than left hopeful: the chip is the only
+   * place this value is visible, so a chip that says DIGEST over a source the server still
+   * has as ESSAY is worse than no change at all.
+   *
+   * Nothing is reprocessed here. Emails already read keep the articles they produced; the
+   * new mode applies to the next run, and the backlog is replayed from the sources screen
+   * when that is what is wanted.
+   */
+  const setParseMode = useCallback(
+    async (source: EmailSource, parseMode: "DIGEST" | "ESSAY") => {
+      if (source.parseMode === parseMode) return;
+
+      setSavingMode(source.id);
+      const previous = source.parseMode;
+      setSources((current) =>
+        current.map((s) => (s.id === source.id ? { ...s, parseMode } : s))
+      );
+
+      try {
+        const response = await fetch(`/api/rss-sources/${source.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parseMode }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error ?? "The parse mode could not be changed");
+        }
+
+        toast.success(
+          parseMode === "DIGEST"
+            ? `${source.name} will be read as a list of linked articles`
+            : `${source.name} will be read as a single piece of writing`
+        );
+      } catch (error) {
+        setSources((current) =>
+          current.map((s) => (s.id === source.id ? { ...s, parseMode: previous } : s))
+        );
+        toast.error(
+          error instanceof Error ? error.message : "The parse mode could not be changed"
+        );
+      } finally {
+        setSavingMode(null);
+      }
+    },
+    []
   );
 
   const toggleActive = useCallback(
@@ -486,8 +540,44 @@ export function EmailSourceManager() {
                 <StatusChip tone={source.active ? healthTone[health.state] : "neutral"}>
                   {source.active ? healthLabel[health.state] : "paused"}
                 </StatusChip>
+                {/*
+                  Editable, because nothing infers it and getting it wrong is expensive.
+                  It was chosen once in the creation form and then frozen: fourteen
+                  sources here were set to ESSAY on the assumption that a Substack
+                  address means a piece of writing, which is false for ThursdAI and for
+                  every other digest that happens to publish on Substack. A digest read
+                  as an essay yields one article that is the whole newsletter instead of
+                  the fifteen it points at.
+                */}
                 {source.parseMode && (
-                  <StatusChip tone="neutral">{source.parseMode.toLowerCase()}</StatusChip>
+                  <span
+                    className="inline-flex overflow-hidden rounded-full border border-radar-line"
+                    role="group"
+                    aria-label={`Parse mode for ${source.name}`}
+                  >
+                    {(["DIGEST", "ESSAY"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        disabled={savingMode === source.id}
+                        onClick={() => void setParseMode(source, mode)}
+                        aria-pressed={source.parseMode === mode}
+                        title={
+                          mode === "DIGEST"
+                            ? "This email lists articles published elsewhere"
+                            : "This email is itself the article"
+                        }
+                        className={cn(
+                          "px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider transition-colors disabled:opacity-50",
+                          source.parseMode === mode
+                            ? "bg-radar-surface2 text-radar-ink"
+                            : "text-radar-ink3 hover:text-radar-ink"
+                        )}
+                      >
+                        {mode.toLowerCase()}
+                      </button>
+                    ))}
+                  </span>
                 )}
               </div>
               <p className="m-0 mt-0.5 truncate text-[11.5px] text-radar-ink3">
