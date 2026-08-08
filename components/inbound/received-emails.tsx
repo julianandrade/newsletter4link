@@ -76,6 +76,40 @@ function statusChip(email: ReceivedEmail) {
   return <StatusChip tone="ok">read</StatusChip>;
 }
 
+/**
+ * Why a row has no articles, which is four different answers and used to be one.
+ *
+ * The panel said "This email produced no articles, a newsletter can be all sponsors and
+ * job listings" for every empty row, including rows the job had never looked at. For an
+ * email still waiting for its body that sentence is simply false, and it is the sentence a
+ * reader would act on: it says the pipeline considered this email and found nothing worth
+ * taking, when in fact nothing has happened to it yet.
+ *
+ * The ingest runs once a day, at 05:30. An email arriving during the day sits until the
+ * next morning, and the copy has to say so rather than imply a verdict.
+ */
+function emptyReason(email: ReceivedEmail): string {
+  if (email.status === "CONTENT_PENDING") {
+    return "This email has not been read yet. Its body is still to be fetched, and the ingest runs once a day at 05:30, so an email that arrived during the day is read the next morning.";
+  }
+
+  if (email.status === "RECEIVED") {
+    return "The body of this email is stored and it is queued to be read. Nothing has been extracted from it yet.";
+  }
+
+  if (email.status === "IGNORED_UNKNOWN_SENDER") {
+    return "No source claimed this sender, so the email was set aside without being read. Create an email source for it and its held mail is put back in the queue.";
+  }
+
+  if (email.status === "FAILED") {
+    return email.error
+      ? `This email could not be read: ${email.error}`
+      : "This email could not be read.";
+  }
+
+  return "This email was read and produced no articles. That is not necessarily a failure: a newsletter can be all sponsors and job listings, and every item in it can be a duplicate of something already collected.";
+}
+
 export function ReceivedEmails() {
   const [emails, setEmails] = useState<ReceivedEmail[]>([]);
   const [total, setTotal] = useState(0);
@@ -210,9 +244,7 @@ export function ReceivedEmails() {
 
                   {loadingArticles !== email.id && rows && rows.length === 0 && (
                     <p className="m-0 text-[12.5px] text-radar-ink2 text-pretty">
-                      This email produced no articles. That is not necessarily a failure:
-                      a newsletter can be all sponsors and job listings, and every item in
-                      it can be a duplicate of something already collected.
+                      {emptyReason(email)}
                     </p>
                   )}
 
