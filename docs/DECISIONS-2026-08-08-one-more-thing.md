@@ -24,6 +24,13 @@ discard them. They are written to the themes you named. I think about half are w
 keeping and two are weak, but that is your call and not mine, which is exactly why they are
 in a queue.
 
+**Update, 9 August 2026: you approved all 24 in bulk**, with `scripts/approve-asides.ts
+--apply`, without reading them line by line. Recorded plainly because it matters: they are
+now offerable in the send screen's picker. Nothing has been sent, and nothing can be
+without an editor choosing one, but the queue no longer stands between a model-written line
+and an edition. Retiring one is a click on the library screen, and `source: MODEL` still
+marks every one of them.
+
 **The honest caveat:** I wrote them, and I am a model. That is what `source: MODEL` records,
 permanently and uneditably. If you would rather the library be entirely yours, delete all 24
 and write your own; the screens work with an empty library.

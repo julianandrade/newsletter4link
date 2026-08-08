@@ -1,7 +1,60 @@
 # Where we are, and how to pick this up
 
-Written 6 August 2026, updated 7 August at 01:00. Everything is committed and pushed,
+Written 6 August 2026, updated 9 August. Everything is committed and pushed,
 production is deployed and healthy, and nothing is left running.
+
+---
+
+## The closing slot is done and closed
+
+**Done 8 August 2026, deployed as `aa53808` and verified READY on the production alias**
+rather than assumed. 12 commits. **1345 unit tests, `tsc` clean, `next build` clean.**
+
+Every edition can now close on a joke, a signed editor's note, or an internal spotlight,
+with an optional image or GIF. Spec in
+[docs/superpowers/specs/2026-08-08-one-more-thing-design.md](../../../docs/superpowers/specs/2026-08-08-one-more-thing-design.md),
+plan in [docs/superpowers/plans/2026-08-08-one-more-thing.md](../../../docs/superpowers/plans/2026-08-08-one-more-thing.md),
+and every decision taken without Julian in
+[docs/DECISIONS-2026-08-08-one-more-thing.md](../../../docs/DECISIONS-2026-08-08-one-more-thing.md).
+This supersedes §4 of `docs/IDEAS-2026-08-07-what-to-build-next.md`, which recommended text
+only and against images. Julian reversed that, and the upload hardening below is the price.
+
+**The library holds 24 approved lines**, 12 per organization, approved in bulk on
+9 August by `scripts/approve-asides.ts --apply`. They were written by a model and carry
+`source: MODEL` permanently. Approving makes them offerable; it sends nothing, because an
+editor still picks one per edition and sends by hand.
+
+### Three defects found in shipped code on the way through
+
+**1. The media upload trusted the client's MIME type, on a public bucket.**
+`app/api/media/upload/route.ts` validated `file.type`, which comes from the browser's
+multipart header, and then handed that same string to Supabase as the stored object's
+content type. `evil.svg` renamed to `meme.png` and declared `image/png` passed both checks
+and came back as script from a domain the product owns. `lib/media/sniff.ts` reads magic
+bytes now; PNG, JPEG and GIF only. SVG carries script, and Outlook on Windows does not
+render WebP.
+
+**2. `RenderContext` in `template-renderer.ts` dropped the new field.** A send uses the
+active stored template when there is one, and two are seeded and editable, so the block
+would have rendered in the built-in edition and in nothing an editor had actually built.
+Every test would have stayed green. The typechecker caught it, not the suite.
+
+**3. The tenant contract test skips a model it cannot find.** Adding `"aside"` to `MODELS`
+and forgetting the wrapper added zero tests and the suite still reported green. There is now
+an assertion per model that it is wrapped at all.
+
+### Two things with no end-to-end evidence
+
+- **`/api/asides/suggest` has never been called against the real model.** Typechecked,
+  built, prompt and parser unit tested, round trip unproven.
+- **No test send carried an image**, because the library has no image in it. The image path
+  is unit tested and rendered in a browser, not confirmed in Outlook. Send yourself a test
+  before an edition carries a meme.
+
+Two real emails were delivered and accepted by Resend, to
+`julian.andrade@linkconsulting.com` and `jgrandrade@gmail.com`.
+`scripts/send-aside-test.test.ts` repeats that on demand; it skips unless
+`SEND_REAL_EMAIL=1`, so the suite never mails anybody.
 
 Read this file, then
 [DECISIONS-2026-08-06.md](DECISIONS-2026-08-06.md) for the calls made overnight without
