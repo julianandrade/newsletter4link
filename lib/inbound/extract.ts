@@ -58,34 +58,64 @@ function anthropic(): Anthropic {
 }
 
 /**
+ * One link in an email, with the anchor it came from.
+ *
+ * The anchor text is the whole point. It is what ties a title to a URL, and for a
+ * newsletter that wraps every link in a tracking redirect it is the *only* thing that
+ * does: `link.mail.beehiiv.com/ss/c/u001.IOfk…` says nothing about what it points at.
+ */
+export interface EmailLink {
+  url: string;
+  /** The anchor's own text. Empty for a bare URL in a plain text email. */
+  text: string;
+}
+
+/**
  * Readable text and links from an email's HTML.
  *
  * Newsletters are table layouts with tracking pixels and a footer of unsubscribe links, so
  * the input is reduced before it costs tokens. Links are listed explicitly alongside the
  * text, because the model has to be able to quote a URL it can see rather than reconstruct
  * one it inferred.
+ *
+ * ## Why the anchor text travels with the URL
+ *
+ * It used to be a list of bare URLs, and that destroyed the pairing the email itself
+ * carries. The model got titles from the text and URLs from the list and had to put them
+ * back together, which is impossible when the URLs are opaque wrappers. On 8 August 2026,
+ * on one real digest, four of the five checkable items were paired with another item's
+ * href: "The Tutor Was Right, Students Quit" was stored with the link belonging to
+ * "Hurricane Warnings a Day Sooner".
+ *
+ * The email already knows the answer. This keeps it.
  */
 export function readableEmail(input: { html?: string | null; text?: string | null }): {
   text: string;
-  links: string[];
+  links: EmailLink[];
 } {
   if (!input.html) {
     const text = (input.text ?? "").trim();
-    return { text, links: extractBareUrls(text) };
+    // A bare URL in plain text has no anchor. Empty rather than a guess: the pairing check
+    // treats "no anchor" as nothing to contradict, and a made-up label would contradict.
+    return { text, links: extractBareUrls(text).map((url) => ({ url, text: "" })) };
   }
 
   const $ = load(input.html);
 
   $("script, style, noscript, iframe, img, svg, meta, link").remove();
 
-  const links: string[] = [];
+  const links: EmailLink[] = [];
 
   $("a[href]").each((_, element) => {
     const href = $(element).attr("href")?.trim();
     if (!href) return;
     if (!/^https?:\/\//i.test(href)) return;
     if (isBoilerplateLink(href)) return;
-    if (!links.includes(href)) links.push(href);
+    // First anchor wins. A newsletter links one piece from its heading and again from a
+    // bare "read more"; the heading is the one that identifies it, and it comes first.
+    if (links.some((link) => link.url === href)) return;
+
+    links.push({ url: href, text: $(element).text().replace(/\s+/g, " ").trim() });
   });
 
   const text = $("body").length > 0 ? $("body").text() : $.text();
@@ -129,9 +159,45 @@ function isBoilerplateLink(href: string): boolean {
     "email-preferences",
     "update-profile",
     "sharer",
+    /**
+     * Added 8 August 2026, from what a real Substack digest actually offered.
+     *
+     * `subscribe` is the newsletter's own call to action, and `action` is where Substack
+     * puts `disable_email` and friends. Both were candidates the model could pair a
+     * heading with, and both are the newsletter selling itself rather than pointing at
+     * a piece of writing.
+     */
+    "subscribe",
+    "action",
   ];
 
   if (segments.some((segment) => boilerplateSegments.includes(segment))) return true;
+
+  /**
+   * An asset is not a document.
+   *
+   * A Substack email wraps every section image in an anchor pointing at the CDN, and the
+   * `<img>` removal above leaves that anchor behind. Three articles on 8 August 2026 were
+   * created from `substackcdn.com/image/fetch/...` URLs, so clicking the article opened a
+   * JPEG.
+   *
+   * The extension has to end the path rather than merely appear in it, so an article at
+   * `/why-png-beats-jpg` survives.
+   */
+  if (/\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|mp4|mp3|pdf)$/.test(path)) return true;
+  if (path.includes("/image/fetch/") || /(^|\.)substackcdn\.com$/.test(url.hostname)) {
+    return true;
+  }
+
+  /**
+   * Substack's "open this in the app" links, which are not the piece.
+   *
+   * One real email carried nine identical `app-link/post` URLs for the same post, plus a
+   * like button and a share button on the same path. They outnumbered the articles.
+   */
+  if (/(^|\.)substack\.com$/.test(url.hostname) && path.startsWith("/app-link/")) {
+    return true;
+  }
 
   // The share intents, which are a host plus a fixed path.
   if (/^(www\.)?(twitter|x)\.com$/.test(url.hostname) && path.startsWith("/intent/")) {
@@ -139,6 +205,20 @@ function isBoilerplateLink(href: string): boolean {
   }
   if (/(^|\.)facebook\.com$/.test(url.hostname) && path.includes("/sharer")) return true;
   if (/(^|\.)linkedin\.com$/.test(url.hostname) && path.includes("/sharing/")) return true;
+  /**
+   * A login wall wrapping a share intent, which is neither.
+   *
+   * Stored in production as an article titled "Slow poke" whose source URL was a LinkedIn
+   * sign-in page with the real article buried in a nested `session_redirect` parameter.
+   */
+  if (/(^|\.)linkedin\.com$/.test(url.hostname) && path.startsWith("/uas/login")) {
+    return true;
+  }
+  // Facebook's, which is the same shape: a sign-in page with the real destination buried
+  // in `next=`. Stored in production as an article titled "Reviews are in".
+  if (/(^|\.)facebook\.com$/.test(url.hostname) && path.startsWith("/login")) {
+    return true;
+  }
 
   if (query.includes("action=unsubscribe")) return true;
 
@@ -172,19 +252,34 @@ const TEXT_SHARE = 0.55;
  * an email with fewer links, and the model would be asked to match an article against a
  * list missing its URL.
  */
+/**
+ * How much of one anchor's text is shown.
+ *
+ * Enough to recognise a headline, capped so a newsletter that puts a paragraph inside an
+ * `<a>` cannot spend the whole link budget on one line.
+ */
+const MAX_ANCHOR_CHARS = 120;
+
 export function buildExtractionInput(
-  readable: { text: string; links: string[] },
+  readable: { text: string; links: EmailLink[] },
   // Typed as number rather than inferred: config is a const object, so the inferred type is
   // the literal 32000 and no caller could pass anything else.
   maxChars: number = config.emailIngest.maxInputChars
 ): string {
-  const header = "\n\nLINKS PRESENT IN THIS EMAIL (you may only use URLs from this list):\n";
+  const header =
+    "\n\nLINKS PRESENT IN THIS EMAIL. Each line is a link's own anchor text followed by its URL. Take an item's URL from the line whose anchor text is that item:\n";
 
   if (readable.links.length === 0) {
     return `${readable.text.slice(0, maxChars)}\n\nThis email contains no links.`;
   }
 
-  const lineFor = (link: string, index: number) => `${index + 1}. ${link}\n`;
+  const lineFor = (link: EmailLink, index: number) => {
+    // Stated rather than blank: a line with nothing between the quotes reads like a bug,
+    // and the model has to be able to tell "no label" from "label the extractor lost".
+    const label =
+      link.text.length > 0 ? link.text.slice(0, MAX_ANCHOR_CHARS) : "(no link text)";
+    return `${index + 1}. "${label}" -> ${link.url}\n`;
+  };
 
   // The text keeps its share, and takes any room the links do not need.
   const linksNeed =
@@ -248,7 +343,9 @@ Exclude, and this is most of what is in a newsletter:
 - tracking, analytics and image URLs
 
 Rules:
-- Use only URLs that appear in the list of links given below. Never construct, complete or guess a URL. If an item has no URL in that list, leave it out.
+- Use only URLs that appear in the list of links given below. Never construct, complete or guess a URL.
+- Take each item's URL from the line whose anchor text is that item's own title or link text. Do not pair an item with a URL from a different line because it looks plausible: the URLs are opaque tracking links and cannot be told apart by reading them.
+- If no line's anchor text corresponds to an item, leave the item out. A missing item is correct; an item pointing at another item's link is not.
 - At most ${maxItems} items, the most substantial first.
 - The snippet is the newsletter's own one or two sentence description, copied as it is. Empty string when there is none. Do not write your own.
 - The title is the article's title as the newsletter gives it.
@@ -306,36 +403,102 @@ function parseJson(text: string): unknown {
   }
 }
 
+/** Punctuation and case removed, so two spellings of one headline compare equal. */
+const normalize = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 /**
- * Keep only the items whose URL was actually in the email.
+ * Anchor labels that identify nothing, so there is nothing to check a title against.
+ *
+ * A newsletter that links its pieces from "Read more →" is not mispairing anything; it
+ * simply carries no label. Treating those as a contradiction would drop the article.
+ */
+const GENERIC_ANCHOR =
+  /^(read|read more|read online|read it|more|link|here|click here|view|view online|view in browser|continue|continue reading|full story|learn more|open|watch|listen|see more|source|link to article)$/;
+
+/**
+ * Does this anchor text actively say the URL belongs to something else?
+ *
+ * Deliberately asymmetric. It answers "is there a contradiction", not "is there a match",
+ * because most of a real newsletter's anchors are labels rather than headlines and only a
+ * substantial, headline-shaped anchor carries enough to contradict anything.
+ */
+function anchorContradicts(title: string, anchor: string): boolean {
+  const label = normalize(anchor);
+  const wanted = normalize(title);
+
+  if (label.length === 0 || wanted.length === 0) return false;
+  // Nothing to go on: a short or generic label identifies no particular article.
+  if (label.length < 15 || GENERIC_ANCHOR.test(label)) return false;
+
+  if (label.includes(wanted) || wanted.includes(label)) return false;
+
+  /**
+   * Half the shorter side's real words, found in the other.
+   *
+   * Containment alone is too strict: a digest routinely retitles an item, so
+   * "Hurricane Warnings a Day Sooner" and "Hurricane warnings arrive a day sooner" would
+   * fail it. Overlap accepts the rewrite and still rejects a different article, whose
+   * words do not appear at all.
+   */
+  const words = (value: string) => value.split(" ").filter((word) => word.length > 3);
+  const labelWords = words(label);
+  const titleWords = words(wanted);
+
+  if (labelWords.length === 0 || titleWords.length === 0) return false;
+
+  const [shorter, longer] =
+    titleWords.length <= labelWords.length ? [titleWords, labelWords] : [labelWords, titleWords];
+  const inBoth = shorter.filter((word) => longer.includes(word)).length;
+
+  return inBoth / shorter.length < 0.5;
+}
+
+/**
+ * Keep only the items whose URL was actually in the email, attached to the right item.
  *
  * The prompt says not to construct a URL and this is what makes that true. A digest with a
  * fabricated link creates an article pointing at something nobody wrote, which is worse than
  * an article missing from the batch.
+ *
+ * Since 8 August 2026 it also checks the *pairing*, which is a different failure and turned
+ * out to be the common one. Every URL the model returned really was in the email; four out
+ * of five were simply attached to the wrong item. Presence alone could never have seen
+ * that, because the wrappers are opaque and any one of them passes a presence check.
  */
 export function keepPresentUrls(
   items: DigestItem[],
-  links: string[]
+  links: EmailLink[]
 ): { items: DigestItem[]; dropped: string[] } {
-  const present = new Set(links.map((link) => link.trim()));
+  const byUrl = new Map(links.map((link) => [link.url.trim(), link]));
   const kept: DigestItem[] = [];
   const dropped: string[] = [];
 
   for (const item of items) {
-    const url = (item.url ?? "").trim();
+    // Coerced rather than trusted: this is parsed model output, and a reply of
+    // `{"url": 12}` used to throw here and take the whole email's extraction with it.
+    const url = String(item?.url ?? "").trim();
+    const link = byUrl.get(url);
 
-    if (url.length === 0 || !present.has(url)) {
+    if (url.length === 0 || !link) {
       dropped.push(url || "(no url)");
+      continue;
+    }
+
+    const title = String(item.title ?? "").trim();
+
+    if (anchorContradicts(title, link.text)) {
+      dropped.push(url);
       continue;
     }
 
     if (kept.some((existing) => existing.url === url)) continue;
 
-    kept.push({
-      title: String(item.title ?? "").trim(),
-      url,
-      snippet: String(item.snippet ?? "").trim(),
-    });
+    kept.push({ title, url, snippet: String(item.snippet ?? "").trim() });
   }
 
   return { items: kept.filter((item) => item.title.length > 0), dropped };
@@ -443,7 +606,7 @@ export async function extractNewsletterItems(
 
       const webVersionUrl =
         typeof item.webVersionUrl === "string" &&
-        readable.links.includes(item.webVersionUrl.trim())
+        readable.links.some((link) => link.url === item.webVersionUrl?.toString().trim())
           ? item.webVersionUrl.trim()
           : null;
 

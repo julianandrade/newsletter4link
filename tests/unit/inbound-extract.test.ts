@@ -52,19 +52,28 @@ model quality than about the plumbing around it. Three things had to land first.
 Unsubscribe: https://patmcguinness.substack.com/action/disable_email`;
 
 describe("readableEmail", () => {
-  it("collects the links a digest carries, once each", () => {
+  it("collects the links a digest carries, once each, with the anchor they came from", () => {
     const readable = readableEmail({ html: DIGEST_HTML });
+    const urls = readable.links.map((link) => link.url);
 
-    expect(readable.links).toContain("https://links.tldr.com/click/openai-agents");
-    expect(readable.links).toContain("https://links.tldr.com/click/mcp-security");
-    expect(new Set(readable.links).size).toBe(readable.links.length);
+    expect(urls).toContain("https://links.tldr.com/click/openai-agents");
+    expect(urls).toContain("https://links.tldr.com/click/mcp-security");
+    expect(new Set(urls).size).toBe(urls.length);
+
+    // The pairing the email carries, kept rather than thrown away. See
+    // inbound-extract-pairing.test.ts for why.
+    expect(
+      readable.links.find((link) => link.url.endsWith("openai-agents"))?.text
+    ).toBe("OpenAI opens its agent platform to enterprises (4 minute read)");
   });
 
   it("drops the tracking pixel and the markup", () => {
     const readable = readableEmail({ html: DIGEST_HTML });
 
     // An image is not a link the model may cite, and its URL is a tracker.
-    expect(readable.links).not.toContain("https://track.tldr.com/open/abc.gif");
+    expect(readable.links.map((link) => link.url)).not.toContain(
+      "https://track.tldr.com/open/abc.gif"
+    );
     expect(readable.text).not.toContain("<table>");
   });
 
@@ -78,7 +87,7 @@ describe("readableEmail", () => {
   it("reads a plain text email, finding its bare URLs", () => {
     const readable = readableEmail({ text: ESSAY_TEXT });
 
-    expect(readable.links).toContain(
+    expect(readable.links.map((link) => link.url)).toContain(
       "https://patmcguinness.substack.com/p/agentic-2026"
     );
     expect(readable.text).toContain("Agentic systems moved from demo to production");
@@ -99,12 +108,15 @@ describe("buildExtractionInput", () => {
   it("enumerates the links so the model can quote rather than construct", () => {
     const input = buildExtractionInput({
       text: "body",
-      links: ["https://a.com/1", "https://b.com/2"],
+      links: [
+        { url: "https://a.com/1", text: "First story" },
+        { url: "https://b.com/2", text: "Second story" },
+      ],
     });
 
-    expect(input).toContain("1. https://a.com/1");
-    expect(input).toContain("2. https://b.com/2");
-    expect(input).toContain("you may only use URLs from this list");
+    expect(input).toContain("1. \"First story\" -> https://a.com/1");
+    expect(input).toContain("2. \"Second story\" -> https://b.com/2");
+    expect(input).toContain("LINKS PRESENT IN THIS EMAIL");
   });
 
   it("says so when there are no links, rather than leaving it ambiguous", () => {
@@ -119,7 +131,7 @@ describe("buildExtractionInput", () => {
     // text is served first now; a link list this small needs almost nothing, so it is kept
     // either way. See `inbound-extract-budget.test.ts` for the case where they compete.
     const input = buildExtractionInput(
-      { text: "x".repeat(50_000), links: ["https://a.com/1"] },
+      { text: "x".repeat(50_000), links: [{ url: "https://a.com/1", text: "One" }] },
       1_000
     );
 
@@ -129,7 +141,10 @@ describe("buildExtractionInput", () => {
 });
 
 describe("keepPresentUrls", () => {
-  const links = ["https://a.com/1", "https://b.com/2"];
+  const links = [
+    { url: "https://a.com/1", text: "" },
+    { url: "https://b.com/2", text: "" },
+  ];
 
   it("keeps items whose URL was in the email", () => {
     const { items } = keepPresentUrls(
@@ -267,7 +282,14 @@ describe("extractNewsletterItems, digest mode", () => {
     const ask: AskModel = async () =>
       reply([
         { title: "Acme makes your database faster", url: "https://links.tldr.com/sponsor/acme", snippet: "" },
-        { title: "Real article", url: "https://links.tldr.com/click/mcp-security", snippet: "" },
+        {
+          // The item's real title, which is also the anchor its URL carries. A made-up
+          // title here would now be dropped by the pairing check rather than the URL
+          // check, and this test is about the URL check.
+          title: "The S in MCP stands for security (7 minute read)",
+          url: "https://links.tldr.com/click/mcp-security",
+          snippet: "",
+        },
       ]);
 
     const result = await extractNewsletterItems(
@@ -280,7 +302,9 @@ describe("extractNewsletterItems, digest mode", () => {
     if (result.mode !== "DIGEST") throw new Error("wrong mode");
     // Both were present in the email, so both survive the URL check: the sponsor filter is
     // the prompt's job and this test records that honestly rather than pretending otherwise.
-    expect(result.items.map((item) => item.title)).toContain("Real article");
+    expect(result.items.map((item) => item.title)).toContain(
+      "The S in MCP stands for security (7 minute read)"
+    );
   });
 
   it("drops a URL that was not in the email", async () => {
@@ -296,7 +320,12 @@ describe("extractNewsletterItems, digest mode", () => {
 
   it("caps the item count", async () => {
     const links = readableEmail({ html: DIGEST_HTML }).links;
-    const many = links.map((url, index) => ({ title: `Item ${index}`, url, snippet: "" }));
+    // Titled from the anchor, so the cap is what this measures rather than the pairing.
+    const many = links.map((link, index) => ({
+      title: link.text || `Item ${index}`,
+      url: link.url,
+      snippet: "",
+    }));
 
     const result = await extractNewsletterItems(
       { html: DIGEST_HTML },

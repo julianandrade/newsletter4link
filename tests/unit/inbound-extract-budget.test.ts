@@ -21,7 +21,12 @@ function emailWith(textChars: number, linkCount: number) {
   const text = "The newsletter says something worth reading. ".repeat(
     Math.ceil(textChars / 45)
   );
-  const links = Array.from({ length: linkCount }, (_, i) => tracker(i));
+  // Anchored the way a real digest anchors them, so the line the budget measures is the
+  // line the model actually receives.
+  const links = Array.from({ length: linkCount }, (_, i) => ({
+    url: tracker(i),
+    text: `Story number ${i}`,
+  }));
 
   return { text: text.slice(0, textChars), links };
 }
@@ -77,7 +82,7 @@ describe("the extraction input budget", () => {
     const input = buildExtractionInput(readable, 32_000);
 
     for (const link of readable.links) {
-      expect(input).toContain(link);
+      expect(input).toContain(link.url);
     }
     expect(input).not.toMatch(/further link/);
   });
@@ -100,17 +105,17 @@ describe("links that cannot be articles are not paid for", () => {
   </body></html>`;
 
   it("drops the unsubscribe and share links the prompt would reject anyway", () => {
-    const readable = readableEmail({ html });
+    const urls = readableEmail({ html }).links.map((link) => link.url);
 
-    expect(readable.links).toContain("https://example.com/real-article-one");
-    expect(readable.links).toContain("https://example.com/real-article-two");
+    expect(urls).toContain("https://example.com/real-article-one");
+    expect(urls).toContain("https://example.com/real-article-two");
 
     // The prompt already tells the model to exclude these. Sending them spends budget to
     // be told no, and on these newsletters the budget is the thing that ran out.
-    expect(readable.links.join(" ")).not.toContain("unsubscribe");
-    expect(readable.links.join(" ")).not.toContain("manage-preferences");
-    expect(readable.links.join(" ")).not.toContain("twitter.com/intent");
-    expect(readable.links.join(" ")).not.toContain("facebook.com/sharer");
+    expect(urls.join(" ")).not.toContain("unsubscribe");
+    expect(urls.join(" ")).not.toContain("manage-preferences");
+    expect(urls.join(" ")).not.toContain("twitter.com/intent");
+    expect(urls.join(" ")).not.toContain("facebook.com/sharer");
   });
 
   it("does not drop a real article whose URL merely contains a suspicious word", () => {
@@ -121,7 +126,7 @@ describe("links that cannot be articles are not paid for", () => {
     });
 
     // The pattern has to match the boilerplate, not any URL with the word in it.
-    expect(readable.links).toContain(
+    expect(readable.links.map((link) => link.url)).toContain(
       "https://example.com/how-to-unsubscribe-from-anything-a-guide"
     );
   });
