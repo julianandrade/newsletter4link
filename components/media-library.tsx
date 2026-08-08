@@ -242,7 +242,7 @@ export function MediaLibrary({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+            accept="image/jpeg,image/png,image/gif"
             onChange={handleUpload}
             className="hidden"
           />
@@ -264,8 +264,14 @@ export function MediaLibrary({
             )}
           </Button>
 
+          {/*
+            SVG and WebP are gone, for different reasons: SVG can carry script and the
+            bucket is public, and WebP does not render in Outlook on Windows. The accept
+            attribute above is a convenience for the file dialog; the server reads the
+            bytes and is the actual control. See lib/media/sniff.ts.
+          */}
           <p className="text-sm text-radar-ink2">
-            Max 5MB. Supports JPEG, PNG, GIF, WebP, SVG
+            Max 5MB. JPEG, PNG or GIF.
           </p>
         </div>
 

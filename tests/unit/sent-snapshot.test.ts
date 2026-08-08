@@ -360,7 +360,7 @@ describe("what a send records about its closing block", () => {
  */
 describe("a malformed stored aside", () => {
   const withAside = (aside: unknown) => {
-    const snapshot = buildSentSnapshot(snapshotInput()) as Record<string, unknown>;
+    const snapshot = buildSentSnapshot(snapshotInput()) as unknown as Record<string, unknown>;
     snapshot.aside = aside;
     return snapshot;
   };
