@@ -59,6 +59,7 @@ const MODELS = [
   "searchHistory",
   "generationDraft",
   "apiKey",
+  "aside",
 ] as const;
 
 type ModelName = (typeof MODELS)[number];
@@ -78,6 +79,27 @@ function lastCall(method: string) {
 
 beforeEach(() => {
   calls.length = 0;
+});
+
+/**
+ * Without this, the per-method loops below are a trap.
+ *
+ * Each one skips a model whose method is not a function, which is right for a model that
+ * legitimately has no `update` or `delete`. But it means adding a name to MODELS and
+ * forgetting the wrapper adds *zero* tests and the suite still reports green, which is the
+ * exact shape of silent failure this file exists to prevent.
+ */
+describe("every model in the list is actually wrapped", () => {
+  for (const model of MODELS) {
+    it(`${model} is on the tenant client`, () => {
+      const client = createTenantClient("org-1") as unknown as Record<string, unknown>;
+
+      expect(
+        client[model],
+        `${model} is in MODELS but missing from createTenantClient`
+      ).toBeDefined();
+    });
+  }
 });
 
 describe("update is scoped to the organization", () => {

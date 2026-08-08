@@ -49,10 +49,11 @@ model Organization {
   searchHistory    SearchHistory[]
   backgroundJobs   BackgroundJob[]
   generationDrafts GenerationDraft[]
+  asides           Aside[]
+  radarWatches     RadarWatch[]
 
   @@index([slug])
   @@index([plan])
-  radarWatches RadarWatch[]
 }
 
 enum Plan {
@@ -173,7 +174,9 @@ model OrgSettings {
    */
   orgContextPrompt String? @db.Text
   rewriteLanguage  String  @default("pt-PT")
-  /** The heading of the relevance section, in the organization's own words. */
+  /**
+   * The heading of the relevance section, in the organization's own words.
+   */
   relevanceHeading String  @default("Relevancia para a Link")
 
   updatedAt DateTime @updatedAt
@@ -210,22 +213,20 @@ model BrandVoice {
 // ==================== ARTICLE MODELS ====================
 
 model Article {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   sourceUrl String
   title     String
-  content   String @db.Text
+  content   String  @db.Text
   author    String?
 
   /**
    * When the publisher published it. Null when nobody told us.
-   *
    * Nullable since 6 August 2026, finding C1. `curateArticle` wrote
    * `publishedAt: new Date()`, so every article arriving through a newsletter carried its
    * own ingestion time as its publication date, and the queue showed that under a column
    * headed PUBLISHED. A digest gives a title, a URL and a sentence, and no date at all,
    * so the honest value is absent rather than now: 38 rows were backfilled to null by
    * `scripts/backfill-captured-at.ts`.
-   *
    * Anything that sorts or filters on this has to decide what an unknown date means,
    * which is the point. `capturedAt` is what to fall back to.
    */
@@ -233,7 +234,6 @@ model Article {
 
   /**
    * When we took it in. Always known, because it is our own clock.
-   *
    * This is what `publishedAt` was really holding for email-sourced articles. Separating
    * them is what lets a screen say "captured today, published we do not know" instead of
    * stating something untrue.
@@ -251,12 +251,10 @@ model Article {
 
   /**
    * When an editor said they did not want this at all. Null means they did not.
-   *
    * A column rather than a fourth ArticleStatus, for two reasons. Restoring returns the
    * article to the verdict it already had, which a status would have overwritten and lost.
    * And the two questions are genuinely independent: an approved article can be discarded,
    * and it is still an approved article when it comes back.
-   *
    * A soft discard rather than a DELETE, because deduplication is by
    * `@@unique([sourceUrl, organizationId])` and `lib/curation/deduplicator.ts` looks the row
    * up on that key. A deleted row stops matching, so the next collection run recreates the
@@ -274,13 +272,6 @@ model Article {
   // Relations
   editions EditionArticle[]
 
-  @@unique([sourceUrl, organizationId]) // Same article can exist in different orgs
-  @@index([status])
-  @@index([discardedAt])
-  @@index([relevanceScore(sort: Desc)])
-  @@index([publishedAt(sort: Desc)])
-  @@index([organizationId])
-
   /**
    * RQ-006 F6: hash of the text a rewrite was generated from, set on write. STALE was
    * a status nothing could ever assign, because nothing recorded what the article said
@@ -291,12 +282,10 @@ model Article {
   /**
    * True when this article's URL is the wrapper the newsletter used, not the article's
    * own address, because the redirect chain could not be followed.
-   *
    * Finding D4 of 6 August 2026: the wrapper was stored in silence and nothing recorded
    * it, so an edition could go out linking to link.mail.beehiiv.com with "Beehiiv" named
    * as the publisher, since the publication name is derived from the host. The flag is
    * what lets a screen say so and an editor decide.
-   *
    * Defaulting to false rather than backfilling: every row written before this existed
    * predates the distinction, and claiming to know which of them are wrapped would be
    * inventing data.
@@ -305,12 +294,10 @@ model Article {
 
   /**
    * Where this article came from. Finding D1.
-   *
    * There was nothing here at all: the only trace of an article's origin was the string
    * in `sourceUrl`, so "what did this newsletter produce" was not answerable and "where
    * did this come from" could only be guessed from a hostname. The RSS collector already
    * carried a `sourceName` and the curator used it in log lines and then dropped it.
-   *
    * Both nullable, and for the same reason: the corpus predates them, an article can be
    * imported by hand or from a web search, and `SetNull` on delete means removing a source
    * does not remove the articles it found. A row with neither is honest about not knowing.
@@ -318,12 +305,20 @@ model Article {
   source   RSSSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   sourceId String?
 
-  /** The email this came out of, when a newsletter is what produced it. */
+  /**
+   * The email this came out of, when a newsletter is what produced it.
+   */
   inboundEmail   InboundEmail? @relation(fields: [inboundEmailId], references: [id], onDelete: SetNull)
   inboundEmailId String?
 
   rewrites ArticleRewrite[]
 
+  @@unique([sourceUrl, organizationId]) // Same article can exist in different orgs
+  @@index([status])
+  @@index([discardedAt])
+  @@index([relevanceScore(sort: Desc)])
+  @@index([publishedAt(sort: Desc)])
+  @@index([organizationId])
   @@index([sourceId])
   @@index([inboundEmailId])
 }
@@ -367,7 +362,6 @@ model Edition {
 
   /**
    * The day this edition is meant to go out, and the one date the product sorts by.
-   *
    * RQ-008: `week` and `year` used to be the identity, under a unique index, which made a
    * second edition inside one week impossible and left an edition with no way to carry a
    * name. They are still here, as a cache derived from this date by
@@ -376,14 +370,15 @@ model Edition {
    */
   publishDate DateTime
 
-  /** The edition's own name. Null on a weekly, which is labelled from its date. */
+  /**
+   * The edition's own name. Null on a weekly, which is labelled from its date.
+   */
   title String?
 
   kind EditionKind @default(WEEKLY)
 
   /**
    * "2026-W32" on a weekly edition, null on anything else.
-   *
    * This is what keeps the schedule from creating two proposals for one week. Postgres
    * treats nulls in a unique index as distinct, so a week holds exactly one weekly and
    * as many specials as anyone wants, without a partial index Prisma cannot express and
@@ -391,9 +386,13 @@ model Edition {
    */
   weeklySlot String?
 
-  /** Derived from publishDate by lib/editions/identity.ts. Never set by a caller. */
+  /**
+   * Derived from publishDate by lib/editions/identity.ts. Never set by a caller.
+   */
   week Int
-  /** The ISO week-year, derived. Not always the calendar year of publishDate. */
+  /**
+   * The ISO week-year, derived. Not always the calendar year of publishDate.
+   */
   year Int
 
   status EditionStatus @default(DRAFT)
@@ -404,12 +403,19 @@ model Edition {
 
   /**
    * What actually went out, frozen at the send. See lib/editions/sent-snapshot.ts.
-   *
    * Null on every edition sent before this existed, and on every edition not yet sent.
    * A reader must handle null by falling back to the live rows, which is what
    * `renderSourceFor` does.
    */
   sentSnapshot Json?
+
+  /**
+   * The closing "one more thing" block this edition will send.
+   * SetNull and not Cascade: retiring a joke must never delete an edition. This is the
+   * intention; `sentSnapshot` is the record of what actually went out.
+   */
+  aside   Aside?  @relation(fields: [asideId], references: [id], onDelete: SetNull)
+  asideId String?
 
   // RQ-005 action 8, D5: archive is what happens to a sent edition. Absence of
   // the marker is the default, visible state, so nothing has to be backfilled.
@@ -473,9 +479,13 @@ enum EditionStatus {
 }
 
 enum EditionKind {
-  /** The edition the schedule creates once a week. Carries a weeklySlot. */
+  /**
+   * The edition the schedule creates once a week. Carries a weeklySlot.
+   */
   WEEKLY
-  /** Anything else: a themed issue, a launch, a year in review. No slot. */
+  /**
+   * Anything else: a themed issue, a launch, a year in review. No slot.
+   */
   SPECIAL
 }
 
@@ -606,7 +616,6 @@ model RSSSource {
 
   /**
    * Where this source comes from.
-   *
    * For an EMAIL source this holds the sender address, which is naturally unique per
    * organization and keeps the existing unique index doing useful work. The alternative,
    * making the column optional, would weaken a constraint that earns its place for feeds.
@@ -618,15 +627,25 @@ model RSSSource {
   // ---- RQ-007: email newsletters as a source ----
   type SourceType @default(RSS)
 
-  /** The newsletter's From address, the primary match key for an inbound email. */
-  senderAddress String?
-  /** The `+tag` used when subscribing, the fallback match key. */
-  inboundTag    String?
-  /** One email to many articles, or one email to one article. */
-  parseMode     ParseMode?
-  /** How often this source is expected to publish, for the silence warning. */
+  /**
+   * The newsletter's From address, the primary match key for an inbound email.
+   */
+  senderAddress       String?
+  /**
+   * The `+tag` used when subscribing, the fallback match key.
+   */
+  inboundTag          String?
+  /**
+   * One email to many articles, or one email to one article.
+   */
+  parseMode           ParseMode?
+  /**
+   * How often this source is expected to publish, for the silence warning.
+   */
   expectedCadenceDays Int?
-  /** Last time an email from this source arrived, which is the health signal. */
+  /**
+   * Last time an email from this source arrived, which is the health signal.
+   */
   lastReceivedAt      DateTime?
 
   lastFetchedAt DateTime?
@@ -639,7 +658,9 @@ model RSSSource {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /** Finding D1: the articles this source produced, so the question is answerable. */
+  /**
+   * Finding D1: the articles this source produced, so the question is answerable.
+   */
   articles Article[]
 
   @@unique([url, organizationId]) // Same RSS can be used by different orgs
@@ -655,9 +676,13 @@ enum SourceType {
 }
 
 enum ParseMode {
-  /** One email carrying many linked articles. */
+  /**
+   * One email carrying many linked articles.
+   */
   DIGEST
-  /** One email that is itself the article. */
+  /**
+   * One email that is itself the article.
+   */
   ESSAY
 }
 
@@ -928,12 +953,10 @@ enum JobStatus {
 
 /**
  * An entity the radar watches: a protocol, a model, a company, a technique.
- *
  * Global rather than per-organization, deliberately. How often "Model Context
  * Protocol" is mentioned on Hacker News is a fact about the world, not about a
  * tenant, so it is counted once and read by everyone. Which entities an
  * organization cares about is the tenant's business, and that lives in RadarWatch.
- *
  * This also dissolves the flaw in the original plan's schema, where signal points
  * carried a nullable organizationId inside a unique key. Postgres treats NULLs as
  * distinct, so that key permitted exactly the duplicates it was written to prevent.
@@ -941,19 +964,19 @@ enum JobStatus {
  */
 model RadarEntity {
   id   String     @id @default(cuid())
-  /** Stable, lowercase, hyphenated. The identity used in seeds and reports. */
+  /**
+   * Stable, lowercase, hyphenated. The identity used in seeds and reports.
+   */
   slug String     @unique
   name String
   kind EntityKind
 
   /**
    * Per-source queries, validated rather than derived from the name.
-   *
    * A name reused as a query is the failure the plan review calls make-or-break:
    * "MCP" on Hacker News returns Minecraft Coder Pack and Microsoft Certified
    * Professional, "Claude" is a given name, "Grok" is a verb. A wrong count does
    * not announce itself, it becomes an acceleration.
-   *
    * Null means this entity is not collected from that source.
    */
   hnQuery    String?
@@ -968,7 +991,9 @@ model RadarEntity {
   precisionMeasured DateTime?
   precisionNotes    String?
 
-  /** Off means collect nothing. Set when validation fails, or by hand. */
+  /**
+   * Off means collect nothing. Set when validation fails, or by hand.
+   */
   active Boolean @default(true)
 
   signals SignalPoint[]
@@ -991,7 +1016,9 @@ enum EntityKind {
   BENCHMARK
 }
 
-/** Which organizations watch which entities. */
+/**
+ * Which organizations watch which entities.
+ */
 model RadarWatch {
   id String @id @default(cuid())
 
@@ -1009,11 +1036,9 @@ model RadarWatch {
 
 /**
  * One count, for one entity, from one source, on one day.
- *
  * `date` is midnight UTC of the day counted, so a re-run of the same day updates
  * the row rather than adding a second one. That is what makes collection idempotent
  * and it is why the unique key has no nullable column in it.
- *
  * Collection is forward-only: there is no backfill, so a gap in the series is a day
  * the collector did not run, and `SignalGap` records why rather than leaving a
  * missing row to be read as a zero.
@@ -1025,11 +1050,15 @@ model SignalPoint {
   entityId String
 
   source SignalSource
-  /** Midnight UTC of the day this count covers. */
+  /**
+   * Midnight UTC of the day this count covers.
+   */
   date   DateTime
   count  Int
 
-  /** What was actually asked, kept so a series can be audited after a query change. */
+  /**
+   * What was actually asked, kept so a series can be audited after a query change.
+   */
   query String
 
   collectedAt DateTime @default(now())
@@ -1046,7 +1075,6 @@ enum SignalSource {
 
 /**
  * A day the collector could not count.
- *
  * Without this, a failed fetch is indistinguishable from a genuine zero, and a
  * baseline built over a week of outages reads as a week of silence. The scorer in
  * phase B has to be able to tell the difference.
@@ -1070,13 +1098,11 @@ model SignalGap {
 
 /**
  * An original short editorial piece written from a curated article.
- *
  * Deliberately not `articleId @unique`. The plan had one rewrite per article, which
  * means regeneration overwrites history, and for a feature whose main risk is
  * copyright and fabrication the thing most wanted six months later is exactly what
  * that destroys: what was published, generated from what input, by which model, and
  * whether the checks passed. Old rows stay and carry `supersededAt` (review F5).
- *
  * The check record is not decoration. With no guarantee that a human reads a piece
  * before it reaches a subscriber, these checks are the only control, so every row
  * carries its result and a complaint can be answered with evidence rather than
@@ -1098,20 +1124,30 @@ model ArticleRewrite {
   status RewriteStatus @default(GENERATED)
   error  String?
 
-  /** RQ-006 F2: the mechanical checks, and their evidence. */
+  /**
+   * RQ-006 F2: the mechanical checks, and their evidence.
+   */
   checksPassed     Boolean
   checkSummary     String? @db.Text
-  /** The failure list, as returned by lib/rewrite/checks.ts. */
+  /**
+   * The failure list, as returned by lib/rewrite/checks.ts.
+   */
   checkFailures    Json?
-  /** Longest run of words shared with the source. Kept when it passes too: a low
-   *  number is the evidence that the piece is not a reproduction. */
+  /**
+   * Longest run of words shared with the source. Kept when it passes too: a low
+   * number is the evidence that the piece is not a reproduction.
+   */
   longestSharedRun Int?
   wordCount        Int?
 
-  /** What the article said when this was written, for STALE (F6). */
+  /**
+   * What the article said when this was written, for STALE (F6).
+   */
   sourceHash String?
 
-  /** Set when a newer rewrite replaces this one. Nothing is deleted. */
+  /**
+   * Set when a newer rewrite replaces this one. Nothing is deleted.
+   */
   supersededAt DateTime?
 
   generatedAt DateTime @default(now())
@@ -1128,9 +1164,13 @@ enum RewriteInput {
 
 enum RewriteStatus {
   GENERATED
-  /** The checks refused it, or generation failed. Never shown to a reader. */
+  /**
+   * The checks refused it, or generation failed. Never shown to a reader.
+   */
   FAILED
-  /** The article changed after this was written; regenerate on next open. */
+  /**
+   * The article changed after this was written; regenerate on next open.
+   */
   STALE
 }
 
@@ -1138,53 +1178,61 @@ enum RewriteStatus {
 
 /**
  * One email that arrived at the ingestion address.
- *
  * Deliberately not organization-scoped. An email arriving at a shared address does not
  * belong to a tenant until a source claims it, and pretending otherwise would mean
  * guessing. The consequence is stated rather than hidden: the unknown-senders view over
  * these rows is platform-wide, so it is restricted to an OWNER.
- *
  * Rows are kept after processing, and after being ignored. Keeping the ignored ones is
  * what makes "promote this sender to a source and process what it already sent" possible.
  */
 model InboundEmail {
   id String @id @default(cuid())
 
-  /** The webhook's own id for this email, and the idempotency key. A replayed delivery
-   *  and a transport retry must not produce a second row. */
+  /**
+   * The webhook's own id for this email, and the idempotency key. A replayed delivery
+   * and a transport retry must not produce a second row.
+   */
   resendEmailId String @unique
 
-  /** The original sender, preserved through the forwarding rule. */
-  from String
-  /** The address it arrived at, such as radar+tldr@example.com. */
-  to   String
-  /** The `+tag` from `to`, lowercased. Null when the address carried none. */
+  /**
+   * The original sender, preserved through the forwarding rule.
+   */
+  from          String
+  /**
+   * The address it arrived at, such as radar+tldr@example.com.
+   */
+  to            String
+  /**
+   * The `+tag` from `to`, lowercased. Null when the address carried none.
+   */
   subaddressTag String?
 
   subject    String?
   receivedAt DateTime @default(now())
 
-  /** Sanitized. Fetched by the job rather than by the webhook, so both are null until then. */
+  /**
+   * Sanitized. Fetched by the job rather than by the webhook, so both are null until then.
+   */
   html String?
   text String?
 
   /**
    * Starts at CONTENT_PENDING, because the webhook stores metadata and returns.
-   *
    * The `email.received` payload carries no body, so content needs a second call to the
    * Receiving API. Making that call inside the webhook would add a network dependency to
    * the one part of this system that must answer fast, and the retry loop that recovers a
    * failed fetch has to exist either way.
    */
-  status InboundEmailStatus @default(CONTENT_PENDING)
-  error  String?
-  /** Content fetch attempts. Three, then FAILED. */
-  retryCount  Int       @default(0)
+  status      InboundEmailStatus @default(CONTENT_PENDING)
+  error       String?
+  /**
+   * Content fetch attempts. Three, then FAILED.
+   */
+  retryCount  Int                @default(0)
   processedAt DateTime?
 
   /**
    * When a run took this row to work on, so two runs cannot process it at once.
-   *
    * A lease rather than a status, for two reasons. A `PROCESSING` state would strand rows
    * for ever when a run is killed mid flight, which is exactly what the 300-second ceiling
    * does; a timestamp expires by itself. And `processedAt` already means something else:
@@ -1193,7 +1241,9 @@ model InboundEmail {
    */
   claimedAt DateTime?
 
-  /** Finding D1: what this email produced, which is the whole point of keeping it. */
+  /**
+   * Finding D1: what this email produced, which is the whole point of keeping it.
+   */
   articles Article[]
 
   @@index([status, receivedAt])
@@ -1203,12 +1253,93 @@ model InboundEmail {
 }
 
 enum InboundEmailStatus {
-  /** Metadata stored, content not fetched yet, or the fetch failed and will be retried. */
+  /**
+   * Metadata stored, content not fetched yet, or the fetch failed and will be retried.
+   */
   CONTENT_PENDING
-  /** Content in hand, awaiting extraction. */
+  /**
+   * Content in hand, awaiting extraction.
+   */
   RECEIVED
   PROCESSED
-  /** No active EMAIL source matches the sender or the tag. Kept, so it can be promoted. */
+  /**
+   * No active EMAIL source matches the sender or the tag. Kept, so it can be promoted.
+   */
   IGNORED_UNKNOWN_SENDER
   FAILED
+}
+
+enum AsideKind {
+  JOKE
+  NOTE
+  SPOTLIGHT
+}
+
+enum AsideStatus {
+  PENDING
+  APPROVED
+  RETIRED
+}
+
+enum AsideSource {
+  HUMAN
+  MODEL
+}
+
+/**
+ * The closing slot's library.
+ * Everything that appears in an edition's "one more thing" block is a row here, including
+ * free text typed on the send screen at the last minute. One code path, and "what did
+ * edition 32 send" has one answer.
+ */
+model Aside {
+  id String @id @default(cuid())
+
+  kind   AsideKind   @default(JOKE)
+  status AsideStatus @default(APPROVED)
+
+  /**
+   * Kept after approval: whether a forwarded joke came from a person is worth knowing later.
+   */
+  source AsideSource @default(HUMAN)
+
+  /**
+   * The payload. Required even with an image, because it is also the image's alt text.
+   */
+  text String
+
+  /**
+   * A public URL from the newsletter-media bucket.
+   */
+  imageUrl String?
+
+  attribution String?
+
+  /**
+   * Filtered against OrgSettings.rewriteLanguage. A machine-translated joke is not a joke,
+   * so a second language is a second hand-written row, never a translation of this one.
+   */
+  language String @default("pt-PT")
+
+  /**
+   * False on free text typed at send time, so a one-off note never returns in the picker.
+   */
+  reusable Boolean @default(true)
+
+  /**
+   * Written when an edition is sent, never when one is chosen or previewed.
+   */
+  lastUsedAt DateTime?
+  useCount   Int       @default(0)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  editions Edition[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, kind, language, lastUsedAt])
+  @@index([organizationId, status, createdAt(sort: Desc)])
 }

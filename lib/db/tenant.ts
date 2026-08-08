@@ -40,7 +40,8 @@ export type TenantScopedModels =
   | "searchTopic"
   | "searchHistory"
   | "generationDraft"
-  | "apiKey";
+  | "apiKey"
+  | "aside";
 
 /**
  * Create a tenant-scoped Prisma client for an organization
@@ -488,6 +489,56 @@ export function createTenantClient(organizationId: string) {
 
       count: <T extends Prisma.MediaAssetCountArgs>(args?: T) =>
         prisma.mediaAsset.count({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+    },
+
+    // ==================== ASIDES ====================
+    aside: {
+      findMany: <T extends Prisma.AsideFindManyArgs>(args?: T) =>
+        prisma.aside.findMany({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findFirst: <T extends Prisma.AsideFindFirstArgs>(args?: T) =>
+        prisma.aside.findFirst({
+          ...args,
+          where: { ...args?.where, organizationId },
+        } as T),
+
+      findUnique: <T extends Prisma.AsideFindUniqueArgs>(args: T) =>
+        prisma.aside
+          .findUnique(args)
+          .then((result) => (result?.organizationId === organizationId ? result : null)),
+
+      create: <T extends Prisma.AsideCreateArgs>(args: T) =>
+        prisma.aside.create({
+          ...args,
+          data: { ...args.data, organizationId },
+        } as T),
+
+      update: <T extends Prisma.AsideUpdateArgs>(args: T) =>
+        prisma.aside.update({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
+      updateMany: <T extends Prisma.AsideUpdateManyArgs>(args: T) =>
+        prisma.aside.updateMany({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
+      delete: <T extends Prisma.AsideDeleteArgs>(args: T) =>
+        prisma.aside.delete({
+          ...args,
+          where: { ...args.where, organizationId },
+        } as T),
+
+      count: <T extends Prisma.AsideCountArgs>(args?: T) =>
+        prisma.aside.count({
           ...args,
           where: { ...args?.where, organizationId },
         } as T),
