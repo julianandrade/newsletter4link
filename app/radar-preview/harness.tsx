@@ -1469,14 +1469,44 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
     // RQ-005: both proposal routes must precede the /api/editions/<id> branch,
     // which would otherwise match "proposal" as an edition id.
     if (url.includes("/api/editions/proposal/candidates")) {
+      /*
+        The filters are applied here, not just accepted, because they are the point of
+        the picker: a harness that returns the same four rows whatever is asked cannot
+        show whether narrowing works. `articleTotal` is the population before the page
+        cap, which is what makes the count line under the list mean anything.
+      */
+      const query = new URL(url, "http://preview").searchParams;
+      const search = (query.get("search") ?? "").toLowerCase();
+      const topics = (query.get("categories") ?? "").split(",").filter(Boolean);
+      const scoreMin = Number(query.get("scoreMin") ?? 0);
+      const scoreMax = Number(query.get("scoreMax") ?? 10);
+      const held = new Set((query.get("exclude") ?? "").split(",").filter(Boolean));
+
+      const eligible = APPROVED.filter((a) => !a.editionCount && !held.has(a.id));
+      const matching = eligible.filter((a) => {
+        if (search && !`${a.title} ${a.summary ?? ""}`.toLowerCase().includes(search)) {
+          return false;
+        }
+        if (topics.length > 0 && !a.category.some((c: string) => topics.includes(c))) {
+          return false;
+        }
+        const score = a.relevanceScore;
+        if ((scoreMin > 0 || scoreMax < 10) && score === null) return false;
+        if (score !== null && (score < scoreMin || score > scoreMax)) return false;
+        return true;
+      });
+
       return json({
         success: true,
         data: {
-          articles: APPROVED.filter((a) => !a.editionCount).map((a, index) => ({
-            ...a,
-            order: index + 1,
-          })),
-          projects: PROJECTS.slice(2).map((p, index) => ({ ...p, order: index + 1 })),
+          articles: matching.map((a, index) => ({ ...a, order: index + 1 })),
+          projects: PROJECTS.slice(2)
+            .filter((p) => !held.has(p.id))
+            .map((p, index) => ({ ...p, order: index + 1 })),
+          articleTotal: matching.length,
+          // From the eligible set rather than the matching one, so a topic pill does
+          // not disappear the moment it is used.
+          categories: [...new Set(eligible.flatMap((a) => a.category))].sort(),
         },
       });
     }

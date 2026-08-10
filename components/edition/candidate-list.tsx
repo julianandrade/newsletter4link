@@ -451,11 +451,22 @@ export function CandidateList({
         </>
       )}
 
+      {/*
+        The noun follows the sections on screen. "2 items" is what a list says when it
+        does not know what it is holding, and here it always does: the builder scopes
+        to one kind per tab, and only the proposal dialog shows both at once.
+      */}
       <BulkBar
         selection={selection}
         actions={actions}
-        noun="item"
-        nounPlural="items"
+        noun={showArticles && showProjects ? "item" : showProjects ? "project" : "story"}
+        nounPlural={
+          showArticles && showProjects
+            ? "items"
+            : showProjects
+              ? "projects"
+              : "stories"
+        }
         busyAction={busy ? "add" : bulkBusy}
         className={barClassName}
       />
