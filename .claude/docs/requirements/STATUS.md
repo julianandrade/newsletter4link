@@ -1,14 +1,16 @@
 # Where we are, and how to pick this up
 
-Written 6 August 2026, updated 10 August. Production is deployed and healthy and
-nothing is left running, but **the 10 August work below is uncommitted and needs one
-manual step from Julian** before it does anything.
+Written 6 August 2026, updated 10 August. Everything is committed and pushed,
+production is deployed and healthy, and nothing is left running.
 
 ---
 
 ## The scheduled jobs, and the closing slot's tab
 
-**10 August 2026. Uncommitted. `tsc` clean, 1345 unit tests passing.**
+**10 August 2026, deployed as `f9cca9d` and verified READY on the production alias**
+rather than assumed: the deployment reports `aliasError: null` with
+`newsletter4link.vercel.app` among its aliases, and the live route answers 401 from our
+own cron guard. `tsc` clean, 1345 unit tests passing.
 
 ### The crons were running the whole time
 
@@ -58,24 +60,36 @@ Consequence worth knowing: like the other two tabs, it is not reachable in Unlay
 **Edit Layout** mode. That is the existing behaviour of this screen, not a new limitation,
 but the closing block is a merge tag and does render in a template built there.
 
-### The one step nobody else can take
+### The secret, and where the three copies live
 
-**Add `CRON_SECRET` as a GitHub Actions secret** on `julianandrade/newsletter4link`,
-under Settings > Secrets and variables > Actions, with the same value the Vercel project
-holds. The workflow fails loudly with a named error if it is missing rather than running
-unauthenticated. Until that exists and the branch is pushed, the evening firings do not
-happen and nothing else changes.
+`CRON_SECRET` is registered on the repository under Settings > Secrets and variables >
+Actions. Vercel holds three independent entries, Development, Preview and Production, and
+all three are marked Sensitive so none can be read back, only overwritten. The value in
+the local `.env` was verified equal to Production's by probing
+`radar-collect?source=NOPE`, which checks auth **before** validating the param and so
+answers 400 on a good secret without doing any work. That is the cheap auth probe to
+reuse; do not use `daily-collection` for it, which runs a real pass.
 
-Scheduled workflows only run on the default branch, so this needs to reach `master`.
+If Production's `CRON_SECRET` is ever rotated, the GitHub secret has to be updated in the
+same sitting. It will not fail quietly: the workflow emits a `::error::` and exits
+non-zero. `UNSUBSCRIBE_SECRET` is set separately in Production, so the two are
+independent and rotating one no longer breaks signed links in mail already delivered.
 
-### Not verified end to end
+### Still not verified end to end
 
-The job-row lifecycle was exercised against the real schema and confirmed to land at the
-top of the dashboard's list query, but **the full cron route has not run with the new code
-in production** — that costs a real curation pass and model credits, and it needs the
-deploy first. The GitHub Actions workflow has never fired, for the same reason. The curl
-invocation it uses was tested against the production alias and correctly reported `401`
-with the body intact on a bad secret.
+**The workflow has never fired and the cron route has never run with this code.** Both
+need a real curation pass, which spends Anthropic and OpenAI credits, so it was left as
+Julian's call rather than taken. The proof to get: Actions > Scheduled curation > Run
+workflow > `both`, then a fresh row in `/dashboard/curation`.
+
+What *was* verified: the job-row lifecycle against the real schema, confirmed to land at
+the top of the dashboard's list query; the tab and its panel rendered in a browser; and
+the workflow's exact curl invocation against the production alias, correctly reporting
+`401` with the body intact on a bad secret.
+
+Unrelated leftover found while here: the `CI` workflow in the Actions list comes from the
+unmerged June branch `claude/production-readiness-review-p8csvk`, is `pull_request`-only,
+and has not run since 18 June. It interferes with nothing.
 
 ---
 
