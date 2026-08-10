@@ -34,6 +34,13 @@ import {
   SkeletonRows,
 } from "@/components/radar/controls";
 import { RSSSourceManager } from "@/components/rss-source-manager";
+import {
+  SortSelect,
+  SortAnnouncement,
+  applySortParams,
+  type SortOption,
+  type SortState,
+} from "@/components/radar/sortable";
 import { relativeTime } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
 
@@ -57,9 +64,35 @@ interface RssSourceOption {
   category: string;
 }
 
-type SortField = "startedAt" | "durationMs" | "totalFound";
-type SortOrder = "asc" | "desc";
+/** Mirrors `JOB_SORT_FIELDS` in `lib/curation/job-manager.ts`. */
+type SortField =
+  | "startedAt"
+  | "status"
+  | "durationMs"
+  | "totalFound"
+  | "curated"
+  | "errorsCount";
 type View = "jobs" | "sources";
+
+const JOB_SORT_OPTIONS: SortOption<SortField>[] = [
+  { field: "startedAt", direction: "desc", label: "Newest run first" },
+  { field: "startedAt", direction: "asc", label: "Oldest run first" },
+  { field: "durationMs", direction: "desc", label: "Slowest first" },
+  { field: "durationMs", direction: "asc", label: "Fastest first" },
+  { field: "totalFound", direction: "desc", label: "Most found first" },
+  { field: "curated", direction: "desc", label: "Most kept first" },
+  { field: "errorsCount", direction: "desc", label: "Most errors first" },
+  { field: "status", direction: "asc", label: "Grouped by status" },
+];
+
+const JOB_SORT_LABELS: Record<SortField, string> = {
+  startedAt: "when it started",
+  status: "status",
+  durationMs: "how long it took",
+  totalFound: "stories found",
+  curated: "stories kept",
+  errorsCount: "errors",
+};
 
 const STATUS_TONE: Record<
   CurationJob["status"],
@@ -103,8 +136,10 @@ export default function CurationHistoryPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortField, setSortField] = useState<SortField>("startedAt");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [sort, setSort] = useState<SortState<SortField>>({
+    field: "startedAt",
+    direction: "desc",
+  });
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
@@ -133,53 +168,27 @@ export default function CurationHistoryPage() {
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [showSourcePicker, setShowSourcePicker] = useState(false);
 
+  /**
+   * The dates and the order are the server's job now.
+   *
+   * They used to be applied here, to the ten rows the route had already chosen, with two
+   * visible consequences. "Slowest first" ordered page one and presented it as the slowest
+   * runs in the history, so the actual slowest run sat on page four and never surfaced.
+   * And a date range filtered those ten rows away, leaving three runs under a pager that
+   * still read "Page 1 of 12" and a Next button that showed nothing.
+   */
   const fetchJobs = () => {
     setIsLoading(true);
     const params = new URLSearchParams({ page: page.toString(), limit: "10" });
-    if (statusFilter !== "all") {
-      params.set("status", statusFilter);
-    }
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    applySortParams(params, sort);
 
     fetch(`/api/curation/jobs?${params}`)
       .then((r) => r.json())
       .then((data) => {
-        let fetchedJobs = data.jobs || [];
-
-        // Client-side date filtering
-        if (dateFrom) {
-          const fromDate = new Date(dateFrom);
-          fromDate.setHours(0, 0, 0, 0);
-          fetchedJobs = fetchedJobs.filter(
-            (job: CurationJob) => new Date(job.startedAt) >= fromDate
-          );
-        }
-        if (dateTo) {
-          const toDate = new Date(dateTo);
-          toDate.setHours(23, 59, 59, 999);
-          fetchedJobs = fetchedJobs.filter(
-            (job: CurationJob) => new Date(job.startedAt) <= toDate
-          );
-        }
-
-        // Client-side sorting
-        fetchedJobs.sort((a: CurationJob, b: CurationJob) => {
-          let aVal: number, bVal: number;
-
-          if (sortField === "startedAt") {
-            aVal = new Date(a.startedAt).getTime();
-            bVal = new Date(b.startedAt).getTime();
-          } else if (sortField === "durationMs") {
-            aVal = a.durationMs || 0;
-            bVal = b.durationMs || 0;
-          } else {
-            aVal = a.totalFound;
-            bVal = b.totalFound;
-          }
-
-          return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
-        });
-
-        setJobs(fetchedJobs);
+        setJobs(data.jobs || []);
         setTotalPages(data.totalPages || 1);
       })
       .catch(console.error)
@@ -189,7 +198,7 @@ export default function CurationHistoryPage() {
   useEffect(() => {
     fetchJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, sortField, sortOrder, dateFrom, dateTo]);
+  }, [page, statusFilter, sort, dateFrom, dateTo]);
 
   // Fetch RSS sources on mount
   useEffect(() => {
@@ -385,19 +394,16 @@ export default function CurationHistoryPage() {
 
   const clearFilters = () => {
     setStatusFilter("all");
-    setSortField("startedAt");
-    setSortOrder("desc");
+    setSort({ field: "startedAt", direction: "desc" });
     setDateFrom("");
     setDateTo("");
     setPage(1);
   };
 
+  // The order is not a filter: it shows the same runs, so counting it here offered
+  // "Clear all" for something that hides nothing and made the empty state blame it.
   const hasActiveFilters =
-    statusFilter !== "all" ||
-    Boolean(dateFrom) ||
-    Boolean(dateTo) ||
-    sortField !== "startedAt" ||
-    sortOrder !== "desc";
+    statusFilter !== "all" || Boolean(dateFrom) || Boolean(dateTo);
 
   const runningJob = jobs.find((job) => job.status === "RUNNING");
   const lastCompleted = jobs.find((job) => job.status === "COMPLETED");
@@ -573,8 +579,22 @@ export default function CurationHistoryPage() {
                   onClick={() => setShowFilters((previous) => !previous)}
                   aria-expanded={showFilters}
                 >
-                  Dates and sorting
+                  Dates
                 </RadarButton>
+
+                {/* Out of the disclosure, beside the status chip group. The order is the
+                    control people reach for first, and it was two selects behind a button. */}
+                <SortSelect
+                  label="Sort runs"
+                  options={JOB_SORT_OPTIONS}
+                  sort={sort}
+                  onChange={(next) => {
+                    setSort(next);
+                    // A new order is a new first page: page 4 of the old one holds
+                    // different runs, which is what made the pager feel broken.
+                    setPage(1);
+                  }}
+                />
 
                 {hasActiveFilters && (
                   <RadarButton variant="ghost" onClick={clearFilters}>
@@ -593,7 +613,7 @@ export default function CurationHistoryPage() {
               </div>
 
               {showFilters && (
-                <div className="radar-enter grid gap-4 rounded-xl border border-radar-line bg-radar-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="radar-enter grid gap-4 rounded-xl border border-radar-line bg-radar-surface p-4 sm:grid-cols-2">
                   <RadarField label="Started from">
                     <RadarInput
                       type="date"
@@ -604,7 +624,10 @@ export default function CurationHistoryPage() {
                       }}
                     />
                   </RadarField>
-                  <RadarField label="Started to">
+                  <RadarField
+                    label="Started to"
+                    hint="Includes the whole of the day you name."
+                  >
                     <RadarInput
                       type="date"
                       value={dateTo}
@@ -613,29 +636,6 @@ export default function CurationHistoryPage() {
                         setPage(1);
                       }}
                     />
-                  </RadarField>
-                  <RadarField label="Sort by">
-                    <RadarSelect
-                      value={sortField}
-                      onChange={(event) =>
-                        setSortField(event.target.value as SortField)
-                      }
-                    >
-                      <option value="startedAt">Start time</option>
-                      <option value="durationMs">Duration</option>
-                      <option value="totalFound">Stories found</option>
-                    </RadarSelect>
-                  </RadarField>
-                  <RadarField label="Order">
-                    <RadarSelect
-                      value={sortOrder}
-                      onChange={(event) =>
-                        setSortOrder(event.target.value as SortOrder)
-                      }
-                    >
-                      <option value="desc">Newest first</option>
-                      <option value="asc">Oldest first</option>
-                    </RadarSelect>
                   </RadarField>
                 </div>
               )}
@@ -669,6 +669,12 @@ export default function CurationHistoryPage() {
               </EmptyState>
             ) : (
               <>
+                <SortAnnouncement
+                  sort={sort}
+                  labels={JOB_SORT_LABELS}
+                  count={jobs.length}
+                  noun={jobs.length === 1 ? "run" : "runs"}
+                />
                 <div className="border-t border-radar-line">
                   {jobs.map((job) => {
                     const canRerun = ["FAILED", "COMPLETED", "CANCELLED"].includes(

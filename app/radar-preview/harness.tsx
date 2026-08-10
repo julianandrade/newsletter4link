@@ -1422,7 +1422,19 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
     if (url.includes("/api/subscribers")) {
       const all = url.includes("all=true");
       const data = all ? SUBSCRIBERS : SUBSCRIBERS.filter((s) => s.active);
-      return json({ success: true, data, count: data.length });
+      // `meta` carries the three figures above the table. They are counted over the whole
+      // audience rather than over the rows returned, because the search narrows the query
+      // now: a stub without them showed "Active 0" beside three active subscribers.
+      return json({
+        success: true,
+        data,
+        count: data.length,
+        meta: {
+          activeCount: SUBSCRIBERS.filter((s) => s.active).length,
+          inactiveCount: SUBSCRIBERS.filter((s) => !s.active).length,
+          languageCount: new Set(SUBSCRIBERS.map((s) => s.preferredLanguage)).size,
+        },
+      });
     }
     if (url.includes("/api/templates")) {
       return json(TEMPLATES);

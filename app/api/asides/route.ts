@@ -2,12 +2,22 @@ import { NextResponse } from "next/server";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { parseAsideCreate } from "@/lib/asides/input";
 import { asidePickerQuery } from "@/lib/asides/select";
+import { parseSort } from "@/lib/list-sort";
 import type { AsideKind } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 const KINDS = ["JOKE", "NOTE", "SPOTLIGHT"];
 const STATUSES = ["PENDING", "APPROVED", "RETIRED"];
+
+/** What an editor working the closing slot actually reorders by. */
+export const ASIDE_SORT_FIELDS = [
+  "createdAt",
+  "lastUsedAt",
+  "useCount",
+  "kind",
+  "language",
+] as const;
 
 /**
  * GET /api/asides
@@ -23,10 +33,12 @@ export async function GET(request: Request) {
     const { db } = await requireOrgContext();
     const url = new URL(request.url);
 
-    const kind = url.searchParams.get("kind");
-    const status = url.searchParams.get("status");
-    const language = url.searchParams.get("language");
-    const offerable = url.searchParams.get("offerable") === "true";
+    const searchParams = url.searchParams;
+    const kind = searchParams.get("kind");
+    const status = searchParams.get("status");
+    const language = searchParams.get("language");
+    const search = searchParams.get("search")?.trim();
+    const offerable = searchParams.get("offerable") === "true";
 
     if (kind && !KINDS.includes(kind)) {
       return NextResponse.json(
@@ -57,17 +69,48 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: asides });
     }
 
+    const sort = parseSort(searchParams, ASIDE_SORT_FIELDS, {
+      field: "createdAt",
+      direction: "desc",
+    });
+
+    /**
+     * Ordered here rather than in the browser because of the `take` below. A library screen
+     * sorting 200 of 340 rows and calling it "least used first" is the same defect the
+     * curation history had, and this list is one an editor works through by exactly that
+     * order.
+     */
+    const orderBy =
+      sort.field === "lastUsedAt"
+        ? [
+            // Never sent goes to the end of the column in both directions. It is the state
+            // the screen counts in its own subtitle, so it is not a null to hide.
+            { lastUsedAt: { sort: sort.direction, nulls: "last" as const } },
+            { createdAt: "desc" as const },
+          ]
+        : sort.field === "createdAt"
+          ? [{ createdAt: sort.direction }]
+          : [{ [sort.field]: sort.direction }, { createdAt: "desc" as const }];
+
     const asides = await db.aside.findMany({
       where: {
         ...(kind ? { kind: kind as AsideKind } : {}),
         ...(status ? { status: status as "PENDING" | "APPROVED" | "RETIRED" } : {}),
         ...(language ? { language } : {}),
+        ...(search
+          ? {
+              OR: [
+                { text: { contains: search, mode: "insensitive" as const } },
+                { attribution: { contains: search, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy,
       take: 200,
     });
 
-    return NextResponse.json({ success: true, data: asides });
+    return NextResponse.json({ success: true, data: asides, sort });
   } catch (error) {
     console.error("Error listing asides:", error);
 

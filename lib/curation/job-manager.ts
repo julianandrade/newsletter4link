@@ -55,19 +55,85 @@ export async function getCurrentJob() {
   });
 }
 
+/** The columns the curation history table draws. */
+export const JOB_SORT_FIELDS = [
+  "startedAt",
+  "status",
+  "durationMs",
+  "totalFound",
+  "curated",
+  "errorsCount",
+] as const;
+
+export type JobSortField = (typeof JOB_SORT_FIELDS)[number];
+
 /**
- * Get recent jobs (paginated)
+ * Get recent jobs (paginated, filtered and ordered).
+ *
+ * The date range and the ordering used to be applied in the browser, to whatever ten rows
+ * this function had already picked. Two consequences, both visible:
+ *
+ *  - "Longest first" ordered the ten rows of page one and presented that as the slowest
+ *    runs in the history. The actual slowest run was on page four and never surfaced.
+ *  - A date range filtered those same ten rows away, so the screen showed three jobs under
+ *    a pager that still said "Page 1 of 12", and pressing Next showed nothing at all.
+ *
+ * Both are the same mistake: a filter or a sort that runs after the page has been cut
+ * describes the page, not the list.
  */
-export async function getJobs(options: { page?: number; limit?: number; status?: CurationJobStatus } = {}) {
-  const { page = 1, limit = 10, status } = options;
+export async function getJobs(
+  options: {
+    page?: number;
+    limit?: number;
+    status?: CurationJobStatus;
+    from?: string | null;
+    to?: string | null;
+    sortBy?: JobSortField;
+    sortOrder?: "asc" | "desc";
+  } = {}
+) {
+  const {
+    page = 1,
+    limit = 10,
+    status,
+    from,
+    to,
+    sortBy = "startedAt",
+    sortOrder = "desc",
+  } = options;
   const skip = (page - 1) * limit;
 
-  const where = status ? { status } : {};
+  const startedAt: { gte?: Date; lte?: Date } = {};
+  if (from) startedAt.gte = new Date(from);
+  if (to) {
+    // The whole of the named day. Parsing "2026-08-08" gives midnight, so a range ending
+    // there excluded every run of the day the reader asked for.
+    const end = new Date(to);
+    end.setHours(23, 59, 59, 999);
+    startedAt.lte = end;
+  }
+
+  const where = {
+    ...(status ? { status } : {}),
+    ...(startedAt.gte || startedAt.lte ? { startedAt } : {}),
+  };
+
+  // `startedAt` second, so runs that finished in the same number of milliseconds, or found
+  // the same number of articles, still come back newest first and in a stable order.
+  const orderBy =
+    sortBy === "startedAt"
+      ? [{ startedAt: sortOrder }]
+      : [
+          sortBy === "durationMs"
+            ? { durationMs: { sort: sortOrder, nulls: "last" as const } }
+            : { [sortBy]: sortOrder },
+          { startedAt: "desc" as const },
+        ];
 
   const [jobs, total] = await Promise.all([
     prisma.curationJob.findMany({
       where,
-      orderBy: { startedAt: "desc" },
+      orderBy,
       skip,
       take: limit,
     }),
@@ -78,7 +144,7 @@ export async function getJobs(options: { page?: number; limit?: number; status?:
     jobs,
     total,
     page,
-    totalPages: Math.ceil(total / limit),
+    totalPages: Math.max(1, Math.ceil(total / limit)),
   };
 }
 

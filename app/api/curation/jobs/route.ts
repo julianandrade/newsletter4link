@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
-import { getJobs, deleteJobsOlderThan } from "@/lib/curation/job-manager";
+import {
+  getJobs,
+  deleteJobsOlderThan,
+  JOB_SORT_FIELDS,
+} from "@/lib/curation/job-manager";
 import { CurationJobStatus } from "@prisma/client";
+import { parseSort } from "@/lib/list-sort";
 
+/**
+ * GET /api/curation/jobs?page=&limit=&status=&from=&to=&sortBy=&sortOrder=
+ *
+ * The date range and the order are parameters now. They were applied in the browser to the
+ * ten rows this route had already chosen, which made "Longest first" a claim about page one
+ * and made a date range blank the pager without changing it.
+ */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,9 +26,22 @@ export async function GET(request: Request) {
       status = statusParam as CurationJobStatus;
     }
 
-    const result = await getJobs({ page, limit, status });
+    const sort = parseSort(searchParams, JOB_SORT_FIELDS, {
+      field: "startedAt",
+      direction: "desc",
+    });
 
-    return NextResponse.json(result);
+    const result = await getJobs({
+      page,
+      limit,
+      status,
+      from: searchParams.get("from"),
+      to: searchParams.get("to"),
+      sortBy: sort.field,
+      sortOrder: sort.direction,
+    });
+
+    return NextResponse.json({ ...result, sort });
   } catch (error) {
     console.error("Error fetching curation jobs:", error);
     return NextResponse.json(

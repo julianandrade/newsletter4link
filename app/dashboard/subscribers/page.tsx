@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import {
@@ -42,8 +42,34 @@ import {
   thClass,
   trClass,
 } from "@/components/radar/controls";
+import {
+  SortableTh,
+  SortAnnouncement,
+  applySortParams,
+  type SortDirection,
+  type SortState,
+} from "@/components/radar/sortable";
 import { relativeTime } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
+
+/** Mirrors `SUBSCRIBER_SORT_FIELDS` in `app/api/subscribers/route.ts`. */
+type SubscriberSortField = "email" | "name" | "variant" | "active" | "createdAt";
+
+const SORT_DEFAULT_DIRECTION: Record<SubscriberSortField, SortDirection> = {
+  email: "asc",
+  name: "asc",
+  variant: "asc",
+  active: "desc",
+  createdAt: "desc",
+};
+
+const SORT_LABELS: Record<SubscriberSortField, string> = {
+  email: "email",
+  name: "name",
+  variant: "variant",
+  active: "status",
+  createdAt: "when they were added",
+};
 
 interface Subscriber {
   id: string;
@@ -74,8 +100,25 @@ const STYLES: [string, string][] = [
 export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [audience, setAudience] = useState<Audience>("active");
+  const [sort, setSort] = useState<SortState<SubscriberSortField>>({
+    field: "createdAt",
+    direction: "desc",
+  });
+  /**
+   * The three figures above the table, from the server.
+   *
+   * They were counted in the browser from the loaded array, which was only ever right
+   * because the search was in the browser too. The search narrows the query now, so
+   * counting the rows on screen would report "1 active" while somebody typed.
+   */
+  const [totals, setTotals] = useState({
+    activeCount: 0,
+    inactiveCount: 0,
+    languageCount: 0,
+  });
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -97,32 +140,39 @@ export default function SubscribersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Subscriber | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Typing is not a query: hold it for a beat, then ask the server once.
   useEffect(() => {
-    loadSubscribers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audience]);
+    const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const loadSubscribers = async () => {
+  const loadSubscribers = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const url =
-        audience === "everyone"
-          ? "/api/subscribers?all=true"
-          : "/api/subscribers";
-      const res = await fetch(url);
+      const params = new URLSearchParams();
+      if (audience === "everyone") params.set("all", "true");
+      if (searchQuery) params.set("search", searchQuery);
+      applySortParams(params, sort);
+
+      const res = await fetch(`/api/subscribers?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setSubscribers(data.data);
+        if (data.meta) setTotals(data.meta);
       } else {
         setLoadError(data.error || "The subscriber list request failed");
       }
-    } catch (e) {
+    } catch {
       setLoadError("The subscriber list request failed");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [audience, searchQuery, sort]);
+
+  useEffect(() => {
+    void loadSubscribers();
+  }, [loadSubscribers]);
 
   const handleAddSubscriber = async () => {
     if (!newEmail.trim() || isAdding) return;
@@ -144,7 +194,9 @@ export default function SubscribersPage() {
 
       const data = await res.json();
       if (data.success) {
-        setSubscribers([data.data, ...subscribers]);
+        // Reload rather than prepend: the list is ordered by the server now, and a new row
+        // pinned to the top of "Email, A to Z" is in the one place it does not belong.
+        await loadSubscribers();
         setIsAddDialogOpen(false);
         setNewEmail("");
         setNewName("");
@@ -254,23 +306,21 @@ export default function SubscribersPage() {
     a.download = "subscribers.csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`Exported ${subscribers.length} rows`);
-  };
-
-  const filteredSubscribers = subscribers.filter((s) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      s.email.toLowerCase().includes(query) ||
-      s.name?.toLowerCase().includes(query)
+    // Says what it exported, because it exports the rows on screen and the search now
+    // narrows those on the server. "Exported 3 rows" after typing three letters is correct
+    // and looks like data loss unless the message names the filter.
+    toast.success(
+      searchQuery
+        ? `Exported the ${subscribers.length} rows matching “${searchQuery}”`
+        : `Exported ${subscribers.length} rows`
     );
-  });
+  };
 
   /**
    * Bulk selection. Ids are in render order so shift-click ranges match the
    * table, and the selection is pruned automatically when the search narrows.
    */
-  const selection = useSelection(filteredSubscribers.map((s) => s.id));
+  const selection = useSelection(subscribers.map((s) => s.id));
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
 
@@ -341,9 +391,20 @@ export default function SubscribersPage() {
     },
   ];
 
-  const activeCount = subscribers.filter((s) => s.active).length;
-  const inactiveCount = subscribers.filter((s) => !s.active).length;
-  const languageCount = new Set(subscribers.map((s) => s.preferredLanguage)).size;
+  const { activeCount, inactiveCount, languageCount } = totals;
+
+  const onSort = (next: SortState<SubscriberSortField>) => setSort(next);
+
+  const sortableColumn = (field: SubscriberSortField, label: string) => (
+    <SortableTh
+      field={field}
+      sort={sort}
+      onSort={onSort}
+      defaultDirection={SORT_DEFAULT_DIRECTION[field]}
+    >
+      {label}
+    </SortableTh>
+  );
 
   return (
     <>
@@ -415,8 +476,8 @@ export default function SubscribersPage() {
               type="search"
               aria-label="Search subscribers"
               placeholder="Search by email or name"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               className="pl-9"
             />
           </div>
@@ -449,7 +510,7 @@ export default function SubscribersPage() {
           <SkeletonRows rows={6} />
         )}
 
-        {!isLoading && !loadError && filteredSubscribers.length === 0 && (
+        {!isLoading && !loadError && subscribers.length === 0 && (
           <EmptyState
             title={
               searchQuery
@@ -458,7 +519,13 @@ export default function SubscribersPage() {
             }
             actions={
               searchQuery ? (
-                <RadarButton variant="accent" onClick={() => setSearchQuery("")}>
+                <RadarButton
+                  variant="accent"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                  }}
+                >
                   Clear the search
                 </RadarButton>
               ) : (
@@ -482,7 +549,7 @@ export default function SubscribersPage() {
           </EmptyState>
         )}
 
-        {filteredSubscribers.length > 0 && !loadError && (
+        {subscribers.length > 0 && !loadError && (
           <>
             <TableShell>
               <table className={tableClass}>
@@ -501,32 +568,24 @@ export default function SubscribersPage() {
                         label={
                           selection.allSelected
                             ? "Clear selection"
-                            : `Select all ${filteredSubscribers.length} subscribers`
+                            : `Select all ${subscribers.length} subscribers`
                         }
                       />
                     </th>
-                    <th scope="col" className={thClass}>
-                      Email
-                    </th>
-                    <th scope="col" className={thClass}>
-                      Name
-                    </th>
-                    <th scope="col" className={thClass}>
-                      Variant
-                    </th>
-                    <th scope="col" className={thClass}>
-                      Status
-                    </th>
-                    <th scope="col" className={thClass}>
-                      Added
-                    </th>
+                    {sortableColumn("email", "Email")}
+                    {sortableColumn("name", "Name")}
+                    {/* One column, two fields. It orders by language then style, which is
+                        the order the two tags are read in. */}
+                    {sortableColumn("variant", "Variant")}
+                    {sortableColumn("active", "Status")}
+                    {sortableColumn("createdAt", "Added")}
                     <th scope="col" className={cn(thClass, "text-right")}>
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSubscribers.map((subscriber) => (
+                  {subscribers.map((subscriber) => (
                     <tr
                       key={subscriber.id}
                       className={cn(
@@ -588,9 +647,24 @@ export default function SubscribersPage() {
               </table>
             </TableShell>
 
+            <SortAnnouncement
+              sort={sort}
+              labels={SORT_LABELS}
+              count={subscribers.length}
+              noun={subscribers.length === 1 ? "subscriber" : "subscribers"}
+            />
+
+            {/*
+              `subscribers` is now what the query returned, so it cannot be compared to
+              itself the way it was when the search ran in the browser. The population is
+              the audience the chip group names, which is what the tiles above count.
+            */}
             <p className="mt-3 mb-0 text-[11.5px] text-radar-ink3">
-              <Num>{filteredSubscribers.length}</Num> of{" "}
-              <Num>{subscribers.length}</Num> shown
+              <Num>{subscribers.length}</Num> of{" "}
+              <Num>
+                {audience === "everyone" ? activeCount + inactiveCount : activeCount}
+              </Num>{" "}
+              shown
               {searchQuery && ` for “${searchQuery}”`}
               {selection.count > 0 && (
                 <> · <Num>{selection.count}</Num> selected</>

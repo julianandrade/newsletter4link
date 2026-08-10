@@ -46,9 +46,17 @@ import {
 import {
   ProjectFiltersComponent,
   ProjectFilters,
+  ProjectSortField,
+  PROJECT_SORT_DEFAULT_DIRECTION,
+  PROJECT_SORT_LABELS,
   defaultProjectFilters,
   buildProjectQueryString,
 } from "@/components/project-filters";
+import {
+  SortableTh,
+  SortAnnouncement,
+  type SortState,
+} from "@/components/radar/sortable";
 import { cn } from "@/lib/utils";
 
 interface Project {
@@ -446,6 +454,29 @@ export default function ProjectsPage() {
     </div>
   );
 
+  /**
+   * The order, held in the same `filters` object the select writes to, so a click on a
+   * header and a choice in "Dates and sorting" are one state and cannot disagree.
+   */
+  const sort: SortState<ProjectSortField> = {
+    field: filters.sortBy,
+    direction: filters.sortOrder,
+  };
+
+  const onSort = (next: SortState<ProjectSortField>) =>
+    setFilters({ ...filters, sortBy: next.field, sortOrder: next.direction });
+
+  const sortableColumn = (field: ProjectSortField, label: string) => (
+    <SortableTh
+      field={field}
+      sort={sort}
+      onSort={onSort}
+      defaultDirection={PROJECT_SORT_DEFAULT_DIRECTION[field]}
+    >
+      {label}
+    </SortableTh>
+  );
+
   const renderTableView = () => (
     <TableShell>
       <table className={tableClass}>
@@ -466,15 +497,13 @@ export default function ProjectsPage() {
                 }
               />
             </th>
-            <th scope="col" className={thClass}>
-              Project
-            </th>
-            <th scope="col" className={thClass}>
-              Team
-            </th>
-            <th scope="col" className={thClass}>
-              Shipped
-            </th>
+            {sortableColumn("name", "Project")}
+            {sortableColumn("team", "Team")}
+            {sortableColumn("projectDate", "Shipped")}
+            {/* The dot in the Project cell is the featured mark, and this is the column
+                that groups by it. Named for what it does rather than "Featured", which
+                would read as a value the row has rather than an order to put it in. */}
+            {sortableColumn("featured", "In the send")}
             <th scope="col" className={cn(thClass, "text-right")}>
               Actions
             </th>
@@ -515,6 +544,13 @@ export default function ProjectsPage() {
               <td className={tdClass}>{project.team}</td>
               <td className={cn(tdClass, "whitespace-nowrap")}>
                 {formatMonth(project.projectDate)}
+              </td>
+              <td className={tdClass}>
+                {project.featured ? (
+                  <StatusChip tone="warn">Featured</StatusChip>
+                ) : (
+                  <span className="text-radar-ink3">no</span>
+                )}
               </td>
               <td className={cn(tdClass, "text-right")}>
                 <div className="flex justify-end">
@@ -616,6 +652,12 @@ export default function ProjectsPage() {
 
         {projects.length > 0 && !loadError && (
           <>
+            <SortAnnouncement
+              sort={sort}
+              labels={PROJECT_SORT_LABELS}
+              count={projects.length}
+              noun={projects.length === 1 ? "project" : "projects"}
+            />
             {/* Select-all strip: the table view carries its own header checkbox. */}
             {layout !== "table" && (
               <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-radar-line pb-3">

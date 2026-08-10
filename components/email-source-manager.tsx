@@ -10,10 +10,36 @@ import {
   SkeletonBar,
   StatusChip,
 } from "@/components/radar/primitives";
+import { RadarInput, RadarSelect } from "@/components/radar/controls";
+import { SearchIcon } from "@/components/radar/icons";
+import {
+  SortSelect,
+  type SortOption,
+  type SortState,
+} from "@/components/radar/sortable";
+import { sortBy } from "@/lib/list-sort";
 import { displayName } from "@/lib/inbound/address";
 import { healthWarning, sourceHealth, type SourceHealth } from "@/lib/inbound/health";
 import { relativeTime } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
+
+type SourceStatusFilter = "all" | "active" | "paused" | "silent";
+type SourceSortField = "lastReceivedAt" | "name" | "createdAt";
+
+const SOURCE_STATUS_FILTERS: [SourceStatusFilter, string][] = [
+  ["all", "Every source"],
+  ["active", "Active"],
+  ["paused", "Paused"],
+  ["silent", "Overdue or silent"],
+];
+
+const SOURCE_SORT_OPTIONS: SortOption<SourceSortField>[] = [
+  { field: "lastReceivedAt", direction: "asc", label: "Silent longest first" },
+  { field: "lastReceivedAt", direction: "desc", label: "Heard from most recently" },
+  { field: "name", direction: "asc", label: "Name, A to Z" },
+  { field: "name", direction: "desc", label: "Name, Z to A" },
+  { field: "createdAt", direction: "desc", label: "Added most recently" },
+];
 
 /**
  * RQ-007 step 3: EMAIL sources, their health, and the senders nobody has claimed.
@@ -100,6 +126,13 @@ export function EmailSourceManager() {
   /** The source whose parse mode is in flight, so its toggle cannot be double-clicked. */
   const [savingMode, setSavingMode] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<SourceStatusFilter>("all");
+  const [sort, setSort] = useState<SortState<SourceSortField>>({
+    field: "lastReceivedAt",
+    direction: "asc",
+  });
+
   const loadSources = useCallback(async () => {
     try {
       const response = await fetch("/api/rss-sources");
@@ -163,6 +196,44 @@ export function EmailSourceManager() {
       })),
     [sources, now]
   );
+
+  /**
+   * The list, filtered and ordered.
+   *
+   * In the browser, and honestly so: `/api/rss-sources` has no `take` and no page, so this
+   * array is every source there is. The health state is derived here too, so it could not
+   * be ordered by the server without teaching the query what `sourceHealth` knows.
+   *
+   * "Silent longest" leads the options because that is the question this panel exists to
+   * answer, and it was previously answerable only by reading every row.
+   */
+  const shown = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    const filtered = withHealth.filter(({ source, health }) => {
+      if (statusFilter === "active" && !source.active) return false;
+      if (statusFilter === "paused" && source.active) return false;
+      if (statusFilter === "silent" && (!source.active || health.state === "ok")) {
+        return false;
+      }
+      if (!query) return true;
+      return (
+        source.name.toLowerCase().includes(query) ||
+        (source.senderAddress ?? "").toLowerCase().includes(query)
+      );
+    });
+
+    return sortBy(
+      filtered,
+      (row) =>
+        sort.field === "name"
+          ? row.source.name
+          : sort.field === "lastReceivedAt"
+            ? (row.source.lastReceivedAt ?? null)
+            : row.source.createdAt,
+      sort.direction
+    );
+  }, [withHealth, search, statusFilter, sort]);
 
   const warnings = useMemo(
     () =>
@@ -512,6 +583,49 @@ export function EmailSourceManager() {
           Email sources {!isLoading && <Num>{sources.length}</Num>}
         </SectionLabel>
 
+        {/* Rendered whatever the list is doing, so a filter that matches nothing keeps the
+            control that widens it. */}
+        {sources.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2.5 pb-1">
+            <div className="relative min-w-[180px] flex-1 sm:max-w-[280px]">
+              <SearchIcon
+                size={15}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
+              />
+              <RadarInput
+                type="search"
+                aria-label="Search email sources"
+                placeholder="Search by name or sender"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <RadarSelect
+              aria-label="Filter email sources"
+              className="w-auto min-w-[160px]"
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as SourceStatusFilter)
+              }
+            >
+              {SOURCE_STATUS_FILTERS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </RadarSelect>
+
+            <SortSelect
+              label="Sort email sources"
+              options={SOURCE_SORT_OPTIONS}
+              sort={sort}
+              onChange={setSort}
+            />
+          </div>
+        )}
+
         {isLoading && <SkeletonBar width="240px" />}
 
         {loadError && (
@@ -527,7 +641,14 @@ export function EmailSourceManager() {
           </p>
         )}
 
-        {withHealth.map(({ source, health }) => (
+        {!isLoading && !loadError && sources.length > 0 && shown.length === 0 && (
+          <p className="m-0 text-[12.5px] text-radar-ink3">
+            None of the {sources.length} email sources match that. Widen the filter, or
+            clear the search.
+          </p>
+        )}
+
+        {shown.map(({ source, health }) => (
           <div
             key={source.id}
             className="flex flex-wrap items-center gap-3 rounded-xl border border-radar-line bg-radar-surface px-4 py-3"

@@ -50,6 +50,17 @@ import {
 } from "@/components/radar/selection";
 import { useOrgRole } from "@/components/radar/use-role";
 import {
+  SortSelect,
+  SortAnnouncement,
+  applySortParams,
+  type SortState,
+} from "@/components/radar/sortable";
+import { ARTICLE_SORT_OPTIONS } from "@/components/article-filters";
+import {
+  ARTICLE_SORT_LABELS,
+  type ArticleSortField,
+} from "@/lib/articles/sort";
+import {
   bulkActionDescriptors,
   type ArticleListState,
 } from "@/lib/articles/list-filter";
@@ -119,6 +130,18 @@ export default function AllArticlesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
 
+  /**
+   * The order, which this screen did not have at all.
+   *
+   * It is a filter's worth of difference on a list of 4,812 rows across 25 pages: without
+   * one, finding the highest-scoring rejection meant reading every page. The default is the
+   * one the route always applied, so nothing moves for anyone who does not touch it.
+   */
+  const [sort, setSort] = useState<SortState<ArticleSortField>>({
+    field: "date",
+    direction: "desc",
+  });
+
   const [page, setPage] = useState(1);
 
   const [articles, setArticles] = useState<ListArticle[]>([]);
@@ -173,6 +196,7 @@ export default function AllArticlesPage() {
     try {
       const params = new URLSearchParams({ state, page: String(page) });
       if (search) params.set("search", search);
+      applySortParams(params, sort);
 
       const response = await fetch(`/api/articles?${params.toString()}`);
       const json = await response.json().catch(() => null);
@@ -196,7 +220,7 @@ export default function AllArticlesPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [state, search, page]);
+  }, [state, search, page, sort]);
 
   useEffect(() => {
     void load();
@@ -388,13 +412,28 @@ export default function AllArticlesPage() {
             ))}
           </div>
 
-          <div className="ml-auto w-full sm:w-[260px]">
+          <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
             <RadarInput
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search titles and summaries"
               aria-label="Search article titles and summaries"
+              className="sm:w-[260px]"
+            />
+            {/*
+              The same eight orders the queue offers, from the same list, because these are
+              the same rows met in a different place. A new order is a new first page: page
+              4 of "Newest first" and page 4 of "Score, high to low" hold different stories.
+            */}
+            <SortSelect
+              label="Sort articles"
+              options={ARTICLE_SORT_OPTIONS}
+              sort={sort}
+              onChange={(next) => {
+                setSort(next);
+                setPage(1);
+              }}
             />
           </div>
         </div>
@@ -438,6 +477,13 @@ export default function AllArticlesPage() {
                   Refreshing the list…
                 </p>
               )}
+
+              <SortAnnouncement
+                sort={sort}
+                labels={ARTICLE_SORT_LABELS}
+                count={articles.length}
+                noun={articles.length === 1 ? "story" : "stories"}
+              />
 
               {canEdit && (
                 <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-radar-line pb-3">

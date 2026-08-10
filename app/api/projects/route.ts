@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { createProject } from "@/lib/queries";
 import { Prisma } from "@prisma/client";
+import { parseSort } from "@/lib/list-sort";
 
 export const dynamic = "force-dynamic";
+
+/** Every column the projects table draws, and nothing that is not on screen. */
+export const PROJECT_SORT_FIELDS = [
+  "name",
+  "team",
+  "projectDate",
+  "createdAt",
+  "featured",
+] as const;
 
 /**
  * GET /api/projects
@@ -16,7 +26,7 @@ export const dynamic = "force-dynamic";
  * - featured: Filter by featured status ("true" or "false")
  * - dateFrom: Filter projects from this date
  * - dateTo: Filter projects until this date
- * - sortBy: Sort field (name, team, projectDate, createdAt)
+ * - sortBy: Sort field (name, team, projectDate, createdAt, featured)
  * - sortOrder: Sort direction (asc, desc)
  */
 export async function GET(request: NextRequest) {
@@ -73,21 +83,26 @@ export async function GET(request: NextRequest) {
         where.projectDate.gte = new Date(dateFrom);
       }
       if (dateTo) {
-        where.projectDate.lte = new Date(dateTo);
+        // The end of the named day, not its first instant. "Delivered to 8 August"
+        // excluded everything shipped on 8 August.
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        where.projectDate.lte = end;
       }
     }
 
-    // Build sort options
-    const sortBy = searchParams.get("sortBy") || "createdAt";
-    const sortOrder = searchParams.get("sortOrder") || "desc";
+    const sort = parseSort(searchParams, PROJECT_SORT_FIELDS, {
+      field: "createdAt",
+      direction: "desc",
+    });
 
-    const validSortFields = ["name", "team", "projectDate", "createdAt"];
-    const orderByField = validSortFields.includes(sortBy) ? sortBy : "createdAt";
-    const orderByDirection = sortOrder === "asc" ? "asc" : "desc";
-
-    const orderBy: Prisma.ProjectOrderByWithRelationInput = {
-      [orderByField]: orderByDirection,
-    };
+    // `name` is the second key throughout: every other field has duplicates in a list this
+    // size, so without it a team of six projects comes back in an arbitrary order that
+    // changes between two identical requests.
+    const orderBy: Prisma.ProjectOrderByWithRelationInput[] =
+      sort.field === "name"
+        ? [{ name: sort.direction }]
+        : [{ [sort.field]: sort.direction }, { name: "asc" }];
 
     const projects = await db.project.findMany({
       where,
@@ -98,6 +113,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: projects,
       count: projects.length,
+      sort,
     });
   } catch (error) {
     console.error("Error fetching projects:", error);

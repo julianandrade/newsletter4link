@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
@@ -24,8 +24,31 @@ import {
   RadarToggle,
   SkeletonRows,
 } from "@/components/radar/controls";
+import {
+  SortSelect,
+  SortAnnouncement,
+  type SortOption,
+  type SortState,
+} from "@/components/radar/sortable";
+import { sortBy } from "@/lib/list-sort";
 import { relativeTime } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
+
+type TemplateSortField = "updatedAt" | "createdAt" | "name";
+
+const TEMPLATE_SORT_OPTIONS: SortOption<TemplateSortField>[] = [
+  { field: "updatedAt", direction: "desc", label: "Edited most recently" },
+  { field: "updatedAt", direction: "asc", label: "Edited longest ago" },
+  { field: "createdAt", direction: "desc", label: "Newest first" },
+  { field: "name", direction: "asc", label: "Name, A to Z" },
+  { field: "name", direction: "desc", label: "Name, Z to A" },
+];
+
+const TEMPLATE_SORT_LABELS: Record<TemplateSortField, string> = {
+  updatedAt: "when it was last edited",
+  createdAt: "when it was created",
+  name: "name",
+};
 
 interface Template {
   id: string;
@@ -49,6 +72,10 @@ export default function TemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sort, setSort] = useState<SortState<TemplateSortField>>({
+    field: "updatedAt",
+    direction: "desc",
+  });
 
   const fetchTemplates = () => {
     setIsLoading(true);
@@ -163,6 +190,27 @@ export default function TemplatesPage() {
 
   const active = templates.find((t) => t.isActive);
 
+  /**
+   * Ordered in the browser, and here that is the honest place for it.
+   *
+   * `/api/templates` has no `take` and no page, so this array is every template there is,
+   * and there is no slice to mistake for the whole. It also cannot be the server's job:
+   * the built-in edition is code rather than a stored row, so it does not exist in the
+   * query the route orders.
+   *
+   * The built-in stays first whatever the order. It is the frame an organization falls back
+   * to when nothing else is active, so it is a fixed point in the list rather than a row
+   * competing on a date it does not really have.
+   */
+  const ordered = useMemo(() => {
+    const builtIn = templates.filter((template) => template.builtIn);
+    const stored = templates.filter((template) => !template.builtIn);
+    return [
+      ...builtIn,
+      ...sortBy(stored, (template) => template[sort.field], sort.direction),
+    ];
+  }, [templates, sort]);
+
   return (
     <>
       <AppHeader />
@@ -181,12 +229,22 @@ export default function TemplatesPage() {
           }
           subtitle="A template is the frame every edition is poured into. One is in use at a time; the default is the one the builder preselects."
           actions={
-            <Link
-              href="/dashboard/templates/new"
-              className={radarButtonClass("accent")}
-            >
-              New template
-            </Link>
+            <>
+              {templates.length > 1 && (
+                <SortSelect
+                  label="Sort templates"
+                  options={TEMPLATE_SORT_OPTIONS}
+                  sort={sort}
+                  onChange={setSort}
+                />
+              )}
+              <Link
+                href="/dashboard/templates/new"
+                className={radarButtonClass("accent")}
+              >
+                New template
+              </Link>
+            </>
           }
         />
 
@@ -211,7 +269,13 @@ export default function TemplatesPage() {
 
         {templates.length > 0 && (
           <div className="flex flex-col gap-3">
-            {templates.map((template) => (
+            <SortAnnouncement
+              sort={sort}
+              labels={TEMPLATE_SORT_LABELS}
+              count={templates.length}
+              noun={templates.length === 1 ? "template" : "templates"}
+            />
+            {ordered.map((template) => (
               <article
                 key={template.id}
                 className={cn(

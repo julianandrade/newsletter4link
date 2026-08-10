@@ -22,8 +22,55 @@ import {
   ScoreMeter,
   StatusChip,
 } from "@/components/radar/primitives";
-import { EmptyState, LoadError, SkeletonRows } from "@/components/radar/controls";
+import {
+  EmptyState,
+  LoadError,
+  RadarInput,
+  RadarSelect,
+  SkeletonRows,
+} from "@/components/radar/controls";
+import { SearchIcon } from "@/components/radar/icons";
+import {
+  SortSelect,
+  SortAnnouncement,
+  applySortParams,
+  type SortOption,
+  type SortState,
+} from "@/components/radar/sortable";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
+
+/** Mirrors `RECEIVED_SORT_FIELDS` in `lib/inbound/received.ts`. */
+type ReceivedSortField = "receivedAt" | "from" | "status";
+
+type StatusFilter =
+  | "all"
+  | "RECEIVED"
+  | "CONTENT_PENDING"
+  | "PROCESSED"
+  | "FAILED"
+  | "IGNORED_UNKNOWN_SENDER";
+
+const STATUS_FILTERS: [StatusFilter, string][] = [
+  ["all", "Every status"],
+  ["PROCESSED", "Processed"],
+  ["FAILED", "Failed"],
+  ["CONTENT_PENDING", "Waiting for content"],
+  ["RECEIVED", "Waiting for extraction"],
+  ["IGNORED_UNKNOWN_SENDER", "Unclaimed sender"],
+];
+
+const RECEIVED_SORT_OPTIONS: SortOption<ReceivedSortField>[] = [
+  { field: "receivedAt", direction: "desc", label: "Newest first" },
+  { field: "receivedAt", direction: "asc", label: "Oldest first" },
+  { field: "from", direction: "asc", label: "Grouped by sender" },
+  { field: "status", direction: "asc", label: "Grouped by status" },
+];
+
+const RECEIVED_SORT_LABELS: Record<ReceivedSortField, string> = {
+  receivedAt: "when it arrived",
+  from: "sender",
+  status: "status",
+};
 
 interface ReceivedEmail {
   id: string;
@@ -121,12 +168,37 @@ export function ReceivedEmails() {
   const [articles, setArticles] = useState<Record<string, ReceivedArticle[]>>({});
   const [loadingArticles, setLoadingArticles] = useState<string | null>(null);
 
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortState<ReceivedSortField>>({
+    field: "receivedAt",
+    direction: "desc",
+  });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  /**
+   * The filter and the order go to the server, because the route caps at 100 rows.
+   *
+   * That cap is what makes the difference matter: narrowing 100 of 340 emails to FAILED in
+   * the browser shows the failures inside the last window, not the failures, and the
+   * failures worth finding are exactly the ones that fell off the end of it.
+   */
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/inbound/received");
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (search) params.set("search", search);
+      applySortParams(params, sort);
+
+      const response = await fetch(`/api/inbound/received?${params.toString()}`);
       const json = await response.json();
 
       if (!json.success) throw new Error(json.error || "Could not load the emails");
@@ -139,7 +211,7 @@ export function ReceivedEmails() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, search, sort]);
 
   useEffect(() => {
     void load();
@@ -173,22 +245,94 @@ export function ReceivedEmails() {
     }
   };
 
-  if (loading) return <SkeletonRows rows={4} />;
+  const narrowed = statusFilter !== "all" || Boolean(search);
+
+  /**
+   * Rendered above every state, including the empty one.
+   *
+   * A filter that returns nothing must not take its own undo off the screen with it. The
+   * early returns below used to be the whole component, so putting the controls inside the
+   * success branch would have made "Failed" with no failures a dead end.
+   */
+  const controls = (
+    <div className="mb-3 flex flex-wrap items-center gap-2.5">
+      <div className="relative min-w-[200px] flex-1 sm:max-w-[320px]">
+        <SearchIcon
+          size={15}
+          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
+        />
+        <RadarInput
+          type="search"
+          aria-label="Search the received emails"
+          placeholder="Search by sender or subject"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      <RadarSelect
+        aria-label="Filter by status"
+        className="w-auto min-w-[170px]"
+        value={statusFilter}
+        onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+      >
+        {STATUS_FILTERS.map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </RadarSelect>
+
+      <SortSelect
+        label="Sort the received emails"
+        options={RECEIVED_SORT_OPTIONS}
+        sort={sort}
+        onChange={setSort}
+      />
+    </div>
+  );
 
   if (error) {
-    return <LoadError what="The received emails" message={error} onRetry={load} />;
+    return (
+      <>
+        {controls}
+        <LoadError what="The received emails" message={error} onRetry={load} />
+      </>
+    );
+  }
+
+  if (loading) {
+    return (
+      <>
+        {controls}
+        <SkeletonRows rows={4} />
+      </>
+    );
   }
 
   if (emails.length === 0) {
     return (
-      <EmptyState title="No emails yet">
-        When a newsletter arrives at the ingest address and one of your email sources
-        claims its sender, it appears here with the articles it produced.
-      </EmptyState>
+      <>
+        {controls}
+        <EmptyState title={narrowed ? "Nothing matches that" : "No emails yet"}>
+          {narrowed
+            ? "Widen the status, or clear the search, and the list will fill back up."
+            : "When a newsletter arrives at the ingest address and one of your email sources claims its sender, it appears here with the articles it produced."}
+        </EmptyState>
+      </>
     );
   }
 
   return (
+    <>
+    {controls}
+    <SortAnnouncement
+      sort={sort}
+      labels={RECEIVED_SORT_LABELS}
+      count={emails.length}
+      noun={emails.length === 1 ? "email" : "emails"}
+    />
     <div className="rounded-xl border border-radar-line">
       <ul className="m-0 list-none p-0">
         {emails.map((email) => {
@@ -307,12 +451,16 @@ export function ReceivedEmails() {
         })}
       </ul>
 
-      {/* No silent truncation: a list showing a window says so. */}
+      {/* No silent truncation: a list showing a window says so. And it now says which
+          window, because the order decides which rows the cap keeps: under "Oldest first"
+          these are the oldest 100, not the most recent. */}
       {total > emails.length && (
         <div className="border-t border-radar-line2 px-4 py-2.5 text-[11.5px] text-radar-ink3">
-          Showing the {limit} most recent of <Num>{total}</Num> emails.
+          Showing {limit} of <Num>{total}</Num>
+          {narrowed ? " matching emails" : " emails"}, in the order chosen above.
         </div>
       )}
     </div>
+    </>
   );
 }

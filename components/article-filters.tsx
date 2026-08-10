@@ -8,7 +8,9 @@ import {
   RadarButton,
   SectionLabel,
 } from "@/components/radar/primitives";
-import { RadarField, RadarInput, RadarSelect } from "@/components/radar/controls";
+import { RadarField, RadarInput } from "@/components/radar/controls";
+import { SortSelect, type SortOption, type SortState } from "@/components/radar/sortable";
+import type { ArticleSortField } from "@/lib/articles/sort";
 import { cn } from "@/lib/utils";
 
 export interface ArticleFilters {
@@ -18,7 +20,13 @@ export interface ArticleFilters {
   scoreMax: number;
   dateFrom: string;
   dateTo: string;
-  sortBy: "relevanceScore" | "publishedAt" | "title";
+  /**
+   * `date` rather than `publishedAt`, because it orders by the publication date or the
+   * capture time, whichever the row has, which is what the Date column shows. The old name
+   * described one of the two and was how the order and the cell came to disagree. The route
+   * still accepts `publishedAt` for anything holding an old URL.
+   */
+  sortBy: ArticleSortField;
   sortOrder: "asc" | "desc";
 }
 
@@ -40,13 +48,35 @@ export const defaultArticleFilters: ArticleFilters = {
   sortOrder: "desc",
 };
 
-const SORT_OPTIONS: { value: string; label: string }[] = [
-  { value: "relevanceScore-desc", label: "Score, high to low" },
-  { value: "relevanceScore-asc", label: "Score, low to high" },
-  { value: "publishedAt-desc", label: "Newest first" },
-  { value: "publishedAt-asc", label: "Oldest first" },
-  { value: "title-asc", label: "Title, A to Z" },
-  { value: "title-desc", label: "Title, Z to A" },
+/**
+ * True when anything narrows the list. Deliberately not the order: reordering shows the
+ * same rows, so counting it as an active filter puts a number on the Filters button and
+ * offers "Clear all" for something nothing is hiding.
+ */
+export function hasArticleFilters(filters: ArticleFilters): boolean {
+  return (
+    Boolean(filters.search) ||
+    filters.categories.length > 0 ||
+    filters.scoreMin > 0 ||
+    filters.scoreMax < 10 ||
+    Boolean(filters.dateFrom) ||
+    Boolean(filters.dateTo)
+  );
+}
+
+/**
+ * The same orders the table headers give, for the card and compact layouts that have no
+ * header to click. One list, so the two controls can never offer different sets.
+ */
+export const ARTICLE_SORT_OPTIONS: SortOption<ArticleSortField>[] = [
+  { field: "relevanceScore", direction: "desc", label: "Score, high to low" },
+  { field: "relevanceScore", direction: "asc", label: "Score, low to high" },
+  { field: "date", direction: "desc", label: "Newest first" },
+  { field: "date", direction: "asc", label: "Oldest first" },
+  { field: "title", direction: "asc", label: "Title, A to Z" },
+  { field: "title", direction: "desc", label: "Title, Z to A" },
+  { field: "source", direction: "asc", label: "Source, A to Z" },
+  { field: "capturedAt", direction: "desc", label: "Captured most recently" },
 ];
 
 export function ArticleFiltersComponent({
@@ -121,24 +151,14 @@ export function ArticleFiltersComponent({
           )}
         </div>
 
-        <RadarSelect
-          aria-label="Sort articles"
-          className="w-auto min-w-[170px]"
-          value={`${filters.sortBy}-${filters.sortOrder}`}
-          onChange={(event) => {
-            const [sortBy, sortOrder] = event.target.value.split("-") as [
-              ArticleFilters["sortBy"],
-              ArticleFilters["sortOrder"],
-            ];
-            onChange({ ...filters, sortBy, sortOrder });
-          }}
-        >
-          {SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </RadarSelect>
+        <SortSelect
+          label="Sort articles"
+          options={ARTICLE_SORT_OPTIONS}
+          sort={{ field: filters.sortBy, direction: filters.sortOrder }}
+          onChange={(next: SortState<ArticleSortField>) =>
+            onChange({ ...filters, sortBy: next.field, sortOrder: next.direction })
+          }
+        />
 
         <RadarButton
           onClick={() => setShowAdvanced((previous) => !previous)}
@@ -210,7 +230,17 @@ export function ArticleFiltersComponent({
               </div>
             </div>
 
-            <RadarField label="Published from">
+            {/*
+              "Dated" rather than "Published", and the hint says why. The range matches the
+              same value the Date column shows, so an article with no publication date is in
+              range when it was captured in range. Labelled "Published", it read as a promise
+              the filter could not keep: it ran on `publishedAt` alone, which never matches a
+              null, so any range silently dropped every undated article.
+            */}
+            <RadarField
+              label="Dated from"
+              hint="Published date, or capture date when the source gave none."
+            >
               <RadarInput
                 type="date"
                 value={filters.dateFrom}
@@ -220,7 +250,7 @@ export function ArticleFiltersComponent({
               />
             </RadarField>
 
-            <RadarField label="Published to">
+            <RadarField label="Dated to">
               <RadarInput
                 type="date"
                 value={filters.dateTo}

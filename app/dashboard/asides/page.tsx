@@ -21,9 +21,48 @@ import {
   SectionLabel,
   StatusChip,
 } from "@/components/radar/primitives";
+import { SearchIcon } from "@/components/radar/icons";
+import { RadarInput } from "@/components/radar/controls";
+import {
+  SortSelect,
+  SortAnnouncement,
+  applySortParams,
+  type SortOption,
+  type SortState,
+} from "@/components/radar/sortable";
 import { relativeTime } from "@/lib/radar/source";
 
 type Status = "APPROVED" | "PENDING" | "RETIRED";
+
+/** Mirrors `ASIDE_SORT_FIELDS` in `app/api/asides/route.ts`. */
+type AsideSortField = "createdAt" | "lastUsedAt" | "useCount" | "kind" | "language";
+
+/**
+ * The orders an editor working the closing slot actually wants.
+ *
+ * "Least used first" leads, because the screen's own subtitle counts how many lines have
+ * never been sent and there was no way to bring them to the top. Ordering by `lastUsedAt`
+ * ascending puts them there: never-sent sorts last in the column, so the ascending end is
+ * the ones sent longest ago and the never-sent block sits at the far end of both.
+ */
+const ASIDE_SORT_OPTIONS: SortOption<AsideSortField>[] = [
+  { field: "createdAt", direction: "desc", label: "Newest first" },
+  { field: "createdAt", direction: "asc", label: "Oldest first" },
+  { field: "useCount", direction: "asc", label: "Least used first" },
+  { field: "useCount", direction: "desc", label: "Most used first" },
+  { field: "lastUsedAt", direction: "asc", label: "Sent longest ago first" },
+  { field: "lastUsedAt", direction: "desc", label: "Sent most recently first" },
+  { field: "kind", direction: "asc", label: "Grouped by kind" },
+  { field: "language", direction: "asc", label: "Grouped by language" },
+];
+
+const ASIDE_SORT_LABELS: Record<AsideSortField, string> = {
+  createdAt: "when it was written",
+  lastUsedAt: "when it was last sent",
+  useCount: "how often it has been sent",
+  kind: "kind",
+  language: "language",
+};
 
 interface Aside {
   id: string;
@@ -59,6 +98,12 @@ function statusFromUrl(): Status | null {
 export default function AsidesPage() {
   const [asides, setAsides] = useState<Aside[]>([]);
   const [status, setStatus] = useState<Status>("APPROVED");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortState<AsideSortField>>({
+    field: "createdAt",
+    direction: "desc",
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
@@ -71,7 +116,11 @@ export default function AsidesPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/asides?status=${status}`);
+      const params = new URLSearchParams({ status });
+      if (search) params.set("search", search);
+      applySortParams(params, sort);
+
+      const response = await fetch(`/api/asides?${params.toString()}`);
       const payload = await response.json();
 
       if (!response.ok || !payload.success) {
@@ -85,12 +134,18 @@ export default function AsidesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [status]);
+  }, [status, search, sort]);
 
   useEffect(() => {
     const fromUrl = statusFromUrl();
     if (fromUrl) setStatus(fromUrl);
   }, []);
+
+  // Typing is not a query.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     void load();
@@ -218,27 +273,64 @@ export default function AsidesPage() {
           </div>
         )}
 
-        <ChipGroup<Status>
-          label="Library view"
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: "APPROVED", label: "Approved" },
-            { value: "PENDING", label: "Pending" },
-            { value: "RETIRED", label: "Retired" },
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <ChipGroup<Status>
+            label="Library view"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "APPROVED", label: "Approved" },
+              { value: "PENDING", label: "Pending" },
+              { value: "RETIRED", label: "Retired" },
+            ]}
+          />
+
+          {/* The library caps at 200 rows, so both of these run on the server. A search
+              that narrowed 200 of 340 in the browser would answer a different question. */}
+          <div className="relative min-w-[200px] flex-1 sm:max-w-[300px]">
+            <SearchIcon
+              size={15}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
+            />
+            <RadarInput
+              type="search"
+              aria-label="Search the closing lines"
+              placeholder="Search the text or the attribution"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <SortSelect
+            label="Sort the library"
+            options={ASIDE_SORT_OPTIONS}
+            sort={sort}
+            onChange={setSort}
+          />
+        </div>
 
         <div className="mt-5 flex flex-col gap-3">
           {isLoading && <p className="text-[13px] text-radar-ink2">Loading...</p>}
 
+          {!isLoading && asides.length > 0 && (
+            <SortAnnouncement
+              sort={sort}
+              labels={ASIDE_SORT_LABELS}
+              count={asides.length}
+              noun={asides.length === 1 ? "line" : "lines"}
+            />
+          )}
+
           {!isLoading && asides.length === 0 && (
             <p className="rounded-xl border border-radar-line bg-radar-surface px-4 py-6 text-[13px] text-radar-ink2">
-              {status === "PENDING"
-                ? "Nothing waiting. Suggest five, or write your own."
-                : status === "RETIRED"
-                  ? "Nothing retired."
-                  : "Nothing approved yet. The slot stays empty until something is."}
+              {search
+                ? `Nothing in ${status.toLowerCase()} matches “${search}”.`
+                : status === "PENDING"
+                  ? "Nothing waiting. Suggest five, or write your own."
+                  : status === "RETIRED"
+                    ? "Nothing retired."
+                    : "Nothing approved yet. The slot stays empty until something is."}
             </p>
           )}
 

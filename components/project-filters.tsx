@@ -4,7 +4,55 @@ import { useCallback, useEffect, useState } from "react";
 import { SearchIcon } from "@/components/radar/icons";
 import { RadarButton, SectionLabel } from "@/components/radar/primitives";
 import { RadarField, RadarInput, RadarSelect } from "@/components/radar/controls";
+import {
+  SortSelect,
+  type SortDirection,
+  type SortOption,
+  type SortState,
+} from "@/components/radar/sortable";
 import { cn } from "@/lib/utils";
+
+/** Mirrors `PROJECT_SORT_FIELDS` in `app/api/projects/route.ts`. */
+export type ProjectSortField =
+  | "name"
+  | "team"
+  | "projectDate"
+  | "createdAt"
+  | "featured";
+
+export const PROJECT_SORT_DEFAULT_DIRECTION: Record<ProjectSortField, SortDirection> = {
+  name: "asc",
+  team: "asc",
+  projectDate: "desc",
+  createdAt: "desc",
+  featured: "desc",
+};
+
+export const PROJECT_SORT_LABELS: Record<ProjectSortField, string> = {
+  name: "name",
+  team: "team",
+  projectDate: "when it shipped",
+  createdAt: "when it was added",
+  featured: "whether it is in the next send",
+};
+
+/**
+ * The same orders the table headers give, for the card and compact layouts.
+ *
+ * Two selects, "Sort by" and "Order", became one list of named orders. Splitting them made
+ * "Newest first" available under Name, where it meant Z to A, and asked for two decisions
+ * to express one intent.
+ */
+export const PROJECT_SORT_OPTIONS: SortOption<ProjectSortField>[] = [
+  { field: "createdAt", direction: "desc", label: "Added most recently" },
+  { field: "createdAt", direction: "asc", label: "Added first" },
+  { field: "projectDate", direction: "desc", label: "Shipped most recently" },
+  { field: "projectDate", direction: "asc", label: "Shipped first" },
+  { field: "name", direction: "asc", label: "Name, A to Z" },
+  { field: "name", direction: "desc", label: "Name, Z to A" },
+  { field: "team", direction: "asc", label: "Team, A to Z" },
+  { field: "featured", direction: "desc", label: "In the next send first" },
+];
 
 export interface ProjectFilters {
   search: string;
@@ -12,7 +60,7 @@ export interface ProjectFilters {
   featured: string; // "all" | "true" | "false"
   dateFrom: string;
   dateTo: string;
-  sortBy: string;
+  sortBy: ProjectSortField;
   sortOrder: "asc" | "desc";
 }
 
@@ -65,14 +113,14 @@ export function ProjectFiltersComponent({
     onFiltersChange(defaultProjectFilters);
   }, [onFiltersChange]);
 
+  // The order is not counted: reordering shows the same projects, so offering "Clear all"
+  // for it says something is hidden when nothing is.
   const hasActiveFilters =
     filters.search !== "" ||
     filters.team !== "all" ||
     filters.featured !== "all" ||
     filters.dateFrom !== "" ||
-    filters.dateTo !== "" ||
-    filters.sortBy !== "createdAt" ||
-    filters.sortOrder !== "desc";
+    filters.dateTo !== "";
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -117,11 +165,26 @@ export function ProjectFiltersComponent({
           <option value="false">Not featured</option>
         </RadarSelect>
 
+        {/* Out of the disclosure. The order is the control people reach for first, and it
+            was two selects behind a button labelled "Dates and sorting". */}
+        <SortSelect
+          label="Sort projects"
+          options={PROJECT_SORT_OPTIONS}
+          sort={{ field: filters.sortBy, direction: filters.sortOrder }}
+          onChange={(next: SortState<ProjectSortField>) =>
+            onFiltersChange({
+              ...filters,
+              sortBy: next.field,
+              sortOrder: next.direction,
+            })
+          }
+        />
+
         <RadarButton
           onClick={() => setShowAdvanced((previous) => !previous)}
           aria-expanded={showAdvanced}
         >
-          Dates and sorting
+          Dates
         </RadarButton>
 
         {hasActiveFilters && (
@@ -133,9 +196,9 @@ export function ProjectFiltersComponent({
 
       {showAdvanced && (
         <div className="radar-enter rounded-xl border border-radar-line bg-radar-surface p-4">
-          <SectionLabel className="mb-3">Narrow and order</SectionLabel>
+          <SectionLabel className="mb-3">Shipped between</SectionLabel>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <RadarField label="Delivered from">
+            <RadarField label="Shipped from">
               <RadarInput
                 type="date"
                 value={filters.dateFrom}
@@ -143,36 +206,14 @@ export function ProjectFiltersComponent({
               />
             </RadarField>
 
-            <RadarField label="Delivered to">
+            {/* The pair filters `projectDate`, which the table heads "Shipped". They were
+                labelled "Delivered", which is a third word for the same column. */}
+            <RadarField label="Shipped to">
               <RadarInput
                 type="date"
                 value={filters.dateTo}
                 onChange={(event) => updateFilter("dateTo", event.target.value)}
               />
-            </RadarField>
-
-            <RadarField label="Sort by">
-              <RadarSelect
-                value={filters.sortBy}
-                onChange={(event) => updateFilter("sortBy", event.target.value)}
-              >
-                <option value="createdAt">When it was added</option>
-                <option value="projectDate">When it shipped</option>
-                <option value="name">Name</option>
-                <option value="team">Team</option>
-              </RadarSelect>
-            </RadarField>
-
-            <RadarField label="Order">
-              <RadarSelect
-                value={filters.sortOrder}
-                onChange={(event) =>
-                  updateFilter("sortOrder", event.target.value as "asc" | "desc")
-                }
-              >
-                <option value="desc">Newest first</option>
-                <option value="asc">Oldest first</option>
-              </RadarSelect>
             </RadarField>
           </div>
         </div>

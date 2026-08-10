@@ -51,17 +51,39 @@ export interface ReceivedArticle {
   capturedAt: string;
 }
 
+/** The columns the received-emails list draws and can be reordered by. */
+export const RECEIVED_SORT_FIELDS = ["receivedAt", "from", "status"] as const;
+
+export type ReceivedSortField = (typeof RECEIVED_SORT_FIELDS)[number];
+
 /**
  * The emails belonging to this organization, newest first.
  *
  * A limit rather than pagination: the useful question is "what has arrived lately", and
  * fifty-seven rows after four months of one address means a page is a long way off. The
  * cap is stated in the response so a screen can say it is showing a window.
+ *
+ * The filter and the order are therefore parameters and not the caller's job. That cap is
+ * exactly what makes a browser-side filter dishonest: narrowing 100 of 340 rows to FAILED
+ * shows the failures of the last window, not the failures.
  */
 export async function getReceivedEmails(
   organizationId: string,
-  limit = 100
+  options: {
+    limit?: number;
+    status?: InboundEmailStatus;
+    search?: string | null;
+    sortBy?: ReceivedSortField;
+    sortOrder?: "asc" | "desc";
+  } = {}
 ): Promise<{ emails: ReceivedEmail[]; total: number; limit: number }> {
+  const {
+    limit = 100,
+    status,
+    search,
+    sortBy = "receivedAt",
+    sortOrder = "desc",
+  } = options;
   const sources = await prisma.rSSSource.findMany({
     where: { organizationId, type: "EMAIL" },
     select: { id: true, name: true, senderAddress: true },
@@ -88,13 +110,39 @@ export async function getReceivedEmails(
       // looking at, so a view that dropped them would hide its most useful rows.
       { from: { in: [...bySender.keys()], mode: "insensitive" as const } },
     ],
+    // AND, because `OR` above is the ownership test and must not be widened by either of
+    // these. A status that replaced it would show every tenant's failures.
+    ...(status || search
+      ? {
+          AND: [
+            ...(status ? [{ status }] : []),
+            ...(search
+              ? [
+                  {
+                    OR: [
+                      { from: { contains: search, mode: "insensitive" as const } },
+                      { subject: { contains: search, mode: "insensitive" as const } },
+                    ],
+                  },
+                ]
+              : []),
+          ],
+        }
+      : {}),
   };
+
+  // `receivedAt` second, so two emails from the same sender or in the same state still
+  // come back newest first rather than in whatever order the index yields.
+  const orderBy =
+    sortBy === "receivedAt"
+      ? [{ receivedAt: sortOrder }]
+      : [{ [sortBy]: sortOrder }, { receivedAt: "desc" as const }];
 
   const [total, rows] = await Promise.all([
     prisma.inboundEmail.count({ where }),
     prisma.inboundEmail.findMany({
       where,
-      orderBy: { receivedAt: "desc" },
+      orderBy,
       take: limit,
       select: {
         id: true,

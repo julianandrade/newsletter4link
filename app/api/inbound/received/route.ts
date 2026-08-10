@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
-import { getEmailArticles, getReceivedEmails } from "@/lib/inbound/received";
+import {
+  getEmailArticles,
+  getReceivedEmails,
+  RECEIVED_SORT_FIELDS,
+} from "@/lib/inbound/received";
+import { parseSort } from "@/lib/list-sort";
+import type { InboundEmailStatus } from "@prisma/client";
+
+const STATUSES = [
+  "RECEIVED",
+  "CONTENT_PENDING",
+  "PROCESSED",
+  "FAILED",
+  "IGNORED_UNKNOWN_SENDER",
+];
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +49,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: articles });
     }
 
-    const received = await getReceivedEmails(organization.id);
+    const params = new URL(request.url).searchParams;
+    const statusParam = params.get("status");
+    const sort = parseSort(params, RECEIVED_SORT_FIELDS, {
+      field: "receivedAt",
+      direction: "desc",
+    });
 
-    return NextResponse.json({ success: true, ...received });
+    const received = await getReceivedEmails(organization.id, {
+      status: STATUSES.includes(statusParam ?? "")
+        ? (statusParam as InboundEmailStatus)
+        : undefined,
+      search: params.get("search"),
+      sortBy: sort.field,
+      sortOrder: sort.direction,
+    });
+
+    return NextResponse.json({ success: true, ...received, sort });
   } catch (error) {
     console.error("Error reading received emails:", error);
 

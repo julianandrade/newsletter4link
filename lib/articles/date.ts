@@ -62,3 +62,40 @@ export function describeDate(article: {
 
   return { value: article.capturedAt, isCapture: true, label: "captured" };
 }
+
+/**
+ * A date range over `bestKnownDate`, as a Prisma where fragment.
+ *
+ * The screens label these inputs "from" and "to" and sit them next to a Date column that
+ * shows a capture time whenever there is no publication date. Filtering on `publishedAt`
+ * alone means `publishedAt: { gte: … }` never matches a null, so asking for "anything since
+ * 8 August" silently dropped every one of the 379 undated articles, including the ones
+ * captured that morning and displaying that morning's date two columns over.
+ *
+ * Expressed as an OR so it still runs in the database and a paginated route can use it: a
+ * row is in range if its publication date is, or if it has none and its capture time is.
+ * Returns null when neither bound is set, so a caller can spread it unconditionally.
+ */
+export function bestKnownDateRangeWhere(range: {
+  from?: string | null;
+  to?: string | null;
+}): { OR: Record<string, unknown>[] } | null {
+  const bounds: { gte?: Date; lte?: Date } = {};
+
+  if (range.from) bounds.gte = new Date(range.from);
+  if (range.to) {
+    // The input is a day, and a reader asking for "to 8 August" means the whole of it.
+    const end = new Date(range.to);
+    end.setHours(23, 59, 59, 999);
+    bounds.lte = end;
+  }
+
+  if (bounds.gte === undefined && bounds.lte === undefined) return null;
+
+  return {
+    OR: [
+      { publishedAt: bounds },
+      { publishedAt: null, capturedAt: bounds },
+    ],
+  };
+}
