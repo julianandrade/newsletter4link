@@ -2,9 +2,33 @@ import OpenAI from "openai";
 import { config } from "@/lib/config";
 import { DEFAULT_EMBEDDING_MODEL } from "@/lib/ai-models";
 
-const openai = new OpenAI({
-  apiKey: config.ai.openai.apiKey,
-});
+/**
+ * Built on first use, not on import.
+ *
+ * `new OpenAI({ apiKey: undefined })` throws, and this module is reachable from
+ * `/api/cron/daily-collection` through `lib/curation/curator`, so Next evaluated it while
+ * collecting page data and a missing key failed the **build** rather than the request.
+ * Every Vercel preview deployment died that way, because `OPENAI_API_KEY` is set for
+ * Production and not for Preview: PR #7 and PR #8 both went red from code that built and
+ * deployed to production without complaint.
+ *
+ * A build should not need production credentials to compile a route it is not calling.
+ * Deferring the constructor is what makes that true, and it costs nothing: the key is read
+ * at the same moment it was before, the first time an embedding is actually generated.
+ *
+ * Same shape as `lib/inbound/extract.ts` and `lib/rewrite/generate.ts`, which reached it
+ * from the other direction: the Anthropic SDK refuses to instantiate under a test runner.
+ * Anthropic's constructor tolerates a missing key where OpenAI's does not, which is the
+ * only reason those two files were enough and this one was missed.
+ */
+let client: OpenAI | null = null;
+
+function openaiClient(): OpenAI {
+  if (!client) {
+    client = new OpenAI({ apiKey: config.ai.openai.apiKey });
+  }
+  return client;
+}
 
 /**
  * Generate embedding vector for text using OpenAI
@@ -26,7 +50,9 @@ export async function generateEmbedding(
 
     console.log(`Generating embedding for text (${truncatedText.length} chars)...`);
 
-    const response = await openai.embeddings.create({
+    // After the key check above, so a missing key still says so in our own words rather
+    // than in the SDK's.
+    const response = await openaiClient().embeddings.create({
       model: embeddingModel,
       input: truncatedText,
     });
