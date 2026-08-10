@@ -37,6 +37,7 @@ import {
   type SortState,
 } from "@/components/radar/sortable";
 import { sortBy } from "@/lib/list-sort";
+import { mergeEditionArticles } from "@/lib/editions/add-to-edition";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
 import { useOrgRole } from "@/components/radar/use-role";
@@ -507,6 +508,138 @@ export default function EditionsPage() {
     [editions]
   );
 
+  /* ------------------------------------------- the approved column's own selection */
+
+  /**
+   * A second `useSelection`, not a shared one. The editions table and this column are
+   * different lists of different things, and one selection across both would let a
+   * bulk action reach rows that are not on screen.
+   *
+   * Ids in render order, which is every waiting story: the column scrolls rather than
+   * slicing to eight, because "select all" over a slice of a hundred and twenty-eight
+   * is the trap this whole change exists to remove.
+   */
+  const poolSelection = useSelection(waitingApproved.map((article) => article.id));
+  const [poolBusy, setPoolBusy] = useState<string | null>(null);
+  const [pendingVerdict, setPendingVerdict] = useState<{
+    action: "reject" | "discard";
+    ids: string[];
+  } | null>(null);
+  const [addingTo, setAddingTo] = useState<string[] | null>(null);
+
+  const runVerdict = async (action: "reject" | "discard", ids: string[]) => {
+    setPoolBusy(action);
+
+    try {
+      const res = await fetch("/api/articles/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ids }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "That did not go through");
+      }
+
+      const affected = data.data?.affected ?? ids.length;
+      toast.success(
+        `${affected} ${affected === 1 ? "story" : "stories"} ${
+          action === "reject" ? "rejected" : "discarded"
+        }.`
+      );
+      poolSelection.clear();
+      await load();
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "That did not go through"
+      );
+    } finally {
+      setPoolBusy(null);
+      setPendingVerdict(null);
+    }
+  };
+
+  /**
+   * Add the selection to an edition that already has contents.
+   *
+   * The read is not optional. `PATCH /api/editions/:id` replaces the whole article
+   * array rather than appending, so sending the selection alone would leave the
+   * edition holding only the selection. `mergeEditionArticles` carries the existing
+   * rows through, and is unit-tested for exactly that.
+   */
+  const addSelectionToEdition = async (editionId: string, ids: string[]) => {
+    setPoolBusy("add");
+
+    try {
+      const read = await fetch(`/api/editions/${editionId}`);
+      const current = await read.json();
+      if (!read.ok || !current.success) {
+        throw new Error(current.error || "Could not read that edition");
+      }
+
+      const existing: string[] = (current.data?.articles ?? []).map(
+        (article: { id: string }) => article.id
+      );
+
+      const res = await fetch(`/api/editions/${editionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articles: mergeEditionArticles(existing, ids) }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Could not add those stories");
+      }
+
+      const added = data.data.articleCount - existing.length;
+      toast.success(
+        `${added} ${added === 1 ? "story" : "stories"} added to ${current.data.label}.`
+      );
+      poolSelection.clear();
+      await load();
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not add those stories"
+      );
+    } finally {
+      setPoolBusy(null);
+      setAddingTo(null);
+    }
+  };
+
+  const poolActions: BulkAction[] = atLeast("EDITOR")
+    ? [
+        {
+          id: "add",
+          label: openEditions.length === 0 ? "No open edition" : "Add to edition…",
+          onRun: (ids) => {
+            if (openEditions.length === 0) {
+              toast.error("Create an edition first, then add stories to it.");
+              return;
+            }
+            // One open edition is the common case and needs no chooser.
+            if (openEditions.length === 1) {
+              void addSelectionToEdition(openEditions[0].id, ids);
+              return;
+            }
+            setAddingTo(ids);
+          },
+        },
+        {
+          id: "reject",
+          label: "Reject",
+          destructive: true,
+          onRun: (ids) => setPendingVerdict({ action: "reject", ids }),
+        },
+        {
+          id: "discard",
+          label: "Discard",
+          destructive: true,
+          onRun: (ids) => setPendingVerdict({ action: "discard", ids }),
+        },
+      ]
+    : [];
+
   /**
    * RQ-008: the edition the "Open builder" shortcut points at, which is the soonest one.
    *
@@ -655,16 +788,52 @@ export default function EditionsPage() {
 
             {/* RQ-005 AC-3.2 and AC-3.6: the destination an approval points at.
                 It exists already, so nothing is built for it. */}
+            {/*
+              The one column you can act on, so the only one that renders every card
+              and carries a checkbox. Everything else here is a read-only summary.
+            */}
             <PipelineColumn
               anchorId="approved-waiting"
               title="Approved"
               dot="var(--r-ok)"
               count={waitingApproved.length}
-              note="ready for an edition"
+              note={
+                poolSelection.count > 0
+                  ? `${poolSelection.count} selected`
+                  : "ready for an edition"
+              }
               empty="Approve stories in the queue and they land here."
+              scrolls
+              lead={
+                waitingApproved.length > 0 && atLeast("EDITOR") ? (
+                  <SelectCheckbox
+                    checked={poolSelection.allSelected}
+                    indeterminate={poolSelection.partiallySelected}
+                    onToggle={() =>
+                      poolSelection.allSelected
+                        ? poolSelection.clear()
+                        : poolSelection.selectAll()
+                    }
+                    label={
+                      poolSelection.allSelected
+                        ? "Clear selection"
+                        : `Select all ${waitingApproved.length} approved stories`
+                    }
+                  />
+                ) : null
+              }
             >
-              {waitingApproved.slice(0, 8).map((article) => (
-                <ArticleCard key={article.id} article={article} />
+              {waitingApproved.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  selected={poolSelection.isSelected(article.id)}
+                  onToggle={
+                    atLeast("EDITOR")
+                      ? (modifiers) => poolSelection.toggle(article.id, modifiers)
+                      : undefined
+                  }
+                />
               ))}
             </PipelineColumn>
 
@@ -733,6 +902,20 @@ export default function EditionsPage() {
               ))}
             </PipelineColumn>
           </div>
+        )}
+
+        {/*
+          Outside the grid, so the bar spans the board rather than sitting inside the
+          one column it acts on and inheriting its scroll container.
+        */}
+        {!isLoading && !error && view === "pipeline" && (
+          <BulkBar
+            selection={poolSelection}
+            actions={poolActions}
+            noun="story"
+            nounPlural="stories"
+            busyAction={poolBusy}
+          />
         )}
 
         {/* All editions */}
@@ -1083,6 +1266,106 @@ export default function EditionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Which edition the selection goes to, when more than one is open. */}
+      <Dialog
+        open={addingTo !== null}
+        onOpenChange={(open) => !open && setAddingTo(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add {addingTo?.length}{" "}
+              {addingTo?.length === 1 ? "story" : "stories"} to which edition?
+            </DialogTitle>
+            <DialogDescription>
+              They are appended after what the edition already holds, and nothing
+              already in it is disturbed. Reorder them in the builder.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2 py-2">
+            {openEditions.map((edition) => (
+              <button
+                key={edition.id}
+                type="button"
+                disabled={poolBusy !== null}
+                onClick={() =>
+                  addingTo && void addSelectionToEdition(edition.id, addingTo)
+                }
+                className="flex items-center gap-2 rounded-xl border border-radar-line bg-radar-surface px-3.5 py-3 text-left transition-colors hover:border-radar-accent disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="font-editorial block text-[14.5px] text-radar-ink">
+                    {edition.label}
+                  </span>
+                  <span className="text-[11.5px] text-radar-ink3">
+                    <Num>{edition.articleCount}</Num>{" "}
+                    {edition.articleCount === 1 ? "story" : "stories"} ·{" "}
+                    {edition.status.toLowerCase()}
+                  </span>
+                </span>
+                {edition.kind === "SPECIAL" && (
+                  <StatusChip tone="neutral">special</StatusChip>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <RadarButton
+              onClick={() => setAddingTo(null)}
+              disabled={poolBusy !== null}
+            >
+              Cancel
+            </RadarButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Both verdicts confirm, on the rule in lib/articles/list-filter.ts. */}
+      <Dialog
+        open={pendingVerdict !== null}
+        onOpenChange={(open) => !open && setPendingVerdict(null)}
+      >
+        <DialogContent>
+          {pendingVerdict && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {pendingVerdict.action === "reject" ? "Reject" : "Discard"}{" "}
+                  {pendingVerdict.ids.length}{" "}
+                  {pendingVerdict.ids.length === 1 ? "story" : "stories"}?
+                </DialogTitle>
+                <DialogDescription>
+                  {pendingVerdict.action === "reject"
+                    ? "They leave the approved pool and will not appear in any edition. Reversible from the All articles screen."
+                    : "They leave every list, including the queue, and are pulled out of any edition that has not been sent. Collection will not bring them back; restore is on the All articles screen under Discarded."}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <RadarButton
+                  onClick={() => setPendingVerdict(null)}
+                  disabled={poolBusy !== null}
+                >
+                  Cancel
+                </RadarButton>
+                <RadarButton
+                  variant="accent"
+                  disabled={poolBusy !== null}
+                  onClick={() =>
+                    void runVerdict(pendingVerdict.action, pendingVerdict.ids)
+                  }
+                >
+                  {poolBusy === pendingVerdict.action
+                    ? "Working…"
+                    : `${pendingVerdict.action === "reject" ? "Reject" : "Discard"} ${pendingVerdict.ids.length}`}
+                </RadarButton>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -1095,6 +1378,8 @@ function PipelineColumn({
   empty,
   children,
   anchorId,
+  lead,
+  scrolls,
 }: {
   title: string;
   dot: string;
@@ -1104,6 +1389,14 @@ function PipelineColumn({
   children: React.ReactNode;
   /** RQ-005 AC-3.2: link target for the approved-and-waiting destination. */
   anchorId?: string;
+  /** Sits before the column name. The select-all checkbox, where there is one. */
+  lead?: React.ReactNode;
+  /**
+   * Render every card behind a scrollbar rather than letting the column run the
+   * length of the page. Only the column you can act on needs it, and it needs it:
+   * slicing to the first eight while offering "select all" is the trap.
+   */
+  scrolls?: boolean;
 }) {
   // Count is the authority on emptiness; inspecting children is unreliable.
   const hasCards = count > 0;
@@ -1111,6 +1404,7 @@ function PipelineColumn({
   return (
     <section id={anchorId} className="flex flex-col gap-2.5 scroll-mt-6">
       <div className="flex items-center gap-2 border-b border-radar-line px-0.5 pb-2.5">
+        {lead}
         <span
           aria-hidden="true"
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -1125,7 +1419,14 @@ function PipelineColumn({
       </div>
 
       {hasCards ? (
-        children
+        <div
+          className={cn(
+            "flex flex-col gap-2.5",
+            scrolls && "max-h-[68vh] overflow-y-auto pr-1"
+          )}
+        >
+          {children}
+        </div>
       ) : (
         <p className="m-0 rounded-xl border border-dashed border-radar-line px-3.5 py-6 text-center text-[12px] text-radar-ink3">
           {empty}
@@ -1135,19 +1436,27 @@ function PipelineColumn({
   );
 }
 
-function ArticleCard({ article }: { article: PipelineArticle }) {
+/**
+ * A pipeline card, selectable or not.
+ *
+ * The two shapes are not decoration. Unselectable, the whole card is one link to the
+ * story, which is the right target when reading is all it does. Selectable, it cannot
+ * be: a checkbox inside an anchor is not operable by keyboard, so the card becomes a
+ * container and the headline carries the link.
+ */
+function ArticleCard({
+  article,
+  selected,
+  onToggle,
+}: {
+  article: PipelineArticle;
+  selected?: boolean;
+  onToggle?: (modifiers: { shiftKey: boolean }) => void;
+}) {
   const identity = sourceIdentity(article.sourceUrl);
 
-  return (
-    <a
-      href={article.sourceUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(
-        "block rounded-xl border border-radar-line bg-radar-surface p-3.5 no-underline shadow-radar transition-colors",
-        "hover:border-radar-ink3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
-      )}
-    >
+  const meta = (
+    <>
       <div className="mb-2 flex items-center gap-2">
         <span className="truncate text-[11px] text-radar-ink3">
           {identity.name}
@@ -1165,6 +1474,50 @@ function ArticleCard({ article }: { article: PipelineArticle }) {
           ))}
         </div>
       )}
-    </a>
+    </>
+  );
+
+  if (!onToggle) {
+    return (
+      <a
+        href={article.sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(
+          "block rounded-xl border border-radar-line bg-radar-surface p-3.5 no-underline shadow-radar transition-colors",
+          "hover:border-radar-ink3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+        )}
+      >
+        {meta}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2.5 rounded-xl border bg-radar-surface p-3.5 shadow-radar transition-colors",
+        selected
+          ? "border-radar-accent"
+          : "border-radar-line hover:border-radar-ink3"
+      )}
+    >
+      <SelectCheckbox
+        checked={Boolean(selected)}
+        onToggle={onToggle}
+        label={`Select ${article.title}`}
+        className="mt-0.5"
+      />
+      <div className="min-w-0 flex-1">
+        <a
+          href={article.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-radar-accent"
+        >
+          {meta}
+        </a>
+      </div>
+    </div>
   );
 }
