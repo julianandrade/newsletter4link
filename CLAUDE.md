@@ -352,11 +352,26 @@ stub, which is how UI work gets verified without a Supabase session.
 ## Agent Behavior Guidelines
 
 ### Multi-Agent Safety
-When multiple Claude sessions or agents may be working:
+
+**Prefer a git worktree for parallel work.** Julian's standing instruction, August 2026:
+when work can run in parallel, or when more than one agent may touch this repo at once,
+give each stream its own worktree instead of sharing one checkout. See
+[docs/WORKTREES.md](docs/WORKTREES.md) for the how and the rules.
+
+This supersedes the previous "do NOT create/remove/modify `git worktree` unless
+explicitly requested". A worktree is now the default for parallel work, not an
+exception. Sharing one checkout is what needs justifying.
+
+The reason it changed: agents sharing a checkout collide on the things that are global
+to it, not on the files they each edit. A branch switch yanks the tree out from under a
+neighbour mid-edit, `npm run dev` binds one port so the second session finds `EADDRINUSE`,
+and `git add -A` sweeps in another session's untracked files. All three happened here.
+
+Still true when sharing a checkout:
 - Do NOT create/apply/drop `git stash` unless explicitly requested
-- Do NOT switch branches unless explicitly requested
-- Do NOT create/remove/modify `git worktree` unless explicitly requested
+- Do NOT switch branches unless explicitly requested; use a worktree instead
 - When unrecognized files appear, focus on your changes only; commit only scoped changes
+  by explicit path, never `git add -A`
 - Keep reports focused on your edits; end with brief "other files present" note only if relevant
 
 ### Verification Standards
