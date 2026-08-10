@@ -24,6 +24,8 @@ import {
 function fakeDb(options: {
   threshold?: number | null;
   articles?: unknown[];
+  /** What the availability read returns, when it should be wider than the match. */
+  availableArticles?: unknown[];
   /** What the second pass returns, when it should differ from the first. */
   pageArticles?: unknown[];
   projects?: unknown[];
@@ -44,6 +46,9 @@ function fakeDb(options: {
       article: {
         findMany: async (args: any) => {
           articleCalls.push(args);
+          if (articleCalls.length === 2) {
+            return options.availableArticles ?? options.articles ?? [];
+          }
           if (articleCalls.length === 3) {
             return options.pageArticles ?? options.articles ?? [];
           }
@@ -258,17 +263,38 @@ describe("readCandidatePool filters", () => {
     expect(articleCalls[0].where.AND).toHaveLength(5);
   });
 
-  it("builds the topic pills from the eligible set, not the filtered one", async () => {
+  it("builds the topic pills from what is available, not from the filtered set", async () => {
     const { db, articleCalls } = fakeDb({
       articles: [article({ category: ["AI Tools", "Agents"] })],
     });
     const pool = await readCandidatePool(db, { categories: ["Agents"] });
 
-    // The pills query carries eligibility and none of the narrowing, so a topic
-    // does not vanish from the list the moment it is used.
+    // The pills query carries availability and none of the narrowing, so a topic
+    // does not vanish from the list the moment it is used to filter.
     expect(articleCalls[1].where.AND).toBeUndefined();
     expect(articleCalls[1].where.editions).toEqual({ none: {} });
     expect(pool.categories).toEqual(["AI Tools", "Agents"].sort());
+  });
+
+  /**
+   * Held ids are availability, not narrowing. A story the caller already holds cannot
+   * be added again, so it should leave the pills and the waiting total as well as the
+   * rows; a story merely filtered out should leave only the rows.
+   */
+  it("counts held ids out of what is available, filters out of what matches", async () => {
+    const { db, articleCalls } = fakeDb({});
+    await readCandidatePool(db, { excludeIds: ["held1"], categories: ["Agents"] });
+
+    // Availability: eligibility plus the exclusion, and no topic filter.
+    const pills = articleCalls[1].where;
+    expect(pills.AND).toHaveLength(2);
+    expect(pills.AND[0].editions).toEqual({ none: {} });
+    expect(pills.AND[1]).toEqual({ id: { notIn: ["held1"] } });
+
+    // The rows: availability nested, then the narrowing on top of it.
+    const rows = articleCalls[0].where;
+    expect(rows.AND[0]).toEqual(pills);
+    expect(rows.AND[1]).toEqual({ category: { hasSome: ["Agents"] } });
   });
 });
 
@@ -402,6 +428,29 @@ describe("readCandidatePool shaping", () => {
     expect(pool.articleTotal).toBe(3);
   });
 
+  /**
+   * The three numbers the picker needs to be honest: what is on screen, what matches
+   * the filter, and what is waiting in total. Without the last one a default filter
+   * reads as "that is everything there is", which is the failure the whole change
+   * exists to avoid.
+   */
+  it("reports what is waiting in total, separately from what matches", async () => {
+    const { db } = fakeDb({
+      // Two match the date range, ten are waiting behind it.
+      articles: [article({ id: "a" }), article({ id: "b" })],
+      availableArticles: Array.from({ length: 10 }, (_unused, index) =>
+        article({ id: `w${index}` })
+      ),
+    });
+
+    const pool = await readCandidatePool(db, { dateFrom: "2026-08-01" });
+
+    expect(pool.articles).toHaveLength(2);
+    expect(pool.articleTotal).toBe(2);
+    // The number that stops a default filter reading as "that is everything".
+    expect(pool.eligibleTotal).toBe(10);
+  });
+
   it("skips the second pass entirely when nothing matches", async () => {
     const { db, articleCalls } = fakeDb({});
     const pool = await readCandidatePool(db);
@@ -412,6 +461,7 @@ describe("readCandidatePool shaping", () => {
       articles: [],
       projects: [],
       articleTotal: 0,
+      eligibleTotal: 0,
       categories: [],
     });
   });

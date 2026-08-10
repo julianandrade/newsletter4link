@@ -32,11 +32,13 @@ import {
   type ArticleFilters,
 } from "@/components/article-filters";
 import {
+  FilterPill,
   Num,
   ScoreMeter,
   SectionLabel,
   SourceStamp,
 } from "@/components/radar/primitives";
+import { POOL_RECENT_DAYS, recentWindowFrom } from "@/lib/articles/date";
 import {
   Callout,
   EmptyNote,
@@ -116,7 +118,10 @@ export interface CandidateListProps {
 interface Pool {
   articles: ProposalArticle[];
   projects: ProposalProject[];
+  /** How many match the current filter. */
   articleTotal: number;
+  /** How many could be added at all, whatever the filter. */
+  eligibleTotal: number;
   categories: string[];
 }
 
@@ -124,6 +129,7 @@ const EMPTY_POOL: Pool = {
   articles: [],
   projects: [],
   articleTotal: 0,
+  eligibleTotal: 0,
   categories: [],
 };
 
@@ -139,6 +145,17 @@ export function CandidateList({
   const showProjects = sections.includes("projects");
 
   const [filters, setFilters] = useState<ArticleFilters>(defaultArticleFilters);
+  /**
+   * The pool opens on the last two months.
+   *
+   * News decays, so an approved story nobody used in eight weeks is almost never what
+   * an editor is hunting for, and left in the default view a hundred expired
+   * candidates compete for attention with the twenty live ones. It is a pill rather
+   * than a hidden default: it can be switched off in one click, and the count line
+   * below says how many it is holding back. A cap you cannot see is the bug this
+   * component was written to remove.
+   */
+  const [recentOnly, setRecentOnly] = useState(true);
   const [pool, setPool] = useState<Pool>(EMPTY_POOL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +184,22 @@ export function CandidateList({
       params.set("limit", String(POOL_PAGE));
       if (excludeKey) params.set("exclude", excludeKey);
 
+      /**
+       * The window is resolved here rather than in render, deliberately.
+       *
+       * `load` only ever runs in an effect, so the date is computed on the client and
+       * nowhere else. Computed during render, or in a lazy `useState` initialiser, it
+       * would be evaluated once on the server for the initial HTML and again on the
+       * client, and the two can disagree across midnight: a hydration mismatch for a
+       * value that only ever feeds a query string.
+       *
+       * An explicit range the editor typed always wins. Sending both would AND them,
+       * which silently narrows what they asked for.
+       */
+      if (recentOnly && !filters.dateFrom) {
+        params.set("dateFrom", recentWindowFrom(new Date()));
+      }
+
       const res = await fetch(`/api/editions/proposal/candidates?${params}`);
       const json = await res.json().catch(() => null);
 
@@ -180,6 +213,7 @@ export function CandidateList({
         articles: json.data?.articles ?? [],
         projects: json.data?.projects ?? [],
         articleTotal: json.data?.articleTotal ?? 0,
+        eligibleTotal: json.data?.eligibleTotal ?? 0,
         categories: json.data?.categories ?? [],
       });
     } catch (cause) {
@@ -191,7 +225,7 @@ export function CandidateList({
     } finally {
       setLoading(false);
     }
-  }, [filters, excludeKey]);
+  }, [filters, excludeKey, recentOnly]);
 
   useEffect(() => {
     void load();
@@ -365,11 +399,53 @@ export function CandidateList({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {showArticles && (
-        <ArticleFiltersComponent
-          filters={filters}
-          onChange={setFilters}
-          availableCategories={pool.categories}
-        />
+        <div className="flex flex-col gap-2.5">
+          <ArticleFiltersComponent
+            filters={filters}
+            onChange={setFilters}
+            availableCategories={pool.categories}
+          />
+          {/*
+            Disabled rather than hidden when an explicit range is set: the window is
+            still the default, it has just been superseded by something the editor
+            typed, and a control that vanishes teaches less than one that greys out.
+          */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              The × when it is on, borrowed from the "Filtered to" chips in
+              article-filters.tsx, which is this codebase's shape for "applied, click
+              to remove". FilterPill's own active state is a border tint, which reads
+              on a row of topic pills where the unpressed ones sit beside it for
+              comparison. This pill starts pressed and stands alone, so there is
+              nothing to compare it against and the tint alone says nothing.
+            */}
+            <FilterPill
+              active={recentOnly && !filters.dateFrom}
+              disabled={Boolean(filters.dateFrom)}
+              onClick={() => setRecentOnly((previous) => !previous)}
+              className={
+                filters.dateFrom ? "cursor-not-allowed opacity-50" : undefined
+              }
+            >
+              Last {POOL_RECENT_DAYS} days
+              {recentOnly && !filters.dateFrom && (
+                <>
+                  <span aria-hidden="true" className="text-radar-ink3">
+                    ×
+                  </span>
+                  <span className="sr-only">
+                    , applied. Activate to include older stories.
+                  </span>
+                </>
+              )}
+            </FilterPill>
+            {filters.dateFrom && (
+              <span className="text-[11.5px] text-radar-ink3">
+                superseded by the range you set
+              </span>
+            )}
+          </div>
+        </div>
       )}
 
       {notice && <Callout tone="ok" title={notice} live />}
@@ -384,11 +460,26 @@ export function CandidateList({
 
       {loading && !error && <SkeletonRows rows={5} />}
 
+      {/*
+        Decided on `eligibleTotal` rather than on `hasArticleFilters`, which does not
+        know about the recency window. With the window on and nothing recent, the old
+        test said "Nothing is waiting" while a hundred and twenty-eight sat behind it.
+        If anything is available at all, an empty list is a filter result, whichever
+        filter did it.
+      */}
       {!loading && !error && nothingAtAll && (
         <EmptyNote>
-          {filtered
-            ? "Nothing waiting matches those filters. Widen the score range or clear a topic."
-            : "Nothing is waiting. Approve a story in the queue and it appears here."}
+          {showArticles && pool.eligibleTotal > 0 ? (
+            <>
+              Nothing matches. <Num>{pool.eligibleTotal}</Num> approved and waiting
+              outside these filters: switch off Last {POOL_RECENT_DAYS} days, widen
+              the score range, or clear a topic.
+            </>
+          ) : filtered ? (
+            "Nothing waiting matches those filters. Widen the score range or clear a topic."
+          ) : (
+            "Nothing is waiting. Approve a story in the queue and it appears here."
+          )}
         </EmptyNote>
       )}
 
@@ -440,12 +531,25 @@ export function CandidateList({
             indistinguishable, and "select all visible" quietly means "select the
             first hundred".
           */}
+          {/*
+            Three numbers, because any two of them can mislead. The rows on screen,
+            what the filter matched, and what is waiting in total: without the last,
+            a default recency window reads as "that is everything there is", which is
+            the same lie the old `take: 50` told.
+          */}
           {showArticles && (
             <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3">
               Showing <Num>{articles.length}</Num> of{" "}
-              <Num>{pool.articleTotal}</Num> waiting
+              <Num>{pool.articleTotal}</Num>{" "}
+              {pool.articleTotal === pool.eligibleTotal ? "waiting" : "that match"}
               {pool.articleTotal > articles.length &&
                 " · narrow the filters to reach the rest"}
+              {pool.eligibleTotal > pool.articleTotal && (
+                <>
+                  {" · "}
+                  <Num>{pool.eligibleTotal}</Num> approved and waiting in all
+                </>
+              )}
             </p>
           )}
         </>

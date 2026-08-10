@@ -158,6 +158,22 @@ const APPROVED = [
     status: "APPROVED",
     editionCount: 0,
   },
+  /*
+    Approved in June and never used, which is what the pool's default recency window
+    exists to move out of the way. Without an aged row here the window filters nothing
+    and the preview shows a control that appears to do nothing.
+  */
+  {
+    ...ARTICLES[2],
+    id: "ap5",
+    title:
+      "Vector database consolidation continues as a third vendor is acquired this quarter",
+    publishedAt: iso(74, 4),
+    capturedAt: iso(74, 4),
+    relevanceScore: 7.1,
+    status: "APPROVED",
+    editionCount: 0,
+  },
 ];
 
 const PROJECTS = [
@@ -1480,10 +1496,14 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       const topics = (query.get("categories") ?? "").split(",").filter(Boolean);
       const scoreMin = Number(query.get("scoreMin") ?? 0);
       const scoreMax = Number(query.get("scoreMax") ?? 10);
+      const dateFrom = query.get("dateFrom");
       const held = new Set((query.get("exclude") ?? "").split(",").filter(Boolean));
 
-      const eligible = APPROVED.filter((a) => !a.editionCount && !held.has(a.id));
-      const matching = eligible.filter((a) => {
+      // Availability: what could still be added at all. The held ids belong here and
+      // the filters below do not, which is what the route does.
+      const available = APPROVED.filter((a) => !a.editionCount && !held.has(a.id));
+
+      const matching = available.filter((a) => {
         if (search && !`${a.title} ${a.summary ?? ""}`.toLowerCase().includes(search)) {
           return false;
         }
@@ -1493,6 +1513,10 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
         const score = a.relevanceScore;
         if ((scoreMin > 0 || scoreMax < 10) && score === null) return false;
         if (score !== null && (score < scoreMin || score > scoreMax)) return false;
+        // Over `publishedAt ?? capturedAt`, matching bestKnownDateRangeWhere: an
+        // article whose source gave no date is in range when it was captured in
+        // range. Filtering on publishedAt alone would drop every undated story.
+        if (dateFrom && (a.publishedAt ?? a.capturedAt) < dateFrom) return false;
         return true;
       });
 
@@ -1504,9 +1528,12 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
             .filter((p) => !held.has(p.id))
             .map((p, index) => ({ ...p, order: index + 1 })),
           articleTotal: matching.length,
-          // From the eligible set rather than the matching one, so a topic pill does
+          // What the filter is hiding, so the recency window cannot read as "that is
+          // everything there is".
+          eligibleTotal: available.length,
+          // From the available set rather than the matching one, so a topic pill does
           // not disappear the moment it is used.
-          categories: [...new Set(eligible.flatMap((a) => a.category))].sort(),
+          categories: [...new Set(available.flatMap((a) => a.category))].sort(),
         },
       });
     }

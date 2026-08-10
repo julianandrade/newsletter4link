@@ -734,7 +734,15 @@ export interface CandidatePool {
    * offers 50 while looking like it means everything.
    */
   articleTotal: number;
-  /** Every topic on an eligible article, for the filter pills. */
+  /**
+   * How many articles could be added at all, ignoring the current filter.
+   *
+   * The difference between this and `articleTotal` is what the filter is hiding, which
+   * is what lets the picker apply a default recency window without it reading as
+   * "that is everything there is".
+   */
+  eligibleTotal: number;
+  /** Every topic on an available article, for the filter pills. */
   categories: string[];
 }
 
@@ -815,7 +823,19 @@ export async function readCandidatePool(
   };
 
   /**
-   * Each narrowing is its own AND member rather than a key merged onto `eligible`.
+   * What could still be added at all, as opposed to what the current filter leaves.
+   *
+   * The held ids belong here rather than with the filters below, because they answer
+   * a different question. `available` is what the topic pills and the waiting total
+   * are counted over: a topic should stop being offered once the only story carrying
+   * it has been taken, but it must not disappear the moment it is filtered *by*.
+   */
+  const held = (options.excludeIds ?? []).filter(Boolean);
+  const available: Prisma.ArticleWhereInput =
+    held.length > 0 ? { AND: [eligible, { id: { notIn: held } }] } : eligible;
+
+  /**
+   * Each narrowing is its own AND member rather than a key merged onto `available`.
    *
    * Eligibility, the search and the date range each carry an `OR` of their own, and
    * merging would have every one silently replace the last: the search would replace
@@ -823,11 +843,6 @@ export async function readCandidatePool(
    * unnoticed because the result still looks like a plausible list.
    */
   const narrowing: Prisma.ArticleWhereInput[] = [];
-
-  const held = (options.excludeIds ?? []).filter(Boolean);
-  if (held.length > 0) {
-    narrowing.push({ id: { notIn: held } });
-  }
 
   if (term) {
     narrowing.push({
@@ -859,7 +874,7 @@ export async function readCandidatePool(
   if (dateRange) narrowing.push(dateRange as Prisma.ArticleWhereInput);
 
   const where: Prisma.ArticleWhereInput =
-    narrowing.length > 0 ? { AND: [eligible, ...narrowing] } : eligible;
+    narrowing.length > 0 ? { AND: [available, ...narrowing] } : available;
 
   const [ranking, projectRows, topicRows] = await Promise.all([
     /**
@@ -902,10 +917,11 @@ export async function readCandidatePool(
       orderBy: [{ featured: "desc" }, { projectDate: "desc" }],
       take: limit,
     }),
-    // The topic pills, over what is eligible rather than over what the filter left.
-    // Built from the filtered set they would disappear as they were used, so a
-    // second topic could never be added to the first.
-    db.article.findMany({ where: eligible, select: { category: true } }),
+    // The topic pills and the waiting total, over what is available rather than over
+    // what the filter left. Built from the filtered set the pills would disappear as
+    // they were used, so a second topic could never be added to the first, and the
+    // total would only ever repeat the number of rows already on screen.
+    db.article.findMany({ where: available, select: { category: true } }),
   ]);
 
   const pageIds = sortArticles(ranking, sort)
@@ -939,6 +955,8 @@ export async function readCandidatePool(
 
   return {
     articleTotal: ranking.length,
+    // Free: this is the read the topic pills already needed.
+    eligibleTotal: topicRows.length,
     categories: [...new Set(topicRows.flatMap((row) => row.category))].sort(),
     articles: articleRows.map((article) => ({
       id: article.id,

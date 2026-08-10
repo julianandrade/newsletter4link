@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bestKnownDate, bestKnownDateIso, describeDate } from "@/lib/articles/date";
+import {
+  POOL_RECENT_DAYS,
+  bestKnownDate,
+  bestKnownDateIso,
+  describeDate,
+  recentWindowFrom,
+} from "@/lib/articles/date";
 
 /**
  * Finding C1. `publishedAt` is nullable now, so every caller that orders, buckets or
@@ -54,6 +60,45 @@ describe("bestKnownDateIso", () => {
     expect(
       bestKnownDateIso({ publishedAt: null, capturedAt: "2026-08-06T09:00:00.000Z" })
     ).toBe("2026-08-06T09:00:00.000Z");
+  });
+});
+
+describe("recentWindowFrom", () => {
+  it("counts back the given number of days", () => {
+    expect(recentWindowFrom(new Date(2026, 7, 10), 60)).toBe("2026-06-11");
+  });
+
+  it("defaults to the pool's own window", () => {
+    expect(recentWindowFrom(new Date(2026, 7, 10))).toBe(
+      recentWindowFrom(new Date(2026, 7, 10), POOL_RECENT_DAYS)
+    );
+  });
+
+  it("crosses a year boundary", () => {
+    expect(recentWindowFrom(new Date(2026, 0, 10), 30)).toBe("2025-12-11");
+  });
+
+  it("pads a single-digit month and day", () => {
+    expect(recentWindowFrom(new Date(2026, 2, 10), 1)).toBe("2026-03-09");
+    expect(recentWindowFrom(new Date(2026, 0, 5), 1)).toBe("2026-01-04");
+  });
+
+  /**
+   * Local date parts, not `toISOString().slice(0, 10)`.
+   *
+   * Late in the evening east of Greenwich the UTC date is already tomorrow's, so the
+   * ISO form would name a day the reader has not reached yet and the window would be
+   * a day short. Asserted at 23:30 local, where the two forms disagree for anyone on
+   * a positive offset.
+   */
+  it("names the local day, not the UTC one", () => {
+    expect(recentWindowFrom(new Date(2026, 7, 10, 23, 30), 0)).toBe("2026-08-10");
+  });
+
+  it("does not mutate the date it is given", () => {
+    const now = new Date(2026, 7, 10);
+    recentWindowFrom(now, 60);
+    expect(now.getTime()).toBe(new Date(2026, 7, 10).getTime());
   });
 });
 

@@ -76,6 +76,37 @@ export function describeDate(article: {
  * row is in range if its publication date is, or if it has none and its capture time is.
  * Returns null when neither bound is set, so a caller can spread it unconditionally.
  */
+/**
+ * How far back the edition picker looks before you ask it to look further.
+ *
+ * Two months. News decays, so an approved story nobody used in eight weeks is
+ * almost never the thing an editor is hunting for, and leaving it in the default
+ * view means a hundred expired candidates competing with the twenty live ones.
+ * Long enough that a good evergreen explainer survives to the next edition.
+ */
+export const POOL_RECENT_DAYS = 60;
+
+/**
+ * The `dateFrom` for a "last N days" window, as the `yyyy-mm-dd` the filters speak.
+ *
+ * Takes `now` rather than reading a clock, so it is testable and so a caller has to
+ * decide when "now" is. That matters here: computed during a render it would be
+ * evaluated once on the server and again on the client, which is a hydration
+ * mismatch waiting to happen. The picker calls this inside its fetch instead.
+ *
+ * Local date parts rather than `toISOString().slice(0, 10)`, because the latter is
+ * UTC and would name yesterday for anyone east of Greenwich late in the evening.
+ */
+export function recentWindowFrom(now: Date, days: number = POOL_RECENT_DAYS): string {
+  const from = new Date(now);
+  from.setDate(from.getDate() - days);
+
+  const month = `${from.getMonth() + 1}`.padStart(2, "0");
+  const day = `${from.getDate()}`.padStart(2, "0");
+
+  return `${from.getFullYear()}-${month}-${day}`;
+}
+
 export function bestKnownDateRangeWhere(range: {
   from?: string | null;
   to?: string | null;

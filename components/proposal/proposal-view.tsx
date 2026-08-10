@@ -39,7 +39,7 @@ import {
   RadarPanel,
   SkeletonRows,
 } from "@/components/radar/controls";
-import { AddToProposal } from "./add-to-proposal";
+import { CandidateList } from "@/components/edition/candidate-list";
 import { sendConfirmation, sentBySentence } from "./copy";
 import {
   isEditable,
@@ -117,8 +117,15 @@ export function ProposalView({
         }
         actions={
           showControls ? (
-            <RadarButton onClick={() => setPicking(true)} disabled={busy}>
-              Add from what is waiting
+            // A toggle, not an opener: the panel it controls is on the page rather
+            // than over it, so pressing this again while it is open should close it
+            // rather than do nothing.
+            <RadarButton
+              onClick={() => setPicking((previous) => !previous)}
+              disabled={busy}
+              aria-expanded={picking}
+            >
+              {picking ? "Done adding" : "Add from what is waiting"}
             </RadarButton>
           ) : undefined
         }
@@ -195,6 +202,38 @@ export function ProposalView({
           </ol>
         )}
       </RadarPanel>
+
+      {/*
+        The pool, in the page rather than over it.
+
+        This was a dialog, and the accommodations it needed were the argument against
+        it: widened to `max-w-4xl` for the filter row, given its own scroll, and the
+        action bar's sticky positioning switched off because a modal has no viewport
+        to stick to. The edition builder hosts the identical list inline and needs
+        none of that. Rendered only while open, so the pool still costs nothing until
+        it is asked for.
+      */}
+      {picking && (
+        <RadarPanel
+          title="What is waiting"
+          note="Approved stories and featured projects that are not in this edition yet. Adding takes effect straight away."
+          actions={
+            <RadarButton onClick={() => setPicking(false)} disabled={busy}>
+              Close
+            </RadarButton>
+          }
+        >
+          <CandidateList
+            sections={["articles", "projects"]}
+            excludeIds={[
+              ...proposal.articles.map((article) => article.id),
+              ...proposal.projects.map((project) => project.id),
+            ]}
+            busy={busy}
+            onAdd={onAdd}
+          />
+        </RadarPanel>
+      )}
 
       {/* RQ-005 AC-6.6: projects get the same controls as stories. */}
       <RadarPanel
@@ -311,20 +350,6 @@ export function ProposalView({
           </RadarButton>
         </div>
       )}
-
-      <AddToProposal
-        open={picking}
-        onOpenChange={setPicking}
-        busy={busy}
-        excludeIds={[
-          ...proposal.articles.map((article) => article.id),
-          ...proposal.projects.map((project) => project.id),
-        ]}
-        onAdd={async (articles, projects) => {
-          await onAdd(articles, projects);
-          setPicking(false);
-        }}
-      />
 
       {/* RQ-005 AC-2.3: one confirmation, with the real numbers in it. */}
       <Dialog open={confirming} onOpenChange={(open) => !open && setConfirming(false)}>
