@@ -39,8 +39,14 @@ export async function GET(request: Request) {
 
     console.log("[CRON] Starting daily content collection for all organizations...");
 
-    // Get all organizations
+    /**
+     * Every live organization. Archived ones are skipped, because an organization that is
+     * hidden but still collecting is a bill with no reader: it spends model credits on
+     * articles nobody can open, and its scoring failures fill the job list of a product
+     * that has been parked.
+     */
     const organizations = await prisma.organization.findMany({
+      where: { archivedAt: null },
       select: { id: true, name: true },
     });
 

@@ -28,6 +28,23 @@ model Organization {
   // Custom domain (Enterprise)
   customDomain String? @unique
 
+  /**
+   * When this organization was wound down. Null means live.
+   *
+   * A nullable timestamp rather than a status enum, so archive and restore are the same
+   * write in opposite directions and there is no second field that can disagree with it.
+   *
+   * Archiving is not only a visibility flag: an archived organization is skipped by the
+   * scheduled jobs, and because `getUserOrganizations` filters on this column it can never
+   * become `currentOrg`, so every organization-scoped route already refuses it through the
+   * `requireOrgContext` it calls today. That is why there is no per-route send guard.
+   *
+   * It is also the only reversible step before a delete. `Organization` cascades into 19
+   * relations including editions already delivered to real inboxes, and this schema has no
+   * audit table, so a hard delete leaves no record that it happened.
+   */
+  archivedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -54,6 +71,7 @@ model Organization {
 
   @@index([slug])
   @@index([plan])
+  @@index([archivedAt])
 }
 
 enum Plan {

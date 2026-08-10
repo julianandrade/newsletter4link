@@ -133,10 +133,20 @@ async function fetchPendingContent(
   );
 }
 
-/** Every EMAIL source, across organizations, since an inbound email has no tenant. */
+/**
+ * Every EMAIL source, across organizations, since an inbound email has no tenant.
+ *
+ * Sources belonging to an archived organization are excluded. An inbound email is not
+ * rejected because of this: it still arrives and is still recorded, it simply matches no
+ * source for a parked organization and so produces no articles. That is the intended
+ * behaviour, since an archived organization has no dashboard on which to read them.
+ */
 async function loadEmailSources(): Promise<MatchableSource[]> {
   const sources = await prisma.rSSSource.findMany({
-    where: { type: "EMAIL" },
+    where: {
+      type: "EMAIL",
+      organization: { archivedAt: null },
+    },
     select: {
       id: true,
       organizationId: true,

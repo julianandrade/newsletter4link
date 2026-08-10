@@ -6,6 +6,7 @@ import { Organization, OrgRole, OrgUser, Plan } from "@prisma/client";
 import { getPlanFeatures, hasFeature, PlanFeatures } from "@/lib/plans/features";
 import { isAllowedEmail } from "@/lib/auth/allowed-domains";
 import { hasRoleAtLeast } from "@/lib/auth/roles";
+import { resolveSelectedOrg } from "@/lib/auth/select-org";
 
 const ORG_COOKIE_NAME = "selected_org_id";
 
@@ -44,11 +45,27 @@ export async function getSupabaseUser() {
 }
 
 /**
- * Get all organizations the current user is a member of
+ * Get all organizations the current user is a member of.
+ *
+ * Archived organizations are excluded, and that single filter is what makes archiving mean
+ * something rather than being a label. Because `currentOrg` is chosen from this list, an
+ * archived organization can never become the current one, so every organization-scoped
+ * route refuses it through the `requireOrgContext()` it already calls. There is therefore
+ * no per-route guard against acting on an archived organization, and none to forget on a
+ * route added later.
+ *
+ * A superadmin is not an exception here. Seeing every organization is what
+ * `/dashboard/platform` is for, and it reads through `requirePlatformContext()` and the raw
+ * client. Widening this function for a superadmin would mean inventing a membership row for
+ * organizations they are not in, and that fabricated row would then flow through
+ * `requireRole()` and every audit trail.
  */
 export async function getUserOrganizations(supabaseUserId: string) {
   const memberships = await prisma.orgUser.findMany({
-    where: { supabaseUserId },
+    where: {
+      supabaseUserId,
+      organization: { archivedAt: null },
+    },
     include: { organization: true },
   });
 
@@ -100,22 +117,39 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   const organizations = await getUserOrganizations(user.id);
   const selectedOrgId = await getSelectedOrgId();
 
-  // Find current org - either selected or first available
+  /**
+   * Which organization this request is for.
+   *
+   * The selection moved into `lib/auth/select-org.ts` because archiving created a case the
+   * old expression could not express. It did `selectedOrgId ? organizations.find(...) :
+   * organizations[0]` and left `currentOrg` null when the find missed, which is right for a
+   * membership that was removed and wrong for an organization archived while the user was
+   * sitting in it: they got a bare "Unauthorized: No organization selected" on a screen that
+   * worked a second earlier, recoverable only by clearing a cookie they cannot see.
+   */
+  const { selected, rewriteCookie } = resolveSelectedOrg(organizations, selectedOrgId);
+
   let currentOrg: OrgContext | null = null;
 
-  if (organizations.length > 0) {
-    const selected = selectedOrgId
-      ? organizations.find((o) => o.organization.id === selectedOrgId)
-      : organizations[0];
-
-    if (selected) {
-      currentOrg = {
-        organization: selected.organization,
-        membership: selected.membership,
-        features: getPlanFeatures(selected.organization.plan),
-        db: createTenantClient(selected.organization.id),
-      };
+  if (selected) {
+    if (rewriteCookie) {
+      /**
+       * Correcting the cookie is best effort, deliberately.
+       *
+       * `getAuthContext` is called from server components as well as route handlers, and
+       * Next refuses a cookie write during render. Swallowing that keeps a read-only page
+       * working: the fallback above has already chosen a usable organization, so the only
+       * cost of not persisting it is repeating this resolution on the next request.
+       */
+      await setSelectedOrgId(selected.organization.id).catch(() => {});
     }
+
+    currentOrg = {
+      organization: selected.organization,
+      membership: selected.membership,
+      features: getPlanFeatures(selected.organization.plan),
+      db: createTenantClient(selected.organization.id),
+    };
   }
 
   return {
