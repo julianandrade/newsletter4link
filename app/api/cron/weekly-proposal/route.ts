@@ -46,7 +46,14 @@ export async function GET(request: Request) {
 
     console.log(`[CRON] Topping up week ${week} of ${year} for all organizations...`);
 
+    /**
+     * Live organizations only. This is the filter that matters most of the four, because
+     * this job creates and tops up editions: without it an archived organization would keep
+     * accruing draft editions nobody can reach, since an archived organization can no longer
+     * become `currentOrg` and so has no dashboard.
+     */
     const organizations = await prisma.organization.findMany({
+      where: { archivedAt: null },
       select: { id: true, name: true },
     });
 

@@ -22,6 +22,17 @@ interface AppSidebarProps {
   user: User;
   /** Live counts rendered beside primary nav entries. */
   counts?: Partial<Record<"feed" | "editions" | "sources", number>>;
+  /**
+   * Whether to show the platform area.
+   *
+   * Computed on the server and passed down, because `SUPERADMIN_EMAILS` must not reach the
+   * client: prefixing it `NEXT_PUBLIC_` to read it here would publish the list of platform
+   * administrators to anyone who opens the bundle. A boolean is safe to send; the list is not.
+   *
+   * This only controls a link. The actual gate is `getPlatformContext()` in the platform
+   * layout and in every platform route, so a hand-typed URL is refused whatever this says.
+   */
+  isSuperAdmin?: boolean;
   /** Below lg the sidebar is an off-canvas drawer driven by the header. */
   mobileOpen?: boolean;
   onNavigate?: () => void;
@@ -57,11 +68,20 @@ const WORKSPACE = [
   { href: "/dashboard/subscribers", label: "Subscribers" },
 ];
 
+/**
+ * The platform area, appended to WORKSPACE only for a superadmin.
+ *
+ * Kept out of WORKSPACE rather than filtered inside it, so a future edit to that list
+ * cannot accidentally show this to everyone.
+ */
+const PLATFORM_ENTRY = { href: "/dashboard/platform", label: "Organizations" };
+
 export function AppSidebar({
   collapsed,
   onToggle,
   user,
   counts,
+  isSuperAdmin = false,
   mobileOpen = false,
   onNavigate,
 }: AppSidebarProps) {
@@ -190,7 +210,7 @@ export function AppSidebar({
             />
           )}
 
-          {WORKSPACE.map((item) => {
+          {(isSuperAdmin ? [...WORKSPACE, PLATFORM_ENTRY] : WORKSPACE).map((item) => {
             const active = isActive(item.href);
 
             const link = (

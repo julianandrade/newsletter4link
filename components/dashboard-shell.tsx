@@ -9,11 +9,20 @@ import type { User } from "@supabase/supabase-js";
 interface DashboardShellProps {
   children: React.ReactNode;
   user: User;
+  /**
+   * Passed through to the sidebar so it can show the platform area. Resolved in
+   * `app/dashboard/layout.tsx`, because the allowlist it comes from is server-only.
+   */
+  isSuperAdmin?: boolean;
 }
 
 const COLLAPSE_KEY = "radar:nav-collapsed";
 
-export function DashboardShell({ children, user }: DashboardShellProps) {
+export function DashboardShell({
+  children,
+  user,
+  isSuperAdmin = false,
+}: DashboardShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -79,6 +88,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
         collapsed={isDesktop ? collapsed : false}
         onToggle={toggleCollapsed}
         user={user}
+        isSuperAdmin={isSuperAdmin}
         mobileOpen={mobileOpen}
         onNavigate={() => setMobileOpen(false)}
       />
