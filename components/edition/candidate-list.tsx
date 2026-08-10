@@ -499,17 +499,35 @@ export function CandidateList({
               label={
                 selection.allSelected
                   ? "Clear selection"
-                  : `Select all ${visibleIds.length} rows on screen`
+                  : `Select all ${visibleIds.length} rows on this page`
               }
             />
+            {/*
+              "on this page", because the number beside it is the rows rendered and
+              not the size of the pool. Reported from production: a select-all reading
+              101 next to a pool of 164 looked like missing stories, and the line that
+              explained it was a hundred rows further down, off screen exactly when the
+              label was being read. The window makes that sharper rather than softer,
+              since visible and eligible now diverge before anyone touches a filter.
+            */}
             <span className="text-[12.5px] text-radar-ink2">
               {selection.count > 0
                 ? `${selection.count} of ${visibleIds.length} selected`
-                : `Select all ${visibleIds.length}`}
+                : `Select all ${visibleIds.length} on this page`}
             </span>
-            <span className="ml-auto text-[11.5px] text-radar-ink3">
-              Shift-click to select a range · Esc to clear
-            </span>
+            {showArticles && (
+              <span className="ml-auto text-[11.5px] text-radar-ink3">
+                Showing <Num>{articles.length}</Num> of{" "}
+                <Num>{pool.articleTotal}</Num>{" "}
+                {pool.articleTotal === pool.eligibleTotal ? "waiting" : "that match"}
+                {pool.eligibleTotal > pool.articleTotal && (
+                  <>
+                    {" · "}
+                    <Num>{pool.eligibleTotal}</Num> waiting in all
+                  </>
+                )}
+              </span>
+            )}
           </div>
 
           {showArticles && articles.length > 0 && (
@@ -532,26 +550,16 @@ export function CandidateList({
             first hundred".
           */}
           {/*
-            Three numbers, because any two of them can mislead. The rows on screen,
-            what the filter matched, and what is waiting in total: without the last,
-            a default recency window reads as "that is everything there is", which is
-            the same lie the old `take: 50` told.
+            The counts moved up beside the select-all label, which is where they are
+            needed. What is left here is the keyboard hint and, when the page is not
+            the whole set, what to do about it.
           */}
-          {showArticles && (
-            <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3">
-              Showing <Num>{articles.length}</Num> of{" "}
-              <Num>{pool.articleTotal}</Num>{" "}
-              {pool.articleTotal === pool.eligibleTotal ? "waiting" : "that match"}
-              {pool.articleTotal > articles.length &&
-                " · narrow the filters to reach the rest"}
-              {pool.eligibleTotal > pool.articleTotal && (
-                <>
-                  {" · "}
-                  <Num>{pool.eligibleTotal}</Num> approved and waiting in all
-                </>
-              )}
-            </p>
-          )}
+          <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3">
+            Shift-click to select a range · Esc to clear
+            {showArticles &&
+              pool.articleTotal > articles.length &&
+              " · narrow the filters to reach the rest"}
+          </p>
         </>
       )}
 
