@@ -898,6 +898,19 @@ export async function readCandidatePool(
         relevanceScore: true,
       },
     }),
+    /**
+     * Every project not already in an edition, featured or not.
+     *
+     * Deliberately wider than `readProjectCandidates`, which feeds the automatic
+     * top-up and does filter `featured: true`. The asymmetry is the point: a machine
+     * assembling an edition unattended should only reach for what someone marked as
+     * showable, and a person choosing by hand should not be prevented from including
+     * a project nobody remembered to flag.
+     *
+     * It is recorded here because the two read as drift otherwise, and because the
+     * picker's own copy claimed "featured projects" for months while offering
+     * unfeatured ones.
+     */
     db.project.findMany({
       where: {
         editions: { none: {} },

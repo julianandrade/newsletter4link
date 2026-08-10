@@ -216,7 +216,14 @@ export function ProposalView({
       {picking && (
         <RadarPanel
           title="What is waiting"
-          note="Approved stories and featured projects that are not in this edition yet. Adding takes effect straight away."
+          /*
+            Both nouns in the old wording were wrong, which a parallel session caught
+            against production. The pool offers `PENDING_REVIEW` stories at or above
+            the organization's threshold as well as approved ones, and the project
+            query only *orders* by `featured`, it does not filter on it, so it was
+            calling 17 unjudged stories approved and one unfeatured project featured.
+          */
+          note="Stories you have approved, or that scored above your threshold, and projects not in this edition yet. Adding takes effect straight away."
           actions={
             <RadarButton onClick={() => setPicking(false)} disabled={busy}>
               Close
