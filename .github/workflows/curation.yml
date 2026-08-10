@@ -1,0 +1,134 @@
+# The second daily firing of the scheduled jobs.
+#
+# It exists because this project's Vercel account is on Hobby, where a cron is capped at
+# once per day and a sub-daily expression fails the *build*, not the run. That is not a
+# theoretical limit here: `15 */4 * * *` on email-ingest silently broke every deployment
+# for days, so the route was never deployed and the job had never once run.
+#
+# So `vercel.json` keeps the morning firing and this keeps the evening one. Both call the
+# same routes with the same credential, and both are safe to repeat: an article already
+# seen is counted as a duplicate rather than written again, and email-ingest claims rows
+# with a lease so two runs cannot process the same email twice.
+#
+# Move these schedules into `vercel.json` and delete this file if the account ever goes
+# Pro. One scheduler is better than two; two is better than one that cannot fire.
+
+name: Scheduled curation
+
+on:
+  schedule:
+    # UTC, always. GitHub Actions has no timezone setting, and neither does Vercel Cron.
+    #
+    # Both are deliberately offset from the Vercel firings rather than doubled up. Vercel
+    # takes the morning (05:30 ingest, 09:00 collection) and this takes the evening, so a
+    # failure in one half of the day still leaves the other half to catch the work.
+    #
+    # :07 rather than :00 because GitHub queues scheduled workflows and the top of the
+    # hour is the most contended minute there. A late run is fine; a skipped one is not.
+    - cron: "7 17 * * *" # email-ingest, evening
+    - cron: "7 21 * * *" # daily-collection, evening
+
+  # A manual button, so "is the job actually working" is answerable in thirty seconds
+  # without waiting for a schedule or holding a secret locally.
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - daily-collection
+          - email-ingest
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # A curation pass over fifteen feeds with model scoring can sit near the route's own
+    # 300-second ceiling. This is the client's patience, well above that, so a slow run is
+    # reported by the route rather than cut off here.
+    timeout-minutes: 15
+
+    steps:
+      - name: Decide what this firing runs
+        id: plan
+        env:
+          # Which cron matched, on a schedule run. Empty on workflow_dispatch.
+          SCHEDULE: ${{ github.event.schedule }}
+          CHOICE: ${{ inputs.job }}
+        run: |
+          set -euo pipefail
+
+          case "${SCHEDULE}" in
+            "7 17 * * *") jobs="email-ingest" ;;
+            "7 21 * * *") jobs="daily-collection" ;;
+            # No schedule means a hand-pressed run.
+            "")           jobs="${CHOICE:-both}" ;;
+            *)            jobs="both" ;;
+          esac
+
+          if [ "$jobs" = "both" ]; then
+            jobs="email-ingest daily-collection"
+          fi
+
+          echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
+          echo "Running: $jobs"
+
+      - name: Call the scheduled routes
+        env:
+          # Same secret Vercel sends on its own cron invocations. `lib/auth/cron.ts` fails
+          # closed on a missing one, so an unset secret here is a 503 and no work, never an
+          # unauthenticated run.
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # The production alias, not a deployment URL. Deployment URLs sit behind Vercel's
+          # deployment protection and answer 302 to an SSO page, which is how an earlier
+          # self-handover in this codebase fired into nothing for four minutes without
+          # logging a thing.
+          BASE_URL: ${{ vars.CRON_BASE_URL || 'https://newsletter4link.vercel.app' }}
+          JOBS: ${{ steps.plan.outputs.jobs }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::CRON_SECRET is not set on this repository. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          failed=0
+
+          for job in ${JOBS}; do
+            url="${BASE_URL}/api/cron/${job}?trigger=github-actions"
+            echo "::group::${job}"
+            echo "POST-equivalent GET ${BASE_URL}/api/cron/${job}"
+
+            # Body and status are captured separately so a failure reports what the route
+            # actually said. `--fail` is not used: a 401 or 503 body is the diagnosis, and
+            # curl would throw it away.
+            #
+            # A redirect is a refusal here, never something to follow: the only thing that
+            # redirects this request is an authentication wall in front of the route.
+            status=$(curl -sS \
+              --max-time 600 \
+              --retry 2 \
+              --retry-connrefused \
+              --no-location \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              -o response.json \
+              -w '%{http_code}' \
+              "${url}") || status="000"
+
+            echo "HTTP ${status}"
+            # Truncated: a collection run's JSON carries a row per organization and the
+            # useful part is the head of it.
+            head -c 2000 response.json || true
+            echo
+
+            if [ "${status}" != "200" ]; then
+              echo "::error::${job} answered ${status}"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+
+          exit "${failed}"

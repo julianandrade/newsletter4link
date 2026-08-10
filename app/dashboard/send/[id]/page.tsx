@@ -71,6 +71,7 @@ import {
   ExternalLink,
   RefreshCw,
   Globe,
+  Sparkles,
 } from "lucide-react";
 import { Checkbox } from "@/components/radar/compat";
 import { Input } from "@/components/radar/compat";
@@ -1098,26 +1099,6 @@ export default function EditionDetailPage() {
           </Callout>
         )}
 
-        {/*
-          The closing block, above the readiness checklist rather than inside it.
-
-          It is not a readiness condition: an edition with no closing block is a complete
-          edition and sends without one. Putting it in the checklist would have said
-          otherwise.
-        */}
-        {edition && (
-          <div className="mb-6">
-            <AsidePicker
-              editionId={edition.id}
-              selectedId={edition.asideId ?? null}
-              readOnly={!isEditable && !isFinalized}
-              onChange={(asideId) =>
-                setEdition((current) => (current ? { ...current, asideId } : current))
-              }
-            />
-          </div>
-        )}
-
         {/* Send Readiness */}
         <Card className="mb-6">
           <CardHeader className="pb-3">
@@ -1978,6 +1959,15 @@ export default function EditionDetailPage() {
                 <Briefcase className="w-4 h-4" />
                 Projects ({(sentProjectList ?? selectedProjectIds).length})
               </TabsTrigger>
+              {/*
+                The closing block picks one row or none, so its count is 0 or 1 rather
+                than a length. It is still counted, because a tab that never shows a
+                number next to two that always do reads as a different kind of thing.
+              */}
+              <TabsTrigger value="aside" className="gap-2">
+                <Sparkles className="w-4 h-4" />
+                One more thing ({edition?.asideId ? 1 : 0})
+              </TabsTrigger>
             </TabsList>
 
           <TabsContent value="articles">
@@ -2104,6 +2094,31 @@ export default function EditionDetailPage() {
                 selectedIds={selectedProjectIds}
                 onSelectionChange={handleProjectSelectionChange}
                 initialProjects={selectedProjects}
+              />
+            )}
+          </TabsContent>
+
+          {/*
+            The closing block, a third tab beside the two other things an edition picks.
+
+            It is deliberately not in the Send Readiness checklist: an edition with no
+            closing block is a complete edition and sends without one, and listing it
+            there would have said otherwise.
+
+            AsidePicker carries its own read-only branch, so a sent edition needs no
+            separate frozen view the way articles and projects do. There is no snapshot
+            to fall back to either: the sent aside is the row `edition.asideId` still
+            points at.
+          */}
+          <TabsContent value="aside">
+            {edition && (
+              <AsidePicker
+                editionId={edition.id}
+                selectedId={edition.asideId ?? null}
+                readOnly={!isEditable && !isFinalized}
+                onChange={(asideId) =>
+                  setEdition((current) => (current ? { ...current, asideId } : current))
+                }
               />
             )}
           </TabsContent>

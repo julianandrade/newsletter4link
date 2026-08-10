@@ -1,7 +1,81 @@
 # Where we are, and how to pick this up
 
-Written 6 August 2026, updated 9 August. Everything is committed and pushed,
-production is deployed and healthy, and nothing is left running.
+Written 6 August 2026, updated 10 August. Production is deployed and healthy and
+nothing is left running, but **the 10 August work below is uncommitted and needs one
+manual step from Julian** before it does anything.
+
+---
+
+## The scheduled jobs, and the closing slot's tab
+
+**10 August 2026. Uncommitted. `tsc` clean, 1345 unit tests passing.**
+
+### The crons were running the whole time
+
+Julian asked why the curation jobs were not running twice a day. They were running,
+once a day, which is the most this account can do. The evidence, from the production
+database rather than from logs:
+
+- `radar-collect` fired every day: 05:19, 05:27, 05:43, 05:29 UTC on 6 to 9 August.
+- `daily-collection` stamped all 15 active RSS sources at **9 August 08:47 UTC** and
+  produced 45 articles that day.
+
+**Do not use Vercel runtime logs to answer this question.** Hobby retains them for one
+hour, so a query over three days returns nothing and reads exactly like a job that never
+fired. It is not evidence of anything. Use `RSSSource.lastFetchedAt` and
+`SignalPoint.collectedAt`, which are real per-run heartbeats.
+
+**Do not use `CurationJob` to answer it either, before this change.** The cron called
+`runCurationPipeline`, which never wrote a row; only the dashboard's streaming path did.
+That is the whole reason this looked broken: `/dashboard/curation` had shown nothing since
+7 August while the job worked every morning.
+
+### What changed
+
+**1. `daily-collection` now writes a `CurationJob` row per organization**, opened before
+the work and closed after it, with the trigger recorded in the job's own log. Errors go on
+the job as log entries, not only to the platform log that is gone within the hour.
+
+Deliberately **not** guarded by `getCurrentJob()`: that lock is global rather than
+per-organization, so a manual run left mid-flight would make the scheduled run skip every
+organization silently, which is the exact failure this is fixing. Running twice only
+inflates the duplicate count.
+
+**2. `.github/workflows/curation.yml` adds the second daily firing**, because a
+sub-daily expression in `vercel.json` fails the build on Hobby. Vercel keeps the morning
+(05:30 ingest, 09:00 collection), the workflow takes the evening (17:07 ingest, 21:07
+collection). Offset rather than doubled up, so a failure in one half of the day leaves the
+other half to catch the work. It has a `workflow_dispatch` button, so "is this actually
+working" is answerable in thirty seconds without holding the secret locally.
+
+**3. The closing block is now a third tab** beside `Articles (n)` and `Projects (n)` in
+the edition builder, rather than a panel above the readiness checklist. Same
+icon-label-count shape. Its count is 0 or 1, because the edition points at one row or
+none. It is still absent from Send Readiness on purpose: an edition with no closing block
+is a complete edition and sends without one.
+
+Consequence worth knowing: like the other two tabs, it is not reachable in Unlayer
+**Edit Layout** mode. That is the existing behaviour of this screen, not a new limitation,
+but the closing block is a merge tag and does render in a template built there.
+
+### The one step nobody else can take
+
+**Add `CRON_SECRET` as a GitHub Actions secret** on `julianandrade/newsletter4link`,
+under Settings > Secrets and variables > Actions, with the same value the Vercel project
+holds. The workflow fails loudly with a named error if it is missing rather than running
+unauthenticated. Until that exists and the branch is pushed, the evening firings do not
+happen and nothing else changes.
+
+Scheduled workflows only run on the default branch, so this needs to reach `master`.
+
+### Not verified end to end
+
+The job-row lifecycle was exercised against the real schema and confirmed to land at the
+top of the dashboard's list query, but **the full cron route has not run with the new code
+in production** — that costs a real curation pass and model credits, and it needs the
+deploy first. The GitHub Actions workflow has never fired, for the same reason. The curl
+invocation it uses was tested against the production alias and correctly reported `401`
+with the body intact on a bad secret.
 
 ---
 
