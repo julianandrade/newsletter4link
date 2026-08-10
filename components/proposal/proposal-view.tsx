@@ -316,6 +316,10 @@ export function ProposalView({
         open={picking}
         onOpenChange={setPicking}
         busy={busy}
+        excludeIds={[
+          ...proposal.articles.map((article) => article.id),
+          ...proposal.projects.map((project) => project.id),
+        ]}
         onAdd={async (articles, projects) => {
           await onAdd(articles, projects);
           setPicking(false);

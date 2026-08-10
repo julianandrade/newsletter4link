@@ -33,7 +33,9 @@ import {
   editionWriteFields,
   weeklySlotFor,
 } from "@/lib/editions/identity";
-import { bestKnownDate } from "@/lib/articles/date";
+import { bestKnownDate, bestKnownDateRangeWhere } from "@/lib/articles/date";
+import { sortArticles, type ArticleSortField } from "@/lib/articles/sort";
+import type { SortRequest } from "@/lib/list-sort";
 
 /** RQ-005 section 2.2 of the specification: product-owner defaults. */
 export const PROPOSAL_ARTICLE_TARGET = 10;
@@ -724,7 +726,43 @@ export const CANDIDATE_POOL_MAX = 100;
 export interface CandidatePool {
   articles: ProposalArticle[];
   projects: ProposalProject[];
+  /**
+   * How many articles match, before the page cap.
+   *
+   * The picker shows this next to the number of rows it received. Without it the
+   * cap is invisible: with 128 waiting and a limit of 50, a "select all" button
+   * offers 50 while looking like it means everything.
+   */
+  articleTotal: number;
+  /** Every topic on an eligible article, for the filter pills. */
+  categories: string[];
 }
+
+export interface CandidatePoolOptions {
+  search?: string | null;
+  categories?: string[];
+  /**
+   * Ids the caller is already holding, on top of the "not in any edition" rule.
+   *
+   * The edition builder stages an add locally and only writes on Save Draft, so
+   * between the two the row is still in no edition and the pool would keep offering
+   * it. Excluded here rather than in the browser so `articleTotal` counts the same
+   * set the rows come from.
+   */
+  excludeIds?: string[];
+  scoreMin?: number | null;
+  scoreMax?: number | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  sort?: SortRequest<ArticleSortField>;
+  limit?: number;
+}
+
+/** Score first, which is how the assembler ranks and how an editor reads the pool. */
+export const CANDIDATE_POOL_SORT_DEFAULT: SortRequest<ArticleSortField> = {
+  field: "relevanceScore",
+  direction: "desc",
+};
 
 /** A limit outside the allowed range is clamped rather than refused: the caller
  *  asked for a page size, not for a policy, and a 400 here would only break the
@@ -753,13 +791,19 @@ export function clampPoolLimit(raw: string | null): number {
  *
  * `order` is zero on everything here. These rows are not in an edition yet, and
  * the caller assigns position when it adds them.
+ *
+ * The filters are the same set `/api/articles/pending` accepts, and they run here
+ * rather than in the browser for one reason: the pool is capped. Narrowing fifty
+ * rows client-side when a hundred and twenty-eight match is narrowing the wrong
+ * set, and it reports the wrong count for the one it narrowed.
  */
 export async function readCandidatePool(
   db: TenantClient,
-  options: { search?: string | null; limit?: number } = {}
+  options: CandidatePoolOptions = {}
 ): Promise<CandidatePool> {
   const limit = options.limit ?? CANDIDATE_POOL_LIMIT;
   const term = options.search?.trim();
+  const sort = options.sort ?? CANDIDATE_POOL_SORT_DEFAULT;
   const threshold = await readRelevanceThreshold(db);
 
   const eligible: Prisma.ArticleWhereInput = {
@@ -770,34 +814,82 @@ export async function readCandidatePool(
     ],
   };
 
-  const matchesTerm: Prisma.ArticleWhereInput | undefined = term
-    ? {
-        OR: [
-          { title: { contains: term, mode: "insensitive" } },
-          { summary: { contains: term, mode: "insensitive" } },
-        ],
-      }
-    : undefined;
+  /**
+   * Each narrowing is its own AND member rather than a key merged onto `eligible`.
+   *
+   * Eligibility, the search and the date range each carry an `OR` of their own, and
+   * merging would have every one silently replace the last: the search would replace
+   * eligibility, and the range would replace the search. Two of the three would go
+   * unnoticed because the result still looks like a plausible list.
+   */
+  const narrowing: Prisma.ArticleWhereInput[] = [];
 
-  const [articleRows, projectRows] = await Promise.all([
-    db.article.findMany({
-      // AND, not a merged OR: the eligibility test and the search are separate
-      // questions, and flattening them would let the search reach articles that
-      // are not eligible at all.
-      where: matchesTerm ? { AND: [eligible, matchesTerm] } : eligible,
-      orderBy: [
-        { relevanceScore: { sort: "desc", nulls: "last" } },
-        // publishedAt is nullable now, so nulls last: without it an undated article
-        // sorts to the front of a descending order in Postgres and displaces a dated one
-        // out of the limit. Finding C1.
-        { publishedAt: { sort: "desc", nulls: "last" } },
-        { capturedAt: "desc" },
+  const held = (options.excludeIds ?? []).filter(Boolean);
+  if (held.length > 0) {
+    narrowing.push({ id: { notIn: held } });
+  }
+
+  if (term) {
+    narrowing.push({
+      OR: [
+        { title: { contains: term, mode: "insensitive" } },
+        { summary: { contains: term, mode: "insensitive" } },
       ],
-      take: limit,
+    });
+  }
+
+  const topics = (options.categories ?? []).filter(Boolean);
+  if (topics.length > 0) {
+    narrowing.push({ category: { hasSome: topics } });
+  }
+
+  const scoreMin = options.scoreMin ?? 0;
+  const scoreMax = options.scoreMax ?? 10;
+  if (scoreMin > 0 || scoreMax < 10) {
+    // An unscored article drops out of any range on purpose: it has no score to be
+    // inside one. That an APPROVED article qualifies without a score is a different
+    // question, asked and answered by `eligible` above.
+    narrowing.push({ relevanceScore: { gte: scoreMin, lte: scoreMax } });
+  }
+
+  const dateRange = bestKnownDateRangeWhere({
+    from: options.dateFrom,
+    to: options.dateTo,
+  });
+  if (dateRange) narrowing.push(dateRange as Prisma.ArticleWhereInput);
+
+  const where: Prisma.ArticleWhereInput =
+    narrowing.length > 0 ? { AND: [eligible, ...narrowing] } : eligible;
+
+  const [ranking, projectRows, topicRows] = await Promise.all([
+    /**
+     * Pass one: every matching row, sort columns only.
+     *
+     * The order has to be decided over the whole set rather than by the database.
+     * `date` is `publishedAt ?? capturedAt`, which Prisma cannot express as an
+     * `orderBy`, and `source` is a publication name derived from the URL with no
+     * column behind it at all. Ordering after the `take` would only reorder
+     * whichever rows the cut happened to keep, which is the defect
+     * `lib/articles/sort.ts` exists to remove.
+     */
+    db.article.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        sourceUrl: true,
+        publishedAt: true,
+        capturedAt: true,
+        relevanceScore: true,
+      },
     }),
     db.project.findMany({
       where: {
         editions: { none: {} },
+        // The caller hands one list of held ids for both kinds. Ids are cuids, so an
+        // article's can never match a project's and the filter is a no-op on the
+        // side it was not meant for.
+        ...(held.length > 0 ? { id: { notIn: held } } : {}),
         ...(term
           ? {
               OR: [
@@ -810,9 +902,44 @@ export async function readCandidatePool(
       orderBy: [{ featured: "desc" }, { projectDate: "desc" }],
       take: limit,
     }),
+    // The topic pills, over what is eligible rather than over what the filter left.
+    // Built from the filtered set they would disappear as they were used, so a
+    // second topic could never be added to the first.
+    db.article.findMany({ where: eligible, select: { category: true } }),
   ]);
 
+  const pageIds = sortArticles(ranking, sort)
+    .slice(0, limit)
+    .map((row) => row.id);
+
+  // Pass two: the full rows for the page. `findMany` answers an `in` in its own
+  // order, so the page order is reapplied from `pageIds` below.
+  const pageRows = pageIds.length
+    ? await db.article.findMany({
+        where: { id: { in: pageIds } },
+        select: {
+          id: true,
+          title: true,
+          sourceUrl: true,
+          author: true,
+          publishedAt: true,
+          capturedAt: true,
+          relevanceScore: true,
+          summary: true,
+          category: true,
+          status: true,
+        },
+      })
+    : [];
+
+  const byId = new Map(pageRows.map((row) => [row.id, row]));
+  const articleRows = pageIds
+    .map((id) => byId.get(id))
+    .filter((row): row is (typeof pageRows)[number] => row !== undefined);
+
   return {
+    articleTotal: ranking.length,
+    categories: [...new Set(topicRows.flatMap((row) => row.category))].sort(),
     articles: articleRows.map((article) => ({
       id: article.id,
       title: article.title,

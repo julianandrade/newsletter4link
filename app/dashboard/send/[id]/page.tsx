@@ -5,8 +5,18 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { AsidePicker } from "@/components/aside-picker";
-import { EditionArticlePicker, Article } from "@/components/edition-article-picker";
-import { EditionProjectPicker, Project } from "@/components/edition-project-picker";
+import { CandidateList } from "@/components/edition/candidate-list";
+import { EditionOrderList } from "@/components/edition/edition-order-list";
+/**
+ * The pool's row shape is the builder's row shape. They used to be two interfaces that
+ * had already drifted: the picker's declared `publishedAt` non-null months after the
+ * column became nullable, and carried no `capturedAt`, so a story whose source gave no
+ * date had nothing honest to show.
+ */
+import type {
+  ProposalArticle as Article,
+  ProposalProject as Project,
+} from "@/components/proposal/state";
 import { EditionUnlayerEditor, EditionUnlayerEditorRef } from "@/components/edition-unlayer-editor";
 import { replaceContentMergeTags, type Article as ContentArticle, type Project as ContentProject } from "@/lib/email/content-renderer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/radar/compat";
@@ -16,6 +26,8 @@ import {
   PageHeading,
   RadarButton,
   RadarMain,
+  SectionLabel,
+  SourceStamp,
 } from "@/components/radar/primitives";
 import {
   Callout,
@@ -2019,12 +2031,55 @@ export default function EditionDetailPage() {
                 </CardContent>
               </Card>
             ) : (
-              // Editable view for draft/finalized editions
-              <EditionArticlePicker
-                selectedIds={selectedArticleIds}
-                onSelectionChange={handleArticleSelectionChange}
-                initialArticles={selectedArticles}
-              />
+              // Editable view for draft/finalized editions.
+              //
+              // Order on top, the waiting pool full width below it. The pool is the
+              // long list, so it gets the width; the edition is the short one and
+              // stays visible above it, which is how you see it grow as you add.
+              <div className="flex flex-col gap-6">
+                <EditionOrderList
+                  items={selectedArticles}
+                  onChange={(next) =>
+                    handleArticleSelectionChange(
+                      next.map((article) => article.id),
+                      next
+                    )
+                  }
+                  title={(article) => article.title}
+                  empty="No stories in this edition yet. Pick from what is waiting below."
+                  renderItem={(article) => (
+                    <>
+                      <SourceStamp
+                        sourceUrl={article.sourceUrl}
+                        publishedAt={article.publishedAt}
+                        capturedAt={article.capturedAt}
+                      />
+                      <span className="font-editorial block text-[14px] leading-[1.3] text-radar-ink text-pretty">
+                        {article.title}
+                      </span>
+                    </>
+                  )}
+                />
+
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Waiting</SectionLabel>
+                  <CandidateList
+                    sections={["articles"]}
+                    // Staged adds are not written until Save Draft, so without this
+                    // the pool would keep offering what is already sitting above.
+                    excludeIds={selectedArticleIds}
+                    onAdd={(articles) =>
+                      handleArticleSelectionChange(
+                        [
+                          ...selectedArticleIds,
+                          ...articles.map((article) => article.id),
+                        ],
+                        [...selectedArticles, ...articles]
+                      )
+                    }
+                  />
+                </div>
+              </div>
             )}
           </TabsContent>
 
@@ -2090,11 +2145,46 @@ export default function EditionDetailPage() {
               </Card>
             ) : (
               // Editable view for draft/finalized editions
-              <EditionProjectPicker
-                selectedIds={selectedProjectIds}
-                onSelectionChange={handleProjectSelectionChange}
-                initialProjects={selectedProjects}
-              />
+              <div className="flex flex-col gap-6">
+                <EditionOrderList
+                  items={selectedProjects}
+                  onChange={(next) =>
+                    handleProjectSelectionChange(
+                      next.map((project) => project.id),
+                      next
+                    )
+                  }
+                  title={(project) => project.name}
+                  empty="No projects in this edition yet. Pick from what is waiting below."
+                  renderItem={(project) => (
+                    <>
+                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-radar-ink3">
+                        {project.team}
+                      </span>
+                      <span className="font-editorial block text-[14px] leading-[1.3] text-radar-ink text-pretty">
+                        {project.name}
+                      </span>
+                    </>
+                  )}
+                />
+
+                <div className="flex flex-col gap-2.5">
+                  <SectionLabel>Waiting</SectionLabel>
+                  <CandidateList
+                    sections={["projects"]}
+                    excludeIds={selectedProjectIds}
+                    onAdd={(_articles, projects) =>
+                      handleProjectSelectionChange(
+                        [
+                          ...selectedProjectIds,
+                          ...projects.map((project) => project.id),
+                        ],
+                        [...selectedProjects, ...projects]
+                      )
+                    }
+                  />
+                </div>
+              </div>
             )}
           </TabsContent>
 
