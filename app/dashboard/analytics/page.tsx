@@ -26,10 +26,13 @@ import {
   thClass,
   trClass,
 } from "@/components/radar/controls";
+import { SortableTh, type SortState } from "@/components/radar/sortable";
+import { sortBy } from "@/lib/list-sort";
 import { sourceIdentity } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
 
 type DateRange = "7d" | "14d" | "30d" | "90d" | "custom";
+type TimelineSortField = "date" | "opens" | "clicks";
 
 interface Edition {
   id: string;
@@ -172,6 +175,10 @@ export default function AnalyticsPage() {
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [segmentBy, setSegmentBy] = useState<"language" | "style">("language");
   const [showTimelineTable, setShowTimelineTable] = useState(false);
+  const [timelineSort, setTimelineSort] = useState<SortState<TimelineSortField>>({
+    field: "date",
+    direction: "asc",
+  });
 
   useEffect(() => {
     // Only fetch when not in custom mode, or when both custom dates are filled
@@ -217,6 +224,25 @@ export default function AnalyticsPage() {
 
   const metrics = data?.metrics || EMPTY_METRICS;
   const timeline = data?.timeline ?? [];
+
+  /**
+   * The numbers view is a table, so its headers order it.
+   *
+   * Sorted in the browser, and that is not the shortcut it looks like: the whole series is
+   * already here, uncapped and unpaginated, because the chart beside it needs every point.
+   * There is no slice to mistake for the whole. Every list that does have a slice sorts on
+   * the server.
+   *
+   * `date` stays the chart's order regardless. A chart with a time axis sorted by opens is
+   * not a chart.
+   */
+  const sortedTimeline = useMemo(
+    () =>
+      timelineSort.field === "date" && timelineSort.direction === "asc"
+        ? timeline
+        : sortBy(timeline, (day) => day[timelineSort.field], timelineSort.direction),
+    [timeline, timelineSort]
+  );
   const segments = useMemo(() => {
     if (!data?.segmentation) return [];
     return segmentBy === "language"
@@ -412,19 +438,36 @@ export default function AnalyticsPage() {
                     <caption className="sr-only">Opens and clicks by day</caption>
                     <thead>
                       <tr className={theadClass}>
-                        <th scope="col" className={thClass}>
+                        <SortableTh
+                          field="date"
+                          sort={timelineSort}
+                          onSort={setTimelineSort}
+                          defaultDirection="asc"
+                        >
                           Day
-                        </th>
-                        <th scope="col" className={cn(thClass, "text-right")}>
+                        </SortableTh>
+                        <SortableTh
+                          field="opens"
+                          sort={timelineSort}
+                          onSort={setTimelineSort}
+                          defaultDirection="desc"
+                          align="right"
+                        >
                           Opens
-                        </th>
-                        <th scope="col" className={cn(thClass, "text-right")}>
+                        </SortableTh>
+                        <SortableTh
+                          field="clicks"
+                          sort={timelineSort}
+                          onSort={setTimelineSort}
+                          defaultDirection="desc"
+                          align="right"
+                        >
                           Clicks
-                        </th>
+                        </SortableTh>
                       </tr>
                     </thead>
                     <tbody>
-                      {timeline.map((day) => (
+                      {sortedTimeline.map((day) => (
                         <tr key={day.date} className={trClass}>
                           <td className={tdClass}>{shortDate(day.date)}</td>
                           <td className={cn(tdClass, "text-right")}>

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { Prisma } from "@prisma/client";
+import { parseSort } from "@/lib/list-sort";
+import { bestKnownDateRangeWhere } from "@/lib/articles/date";
+import {
+  ARTICLE_SORT_ALIASES,
+  ARTICLE_SORT_FIELDS,
+  sortArticles,
+} from "@/lib/articles/sort";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +22,8 @@ export const dynamic = "force-dynamic";
  * - scoreMax: Maximum relevance score (default: 10)
  * - dateFrom: Published after date (ISO string)
  * - dateTo: Published before date (ISO string)
- * - sortBy: Field to sort by (relevanceScore, publishedAt, title)
+ * - sortBy: date, relevanceScore, title, source, capturedAt
+ *           (`publishedAt` is accepted and means `date`)
  * - sortOrder: asc or desc
  */
 export async function GET(request: NextRequest) {
@@ -33,8 +41,13 @@ export async function GET(request: NextRequest) {
     const scoreMax = parseFloat(searchParams.get("scoreMax") || "10");
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
-    const sortBy = searchParams.get("sortBy") || "relevanceScore";
-    const sortOrder = searchParams.get("sortOrder") || "desc";
+
+    const sort = parseSort(
+      searchParams,
+      ARTICLE_SORT_FIELDS,
+      { field: "relevanceScore", direction: "desc" },
+      ARTICLE_SORT_ALIASES
+    );
 
     // Build where clause
     const where: Prisma.ArticleWhereInput = {
@@ -62,43 +75,31 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Date range filter
-    if (dateFrom || dateTo) {
-      where.publishedAt = {};
-      if (dateFrom) {
-        where.publishedAt.gte = new Date(dateFrom);
-      }
-      if (dateTo) {
-        // Add one day to include the end date
-        const endDate = new Date(dateTo);
-        endDate.setDate(endDate.getDate() + 1);
-        where.publishedAt.lte = endDate;
-      }
+    // Date range filter, over the same value the Date column shows. `publishedAt` alone
+    // never matched an undated article, so a range silently hid 379 of them.
+    const dateRange = bestKnownDateRangeWhere({ from: dateFrom, to: dateTo });
+    if (dateRange) {
+      // AND, so a range and a search narrow together instead of the second OR replacing
+      // the first. `where.OR` is already taken by the search above.
+      where.AND = [dateRange as Prisma.ArticleWhereInput];
     }
 
-    // Build orderBy clause
-    const validSortFields = ["relevanceScore", "publishedAt", "title"];
-    const orderByField = validSortFields.includes(sortBy) ? sortBy : "relevanceScore";
-    const orderByDirection = sortOrder === "asc" ? "asc" : "desc";
-
-    // Finding C1: publishedAt is nullable, and a null sorts first on a descending
-    // order in Postgres, so an undated article would head the list. Nulls last, with
-    // the capture time as the tie-break: it is the only date an undated article has.
-    const orderBy: Prisma.ArticleOrderByWithRelationInput[] = [
-      orderByField === "publishedAt"
-        ? { publishedAt: { sort: orderByDirection, nulls: "last" } }
-        : { [orderByField]: orderByDirection },
-    ];
-
-    if (orderByField !== "publishedAt") {
-      orderBy.push({ publishedAt: { sort: "desc", nulls: "last" } });
-    }
-
-    orderBy.push({ capturedAt: "desc" });
-
-    const articles = await db.article.findMany({
+    /**
+     * The order is applied here rather than by the database, and that is the fix.
+     *
+     * This route returns every pending article with no `take`, so an in-process sort is
+     * total, and it is the only way `date` can mean what the screen shows: Postgres cannot
+     * order by `COALESCE(publishedAt, capturedAt)` through Prisma's `orderBy`, and ordering
+     * by the raw column with NULLS LAST is precisely the bug. `source` is derived from the
+     * URL too, so it has no column to sort on either.
+     *
+     * One path for all five fields on purpose. Splitting "the database can do this one"
+     * from "we do this one here" is how the two ends drift: Postgres sorts nulls first on a
+     * descending order and puts uppercase before lowercase, and `sortArticles` does
+     * neither.
+     */
+    const rows = await db.article.findMany({
       where,
-      orderBy,
       select: {
         id: true,
         title: true,
@@ -113,6 +114,8 @@ export async function GET(request: NextRequest) {
         createdAt: true,
       },
     });
+
+    const articles = sortArticles(rows, sort);
 
     // Get unique categories from all pending articles for filter options
     const allPendingArticles = await db.article.findMany({
@@ -130,6 +133,9 @@ export async function GET(request: NextRequest) {
       count: articles.length,
       meta: {
         categories: uniqueCategories,
+        // Echoed back so a screen can show the order it actually got rather than the one it
+        // asked for, which are different whenever a stale `sortBy` falls back.
+        sort,
       },
     });
   } catch (error) {

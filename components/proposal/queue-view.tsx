@@ -60,8 +60,19 @@ import { LayoutToggle, useLayoutPreference } from "@/components/layout-toggle";
 import {
   ArticleFiltersComponent,
   defaultArticleFilters,
+  hasArticleFilters,
   type ArticleFilters,
 } from "@/components/article-filters";
+import {
+  SortableTh,
+  SortAnnouncement,
+  type SortState,
+} from "@/components/radar/sortable";
+import {
+  ARTICLE_SORT_DEFAULT_DIRECTION,
+  ARTICLE_SORT_LABELS,
+  type ArticleSortField,
+} from "@/lib/articles/sort";
 import { cn } from "@/lib/utils";
 import type { QueueArticle, Verdict } from "./state";
 
@@ -175,13 +186,37 @@ export function QueueView({
     });
   };
 
-  const hasFilters =
-    Boolean(filters.search) ||
-    filters.categories.length > 0 ||
-    filters.scoreMin > 0 ||
-    filters.scoreMax < 10 ||
-    Boolean(filters.dateFrom) ||
-    Boolean(filters.dateTo);
+  const hasFilters = hasArticleFilters(filters);
+
+  /**
+   * The order, as the table sees it. It lives in the same `filters` object the select
+   * writes to, so clicking a header and choosing from the select are the same state and
+   * cannot disagree, and switching layout keeps the order you were reading in.
+   */
+  const sort: SortState<ArticleSortField> = {
+    field: filters.sortBy,
+    direction: filters.sortOrder,
+  };
+
+  const onSort = (next: SortState<ArticleSortField>) =>
+    onFiltersChange({ ...filters, sortBy: next.field, sortOrder: next.direction });
+
+  /** Every sortable header, so the set is declared once rather than five times inline. */
+  const sortableColumn = (
+    field: ArticleSortField,
+    label: string,
+    align: "left" | "right" = "left"
+  ) => (
+    <SortableTh
+      field={field}
+      sort={sort}
+      onSort={onSort}
+      defaultDirection={ARTICLE_SORT_DEFAULT_DIRECTION[field]}
+      align={align}
+    >
+      {label}
+    </SortableTh>
+  );
 
   /** Verdict pair, shared by all three layouts so the controls never move. */
   const Verdicts = ({
@@ -372,18 +407,13 @@ export function QueueView({
                 }
               />
             </th>
-            <th scope="col" className={thClass}>
-              Score
-            </th>
-            <th scope="col" className={thClass}>
-              Story
-            </th>
-            <th scope="col" className={thClass}>
-              Source
-            </th>
-            <th scope="col" className={thClass}>
-              Date
-            </th>
+            {sortableColumn("relevanceScore", "Score")}
+            {sortableColumn("title", "Story")}
+            {sortableColumn("source", "Source")}
+            {sortableColumn("date", "Date")}
+            {/* Topics is a list per row, so there is no single value to order by, and a
+                header that looks like the four beside it but does nothing is worse than one
+                that plainly is not a control. Filter by topic instead. */}
             <th scope="col" className={thClass}>
               Topics
             </th>
@@ -570,6 +600,14 @@ export function QueueView({
               Refreshing the queue…
             </p>
           )}
+          {/* Reordering replaces every row without moving focus, so nothing else says it
+              happened. */}
+          <SortAnnouncement
+            sort={sort}
+            labels={ARTICLE_SORT_LABELS}
+            count={articles.length}
+            noun={articles.length === 1 ? "story" : "stories"}
+          />
           {renderSelectionBar()}
           {renderContent()}
           <BulkBar

@@ -31,6 +31,12 @@ import {
   useSelection,
   type BulkAction,
 } from "@/components/radar/selection";
+import {
+  SortableTh,
+  SortAnnouncement,
+  type SortState,
+} from "@/components/radar/sortable";
+import { sortBy } from "@/lib/list-sort";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
 import { useOrgRole } from "@/components/radar/use-role";
@@ -101,6 +107,28 @@ interface PipelineArticle {
 
 type View = "pipeline" | "editions";
 
+type EditionSortField = "publishDate" | "articleCount" | "sentAt" | "status";
+
+/**
+ * Draft, then Ready, then Sent, which is the order the work moves in.
+ *
+ * Alphabetically the enum reads DRAFT, FINALIZED, SENT and happens to agree, but the chip
+ * says "Ready" for FINALIZED, so a reader sorting the Status column and getting D, R, S
+ * would be looking at an accident. This makes it the intent.
+ */
+const EDITION_STATUS_ORDER: Record<Edition["status"], number> = {
+  DRAFT: 0,
+  FINALIZED: 1,
+  SENT: 2,
+};
+
+const EDITION_SORT_LABELS: Record<EditionSortField, string> = {
+  publishDate: "publication date",
+  articleCount: "how many stories it holds",
+  sentAt: "when it was sent",
+  status: "status",
+};
+
 /** RQ-005 AC-8.3: archived editions are out of the way, not gone. */
 type ArchivedFilter = "exclude" | "only" | "all";
 
@@ -163,6 +191,10 @@ export default function EditionsPage() {
 
   const [view, setView] = useState<View>("pipeline");
   const [archived, setArchived] = useState<ArchivedFilter>("exclude");
+  const [editionSort, setEditionSort] = useState<SortState<EditionSortField>>({
+    field: "publishDate",
+    direction: "desc",
+  });
   const { atLeast } = useOrgRole();
   const [editions, setEditions] = useState<Edition[]>([]);
   const [pending, setPending] = useState<PipelineArticle[]>([]);
@@ -171,13 +203,49 @@ export default function EditionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   /**
+   * The all-editions table's own order.
+   *
+   * In the browser because `/api/editions` has no `take` and no page: this array is every
+   * edition, so there is no slice to mistake for the whole. Separate from `splitEditions`
+   * deliberately, which orders the two pipeline columns and is not a thing a reader chooses.
+   *
+   * `publishDate` keeps `createdAt` as its tie-break, for the reason the route records: two
+   * editions can share a week now, so the date alone is not a stable order.
+   */
+  const sortedEditions = useMemo(() => {
+    if (editionSort.field === "publishDate") {
+      const sign = editionSort.direction === "desc" ? -1 : 1;
+      return [...editions].sort(
+        (a, b) =>
+          sign *
+          (a.publishDate.localeCompare(b.publishDate) ||
+            a.createdAt.localeCompare(b.createdAt))
+      );
+    }
+
+    return sortBy(
+      editions,
+      (edition) =>
+        editionSort.field === "articleCount"
+          ? edition.articleCount
+          : editionSort.field === "sentAt"
+            ? edition.sentAt
+            : EDITION_STATUS_ORDER[edition.status],
+      editionSort.direction
+    );
+  }, [editions, editionSort]);
+
+  /**
    * RQ-005 action 7: the same selection the other lists have.
    *
    * Sent editions are held back by the endpoint unless explicitly included:
    * deleting one does not unsend the mail, it only removes the record that it
    * went out.
+   *
+   * Ids in render order, so a shift-click range follows the rows on screen. The table is
+   * reorderable now, so that is `sortedEditions` and not the order they arrived in.
    */
-  const selection = useSelection(editions.map((edition) => edition.id));
+  const selection = useSelection(sortedEditions.map((edition) => edition.id));
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [pendingBulk, setPendingBulk] = useState<PendingBulk | null>(null);
 
@@ -686,11 +754,17 @@ export default function EditionsPage() {
               </div>
             ) : (
               <>
+                <SortAnnouncement
+                  sort={editionSort}
+                  labels={EDITION_SORT_LABELS}
+                  count={editions.length}
+                  noun={editions.length === 1 ? "edition" : "editions"}
+                />
                 <div className="overflow-x-auto rounded-xl border border-radar-line">
                   <table className="w-full border-collapse text-left">
-                    <caption className="sr-only">
-                      All newsletter editions, newest first
-                    </caption>
+                    {/* No longer "newest first": the headers decide, so the caption says
+                        what the table is and the live region says how it is ordered. */}
+                    <caption className="sr-only">All newsletter editions</caption>
                     <thead>
                       <tr className="border-b border-radar-line bg-radar-surface2 text-[10px] font-semibold uppercase tracking-[0.09em] text-radar-ink3">
                         <th scope="col" className="w-[36px] px-4 py-2.5 font-semibold">
@@ -709,25 +783,45 @@ export default function EditionsPage() {
                             }
                           />
                         </th>
-                        <th scope="col" className="px-4 py-2.5 font-semibold">
+                        <SortableTh
+                          field="publishDate"
+                          sort={editionSort}
+                          onSort={setEditionSort}
+                          defaultDirection="desc"
+                        >
                           Edition
-                        </th>
-                        <th scope="col" className="px-4 py-2.5 font-semibold">
+                        </SortableTh>
+                        {/* Orders by the story count, which is the number that decides
+                            whether an edition is thin. Projects break the tie. */}
+                        <SortableTh
+                          field="articleCount"
+                          sort={editionSort}
+                          onSort={setEditionSort}
+                          defaultDirection="desc"
+                        >
                           Contents
-                        </th>
-                        <th scope="col" className="px-4 py-2.5 font-semibold">
+                        </SortableTh>
+                        <SortableTh
+                          field="sentAt"
+                          sort={editionSort}
+                          onSort={setEditionSort}
+                          defaultDirection="desc"
+                        >
                           Sent
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-2.5 text-right font-semibold"
+                        </SortableTh>
+                        <SortableTh
+                          field="status"
+                          sort={editionSort}
+                          onSort={setEditionSort}
+                          defaultDirection="asc"
+                          align="right"
                         >
                           Status
-                        </th>
+                        </SortableTh>
                       </tr>
                     </thead>
                     <tbody>
-                      {editions.map((edition) => (
+                      {sortedEditions.map((edition) => (
                         <tr
                           key={edition.id}
                           className={cn(
