@@ -40,6 +40,7 @@ import {
   SkeletonRows,
 } from "@/components/radar/controls";
 import { CandidateList } from "@/components/edition/candidate-list";
+import { framedEmailHtml } from "@/lib/email/framed-html";
 import { sendConfirmation, sentBySentence } from "./copy";
 import {
   isEditable,
@@ -321,11 +322,17 @@ export function ProposalView({
             />
           )}
           {previewLoading && !previewError && <SkeletonRows rows={4} />}
+          {/*
+            Preview links open in a new tab, which is also the only way they open at all: an
+            untargeted link navigates the frame, and a publisher sending
+            `frame-ancestors 'self'` refuses to be framed. The popup permissions are what the
+            new tab needs, since a sandbox without them blocks it instead.
+          */}
           {!previewLoading && !previewError && previewHtml && (
             <iframe
               title="Rendered edition preview"
-              srcDoc={previewHtml}
-              sandbox="allow-same-origin"
+              srcDoc={framedEmailHtml(previewHtml)}
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               className="h-[560px] w-full rounded-lg border border-radar-line bg-white"
             />
           )}
