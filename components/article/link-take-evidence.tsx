@@ -49,9 +49,23 @@ export function LinkTakeEvidence({ rewrite }: { rewrite: ViewRewrite }) {
   facts.push(shortDate(rewrite.generatedAt));
 
   return (
-    <p className="m-0 text-[11.5px] text-radar-ink3 text-pretty">
-      {facts.join(" · ")}
-    </p>
+    <>
+      <p className="m-0 text-[11.5px] text-radar-ink3 text-pretty">
+        {facts.join(" · ")}
+      </p>
+
+      {/*
+        Its own line rather than another fact in the list: it is a sentence somebody typed,
+        of any length, and a middle dot between it and the model name would read as part of
+        the ask. Shown at all because prose that reads differently from the version it
+        replaced should say why where the piece is, not only in the history.
+      */}
+      {rewrite.instruction ? (
+        <p className="mt-1 mb-0 text-[11.5px] text-radar-ink3 text-pretty">
+          {`Written to an instruction: "${rewrite.instruction}"`}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -104,6 +118,12 @@ export function RewriteHistoryPanel({
                   {entry.model}
                 </span>
               </div>
+
+              {entry.instruction ? (
+                <p className="mt-1 mb-0 text-[12px] text-radar-ink3 text-pretty">
+                  {`Asked for: "${entry.instruction}"`}
+                </p>
+              ) : null}
 
               {entry.checkSummary ? (
                 <p className="mt-1 mb-0 text-[12px] text-radar-ink2 text-pretty">

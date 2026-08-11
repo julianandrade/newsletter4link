@@ -31,6 +31,12 @@ export type PipelineOutcome =
 export interface PipelineOptions {
   /** Regenerate even when a current rewrite exists and is not stale. */
   force?: boolean;
+  /**
+   * One editor's ask for this attempt, from the Regenerate control. Null on every
+   * automatic path, and never read from the organization's settings: it is stored on the
+   * row it produced so the history can say which instruction wrote which version.
+   */
+  instruction?: string | null;
   /** Injected for tests. */
   ask?: AskModel;
   fetchPage?: FetchPage;
@@ -114,6 +120,7 @@ export async function rewriteArticle(
       model,
       language,
       articleHash,
+      instruction: options.instruction ?? null,
     });
 
     return { status: "refused", reason: resolved.note, rewriteId };
@@ -130,6 +137,7 @@ export async function rewriteArticle(
       orgContext: settings?.orgContextPrompt ?? null,
       brandVoice: settings?.brandVoicePrompt ?? null,
       relevanceHeading: settings?.relevanceHeading ?? "Relevancia para a Link",
+      instruction: options.instruction ?? null,
       model,
     },
     options.ask
@@ -141,6 +149,7 @@ export async function rewriteArticle(
     model,
     language,
     articleHash,
+    instruction: options.instruction ?? null,
   });
 
   if (outcome.status === "REFUSED") {

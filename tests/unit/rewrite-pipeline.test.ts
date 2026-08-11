@@ -111,6 +111,67 @@ describe("rewriteArticle, the happy path", () => {
     expect(created[0].model).toBe("claude-sonnet-5");
     expect(created[0].language).toBe("pt-PT");
   });
+
+  it("records no instruction when nobody typed one", async () => {
+    const { db, created } = fakeDb();
+
+    await rewriteArticle(db, "a1", "approval", { ask: ask(CLEAN) });
+
+    expect(created[0].instruction).toBeNull();
+  });
+});
+
+/**
+ * One ask, for one version.
+ *
+ * The two things that would break quietly: an instruction that reaches the row but not the
+ * prompt, which stores a promise nothing acted on, and one that reaches the prompt but not
+ * the row, which leaves the history unable to say why a version reads as it does.
+ */
+describe("rewriteArticle carries an editor's instruction", () => {
+  it("puts it in the prompt and on the row it produced", async () => {
+    const asked = vi.fn<AskModel>(async () => CLEAN);
+    const { db, created } = fakeDb();
+
+    const outcome = await rewriteArticle(db, "a1", "on-open", {
+      ask: asked,
+      force: true,
+      instruction: "Mais curto, e comeca pelo impacto em compliance.",
+    });
+
+    expect(outcome.status).toBe("generated");
+    expect(asked.mock.calls[0][0]).toContain(
+      "Mais curto, e comeca pelo impacto em compliance."
+    );
+    expect(created[0].instruction).toBe(
+      "Mais curto, e comeca pelo impacto em compliance."
+    );
+  });
+
+  it("records it on a refusal too, which is when it is most worth having", async () => {
+    // Below the usable floor, so nothing is generated and the row is the only trace that
+    // somebody asked for something.
+    const { db, created } = fakeDb({
+      article: {
+        id: "a1",
+        title: "A headline",
+        content: "Too short to write from.",
+        sourceUrl: "https://www.reuters.com/tech/x",
+        publishedAt: null,
+        contentHash: null,
+        summary: null,
+      },
+    });
+
+    const outcome = await rewriteArticle(db, "a1", "on-open", {
+      ask: ask(CLEAN),
+      force: true,
+      instruction: "Tenta outra vez.",
+    });
+
+    expect(outcome.status).toBe("refused");
+    expect(created[0].instruction).toBe("Tenta outra vez.");
+  });
 });
 
 describe("rewriteArticle spends nothing it does not have to", () => {

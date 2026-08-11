@@ -12,6 +12,7 @@
  * flat and subtly wrong.
  */
 
+import { NO_LONG_DASH_RULE, stripLongDashes } from "@/lib/ai/typography";
 import { MAX_ASIDE_TEXT } from "./input";
 
 /** Enough to find one worth keeping, few enough to read in under a minute. */
@@ -54,7 +55,8 @@ Rules:
 - No numbering, no bullets, no quotes around them, no preamble and no closing remark.
 - Each line stands alone and is under ${MAX_ASIDE_TEXT} characters.
 - Self-deprecating about our own industry, never about a named company, product or person.
-- Dry. A line that is trying to be funny is worse than one that is merely true.`;
+- Dry. A line that is trying to be funny is worse than one that is merely true.
+- ${NO_LONG_DASH_RULE}`;
 }
 
 /**
@@ -69,7 +71,10 @@ export function parseSuggestions(reply: string): string[] {
   const suggestions: string[] = [];
 
   for (const raw of reply.split("\n")) {
-    let line = raw.trim();
+    // The house dash rule, before the bullet strip below rather than after it: a line the
+    // model opened with an em dash meant it as a bullet, and this turns it into the hyphen
+    // that strip already knows how to remove.
+    let line = stripLongDashes(raw).trim();
     if (!line) continue;
 
     // Numbering and bullets, which get added despite the instruction not to.

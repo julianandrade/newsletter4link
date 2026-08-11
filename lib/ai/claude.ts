@@ -8,6 +8,7 @@ import {
   UNPLACED,
 } from "@/lib/ai/categories";
 import { messageTextOr } from "@/lib/ai/message";
+import { NO_LONG_DASH_RULE, stripLongDashes } from "@/lib/ai/typography";
 
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
@@ -111,6 +112,8 @@ Write a concise, engaging 2-3 sentence summary of this article. Focus on:
 
 Be clear, direct, and avoid hype. Target audience: tech professionals and executives.
 
+${NO_LONG_DASH_RULE}
+
 Title: ${title}
 
 Content: ${content.substring(0, 2000)}
@@ -120,9 +123,9 @@ Write only the summary, no preamble or extra text.`,
       ],
     });
 
-    const summary = messageTextOr(message, "");
-
-    return summary;
+    // The house rule is asked for above and enforced here. This summary is our prose, not
+    // the publisher's: the article's own text is stored untouched.
+    return stripLongDashes(messageTextOr(message, ""));
   } catch (error) {
     // RQ-002
     rethrowIfModelRejected(error, model);

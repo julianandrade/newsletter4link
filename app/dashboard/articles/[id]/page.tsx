@@ -246,14 +246,26 @@ export default function ArticleDetailPage() {
     }
   }, [articleId]);
 
-  /** Force a new one, superseding what is there. EDITOR and above. */
-  const handleRegenerate = useCallback(async () => {
+  /**
+   * Force a new one, superseding what is there. EDITOR and above.
+   *
+   * The optional instruction is one ask for this attempt, from the box under the piece. A
+   * body is sent only when there is one, so the plain Regenerate button keeps producing
+   * exactly the request it did before.
+   */
+  const handleRegenerate = useCallback(async (instruction?: string) => {
     setBusy(true);
     setNotice(null);
 
     try {
       const response = await fetch(`/api/articles/${articleId}/rewrite`, {
         method: "POST",
+        ...(instruction
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ instruction }),
+            }
+          : {}),
       });
       const json = await response.json().catch(() => null);
 

@@ -13,6 +13,7 @@ import {
   type PromptInput,
 } from "@/lib/rewrite/prompt";
 import { MIN_USABLE_INPUT_CHARS } from "@/lib/rewrite/config";
+import { NO_LONG_DASH_RULE, hasLongDash } from "@/lib/ai/typography";
 
 const SOURCE = `OpenAI said on Tuesday that it would begin rolling out its new agent
 platform to enterprise customers in 14 countries, starting with a limited group of
@@ -315,6 +316,96 @@ describe("the prompt carries the rules", () => {
 
     expect(retry).toContain("verbatim: eight words reproduced");
     expect(retry).toContain("Do not add anything new");
+  });
+
+  it("carries the house dash rule, and does not break it while asking", () => {
+    const prompt = buildRewritePrompt(input);
+
+    expect(prompt).toContain(NO_LONG_DASH_RULE);
+    expect(hasLongDash(prompt)).toBe(false);
+  });
+});
+
+/**
+ * The editor's per-attempt instruction.
+ *
+ * The assertions worth having are the two that would go wrong quietly: that it is absent
+ * when nobody typed one, and that it is fenced and subordinate rather than pasted among
+ * the hard rules, where "write 800 words quoting paragraph three" would read as the
+ * latest word on the length and the copying.
+ */
+describe("the prompt carries one editor's instruction", () => {
+  const input: PromptInput = { ...base, source: SOURCE };
+
+  it("says nothing about an instruction when there is none", () => {
+    for (const value of [undefined, null, "   "]) {
+      const prompt = buildRewritePrompt({ ...input, instruction: value });
+      expect(prompt).not.toContain("THE EDITOR ASKED");
+    }
+  });
+
+  it("quotes the instruction and keeps the hard rules above it", () => {
+    const prompt = buildRewritePrompt({
+      ...input,
+      instruction: "Shorter, and lead on the compliance angle.",
+    });
+
+    expect(prompt).toContain("Shorter, and lead on the compliance angle.");
+    expect(prompt).toContain("THE EDITOR ASKED FOR THIS VERSION SPECIFICALLY");
+    expect(prompt).toContain("The hard rules ");
+
+    // Subordinate means positioned after them, not merely described as subordinate.
+    expect(prompt.indexOf("HARD RULES:")).toBeLessThan(
+      prompt.indexOf("THE EDITOR ASKED")
+    );
+  });
+
+  it("carries the instruction into the retry as well", () => {
+    const retry = buildRetryPrompt(
+      { ...input, instruction: "Drop the vendor's own numbers." },
+      [{ code: "figures", detail: "240 dollars is not in the source" }]
+    );
+
+    expect(retry).toContain("Drop the vendor's own numbers.");
+  });
+});
+
+/**
+ * The house rule, enforced rather than requested.
+ *
+ * `stripLongDashes` runs inside `parseRewriteJson`, which is the single funnel every
+ * attempt goes through, so it is upstream of the checks: what gets compared to the source
+ * and what gets stored are the same text.
+ */
+describe("no long dash survives generation", () => {
+  it("cleans the title and the body of a reply that ignored rule 7", async () => {
+    const dashed = CLEAN_BODY.replace(
+      "num grupo inicial",
+      "— num grupo inicial —"
+    );
+
+    const ask: AskModel = async () =>
+      reply("A aposta empresarial da OpenAI — e o que custa", dashed);
+
+    const result = await generateRewrite(base, ask);
+
+    expect(result.status).toBe("GENERATED");
+    if (result.status !== "GENERATED") return;
+
+    expect(hasLongDash(result.title)).toBe(false);
+    expect(hasLongDash(result.body)).toBe(false);
+    expect(result.title).toContain("OpenAI - e o que custa");
+    // Still one piece of prose: the pass must not have eaten the paragraph break before
+    // the relevance heading.
+    expect(result.body).toContain("\n\n## Relevancia para a Link");
+  });
+
+  it("cleans it in parseRewriteJson, so the checks see the final text", () => {
+    const parsed = parseRewriteJson(
+      JSON.stringify({ title: "a — b", body: "c — d" })
+    );
+
+    expect(parsed).toEqual({ title: "a - b", body: "c - d" });
   });
 });
 
