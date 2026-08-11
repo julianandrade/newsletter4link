@@ -262,6 +262,27 @@ Playwright is configured in `playwright.config.ts` for browser checks. The
 temporary `/radar-preview` route renders any dashboard screen behind a fetch
 stub, which is how UI work gets verified without a Supabase session.
 
+### A newsletter link only works in the environment that signed it
+
+A real `/editions/:id?t=...` link from a delivered email answers **404** on a preview
+deployment and on localhost, while the same URL answers 200 in production. The token is an
+HMAC over `archive:{subscriberId}` keyed on `UNSUBSCRIBE_SECRET`, and that value differs per
+environment, so verification fails and `resolveArchiveAccess` refuses; every refusal is the
+same 404 by design, which is why it looks like a missing edition rather than a rejected key.
+
+Two consequences worth knowing before you spend an hour on it, as happened on 11 August 2026:
+
+- A preview deployment cannot validate a production newsletter link. Do not read a 404 there
+  as a broken page or a failed deploy.
+- To check the archive locally against a real edition, mint your own token with the local
+  secret: decode the subscriber id from the production token's first segment
+  (`base64url`), then sign `archive:{id}` with the local `UNSUBSCRIBE_SECRET`. The row it
+  needs (a `SENT` `EmailEvent` for that subscriber and edition) is in the shared database
+  already, so nothing has to be written.
+
+To confirm something reached production, probe the deployed route itself and assert on the
+markup you changed. A green Vercel build is not evidence that the change shipped.
+
 ---
 
 ## Deployment
@@ -375,9 +396,31 @@ and `git add -A` sweeps in another session's untracked files. All three happened
 Still true when sharing a checkout:
 - Do NOT create/apply/drop `git stash` unless explicitly requested
 - Do NOT switch branches unless explicitly requested; use a worktree instead
+- Do NOT discard uncommitted work: no `git checkout -- .`, `git reset --hard`, or
+  `git clean -fd` on a shared checkout, whoever appears to own the changes. These are the
+  only commands on this list that destroy work rather than move it, and a neighbour's
+  half-finished edit looks exactly like your own stray file
 - When unrecognized files appear, focus on your changes only; commit only scoped changes
   by explicit path, never `git add -A`
 - Keep reports focused on your edits; end with brief "other files present" note only if relevant
+
+**The database is shared even when the code is not.** A worktree gives each stream its own
+files; every one of them still points at the same Supabase instance through the same
+`DATABASE_URL`. So `prisma db push`, `prisma migrate reset`, and any script that writes or
+deletes rows are off limits unless explicitly requested, from a worktree as much as from
+master. Read-only queries are fine. This is the one collision worktrees do not prevent, and
+the only one on this page that cannot be undone: a branch switch loses minutes, a reset loses
+an afternoon, `db push` against production data loses the data.
+
+**Never take a port you did not bind.** `npm run dev` binds 3111, so a second session finds
+`EADDRINUSE`. Start yours on another port rather than killing the process holding it: the
+server you would be reclaiming is another agent's, or Julian's own, and it takes its session
+down with it. Whatever port you land on, say so in your report, since the URL you verified on
+is not the one anyone else is looking at.
+
+Scratch output (screenshots, throwaway scripts, downloaded pages) goes to the session
+scratchpad or `.playwright-mcp/`, which `.gitignore` covers. Never the repo root, where it
+becomes an untracked file the next session has to reason about.
 
 ### Verification Standards
 - When answering questions, verify in code first; do not guess
@@ -412,7 +455,23 @@ Still true when sharing a checkout:
 ### PR Review Mode
 - Use `gh pr view` and `gh pr diff` for review
 - Do NOT switch branches during review
-- Goal: merge PRs; prefer rebase when clean, squash when history is messy
+- Prefer rebase when history is clean, squash when it is messy
+
+### Merging is Julian's call
+
+**Master requires a PR.** Direct pushes have been blocked since 10 August 2026 by a
+repository ruleset, not by classic branch protection, so the protection API answers 404 and
+tells you nothing. Branch, push, open a PR.
+
+**Do not merge your own PR unless asked.** Open it, report it green, and stop there. The
+previous wording here was "Goal: merge PRs", which read as authorization and contradicted the
+rule above; this line replaces it. Merging master deploys to production, and that is a
+decision with an audience, so it belongs to Julian even when the checks are green and the work
+is verified.
+
+Once he does say merge: rebase-merge, then confirm production actually serves the change by
+probing the deployed route. A green build is not a shipped build, and this project has proved
+that more than once.
 
 ### Security
 - Never commit API keys, real phone numbers, or live config values
