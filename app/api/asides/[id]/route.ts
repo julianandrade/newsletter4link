@@ -5,6 +5,50 @@ import { parseAsidePatch } from "@/lib/asides/input";
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/asides/:id
+ *
+ * One aside, whatever state it is in. VIEWER or above, this organization only.
+ *
+ * The reason it exists rather than the caller filtering the library: `?offerable=true`
+ * answers "what may still be chosen", and an edition can carry a row that question excludes.
+ * A one-off is written `reusable: false`, a line can be retired after an edition picked it,
+ * and the send screen's kind tab opens on Joke whatever the edition is carrying. Resolving
+ * the attachment by searching the library made all three read as an edition carrying
+ * something the product could not show.
+ *
+ * Scoped through the tenant client, so an aside in another organization answers 404 rather
+ * than the row. Never 403: a refusal that separates "not yours" from "does not exist" tells
+ * a caller which ids are real elsewhere.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { db } = await requireOrgContext();
+    const { id } = await params;
+
+    const aside = await db.aside.findFirst({ where: { id } });
+
+    if (!aside) {
+      return NextResponse.json(
+        { success: false, error: "Aside not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data: aside });
+  } catch (error) {
+    console.error("Error reading aside:", error);
+
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * PATCH /api/asides/:id
  *
  * Edit an aside, or move it between PENDING, APPROVED and RETIRED. EDITOR or above,
