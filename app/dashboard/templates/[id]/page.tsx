@@ -32,6 +32,7 @@ import {
 } from "@/components/radar/controls";
 import type { EditorRef, EmailEditorProps } from "react-email-editor";
 import { RADAR_MERGE_TAGS, unlayerMergeTagOptions } from "@/lib/email/merge-tags";
+import { framedEmailHtml } from "@/lib/email/framed-html";
 
 // Dynamically import the email editor to avoid SSR issues
 const EmailEditor = dynamic(() => import("react-email-editor"), {
@@ -489,12 +490,18 @@ export default function EditTemplatePage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto rounded-xl border border-radar-line bg-white">
+            {/*
+              Preview links open in a new tab, which is also the only way they open at all: an
+              untargeted link navigates the frame, and a publisher sending
+              `frame-ancestors 'self'` refuses to be framed. The popup permissions are what the
+              new tab needs, since a sandbox without them blocks it instead.
+            */}
             {previewHtml ? (
               <iframe
-                srcDoc={previewHtml}
+                srcDoc={framedEmailHtml(previewHtml)}
                 title="Template preview"
                 className="h-[600px] w-full border-0"
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               />
             ) : (
               <p className="m-0 py-16 text-center text-[12.5px] text-radar-ink3">

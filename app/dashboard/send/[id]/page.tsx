@@ -19,6 +19,7 @@ import type {
 } from "@/components/proposal/state";
 import { EditionUnlayerEditor, EditionUnlayerEditorRef } from "@/components/edition-unlayer-editor";
 import { replaceContentMergeTags, type Article as ContentArticle, type Project as ContentProject } from "@/lib/email/content-renderer";
+import { framedEmailHtml } from "@/lib/email/framed-html";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/radar/compat";
 import { Button } from "@/components/radar/compat";
 import { Badge } from "@/components/radar/compat";
@@ -2303,9 +2304,13 @@ export default function EditionDetailPage() {
             )}
           </div>
           <div className="flex-1 overflow-auto border rounded-lg bg-white">
+            {/*
+              Preview links open in a new tab. Untargeted, they navigate the frame, and a
+              publisher sending `frame-ancestors 'self'` refuses to be framed.
+            */}
             {previewHtml ? (
               <iframe
-                srcDoc={previewHtml}
+                srcDoc={framedEmailHtml(previewHtml)}
                 className="w-full h-[600px] border-0"
                 title="Email Preview"
               />

@@ -5,6 +5,7 @@ import { buildEditionEmail } from "@/lib/email/edition-data";
 import { renderEditionEmail } from "@/lib/email/edition-template";
 import { frozenHtmlFor, renderSourceFor } from "@/lib/editions/sent-snapshot";
 import { personalizeHtml } from "@/lib/email/personalize";
+import { framedEmailHtml } from "@/lib/email/framed-html";
 import { resolveArchiveAccess } from "@/lib/email/archive-access";
 import { buildArchiveUrl, buildEditionIndexUrl } from "@/lib/email/archive-url";
 import { buildUnsubscribeUrl } from "@/lib/email/unsubscribe-token";
@@ -139,12 +140,16 @@ export default async function EditionArchivePage({
    * thing to keep in step with the design. The edition is table HTML with its own dark-mode
    * rules, and an iframe is what lets it keep them without its styles reaching the page around
    * it. `sandbox` without `allow-scripts`, because nothing here needs to run.
+   *
+   * `framedEmailHtml` is what makes a story link work here. Untargeted, it would navigate this
+   * frame, and a publisher sending `frame-ancestors 'self'` answers that with "refused to
+   * connect": the popup permissions in `sandbox` are what the new tab needs.
    */
   return (
     <main className="min-h-screen bg-[#eceeed]">
       <iframe
         title="This edition"
-        srcDoc={html}
+        srcDoc={framedEmailHtml(html)}
         sandbox="allow-popups allow-popups-to-escape-sandbox"
         className="h-screen w-full border-0"
       />
