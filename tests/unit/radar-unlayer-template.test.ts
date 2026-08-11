@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createRadarUnlayerTemplate } from "@/scripts/templates/radar-unlayer";
 import { createRadarFrameTemplate } from "@/scripts/templates/radar-frame";
 import { renderTemplate } from "@/lib/email/template-renderer";
@@ -6,9 +6,20 @@ import { personalizeHtml } from "@/lib/email/personalize";
 import { hardenExportedHtml } from "@/lib/email/harden-export";
 import { RADAR_MERGE_TAGS, isHeadlessTemplate } from "@/lib/email/merge-tags";
 
-beforeAll(() => {
-  process.env.UNSUBSCRIBE_SECRET = "test-secret-for-unit-tests";
-});
+/**
+ * At module scope, not in a `beforeAll`, and assigned rather than defaulted.
+ *
+ * `sendThrough` below is called in the body of a `describe`, which vitest runs during
+ * collection, before any hook fires. So a `beforeAll` here was decorative: on this machine the
+ * signature was made with whatever `UNSUBSCRIBE_SECRET` the developer's `.env` happened to
+ * hold, and on a checkout without one, `personalizeHtml` threw at collection and the whole
+ * file failed before a single assertion ran. It is what the first CI run on this repository
+ * caught. Same shape as tests/unit/merge-tags.test.ts, which sets it at module scope too.
+ *
+ * Assigned unconditionally so the value is the test's own on every machine. What is signed
+ * here is never verified, only checked for having replaced its merge tag, so any constant does.
+ */
+process.env.UNSUBSCRIBE_SECRET = "test-secret-for-unit-tests";
 
 const { html: v3Html, design } = createRadarUnlayerTemplate({ logoUrl: "", bannerUrl: "" });
 const { html: v2Html } = createRadarFrameTemplate({ logoUrl: "", bannerUrl: "" });
