@@ -18,17 +18,23 @@ export const maxDuration = 300; // 5 minutes
  *
  * Runs the content curation pipeline for all organizations.
  *
- * Fired by Vercel Cron at 09:00 UTC (see vercel.json) and again by
- * .github/workflows/curation.yml, which exists only because Hobby accounts cap a
- * Vercel cron at once per day. Both callers are authorized the same way and the
- * pipeline is safe to run twice: an article already seen is counted as a duplicate
- * rather than written again.
+ * Fired by .github/workflows/curation.yml at 09:07 and 21:07 UTC, and by Vercel Cron at
+ * 08:00 (see vercel.json). Every caller is authorized the same way and the pipeline is
+ * safe to run repeatedly: an article already seen is counted as a duplicate rather than
+ * written again.
+ *
+ * The GitHub firings are the ones that work. Vercel's slot for this job had never once
+ * landed as of 11 August 2026: not one CurationJob row in the whole history carried
+ * `trigger=schedule`, while Vercel's other crons fired daily. Triggering it by hand with
+ * `vercel crons run` completed normally, 35 found and 3 curated, so nothing below this
+ * line is at fault and the move from 09:00 to 08:00 is an experiment rather than a fix.
+ * Read the schedule block in curation.yml before changing any of these times.
  *
  * Every run writes a CurationJob row. It did not, for months, and that is why this
  * job looked dead: /dashboard/curation lists CurationJob rows, only the dashboard's
- * own streaming path created any, and so a scheduled run that collected 45 articles
- * left no trace anywhere the product could show it. A job nobody can see is
- * indistinguishable from a job that never ran.
+ * own streaming path created any, and so a scheduled run left no trace anywhere the
+ * product could show it. A job nobody can see is indistinguishable from a job that
+ * never ran.
  */
 export async function GET(request: Request) {
   try {

@@ -35,7 +35,7 @@ function readChain(request: Request): number {
 }
 
 /**
- * `?budgetMs=` — shorten the budget so a handover can be observed without waiting four
+ * `?budgetMs=`: shorten the budget so a handover can be observed without waiting four
  * minutes for one.
  *
  * The same argument as `?limit=`: the chain is the one part of this job that no test can
@@ -100,7 +100,7 @@ function handOver(result: IngestResult, chain: number): void {
 }
 
 /**
- * `?limit=` — how many emails this run may touch. Absent means the job's own default,
+ * `?limit=`: how many emails this run may touch. Absent means the job's own default,
  * which is what Vercel's schedule invokes and what the behaviour was before.
  *
  * It exists to make this job safe to test. Every pending email carries a `retryCount`
@@ -158,9 +158,11 @@ async function runAndHandOver(request: Request, chain: number): Promise<IngestRe
  *
  * RQ-007 step 2: read the emails the webhook recorded and create the articles they point at.
  *
- * Twice a day. Vercel Cron fires it at 05:30, ahead of the 06:00 radar and the 09:00
+ * Twice a day. Vercel Cron fires it at 05:30, ahead of the 06:00 radar and the 08:00
  * collection so a newsletter's articles are in place before anything reads them, and
- * .github/workflows/curation.yml fires it again at 17:30.
+ * .github/workflows/curation.yml fires it again at 17:07. This is one of the three Vercel
+ * slots that demonstrably do land; daily-collection's does not, which is why that job has
+ * a GitHub firing in the morning too.
  *
  * The second firing does not live in `vercel.json`, and cannot. It was `15 * /4 * * *`
  * (every four hours) until 5 August 2026, and that value silently broke every deployment
