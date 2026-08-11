@@ -118,3 +118,51 @@ export function rethrowIfModelRejected(error: unknown, model: string): void {
     throw new UnusableModelError(model, error);
   }
 }
+
+/**
+ * Let a model rejection through, whether it arrived raw or already converted.
+ *
+ * The one to reach for in a catch that wraps another catch. `rethrowIfModelRejected` reads
+ * the provider's own fields, and an `UnusableModelError` has none of them, so a nested catch
+ * using it swallowed exactly the error it was added to let through. That is not theoretical:
+ * the loop in `analyzeResults` did it, and the test for it failed before this existed.
+ */
+export function rethrowIfModelUnusable(error: unknown, model: string): void {
+  if (error instanceof UnusableModelError) throw error;
+  rethrowIfModelRejected(error, model);
+}
+
+/**
+ * Run a model call, and let a refused model arrive as `UnusableModelError`.
+ *
+ * The wrapper exists because the alternative is remembering the two-line catch at every
+ * call site, and eleven of them had forgotten it: `rethrowIfModelRejected` was imported by
+ * four modules and called by none, so outside curation a withdrawn model surfaced as a raw
+ * provider error, or as nothing at all where a catch degraded to a fallback.
+ *
+ * Anything that is not a model rejection is rethrown untouched, so a timeout or a rate
+ * limit keeps whatever handling it already had. Q6: fail the run rather than substitute.
+ */
+export async function withModelRejection<T>(
+  model: string,
+  run: () => Promise<T>
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    rethrowIfModelRejected(error, model);
+    throw error;
+  }
+}
+
+/**
+ * What happened, and what to do about it, in one sentence.
+ *
+ * Here rather than at each surface because it is read by a person in four places now, the
+ * curation job screen, two API responses and a progress stream, and four hand-written
+ * copies of a sentence is three that will drift. Framework-free on purpose: the HTTP
+ * shaping lives in `lib/ai/model-http.ts`.
+ */
+export function modelRejectionMessage(error: UnusableModelError): string {
+  return `${error.message}. Choose a different model in Settings.`;
+}

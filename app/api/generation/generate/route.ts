@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import { resolveAiModels } from "@/lib/ai/model";
+import { modelRejectionResponse } from "@/lib/ai/model-http";
 import { generateNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 import { isoWeekAndYear } from "@/lib/radar/week";
@@ -158,6 +159,11 @@ export async function POST(request: NextRequest) {
       draftId: draft.id,
     });
   } catch (error) {
+    // RQ-002: the organization's model was refused, which is a setting to change
+    // rather than a failure to retry. Before this the answer was a 500.
+    const refused = modelRejectionResponse(error);
+    if (refused) return refused;
+
     console.error("Newsletter generation failed:", error);
     return NextResponse.json(
       { error: "Failed to generate newsletter" },

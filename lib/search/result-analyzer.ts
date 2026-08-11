@@ -7,6 +7,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelUnusable } from "@/lib/ai/model";
 import { SearchProviderResult } from "./providers/types";
 import { messageTextOr } from "@/lib/ai/message";
 
@@ -125,6 +126,10 @@ Respond with ONLY the JSON object.`,
       };
     }
   } catch (error) {
+    // RQ-002 Q6: everything else here degrades to a score of 5, which is the right
+    // answer for one unparseable result and the wrong one for a model that will refuse
+    // every remaining call too.
+    rethrowIfModelUnusable(error, model);
     console.error("Error analyzing result:", error);
     return {
       score: 5,
@@ -211,6 +216,11 @@ export async function analyzeResults(
       if (error instanceof Error && error.name === "JobCancelledError") {
         throw error;
       }
+
+      // And a refused model, for the reason curator.ts gives: continuing would repeat
+      // the same rejection for every remaining result and report a run that scored
+      // nothing as merely unlucky.
+      rethrowIfModelUnusable(error, model);
 
       console.error(`Error analyzing result ${i}:`, error);
       // Add result with default scores on error
@@ -329,6 +339,7 @@ Respond with ONLY the JSON array.`,
       );
     }
   } catch (error) {
+    rethrowIfModelUnusable(error, model);
     console.error("Error in batch analysis:", error);
     // Return results with default scores
     return results.map((result) => ({

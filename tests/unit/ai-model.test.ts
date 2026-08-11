@@ -9,8 +9,15 @@ import { DEFAULT_AI_MODEL, DEFAULT_EMBEDDING_MODEL } from "@/lib/ai-models";
 const getSettings = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/settings", () => ({ getSettings }));
 
-const { resolveAiModels, isModelRejection, UnusableModelError, rethrowIfModelRejected } =
-  await import("@/lib/ai/model");
+const {
+  resolveAiModels,
+  isModelRejection,
+  UnusableModelError,
+  rethrowIfModelRejected,
+  rethrowIfModelUnusable,
+  withModelRejection,
+  modelRejectionMessage,
+} = await import("@/lib/ai/model");
 
 beforeEach(() => {
   getSettings.mockReset();
@@ -150,5 +157,65 @@ describe("rethrowIfModelRejected", () => {
     expect(() =>
       rethrowIfModelRejected({ status: 429 }, "claude-x")
     ).not.toThrow();
+  });
+});
+
+/**
+ * The guard for a catch that wraps another catch.
+ *
+ * `rethrowIfModelRejected` reads the provider's own fields, and an UnusableModelError
+ * carries none of them, so a nested catch using it swallowed the error it was added to let
+ * through. That happened in analyzeResults, and its test caught it.
+ */
+describe("rethrowIfModelUnusable", () => {
+  it("lets an already-converted rejection through", () => {
+    const converted = new UnusableModelError("claude-x");
+
+    expect(() => rethrowIfModelUnusable(converted, "claude-y")).toThrow(converted);
+  });
+
+  it("converts a raw rejection, like the narrower guard does", () => {
+    expect(() =>
+      rethrowIfModelUnusable({ error: { type: "not_found_error" } }, "claude-x")
+    ).toThrow(UnusableModelError);
+  });
+
+  it("returns quietly for a transient failure", () => {
+    expect(() => rethrowIfModelUnusable({ status: 429 }, "claude-x")).not.toThrow();
+  });
+});
+
+describe("withModelRejection", () => {
+  it("returns what the call returned", async () => {
+    await expect(withModelRejection("claude-x", async () => "a reply")).resolves.toBe(
+      "a reply"
+    );
+  });
+
+  it("converts a refused model, naming the one that was asked for", async () => {
+    await expect(
+      withModelRejection("claude-x", async () => {
+        throw { status: 404, message: "model claude-x not found" };
+      })
+    ).rejects.toMatchObject({ name: "UnusableModelError", model: "claude-x" });
+  });
+
+  it("leaves every other failure exactly as it was", async () => {
+    const outage = new Error("Overloaded");
+
+    await expect(
+      withModelRejection("claude-x", async () => {
+        throw outage;
+      })
+    ).rejects.toBe(outage);
+  });
+});
+
+describe("modelRejectionMessage", () => {
+  it("names the model and says what to do about it", () => {
+    const message = modelRejectionMessage(new UnusableModelError("claude-retired-9"));
+
+    expect(message).toContain("claude-retired-9");
+    expect(message).toContain("Choose a different model in Settings");
   });
 });

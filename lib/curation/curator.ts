@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/db";
 import { fetchAllRSSFeeds, fetchRSSFeedsByIds } from "./rss-collector";
 import { generateEmbedding } from "@/lib/ai/embeddings";
-import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
+import {
+  resolveAiModels,
+  UnusableModelError,
+  modelRejectionMessage,
+} from "@/lib/ai/model";
 import { checkForDuplicates } from "./deduplicator";
 import {
   scoreArticleRelevance,
@@ -517,7 +521,7 @@ export async function runCurationPipelineWithStreaming(
     // rather than needing the logs read.
     const errorMsg =
       error instanceof UnusableModelError
-        ? `${error.message}. Choose a different model in Settings.`
+        ? modelRejectionMessage(error)
         : `Fatal error in curation pipeline: ${error instanceof Error ? error.message : "Unknown error"}`;
     onProgress({
       stage: "fatal_error",

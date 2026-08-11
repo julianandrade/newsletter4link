@@ -7,6 +7,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelUnusable } from "@/lib/ai/model";
 import { getCategoryGroupingPrompt } from "./prompts";
 import { messageTextOr } from "@/lib/ai/message";
 
@@ -63,6 +64,9 @@ export async function planNewsletter(
   try {
     return await aiPlanNewsletter(articles, model);
   } catch (error) {
+    // RQ-002 Q6: a refused model is not a reason to fall back, it is a reason to stop.
+    // Falling back here produced a quietly worse newsletter and no word about why.
+    rethrowIfModelUnusable(error, model);
     console.error("AI planning failed, falling back to simple planning:", error);
     return simpleNewsletter(articles);
   }

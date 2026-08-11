@@ -6,6 +6,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
+import { rethrowIfModelUnusable, withModelRejection } from "@/lib/ai/model";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
 import { BrandVoice } from "@prisma/client";
 import {
@@ -38,6 +39,21 @@ export class GenerationCancelledError extends Error {
 const anthropic = new Anthropic({
   apiKey: config.ai.anthropic.apiKey,
 });
+
+/**
+ * Every provider call in this file goes through here.
+ *
+ * RQ-002 Q6: a withdrawn model has to arrive at the route as `UnusableModelError`, naming
+ * itself, rather than as a raw 404 that reads like an outage. Seven call sites needed the
+ * same two-line catch, which is seven chances to forget it, and it had been forgotten in
+ * all seven: `rethrowIfModelRejected` was imported here and never called.
+ */
+function ask(
+  model: string,
+  params: Anthropic.Messages.MessageCreateParamsNonStreaming
+): Promise<Anthropic.Messages.Message> {
+  return withModelRejection(model, () => anthropic.messages.create(params));
+}
 
 const useMockGeneration = process.env.MOCK_GENERATION === "true";
 
@@ -260,7 +276,7 @@ async function generateOpening(
     brandVoice?.greetings?.[0]
   );
 
-  const message = await anthropic.messages.create({
+  const message = await ask(model, {
     model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
@@ -358,7 +374,7 @@ async function generateArticleSummary(
     isHero
   );
 
-  const message = await anthropic.messages.create({
+  const message = await ask(model, {
     model,
     max_tokens: 250,
     messages: [{ role: "user", content: prompt }],
@@ -391,7 +407,7 @@ async function addTransitions(
 
     const prompt = getTransitionPrompt(brandVoice, fromSection, toSection);
 
-    const message = await anthropic.messages.create({
+    const message = await ask(model, {
       model,
       max_tokens: 100,
       messages: [{ role: "user", content: prompt }],
@@ -420,7 +436,7 @@ async function generateClosing(
     brandVoice?.closings?.[0]
   );
 
-  const message = await anthropic.messages.create({
+  const message = await ask(model, {
     model,
     max_tokens: 200,
     messages: [{ role: "user", content: prompt }],
@@ -453,7 +469,7 @@ async function generateSubjectLines(
     otherTopics
   );
 
-  const message = await anthropic.messages.create({
+  const message = await ask(model, {
     model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
@@ -512,7 +528,7 @@ export async function regenerateSubjectLines(
     []
   );
 
-  const message = await anthropic.messages.create({
+  const message = await ask(model, {
     model,
     max_tokens: 300,
     messages: [{ role: "user", content: prompt }],
@@ -575,7 +591,7 @@ export async function quickGenerateNewsletter(
 
   const prompt = getFullNewsletterPrompt(brandVoice, articles, edition);
 
-  const message = await anthropic.messages.create({
+  const message = await ask(model, {
     model,
     max_tokens: 2000,
     messages: [{ role: "user", content: prompt }],
@@ -613,6 +629,9 @@ export async function quickGenerateNewsletter(
       generatedAt: new Date(),
     };
   } catch (e) {
+    // The two calls above this are planNewsletter and generateSubjectLines, so a
+    // refused model reached here and left as "Failed to generate newsletter content".
+    rethrowIfModelUnusable(e, model);
     console.error("Quick generation failed:", e);
     throw new Error("Failed to generate newsletter content");
   }
