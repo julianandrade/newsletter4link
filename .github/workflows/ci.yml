@@ -34,6 +34,12 @@ permissions:
 
 jobs:
   verify:
+    # This name is load-bearing, and it is now out of date on purpose.
+    #
+    # The "Protect master branch" ruleset requires a status check by this exact string, so
+    # renaming the job stops that check from ever arriving and leaves every pull request
+    # waiting on something that no longer exists. The job runs three things now rather than
+    # two. Change the ruleset first, in the same breath, or leave the name alone.
     name: Types and unit tests
     runs-on: ubuntu-latest
     # The suite runs in about half a minute and the install dominates. This is well above
