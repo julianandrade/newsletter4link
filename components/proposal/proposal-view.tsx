@@ -332,7 +332,7 @@ export function ProposalView({
             <iframe
               title="Rendered edition preview"
               srcDoc={framedEmailHtml(previewHtml)}
-              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
               className="h-[560px] w-full rounded-lg border border-radar-line bg-white"
             />
           )}

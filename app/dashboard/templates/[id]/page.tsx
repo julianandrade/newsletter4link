@@ -501,7 +501,7 @@ export default function EditTemplatePage() {
                 srcDoc={framedEmailHtml(previewHtml)}
                 title="Template preview"
                 className="h-[600px] w-full border-0"
-                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                sandbox="allow-popups allow-popups-to-escape-sandbox"
               />
             ) : (
               <p className="m-0 py-16 text-center text-[12.5px] text-radar-ink3">

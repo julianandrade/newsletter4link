@@ -2307,12 +2307,19 @@ export default function EditionDetailPage() {
             {/*
               Preview links open in a new tab. Untargeted, they navigate the frame, and a
               publisher sending `frame-ancestors 'self'` refuses to be framed.
+
+              Sandboxed like the archive, and for the same reason: what renders here is a stored
+              template's own HTML, edited in Unlayer and reachable by anyone who can edit a
+              template, so it is not markup this page wrote. Without `allow-scripts` nothing in
+              it runs; the popup permissions are only what the new tab needs. This frame carried
+              no `sandbox` at all.
             */}
             {previewHtml ? (
               <iframe
                 srcDoc={framedEmailHtml(previewHtml)}
                 className="w-full h-[600px] border-0"
                 title="Email Preview"
+                sandbox="allow-popups allow-popups-to-escape-sandbox"
               />
             ) : (
               <div className="flex items-center justify-center h-[400px] text-radar-ink2">
