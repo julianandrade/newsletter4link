@@ -1,4 +1,5 @@
 import { JobType } from "@prisma/client";
+import { UnusableModelError, modelRejectionMessage } from "@/lib/ai/model";
 import {
   createJob,
   getRunningJob,
@@ -129,8 +130,21 @@ export function createJobStream(options: JobStreamOptions): Response {
             jobId,
           });
         } else {
+          /**
+           * RQ-002: a refused model says which one, and what to do about it.
+           *
+           * Here rather than in each streaming route, because both of them reach a model
+           * through a library that now throws `UnusableModelError` and neither can answer
+           * with a status code: the headers left before the failure happened. This is also
+           * the message `failJob` records, so the job screen shows the same sentence
+           * afterwards as the stream showed at the time.
+           */
           const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
+            error instanceof UnusableModelError
+              ? modelRejectionMessage(error)
+              : error instanceof Error
+                ? error.message
+                : "Unknown error";
 
           // Mark job as failed if we have a jobId
           if (jobId) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { searchMultiProvider } from "@/lib/search/providers";
+import { modelRejectionResponse } from "@/lib/ai/model-http";
 import { batchAnalyzeResults } from "@/lib/search/result-analyzer";
 import { SearchTimeRange } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -201,6 +202,11 @@ export async function POST(
       message: `Search completed. Found ${newResultsCount} results.`,
     });
   } catch (error) {
+    // RQ-002: this handler runs a saved topic through batchAnalyzeResults, so a
+    // refused model reaches here. A setting to change, not a search to retry.
+    const refused = modelRejectionResponse(error);
+    if (refused) return refused;
+
     console.error("Error running search:", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {

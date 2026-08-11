@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { resolveAiModels } from "@/lib/ai/model";
+import { modelRejectionResponse } from "@/lib/ai/model-http";
 import { processQuery } from "@/lib/search/query-processor";
 import { prisma } from "@/lib/db";
 
@@ -140,6 +141,11 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
+    // RQ-002: the organization's model was refused, which is a setting to change
+    // rather than a failure to retry. Before this the answer was a 500.
+    const refused = modelRejectionResponse(error);
+    if (refused) return refused;
+
     console.error("Error creating search topic:", error);
 
     if (error instanceof Error && error.message.includes("Unauthorized")) {

@@ -7,6 +7,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
+import { rethrowIfModelUnusable } from "@/lib/ai/model";
 import { messageTextOr } from "@/lib/ai/message";
 
 const anthropic = new Anthropic({
@@ -135,6 +136,9 @@ Respond with ONLY the JSON object, no explanation.`,
       analysis,
     };
   } catch (error) {
+    // RQ-002 Q6: a refused model stops the search rather than quietly running it
+    // unexpanded, which looked like a thin result set rather than a broken setting.
+    rethrowIfModelUnusable(error, model);
     console.error("Error processing query:", error);
     // Return basic expansion on error
     return {

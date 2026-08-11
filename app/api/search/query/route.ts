@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { resolveAiModels } from "@/lib/ai/model";
+import { modelRejectionResponse } from "@/lib/ai/model-http";
 import { processQuery, mapTimeScopeToTimeRange } from "@/lib/search/query-processor";
 import {
   searchMultiProvider,
@@ -97,6 +98,11 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    // RQ-002: the organization's model was refused, which is a setting to change
+    // rather than a failure to retry. Before this the answer was a 500.
+    const refused = modelRejectionResponse(error);
+    if (refused) return refused;
+
     console.error("Search error:", error);
 
     if (error instanceof Error) {
