@@ -27,7 +27,7 @@ export default async function OnboardingPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold">Welcome to Newsletter</h1>
           <p className="text-radar-ink2 mt-2">
-            Let's set up your organization to get started
+            Let&apos;s set up your organization to get started
           </p>
         </div>
 

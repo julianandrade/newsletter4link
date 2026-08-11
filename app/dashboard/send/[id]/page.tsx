@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
 import { AsidePicker } from "@/components/aside-picker";
@@ -1580,9 +1581,11 @@ export default function EditionDetailPage() {
             {templates.length === 0 && (
               <p className="text-sm text-radar-ink2 mt-2">
                 No custom templates available.{" "}
-                <a href="/dashboard/templates" className="text-radar-accent hover:underline">
+                {/* Link, not an anchor: an internal page reached with `<a>` reloads the
+                    whole dashboard and loses the builder's state on the way out. */}
+                <Link href="/dashboard/templates" className="text-radar-accent hover:underline">
                   Create one
-                </a>
+                </Link>
               </p>
             )}
           </CardContent>

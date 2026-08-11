@@ -76,3 +76,16 @@ jobs:
       - name: Unit tests
         if: ${{ !cancelled() }}
         run: npx vitest run
+
+      # Third, and on the same footing: `!cancelled()` so one push answers all three
+      # questions rather than hiding the second and third behind the first.
+      #
+      # `eslint .` with no `--max-warnings`, deliberately. The flat config in
+      # eslint.config.mjs keeps the React Compiler rules at warning level, because the day
+      # the linter was installed they reported 55 findings across every data-loading screen,
+      # and a gate nobody can pass is indistinguishable from the gate this project had
+      # before, which was none. Errors fail the job; the 150 warnings are a list to work
+      # through. Lower the number, then lower the ceiling.
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npm run lint

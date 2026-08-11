@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 /**
@@ -128,12 +129,12 @@ export default function UnsubscribeContent() {
         )}
 
         <div className="mt-10">
-          <a
+          <Link
             href="/"
             className="text-[13px] text-radar-ink3 underline hover:text-radar-accent"
           >
             Return to home
-          </a>
+          </Link>
         </div>
       </div>
     </main>

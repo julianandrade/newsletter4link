@@ -71,7 +71,7 @@ export function AcceptInviteForm({
         </div>
         <CardTitle>Join {organizationName}</CardTitle>
         <CardDescription>
-          You've been invited to join as a{" "}
+          You&apos;ve been invited to join as a{" "}
           <Badge variant="secondary" className="mx-1">
             {role.toLowerCase()}
           </Badge>
@@ -86,7 +86,7 @@ export function AcceptInviteForm({
               <p className="font-medium text-radar-warn">Email mismatch</p>
               <p className="text-radar-ink2">
                 This invite was sent to <strong>{invitedEmail}</strong> but
-                you're logged in as <strong>{userEmail}</strong>. You can still
+                you&apos;re logged in as <strong>{userEmail}</strong>. You can still
                 accept if this is intentional.
               </p>
             </div>
@@ -94,7 +94,7 @@ export function AcceptInviteForm({
         )}
 
         <div className="text-center text-sm text-radar-ink2">
-          <p>By accepting, you'll gain access to:</p>
+          <p>By accepting, you&apos;ll gain access to:</p>
           <ul className="mt-2 space-y-1">
             <li className="flex items-center justify-center gap-2">
               <CheckCircle className="h-4 w-4 text-radar-ok" />

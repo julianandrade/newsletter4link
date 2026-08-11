@@ -256,7 +256,14 @@ npx vitest tests/unit/selection.test.tsx
 
 # Typecheck, which the suites do not replace
 npx tsc --noEmit
+
+# Lint. Fails on errors only, by design: see the reasoning in eslint.config.mjs
+npm run lint
+npm run lint:fix
 ```
+
+All three run in CI on every pull request and on every push to master, in that
+order, each with `!cancelled()` so one push answers all three questions.
 
 Playwright is configured in `playwright.config.ts` for browser checks. The
 temporary `/radar-preview` route renders any dashboard screen behind a fetch
