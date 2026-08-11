@@ -17,7 +17,7 @@
 
 import { NextRequest } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
-import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
+import { resolveAiModels } from "@/lib/ai/model";
 import { createJobStream } from "@/lib/jobs";
 import { JobType } from "@prisma/client";
 import { processQuery, mapTimeScopeToTimeRange } from "@/lib/search/query-processor";
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     // Get org settings for brand voice
     const orgSettings = await ctx.db.orgSettings.findUnique();
     brandVoicePrompt = orgSettings?.brandVoicePrompt || null;
-  } catch (error) {
+  } catch {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { "Content-Type": "application/json" } }

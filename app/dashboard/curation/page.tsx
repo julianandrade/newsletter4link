@@ -358,7 +358,7 @@ export default function CurationHistoryPage() {
       } else {
         toast.error(data.error || "Could not delete the old jobs");
       }
-    } catch (error) {
+    } catch {
       toast.error("Could not delete the old jobs");
     } finally {
       setIsDeleting(false);

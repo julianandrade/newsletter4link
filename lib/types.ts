@@ -1,4 +1,4 @@
-import { Article, Project, Edition, Subscriber, ArticleStatus, EditionStatus, EmailEventType } from "@prisma/client";
+import { Article, Project, Edition, Subscriber, ArticleStatus, EditionStatus } from "@prisma/client";
 
 // ==================== API Response Types ====================
 

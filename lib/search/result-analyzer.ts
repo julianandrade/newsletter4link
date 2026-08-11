@@ -7,7 +7,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
-import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { SearchProviderResult } from "./providers/types";
 import { messageTextOr } from "@/lib/ai/message";
 
@@ -178,7 +177,16 @@ export async function analyzeResults(
     const result = results[i];
 
     try {
-      const analysis = await analyzeResult(result, originalQuery, brandVoicePrompt);
+      // RQ-002: `model` travels all the way down, or it may as well not be a parameter.
+      // It was resolved at the route, accepted here and dropped on this line, so every
+      // search result was scored by the SDK's default rather than by the model the
+      // organization chose. Found by the linter: the argument was reported unused.
+      const analysis = await analyzeResult(
+        result,
+        originalQuery,
+        brandVoicePrompt,
+        model
+      );
 
       analyzedResults.push({
         ...result,
@@ -245,7 +253,7 @@ export async function batchAnalyzeResults(
 
   // For small batches, use individual analysis
   if (results.length <= 3) {
-    return analyzeResults(results, originalQuery, brandVoicePrompt);
+    return analyzeResults(results, originalQuery, brandVoicePrompt, undefined, model);
   }
 
   try {
@@ -311,8 +319,14 @@ Respond with ONLY the JSON array.`,
       });
     } catch (parseError) {
       console.error("Failed to parse batch analysis:", parseError);
-      // Fall back to individual analysis
-      return analyzeResults(results.slice(0, 5), originalQuery, brandVoicePrompt);
+      // Fall back to individual analysis, on the same model the batch was asked of.
+      return analyzeResults(
+        results.slice(0, 5),
+        originalQuery,
+        brandVoicePrompt,
+        undefined,
+        model
+      );
     }
   } catch (error) {
     console.error("Error in batch analysis:", error);

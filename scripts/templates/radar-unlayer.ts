@@ -39,7 +39,6 @@ interface Branding {
 const ACCENT = "#ff7901";
 const PRIMARY = "#2d4449";
 const MUTED = "#6b7674";
-const TINT = "#e9eeee";
 const CARD = "#fbfbfa";
 const PAGE = "#eceeed";
 const SANS = "Arial,Helvetica,sans-serif";

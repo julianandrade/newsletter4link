@@ -7,7 +7,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "@/lib/config";
 import { DEFAULT_AI_MODEL } from "@/lib/ai-models";
-import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { BrandVoice } from "@prisma/client";
 import {
   getOpeningHookPrompt,

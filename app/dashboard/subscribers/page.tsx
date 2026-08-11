@@ -206,7 +206,7 @@ export default function SubscribersPage() {
       } else {
         setAddError(data.error || "Could not add that subscriber");
       }
-    } catch (e) {
+    } catch {
       setAddError("Could not add that subscriber");
     } finally {
       setIsAdding(false);
@@ -229,7 +229,7 @@ export default function SubscribersPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Update failed");
       toast.success(next ? "Subscribing again" : "Unsubscribed");
-    } catch (e) {
+    } catch {
       setSubscribers((previous) =>
         previous.map((s) =>
           s.id === subscriber.id ? { ...s, active: subscriber.active } : s
@@ -256,7 +256,7 @@ export default function SubscribersPage() {
         const data = await res.json();
         toast.error(data.error || "Could not delete that subscriber");
       }
-    } catch (e) {
+    } catch {
       toast.error("Could not delete that subscriber");
     } finally {
       setIsDeleting(false);
@@ -283,7 +283,7 @@ export default function SubscribersPage() {
       } else {
         toast.error(data.error || "The import failed");
       }
-    } catch (e) {
+    } catch {
       toast.error("The import failed");
     } finally {
       setIsImporting(false);

@@ -75,7 +75,7 @@ async function addUserToDefaultOrg() {
     }
 
     // Add user to the organization as OWNER
-    const newMember = await prisma.orgUser.create({
+    await prisma.orgUser.create({
       data: {
         supabaseUserId,
         email,

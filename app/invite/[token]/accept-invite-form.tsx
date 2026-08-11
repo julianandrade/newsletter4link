@@ -57,7 +57,7 @@ export function AcceptInviteForm({
       // Success! Redirect to dashboard
       router.push("/dashboard");
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
     }

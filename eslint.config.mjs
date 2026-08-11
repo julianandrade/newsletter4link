@@ -21,7 +21,7 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
  */
 import tseslint from "typescript-eslint";
 
-export default [
+const config = [
   {
     /**
      * Ignored before anything else, because a flat config's `ignores` in a block of its own
@@ -117,3 +117,5 @@ export default [
     },
   },
 ];
+
+export default config;

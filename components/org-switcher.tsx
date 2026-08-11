@@ -141,6 +141,9 @@ export function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
               onClick={() => setOpen(!open)}
             >
               {currentOrg?.logoUrl ? (
+                // An organization logo at 24 pixels, from Supabase storage. next/image
+                // would need that host in images.remotePatterns and would save nothing.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentOrg.logoUrl}
                   alt={currentOrg.name}
@@ -175,6 +178,7 @@ export function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
           >
             <div className="flex items-center gap-2 truncate">
               {currentOrg?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentOrg.logoUrl}
                   alt={currentOrg.name}
@@ -203,6 +207,7 @@ export function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       {org.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={org.logoUrl}
                           alt={org.name}

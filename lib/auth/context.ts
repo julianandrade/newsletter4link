@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { createTenantClient, TenantClient } from "@/lib/db/tenant";
 import { cookies } from "next/headers";
-import { Organization, OrgRole, OrgUser, Plan } from "@prisma/client";
+import { Organization, OrgRole, OrgUser } from "@prisma/client";
 import { getPlanFeatures, hasFeature, PlanFeatures } from "@/lib/plans/features";
 import { isAllowedEmail } from "@/lib/auth/allowed-domains";
 import { hasRoleAtLeast } from "@/lib/auth/roles";

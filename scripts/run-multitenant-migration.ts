@@ -198,7 +198,7 @@ async function runMigration() {
         await prisma.$executeRawUnsafe(
           `ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "organizationId" TEXT`
         );
-      } catch (e) {
+      } catch {
         console.log(`Column may already exist in ${table}`);
       }
     }
@@ -219,7 +219,7 @@ async function runMigration() {
         await prisma.$executeRawUnsafe(
           `ALTER TABLE "${table}" ALTER COLUMN "organizationId" SET NOT NULL`
         );
-      } catch (e) {
+      } catch {
         console.log(`  ${table}: column already NOT NULL or error`);
       }
     }
@@ -233,7 +233,7 @@ async function runMigration() {
           ADD CONSTRAINT "${table}_organizationId_fkey"
           FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE
         `);
-      } catch (e) {
+      } catch {
         console.log(`  ${table}: constraint may already exist`);
       }
     }
@@ -245,7 +245,7 @@ async function runMigration() {
         await prisma.$executeRawUnsafe(
           `CREATE INDEX IF NOT EXISTS "${table}_organizationId_idx" ON "${table}"("organizationId")`
         );
-      } catch (e) {
+      } catch {
         console.log(`  ${table}: index may already exist`);
       }
     }
@@ -267,7 +267,7 @@ async function runMigration() {
         await prisma.$executeRawUnsafe(
           `ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${constraint}"`
         );
-      } catch (e) {
+      } catch {
         // Constraint may not exist
       }
     }
@@ -277,7 +277,7 @@ async function runMigration() {
       await prisma.$executeRawUnsafe(
         `CREATE UNIQUE INDEX IF NOT EXISTS "Article_sourceUrl_organizationId_key" ON "Article"("sourceUrl", "organizationId")`
       );
-    } catch (e) {
+    } catch {
       console.log("  Article compound unique may already exist");
     }
 
@@ -285,7 +285,7 @@ async function runMigration() {
       await prisma.$executeRawUnsafe(
         `CREATE UNIQUE INDEX IF NOT EXISTS "Subscriber_email_organizationId_key" ON "Subscriber"("email", "organizationId")`
       );
-    } catch (e) {
+    } catch {
       console.log("  Subscriber compound unique may already exist");
     }
 
@@ -293,7 +293,7 @@ async function runMigration() {
       await prisma.$executeRawUnsafe(
         `CREATE UNIQUE INDEX IF NOT EXISTS "RSSSource_feedUrl_organizationId_key" ON "RSSSource"("feedUrl", "organizationId")`
       );
-    } catch (e) {
+    } catch {
       console.log("  RSSSource compound unique may already exist");
     }
 
@@ -301,7 +301,7 @@ async function runMigration() {
       await prisma.$executeRawUnsafe(
         `CREATE UNIQUE INDEX IF NOT EXISTS "Edition_week_year_organizationId_key" ON "Edition"("week", "year", "organizationId")`
       );
-    } catch (e) {
+    } catch {
       console.log("  Edition compound unique may already exist");
     }
 
@@ -309,7 +309,7 @@ async function runMigration() {
       await prisma.$executeRawUnsafe(
         `CREATE UNIQUE INDEX IF NOT EXISTS "EmailTemplate_name_organizationId_key" ON "EmailTemplate"("name", "organizationId")`
       );
-    } catch (e) {
+    } catch {
       console.log("  EmailTemplate compound unique may already exist");
     }
 

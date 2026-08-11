@@ -23,7 +23,6 @@ import {
   tableClass,
   tdClass,
   theadClass,
-  thClass,
   trClass,
 } from "@/components/radar/controls";
 import { SortableTh, type SortState } from "@/components/radar/sortable";
@@ -223,7 +222,9 @@ export default function AnalyticsPage() {
   };
 
   const metrics = data?.metrics || EMPTY_METRICS;
-  const timeline = data?.timeline ?? [];
+  // Memoized, so `sortedTimeline` below is a memo rather than a sort on every render:
+  // `?? []` built a new array each time and changed the dependency with it.
+  const timeline = useMemo(() => data?.timeline ?? [], [data?.timeline]);
 
   /**
    * The numbers view is a table, so its headers order it.

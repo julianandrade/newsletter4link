@@ -45,7 +45,7 @@ const industries = [
   { value: "OTHER", label: "Other", icon: HelpCircle, description: "General business and technology", sources: 3, topics: 2 },
 ];
 
-export function OnboardingForm({ userEmail }: OnboardingFormProps) {
+export function OnboardingForm(_props: OnboardingFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -78,7 +78,7 @@ export function OnboardingForm({ userEmail }: OnboardingFormProps) {
       // Success! Redirect to dashboard
       router.push("/dashboard");
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("Something went wrong. Please try again.");
       setJoiningDefault(false);
     }
@@ -133,7 +133,7 @@ export function OnboardingForm({ userEmail }: OnboardingFormProps) {
       // Success! Redirect to dashboard
       router.push("/dashboard");
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
     }

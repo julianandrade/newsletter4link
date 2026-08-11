@@ -287,7 +287,8 @@ describe("escaping", () => {
           {
             title: "Trap",
             summary: "s",
-            // eslint-disable-next-line no-script-url
+            // A javascript: URL on purpose. The directive that used to be here disabled
+            // a rule this config does not enable, but the note is worth keeping.
             sourceUrl: "javascript:alert(1)",
             category: ["X"],
           },

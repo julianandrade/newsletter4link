@@ -37,8 +37,7 @@ interface SegmentResult {
 
 function getDateRangeFilter(
   dateRange: DateRange | null,
-  startDate: string | null,
-  endDate: string | null
+  startDate: string | null
 ): Date | null {
   if (dateRange === "custom" && startDate) {
     const date = new Date(startDate);
@@ -82,7 +81,7 @@ function getEndDateFilter(
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireOrgContext();
-    const { db, organization } = ctx;
+    const { db } = ctx;
 
     const { searchParams } = new URL(request.url);
     const editionId = searchParams.get("editionId");
@@ -197,7 +196,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get engagement timeline based on date range
-    const timelineStartDate = getDateRangeFilter(dateRange, startDate, endDate);
+    const timelineStartDate = getDateRangeFilter(dateRange, startDate);
     const timelineEndDate = getEndDateFilter(dateRange, endDate);
 
     const timelineTimestampFilter: { gte?: Date; lte?: Date } = {};

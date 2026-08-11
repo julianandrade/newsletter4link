@@ -312,7 +312,7 @@ export async function deleteJob(jobId: string) {
     return await prisma.curationJob.delete({
       where: { id: jobId },
     });
-  } catch (error) {
+  } catch {
     // Job not found
     return null;
   }

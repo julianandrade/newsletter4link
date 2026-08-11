@@ -65,16 +65,13 @@ import {
 import { Label } from "@/components/radar/compat";
 import {
   Loader2,
-  Save,
   Eye,
   Send,
   CheckCircle,
-  ArrowLeft,
   Calendar,
   FileText,
   Briefcase,
   Clock,
-  AlertCircle,
   Lock,
   Palette,
   Users,
@@ -234,7 +231,6 @@ export default function EditionDetailPage() {
 
   // Edit mode state
   const [contentMode, setContentMode] = useState<"select" | "edit">("select");
-  const [isEditorReady, setIsEditorReady] = useState(false);
   const [isEditorDirty, setIsEditorDirty] = useState(false);
   const [editorDesign, setEditorDesign] = useState<object | null>(null);
   const editorRef = useRef<EditionUnlayerEditorRef>(null);
@@ -503,7 +499,6 @@ export default function EditionDetailPage() {
 
   // Handle editor ready
   const handleEditorReady = useCallback(() => {
-    setIsEditorReady(true);
     // Load design if one is pending
     if (editorDesign && editorRef.current) {
       editorRef.current.loadDesign(editorDesign);
@@ -2122,6 +2117,8 @@ export default function EditionDetailPage() {
                           </div>
                           {imageUrl && (
                             <div className="w-10 h-10 rounded-md overflow-hidden bg-radar-surface2 shrink-0">
+                              {/* A project image an editor pasted, from whatever host they took it from. */}
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={imageUrl}
                                 alt={project.name}

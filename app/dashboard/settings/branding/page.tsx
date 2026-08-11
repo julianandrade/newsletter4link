@@ -185,7 +185,9 @@ export default function BrandingSettingsPage() {
                   <div className="flex min-h-[168px] items-center justify-center rounded-xl border border-dashed border-radar-line bg-radar-surface2 p-4">
                     {url ? (
                       <div className="flex w-full flex-col items-center gap-3">
-                        {/* Remote CDN images, so a plain img rather than next/image. */}
+                        {/* Remote CDN images, so a plain img rather than next/image: the host would
+                            have to be listed in images.remotePatterns first. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={url}
                           alt={`${slot.title} preview`}

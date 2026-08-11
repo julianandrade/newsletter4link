@@ -8,8 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
-import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
-import { generateNewsletter, GeneratedNewsletter } from "@/lib/generation/generator";
+import { resolveAiModels } from "@/lib/ai/model";
+import { generateNewsletter } from "@/lib/generation/generator";
 import { ArticleForPlanning } from "@/lib/generation/content-planner";
 import { isoWeekAndYear } from "@/lib/radar/week";
 import { editionLabel } from "@/lib/editions/identity";

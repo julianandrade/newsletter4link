@@ -175,11 +175,16 @@ export default function GeneratePage() {
   }, []);
 
   // Check for running job on mount (after we have orgId)
+  //
+  // The ref is the guard, so this runs once per orgId however often the component
+  // renders. `checkForRunningJob` is redeclared every render, so listing it as a
+  // dependency would restart the check instead of leaving it alone.
   useEffect(() => {
     if (orgId && !hasCheckedRunningJob.current) {
       hasCheckedRunningJob.current = true;
       checkForRunningJob();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
   async function fetchOrganization() {
@@ -254,7 +259,6 @@ export default function GeneratePage() {
       setDrafts([]);
       setSelectedDraftId(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEditionId, editions]);
 
   useEffect(() => {
@@ -285,7 +289,6 @@ export default function GeneratePage() {
     });
     setIsDirty(false);
     setSelectedSubjectLine(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDraftId, drafts, isLoadingDrafts]);
 
   async function fetchEditions() {
@@ -540,7 +543,6 @@ export default function GeneratePage() {
         localStorage.removeItem(`${STORAGE_KEY_PREFIX}${orgId}`);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEditionId, selectedBrandVoiceId, orgId]);
 
   async function handleCancel() {
