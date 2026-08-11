@@ -45,6 +45,13 @@ export interface ViewRewrite {
   checkSummary: string | null;
   longestSharedRun: number | null;
   wordCount: number | null;
+  /**
+   * The editor's ask this version was written to, when there was one.
+   *
+   * Optional so a fixture, or a payload from before the column existed, still type-checks
+   * and reads as an ordinary automatic generation.
+   */
+  instruction?: string | null;
 }
 
 export interface LinkTakePayload {
@@ -110,6 +117,8 @@ export interface RewriteHistoryEntry {
   model: string;
   generatedAt: string;
   error: string | null;
+  /** What was asked for, when a person asked for this version specifically. */
+  instruction?: string | null;
 }
 
 /**

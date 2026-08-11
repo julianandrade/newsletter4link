@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSuggestPrompt, parseSuggestions, SUGGESTION_COUNT } from "@/lib/asides/suggest";
+import { NO_LONG_DASH_RULE, hasLongDash } from "@/lib/ai/typography";
 
 describe("parseSuggestions", () => {
   it("reads one candidate per line", () => {
@@ -94,5 +95,32 @@ describe("buildSuggestPrompt", () => {
     const prompt = buildSuggestPrompt({ topics: [], samples: [], language: "pt-PT" });
 
     expect(prompt).toContain("500");
+  });
+});
+
+/**
+ * The house dash rule, on the one surface where the line is the whole product.
+ *
+ * A closing one-liner is short enough that an em dash is most of its punctuation, so the
+ * prompt asking and the parser enforcing are worth having on both ends here.
+ */
+describe("no long dash survives a suggestion", () => {
+  it("replaces one inside a line and keeps the line", () => {
+    expect(parseSuggestions("A promessa era autonomia — entregou um diff por rever."))
+      .toEqual(["A promessa era autonomia - entregou um diff por rever."]);
+  });
+
+  it("treats a dash opening a line as the bullet it was", () => {
+    expect(parseSuggestions("— Primeira\n— Segunda")).toEqual([
+      "Primeira",
+      "Segunda",
+    ]);
+  });
+
+  it("asks for it in the prompt as well", () => {
+    const prompt = buildSuggestPrompt({ topics: [], samples: [], language: "pt-PT" });
+
+    expect(prompt).toContain(NO_LONG_DASH_RULE);
+    expect(hasLongDash(prompt)).toBe(false);
   });
 });

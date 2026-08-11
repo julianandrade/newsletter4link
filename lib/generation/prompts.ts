@@ -5,9 +5,14 @@
  */
 
 import { BrandVoice } from "@prisma/client";
+import { NO_LONG_DASH_RULE } from "@/lib/ai/typography";
 
 /**
  * Build the brand voice system prompt section
+ *
+ * Every prose prompt in this file goes through here, which is why the house typography
+ * rule is appended here rather than repeated in each of them. `stripLongDashes` in
+ * `lib/generation/generator.ts` is what makes it true when the model ignores it.
  */
 export function buildBrandVoicePrompt(brandVoice: BrandVoice | null): string {
   if (!brandVoice) {
@@ -15,7 +20,9 @@ export function buildBrandVoicePrompt(brandVoice: BrandVoice | null): string {
 BRAND VOICE:
 Write in a professional, informative tone. Be clear and direct.
 Focus on delivering value to tech professionals and executives.
-Avoid hype and marketing speak. Be factual and insightful.`;
+Avoid hype and marketing speak. Be factual and insightful.
+
+TYPOGRAPHY: ${NO_LONG_DASH_RULE}`;
   }
 
   const parts: string[] = [`BRAND VOICE: ${brandVoice.name}`];
@@ -55,6 +62,8 @@ Avoid hype and marketing speak. Be factual and insightful.`;
       parts.push(`\nAvoid phrases like: "${examples.bad.join('", "')}"`);
     }
   }
+
+  parts.push(`\n\nTYPOGRAPHY: ${NO_LONG_DASH_RULE}`);
 
   return parts.join("");
 }

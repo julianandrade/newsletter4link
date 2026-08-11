@@ -29,6 +29,11 @@ export interface StoredRewrite {
   wordCount: number | null;
   generatedAt: Date;
   error: string | null;
+  /**
+   * The editor's ask for this version, when one was typed. Null on every automatic
+   * generation, which is most of them.
+   */
+  instruction: string | null;
 }
 
 /**
@@ -47,6 +52,14 @@ export async function saveRewrite(
     language: string;
     /** Hash of the article text at the time, so staleness can be computed later. */
     articleHash: string;
+    /**
+     * The instruction this version was written to, when an editor typed one.
+     *
+     * Stored on the row rather than anywhere else, for the same reason nothing is
+     * overwritten: "why does version three read differently from version two" is a
+     * question the history has to be able to answer on its own.
+     */
+    instruction?: string | null;
   }
 ): Promise<string> {
   const { outcome } = input;
@@ -85,6 +98,7 @@ export async function saveRewrite(
         longestSharedRun: outcome.check?.stats.longestSharedRun ?? null,
         wordCount: outcome.check?.stats.words ?? null,
         sourceHash: input.articleHash,
+        instruction: input.instruction ?? null,
       },
       select: { id: true },
     });

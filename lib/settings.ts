@@ -19,6 +19,16 @@ export interface OrgSettingsData extends AppSettings {
   fromName: string | null;
   replyToEmail: string | null;
   theme: string | null;
+  /**
+   * RQ-006: what grounds and frames the generated prose.
+   *
+   * Returned here since 11 August 2026. All three were read by
+   * `lib/rewrite/pipeline.ts` and absent from this shape, so the settings screen could
+   * not show them and `PUT /api/settings` could not change them.
+   */
+  orgContextPrompt: string | null;
+  rewriteLanguage: string;
+  relevanceHeading: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -39,7 +49,57 @@ const DEFAULT_ORG_SETTINGS: OrgSettingsData = {
   fromName: null,
   replyToEmail: null,
   theme: "linkroad-dark",
+  orgContextPrompt: null,
+  // The same defaults the column carries and the pipeline falls back to.
+  rewriteLanguage: "pt-PT",
+  relevanceHeading: "Relevancia para a Link",
 };
+
+/**
+ * One row to one response shape, in one place.
+ *
+ * `getOrgSettings` and `updateOrgSettings` both return this, and they used to build it
+ * with two hand-written field lists. Adding a column then meant remembering both, and a
+ * field returned by the read but not the write is a screen that shows the new value until
+ * the next save silently drops it.
+ */
+function toOrgSettings(row: {
+  relevanceThreshold: number;
+  maxArticlesPerEdition: number;
+  vectorSimilarityThreshold: number;
+  articleMaxAgeDays: number;
+  aiModel: string;
+  embeddingModel: string;
+  brandVoicePrompt: string | null;
+  logoUrl: string | null;
+  bannerUrl: string | null;
+  primaryColor: string | null;
+  fromName: string | null;
+  replyToEmail: string | null;
+  theme: string | null;
+  orgContextPrompt: string | null;
+  rewriteLanguage: string;
+  relevanceHeading: string;
+}): OrgSettingsData {
+  return {
+    relevanceThreshold: row.relevanceThreshold,
+    maxArticlesPerEdition: row.maxArticlesPerEdition,
+    vectorSimilarityThreshold: row.vectorSimilarityThreshold,
+    articleMaxAgeDays: row.articleMaxAgeDays,
+    aiModel: row.aiModel,
+    embeddingModel: row.embeddingModel,
+    brandVoicePrompt: row.brandVoicePrompt,
+    logoUrl: row.logoUrl,
+    bannerUrl: row.bannerUrl,
+    primaryColor: row.primaryColor,
+    fromName: row.fromName,
+    replyToEmail: row.replyToEmail,
+    theme: row.theme ?? DEFAULT_ORG_SETTINGS.theme,
+    orgContextPrompt: row.orgContextPrompt,
+    rewriteLanguage: row.rewriteLanguage,
+    relevanceHeading: row.relevanceHeading,
+  };
+}
 
 /**
  * Get settings from database
@@ -131,21 +191,7 @@ export async function getOrgSettings(db: TenantClient): Promise<OrgSettingsData>
     });
   }
 
-  return {
-    relevanceThreshold: settings.relevanceThreshold,
-    maxArticlesPerEdition: settings.maxArticlesPerEdition,
-    vectorSimilarityThreshold: settings.vectorSimilarityThreshold,
-    articleMaxAgeDays: settings.articleMaxAgeDays,
-    aiModel: settings.aiModel,
-    embeddingModel: settings.embeddingModel,
-    brandVoicePrompt: settings.brandVoicePrompt,
-    logoUrl: settings.logoUrl,
-    bannerUrl: settings.bannerUrl,
-    primaryColor: settings.primaryColor,
-    fromName: settings.fromName,
-    replyToEmail: settings.replyToEmail,
-    theme: settings.theme ?? DEFAULT_ORG_SETTINGS.theme,
-  };
+  return toOrgSettings(settings);
 }
 
 /**
@@ -159,21 +205,7 @@ export async function updateOrgSettings(
     update: updates,
   });
 
-  return {
-    relevanceThreshold: settings.relevanceThreshold,
-    maxArticlesPerEdition: settings.maxArticlesPerEdition,
-    vectorSimilarityThreshold: settings.vectorSimilarityThreshold,
-    articleMaxAgeDays: settings.articleMaxAgeDays,
-    aiModel: settings.aiModel,
-    embeddingModel: settings.embeddingModel,
-    brandVoicePrompt: settings.brandVoicePrompt,
-    logoUrl: settings.logoUrl,
-    bannerUrl: settings.bannerUrl,
-    primaryColor: settings.primaryColor,
-    fromName: settings.fromName,
-    replyToEmail: settings.replyToEmail,
-    theme: settings.theme ?? DEFAULT_ORG_SETTINGS.theme,
-  };
+  return toOrgSettings(settings);
 }
 
 // Re-exported from lib/ai-models so server code and the settings screen share

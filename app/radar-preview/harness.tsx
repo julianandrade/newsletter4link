@@ -1066,6 +1066,11 @@ const SETTINGS = {
   embeddingModel: "text-embedding-ada-002",
   brandVoicePrompt:
     "We advise financial-sector clients on digital transformation. Professional but plain. Concrete results over announcements.",
+  // RQ-006's three, so the panel that reads them has something to show here too.
+  orgContextPrompt:
+    "A consultancy of 800 people delivering digital transformation, quality engineering and AI for banks, insurers and public administration in Portugal.",
+  rewriteLanguage: "pt-PT",
+  relevanceHeading: "Relevancia para a Link",
 };
 
 const USAGE = {

@@ -373,6 +373,95 @@ describe("evidence and history", () => {
   });
 });
 
+/**
+ * The instruction box: one ask, for one version.
+ *
+ * The assertions are the ones that would let it look like it works while doing nothing:
+ * an empty box that still submits, a submitted ask that does not reach the caller, and
+ * text left in the box afterwards, which reads as a setting that will keep applying.
+ */
+describe("asking for a different version", () => {
+  const box = () => screen.getByLabelText(/Ask for a different version/i);
+  const submit = () => screen.getByRole("button", { name: /Write it again/i });
+
+  it("hands the typed instruction to the caller", () => {
+    const onRegenerate = vi.fn();
+
+    render(
+      <LinkTakeView
+        payload={READY}
+        canEdit
+        onGenerate={() => {}}
+        onRegenerate={onRegenerate}
+      />
+    );
+
+    fireEvent.change(box(), { target: { value: "  Mais curto, sem numeros.  " } });
+    fireEvent.click(submit());
+
+    expect(onRegenerate).toHaveBeenCalledWith("Mais curto, sem numeros.");
+  });
+
+  it("clears the box, because the ask applied to that version only", () => {
+    render(
+      <LinkTakeView payload={READY} canEdit onGenerate={() => {}} onRegenerate={() => {}} />
+    );
+
+    fireEvent.change(box(), { target: { value: "Mais curto." } });
+    fireEvent.click(submit());
+
+    expect((box() as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("cannot be submitted empty, or while a generation is in flight", () => {
+    const onRegenerate = vi.fn();
+    const { rerender } = render(
+      <LinkTakeView
+        payload={READY}
+        canEdit
+        onGenerate={() => {}}
+        onRegenerate={onRegenerate}
+      />
+    );
+
+    expect(submit()).toHaveProperty("disabled", true);
+
+    fireEvent.change(box(), { target: { value: "   " } });
+    expect(submit()).toHaveProperty("disabled", true);
+
+    rerender(
+      <LinkTakeView
+        payload={READY}
+        canEdit
+        busy
+        onGenerate={() => {}}
+        onRegenerate={onRegenerate}
+      />
+    );
+
+    fireEvent.change(box(), { target: { value: "Mais curto." } });
+    expect(submit()).toHaveProperty("disabled", true);
+    expect(onRegenerate).not.toHaveBeenCalled();
+  });
+
+  it("is offered after a refusal, which is when it is most useful", () => {
+    render(
+      <LinkTakeView payload={REFUSED} canEdit onGenerate={() => {}} onRegenerate={() => {}} />
+    );
+
+    expect(box()).toBeTruthy();
+  });
+
+  it("is absent for a reader, and before anything has been attempted", () => {
+    const { unmount } = view(READY);
+    expect(screen.queryByLabelText(/Ask for a different version/i)).toBeNull();
+    unmount();
+
+    view(ABSENT, true);
+    expect(screen.queryByLabelText(/Ask for a different version/i)).toBeNull();
+  });
+});
+
 describe("while a generation is in flight", () => {
   it("disables the control so a second click cannot spend twice", () => {
     render(<LinkTakeView payload={ABSENT} canEdit={false} busy {...NOOP} />);

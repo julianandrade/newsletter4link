@@ -3,9 +3,10 @@
 /**
  * RQ-006_03: the article detail view.
  *
- * Props in, markup out. It does no fetching and holds no state beyond what a
- * disclosure needs, which is what lets every state of the screen be a fixture in the
- * preview harness and an assertion in a test rather than something to click through.
+ * Props in, markup out. It does no fetching, and the only state under it belongs to the
+ * two controls that need their own, a disclosure and the instruction box, which is what
+ * lets every state of the screen be a fixture in the preview harness and an assertion in a
+ * test rather than something to click through.
  *
  * The one invariant: `AttributionBlock` is rendered before the branch, so there is no
  * path through this component that produces prose or summary without the publication
@@ -13,6 +14,7 @@
  * rather than remembered.
  */
 
+import { useState } from "react";
 import Link from "next/link";
 import { AttributionBlock } from "@/components/article/attribution-block";
 import {
@@ -30,8 +32,10 @@ import {
 import {
   Callout,
   RadarDisclosure,
+  RadarTextarea,
   type CalloutTone,
 } from "@/components/radar/controls";
+import { MAX_INSTRUCTION_CHARS } from "@/lib/rewrite/config";
 import {
   parseBlocks,
   type BulletBlock,
@@ -59,7 +63,13 @@ export interface LinkTakeViewProps {
   /** What the last generate attempt had to say, when it had something. */
   notice?: LinkTakeNotice | null;
   onGenerate: () => void;
-  onRegenerate: () => void;
+  /**
+   * Regenerate, optionally against one ask for this attempt only.
+   *
+   * Called with nothing by the plain buttons and with the typed text by the form below.
+   * The two are one handler because they differ only in what goes in the body.
+   */
+  onRegenerate: (instruction?: string) => void;
   onLoadHistory?: () => void;
   history?: RewriteHistoryEntry[] | null;
   historyError?: string | null;
@@ -142,6 +152,73 @@ function Prose({ body }: { body: string }) {
   return <div className="mt-5">{rendered}</div>;
 }
 
+/**
+ * One ask, for one attempt.
+ *
+ * Its own component because it is the only stateful thing on this screen, and keeping the
+ * state in here is what leaves `LinkTakeView` a function of its props: every state of the
+ * screen stays a fixture in the preview harness rather than something to click through.
+ *
+ * The text is not kept after a submit. It is deliberately not a setting: what is typed
+ * here applies to this version, and the standing instructions live in Settings under Brand
+ * voice. Clearing it is how the screen says so.
+ */
+function InstructionForm({
+  busy,
+  onSubmit,
+}: {
+  busy: boolean;
+  onSubmit: (instruction: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const trimmed = text.trim();
+
+  return (
+    <form
+      className="mt-4 rounded-xl border border-radar-line2 p-3.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!trimmed || busy) return;
+        onSubmit(trimmed);
+        setText("");
+      }}
+    >
+      <label
+        htmlFor="rewrite-instruction"
+        className="mb-1.5 block text-[11.5px] font-medium text-radar-ink2"
+      >
+        Ask for a different version
+      </label>
+
+      <RadarTextarea
+        id="rewrite-instruction"
+        rows={2}
+        maxLength={MAX_INSTRUCTION_CHARS}
+        value={text}
+        disabled={busy}
+        onChange={(event) => setText(event.target.value)}
+        placeholder="Shorter, and lead on what it means for a compliance team."
+      />
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="m-0 text-[11.5px] text-radar-ink3 text-pretty">
+          Applies to this piece and this attempt only. For a standing rule, edit Brand
+          voice in Settings.
+        </p>
+        <RadarButton
+          type="submit"
+          variant="accent"
+          size="sm"
+          disabled={busy || trimmed.length === 0}
+          aria-busy={busy}
+        >
+          Write it again
+        </RadarButton>
+      </div>
+    </form>
+  );
+}
+
 export function LinkTakeView({
   payload,
   canEdit,
@@ -168,7 +245,9 @@ export function LinkTakeView({
     canEdit ? (
       <RadarButton
         size={size}
-        onClick={onRegenerate}
+        // Wrapped, not passed: the handler takes an optional instruction, and handing it
+        // straight to onClick would call it with the click event as that instruction.
+        onClick={() => onRegenerate()}
         disabled={busy}
         aria-busy={busy}
       >
@@ -309,6 +388,14 @@ export function LinkTakeView({
           )}
         </div>
       )}
+
+      {/*
+        Not in the absent state, where the offer is already on screen as one button and a
+        first attempt has nothing to be written differently from.
+      */}
+      {canEdit && state.kind !== "absent" ? (
+        <InstructionForm busy={busy} onSubmit={onRegenerate} />
+      ) : null}
 
       {/*
         Not in the absent state: nothing has ever been attempted there, so the panel

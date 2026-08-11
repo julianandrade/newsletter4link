@@ -1164,6 +1164,17 @@ model ArticleRewrite {
   sourceHash String?
 
   /**
+   * The editor's ask for this version, typed next to Regenerate. Null on every automatic
+   * generation.
+   *
+   * On the row rather than on OrgSettings: the standing instructions are
+   * `OrgSettings.brandVoicePrompt` and `orgContextPrompt`, and a one-off ask stored there
+   * would reshape every article generated afterwards. Here it is also what lets the
+   * history answer why one version reads differently from the one it superseded.
+   */
+  instruction String? @db.Text
+
+  /**
    * Set when a newer rewrite replaces this one. Nothing is deleted.
    */
   supersededAt DateTime?

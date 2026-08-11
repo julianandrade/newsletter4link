@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext, requireRole } from "@/lib/auth/context";
+import { MAX_INSTRUCTION_CHARS } from "@/lib/rewrite/config";
 import { rewriteArticle, publicationOf } from "@/lib/rewrite/pipeline";
 import { readCurrentRewrite, readRewriteHistory } from "@/lib/rewrite/store";
 
@@ -90,6 +91,10 @@ export async function GET(
               checkSummary: current.rewrite!.checkSummary,
               longestSharedRun: current.rewrite!.longestSharedRun,
               wordCount: current.rewrite!.wordCount,
+              // What was asked for, when something was. Shown under the piece: prose that
+              // reads differently from the last version should say why on the screen, not
+              // only in the history panel.
+              instruction: current.rewrite!.instruction,
             }
           : null,
         /** Why there is nothing, when there is nothing. */
@@ -124,17 +129,50 @@ export async function GET(
  * organization description and wanting the relevance section rewritten against it.
  *
  * Forced, so it supersedes a passing rewrite rather than reusing it. The old row stays.
+ *
+ * The optional `instruction` in the body is one ask for this attempt only: "shorter",
+ * "drop the vendor's own numbers", "lead on the compliance angle". It is stored on the row
+ * it produces, and it is never written to the organization's settings, where it would
+ * silently apply to every article afterwards. The standing version of the same thing is
+ * the Brand voice field in Settings.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const ctx = await requireOrgContext();
     requireRole(ctx, "EDITOR");
 
+    // A body is optional: the plain Regenerate button sends none, and a POST with no
+    // content type at all must not fail on a parse.
+    const body = (await request.json().catch(() => null)) as {
+      instruction?: unknown;
+    } | null;
+
+    let instruction: string | null = null;
+
+    if (typeof body?.instruction === "string") {
+      const trimmed = body.instruction.trim();
+
+      if (trimmed.length > MAX_INSTRUCTION_CHARS) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `The instruction must be ${MAX_INSTRUCTION_CHARS} characters or less.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      instruction = trimmed.length > 0 ? trimmed : null;
+    }
+
     const { id } = await params;
-    const outcome = await rewriteArticle(ctx.db, id, "on-open", { force: true });
+    const outcome = await rewriteArticle(ctx.db, id, "on-open", {
+      force: true,
+      instruction,
+    });
 
     if (outcome.status === "skipped") {
       return NextResponse.json(
@@ -193,6 +231,7 @@ export async function PATCH(
         model: row.model,
         generatedAt: row.generatedAt,
         error: row.error,
+        instruction: row.instruction,
       })),
     });
   } catch (error) {

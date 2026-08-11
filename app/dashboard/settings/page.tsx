@@ -27,6 +27,12 @@ import {
   LEGACY_AI_MODELS,
   EMBEDDING_MODELS,
 } from "@/lib/ai-models";
+import { MAX_BRAND_VOICE_CHARS } from "@/lib/settings-input";
+import {
+  MAX_ORG_CONTEXT_CHARS,
+  MAX_RELEVANCE_HEADING_CHARS,
+  REWRITE_LANGUAGES,
+} from "@/lib/rewrite/config";
 import { cn } from "@/lib/utils";
 
 interface Settings {
@@ -37,11 +43,15 @@ interface Settings {
   aiModel: string;
   embeddingModel: string;
   brandVoicePrompt: string | null;
+  /** RQ-006: the three the Link Take is written against. */
+  orgContextPrompt: string | null;
+  rewriteLanguage: string;
+  relevanceHeading: string;
 }
 
 type View = "curation" | "ai" | "appearance" | "plan";
 
-const BRAND_VOICE_LIMIT = 500;
+const BRAND_VOICE_LIMIT = MAX_BRAND_VOICE_CHARS;
 
 export default function SettingsPage() {
   const [view, setView] = useState<View>("curation");
@@ -93,6 +103,7 @@ export default function SettingsPage() {
   };
 
   const brandVoiceLength = settings?.brandVoicePrompt?.length ?? 0;
+  const orgContextLength = settings?.orgContextPrompt?.length ?? 0;
   const modelIsCurrent =
     !settings?.aiModel ||
     AI_MODELS.some((model) => model.value === settings.aiModel);
@@ -334,6 +345,97 @@ export default function SettingsPage() {
                       placeholder="We advise financial-sector clients on digital transformation. Professional but plain. We want practical AI applications, especially compliance and automation, and concrete results over announcements. No hype."
                     />
                   </RadarField>
+                </RadarPanel>
+
+                {/*
+                  RQ-006's three fields, on screen for the first time. They were read by
+                  the rewrite pipeline from the day it shipped and were absent from the
+                  settings API, so the one thing the requirement says must never be
+                  hardcoded, the organization's own description, could only be changed with
+                  SQL.
+
+                  Next to Brand voice rather than in their own tab: that panel says how the
+                  prose sounds, and these three say what it is grounded in, what the
+                  relevance section is called and which language it is written in. One
+                  screen, one save.
+                */}
+                <RadarPanel
+                  title="The generated story"
+                  note="What every Link Take is written against. Changing these affects the next piece written, not the ones already on file."
+                >
+                  <div className="flex flex-col gap-5">
+                    <RadarField
+                      label="What this organization does"
+                      htmlFor="orgContextPrompt"
+                      hint={
+                        <>
+                          The relevance section is grounded in this, in concrete terms. Name
+                          the sector, the clients and the work. Left empty, the model is
+                          told to invent nothing and to keep that section generic or drop
+                          it.{" "}
+                          <Num
+                            className={cn(
+                              orgContextLength > MAX_ORG_CONTEXT_CHARS - 100 &&
+                                "text-radar-warn"
+                            )}
+                          >
+                            {orgContextLength}
+                          </Num>{" "}
+                          of <Num>{MAX_ORG_CONTEXT_CHARS}</Num> characters.
+                        </>
+                      }
+                    >
+                      <RadarTextarea
+                        id="orgContextPrompt"
+                        rows={5}
+                        maxLength={MAX_ORG_CONTEXT_CHARS}
+                        value={settings?.orgContextPrompt ?? ""}
+                        onChange={(event) =>
+                          update("orgContextPrompt", event.target.value || null)
+                        }
+                        placeholder="A consultancy of 800 people delivering digital transformation, quality engineering and AI for banks, insurers and public administration in Portugal. Our people are engineers, architects and testers, and what they want from a story is what it changes in a delivery."
+                      />
+                    </RadarField>
+
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <RadarField
+                        label="Heading of the relevance section"
+                        htmlFor="relevanceHeading"
+                        required
+                        hint="Printed as a heading inside every piece, so it is written in the language of the prose. It cannot be empty."
+                      >
+                        <RadarInput
+                          id="relevanceHeading"
+                          maxLength={MAX_RELEVANCE_HEADING_CHARS}
+                          value={settings?.relevanceHeading ?? ""}
+                          onChange={(event) =>
+                            update("relevanceHeading", event.target.value)
+                          }
+                          placeholder="Relevancia para a Link"
+                        />
+                      </RadarField>
+
+                      <RadarField
+                        label="Language of the prose"
+                        htmlFor="rewriteLanguage"
+                        hint="The dashboard stays in English. This is the language the stories and the closing lines are written in, and the closing-slot library is filtered by it, so stored lines in another language stop being offered."
+                      >
+                        <RadarSelect
+                          id="rewriteLanguage"
+                          value={settings?.rewriteLanguage ?? "pt-PT"}
+                          onChange={(event) =>
+                            update("rewriteLanguage", event.target.value)
+                          }
+                        >
+                          {REWRITE_LANGUAGES.map((language) => (
+                            <option key={language.value} value={language.value}>
+                              {language.label}
+                            </option>
+                          ))}
+                        </RadarSelect>
+                      </RadarField>
+                    </div>
+                  </div>
                 </RadarPanel>
               </div>
             )}

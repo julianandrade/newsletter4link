@@ -24,6 +24,7 @@ import {
 } from "./content-planner";
 import { isJobCancelled } from "@/lib/jobs";
 import { messageText, messageTextOr } from "@/lib/ai/message";
+import { stripLongDashes, stripLongDashesFrom } from "@/lib/ai/typography";
 
 /**
  * Error thrown when generation is cancelled
@@ -266,7 +267,11 @@ async function generateOpening(
     messages: [{ role: "user", content: prompt }],
   });
 
-  return messageTextOr(message, "Welcome to this week's newsletter.");
+  // Every model reply that becomes prose in the edition passes through stripLongDashes.
+  // The prompt asks for it, in buildBrandVoicePrompt; this is what makes it true.
+  return stripLongDashes(
+    messageTextOr(message, "Welcome to this week's newsletter.")
+  );
 }
 
 /**
@@ -360,7 +365,9 @@ async function generateArticleSummary(
     messages: [{ role: "user", content: prompt }],
   });
 
-  return messageTextOr(message, article.summary || "Read more about this development.");
+  return stripLongDashes(
+    messageTextOr(message, article.summary || "Read more about this development.")
+  );
 }
 
 /**
@@ -393,7 +400,7 @@ async function addTransitions(
 
     // Absent rather than empty: a transition is optional, and "" would render as a
     // blank paragraph between sections.
-    sections[i].transition = messageText(message) || undefined;
+    sections[i].transition = stripLongDashes(messageText(message)) || undefined;
 
     await delay(200);
   }
@@ -420,7 +427,9 @@ async function generateClosing(
     messages: [{ role: "user", content: prompt }],
   });
 
-  return messageTextOr(message, "Thanks for reading. See you next week!");
+  return stripLongDashes(
+    messageTextOr(message, "Thanks for reading. See you next week!")
+  );
 }
 
 /**
@@ -458,7 +467,9 @@ async function generateSubjectLines(
     const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();
     const subjects = JSON.parse(cleanJson);
     if (Array.isArray(subjects) && subjects.length > 0) {
-      return subjects.slice(0, 5);
+      // Coerced before it is cleaned: this is parsed JSON, so an element is a string only
+      // because the prompt asked for one.
+      return stripLongDashesFrom(subjects.slice(0, 5).map(String));
     }
   } catch (e) {
     console.error("Failed to parse subject lines:", e);
@@ -515,7 +526,7 @@ export async function regenerateSubjectLines(
     const cleanJson = responseText.replace(/```json\n?|\n?```/g, "").trim();
     const subjects = JSON.parse(cleanJson);
     if (Array.isArray(subjects)) {
-      return subjects.slice(0, 5);
+      return stripLongDashesFrom(subjects.slice(0, 5).map(String));
     }
   } catch (e) {
     console.error("Failed to parse subject lines:", e);
@@ -582,20 +593,22 @@ export async function quickGenerateNewsletter(
     const subjectLines = await generateSubjectLines(plan, edition, brandVoice, model);
 
     return {
-      opening: generated.opening || "Welcome to this week's newsletter.",
+      opening: stripLongDashes(
+        generated.opening || "Welcome to this week's newsletter."
+      ),
       sections: [
         {
           name: "This Week",
           articles: (generated.articles || []).map((a: { title: string; summary: string; url: string }, i: number) => ({
             id: articles[i]?.id || `article-${i}`,
-            title: a.title,
-            summary: a.summary,
+            title: stripLongDashes(a.title),
+            summary: stripLongDashes(a.summary),
             sourceUrl: a.url,
             isHero: i === 0,
           })),
         },
       ],
-      closing: generated.closing || "Thanks for reading!",
+      closing: stripLongDashes(generated.closing || "Thanks for reading!"),
       subjectLines,
       plan,
       generatedAt: new Date(),

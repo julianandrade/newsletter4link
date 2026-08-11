@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { rethrowIfModelRejected } from "@/lib/ai/model";
 import { describeBlocks, messageText } from "@/lib/ai/message";
+import { stripLongDashes } from "@/lib/ai/typography";
 import {
   checkRewrite,
   describeCheck,
@@ -123,7 +124,18 @@ export function parseRewriteJson(
     ) {
       const { title, body } = parsed as { title: string; body: string };
       if (title.trim().length === 0 || body.trim().length === 0) return null;
-      return { title: title.trim(), body: body.trim() };
+      /**
+       * The house dash rule, applied here rather than trusted to rule 7.
+       *
+       * This is the single funnel every attempt passes through, the retry included, and
+       * it is upstream of the checks, so what gets compared to the source and what gets
+       * stored are the same text. Punctuation cannot affect the copy check either way:
+       * `words()` in checks.ts strips it before comparing.
+       */
+      return {
+        title: stripLongDashes(title.trim()),
+        body: stripLongDashes(body.trim()),
+      };
     }
   } catch {
     return null;
