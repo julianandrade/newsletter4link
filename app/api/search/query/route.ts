@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
-import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
+import { resolveAiModels } from "@/lib/ai/model";
 import { processQuery, mapTimeScopeToTimeRange } from "@/lib/search/query-processor";
 import {
   searchMultiProvider,

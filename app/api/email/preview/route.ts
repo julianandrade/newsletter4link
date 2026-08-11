@@ -81,7 +81,8 @@ export function previewSourceChoice(input: {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { editionId, templateId, customData, draftId } = body;
+    const { editionId, templateId, draftId } = body;
+    const customData: CustomData | undefined = body.customData;
     const ctx = await requireOrgContext();
 
     let emailData: TemplateData;

@@ -142,11 +142,14 @@ export default function SearchPage() {
   const hasPreselectedTopic = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load organization, saved topics, and history on mount
+  // Load organization, saved topics, and history on mount, once and deliberately: the
+  // three loaders are redeclared every render, so listing them would refetch the page's
+  // whole state on every keystroke.
   useEffect(() => {
     fetchOrganization();
     loadTopics();
     loadHistory(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Seed the box from ?q=, so links from Trends arrive with the query in place.
@@ -163,11 +166,16 @@ export default function SearchPage() {
   }, []);
 
   // Check for running job on mount (after we have orgId)
+  //
+  // The ref is the guard, so this runs once per orgId however often the component
+  // renders. `checkForRunningJob` is redeclared every render, so listing it as a
+  // dependency would restart the check instead of leaving it alone.
   useEffect(() => {
     if (orgId && !hasCheckedRunningJob.current) {
       hasCheckedRunningJob.current = true;
       checkForRunningJob();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
   async function fetchOrganization() {
@@ -282,7 +290,7 @@ export default function SearchPage() {
       } else {
         toast.error(data.error || "Failed to save search");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to save search");
     } finally {
       setIsSavingSearch(false);
@@ -319,7 +327,7 @@ export default function SearchPage() {
       } else {
         toast.error(data.error || "Failed to load results");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to load results");
     } finally {
       setIsLoadingHistoryResults(null);
@@ -347,7 +355,7 @@ export default function SearchPage() {
       } else {
         toast.error(data.error || "Failed to create the watchlist");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to create the watchlist");
     } finally {
       setConvertingHistoryId(null);
@@ -373,7 +381,7 @@ export default function SearchPage() {
         const data = await res.json();
         toast.error(data.error || "Failed to delete");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete");
     } finally {
       setDeletingHistoryId(null);
@@ -624,7 +632,7 @@ export default function SearchPage() {
       } else {
         toast.error(data.error || "Failed to create the watchlist");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to create the watchlist");
     } finally {
       setIsCreatingTopic(false);
@@ -651,7 +659,7 @@ export default function SearchPage() {
       } else {
         toast.error(data.error || "The watchlist run failed");
       }
-    } catch (e) {
+    } catch {
       toast.error("The watchlist run failed");
     } finally {
       setIsRunningTopic(false);
@@ -674,7 +682,7 @@ export default function SearchPage() {
       } else {
         toast.error("Failed to delete the watchlist");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete the watchlist");
     }
   };
@@ -698,7 +706,7 @@ export default function SearchPage() {
       } else {
         setTopicResults([]);
       }
-    } catch (e) {
+    } catch {
       setTopicResults([]);
     } finally {
       setIsLoadingTopicResults(false);
@@ -765,7 +773,7 @@ export default function SearchPage() {
       } else {
         toast.error(data.error || "Failed to import");
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to import");
     } finally {
       setImportingUrl(null);

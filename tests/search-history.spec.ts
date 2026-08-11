@@ -1,4 +1,4 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, Page } from "@playwright/test";
 
 const email = "test@example.com";
 const password = "Test1234!";

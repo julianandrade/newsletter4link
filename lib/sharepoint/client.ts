@@ -5,7 +5,7 @@
  * Handles site pages, document libraries, and assets.
  */
 
-import { Client, ResponseType } from "@microsoft/microsoft-graph-client";
+import { Client } from "@microsoft/microsoft-graph-client";
 import { getAccessToken, getSharePointConfig, parseSiteUrl } from "./auth";
 
 // Cache site ID to avoid repeated lookups

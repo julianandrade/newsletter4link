@@ -103,6 +103,7 @@ export default function MfaPage() {
       setStage("done");
       // A full navigation, so the middleware re-reads the upgraded session
       // rather than serving a client route from the old assurance level.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign("/dashboard");
     },
     [factorId, code, verifyTotp]
@@ -132,7 +133,9 @@ export default function MfaPage() {
         <RadarPanel className="mt-6 p-6">
           {qrCode && (
             <div className="mb-6">
-              {/* Supabase returns the QR as an SVG data URL. */}
+              {/* Supabase returns the QR as an SVG data URL, which next/image cannot optimise
+                  and would need dangerouslyAllowSVG to render at all. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={qrCode}
                 alt="QR code for enrolling this account in your authenticator app"
@@ -187,6 +190,8 @@ export default function MfaPage() {
             type="button"
             onClick={async () => {
               await signOut();
+              // A full navigation on purpose, as above: the session just changed.
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
               window.location.assign("/login");
             }}
             className="mt-6 text-sm text-radar-ink3 hover:text-radar-accent underline"

@@ -10,7 +10,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/radar/compat";
 import { Button } from "@/components/radar/compat";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,7 +25,6 @@ import {
 import { Input } from "@/components/radar/compat";
 import { Label } from "@/components/radar/compat";
 import { MediaLibrary } from "@/components/media-library";
-import { cn } from "@/lib/utils";
 import {
   Bold,
   Italic,
@@ -34,7 +32,6 @@ import {
   Image as ImageIcon,
   X,
   Plus,
-  GripVertical,
   Pencil,
   Check,
   ExternalLink,
@@ -235,7 +232,6 @@ function InlineEditor({
   content,
   onSave,
   onCancel,
-  placeholder = "Enter text...",
 }: InlineEditorProps) {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
@@ -675,7 +671,6 @@ interface AddBlockButtonProps {
 }
 
 function AddBlockButton({
-  position,
   onAddText,
   onAddImage,
 }: AddBlockButtonProps) {

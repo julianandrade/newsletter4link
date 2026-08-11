@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ALLOWED_EMAIL_DOMAINS,
   DOMAIN_REJECTED_MESSAGE,
@@ -25,7 +25,6 @@ const CALLBACK_ERRORS: Record<string, string> = {
 };
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { signInWithAzure, signInWithPassword, signUp, loading: authLoading } = useAuth();
 
@@ -77,6 +76,7 @@ function LoginForm() {
     // Password accounts owe a second factor. A full navigation rather than a
     // client push, so the middleware sees the new session and routes to the
     // step-up page or the dashboard as appropriate.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/dashboard");
   };
 

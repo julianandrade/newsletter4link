@@ -10,7 +10,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/auth/context";
-import { resolveAiModels, UnusableModelError } from "@/lib/ai/model";
+import { resolveAiModels } from "@/lib/ai/model";
 import { createJobStream, JobCancelledError } from "@/lib/jobs";
 import { JobType } from "@prisma/client";
 import {
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       );
     }
     organizationId = organization.id;
-  } catch (error) {
+  } catch {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { "Content-Type": "application/json" } }

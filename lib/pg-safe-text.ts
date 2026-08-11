@@ -27,7 +27,6 @@
  * A NUL is also rejected by a plain `text` column, so this is not only a jsonb concern.
  */
 
-// eslint-disable-next-line no-control-regex
 const NUL = /\u0000/g;
 
 /**

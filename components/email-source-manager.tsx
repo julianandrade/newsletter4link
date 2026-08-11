@@ -179,6 +179,9 @@ export function EmailSourceManager() {
     void loadUnknown();
   }, [loadSources, loadUnknown]);
 
+  // `sources` is not read in here, and that is the point: the clock this screen measures
+  // staleness against is taken once per load of the sources, not once per render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => new Date(), [sources]);
 
   const withHealth = useMemo(

@@ -6,7 +6,7 @@ import {
   newsletterSubject,
 } from "@/lib/email/sender";
 import { prisma } from "@/lib/db";
-import { getCurrentEdition, markEditionAsSent } from "@/lib/queries";
+import { markEditionAsSent } from "@/lib/queries";
 import {
   renderTemplateById,
   injectCustomBlocks,
@@ -111,7 +111,7 @@ interface CustomData {
 export async function POST(request: Request) {
   try {
     const ctx = await requireOrgContext();
-    const { db, organization } = ctx;
+    const { db } = ctx;
 
     // RQ-005 BR-011: this route mails every active subscriber, so membership alone
     // is not enough to reach it. It previously required only that the caller belong
@@ -122,13 +122,13 @@ export async function POST(request: Request) {
     const {
       editionId,
       templateId,
-      customData,
       customHtml,
       subscriberIds,
       emails,
       provider,
       draftId,
     } = body;
+    const customData: CustomData | undefined = body.customData;
 
     // Validate provider if specified
     if (provider && !["resend", "graph"].includes(provider)) {

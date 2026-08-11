@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Num,
   RadarButton,
   SectionLabel,
   StatusChip,
@@ -74,7 +73,6 @@ export function ApiKeysCard({ plan, hasAccess }: ApiKeysCardProps) {
     } else {
       setIsLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess]);
 
   async function fetchApiKeys() {

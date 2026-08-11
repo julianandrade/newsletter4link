@@ -96,7 +96,7 @@ describe("resolveArchiveAccess", () => {
       "garbage",
       EDITION,
       lookups({
-        findSubscriber: async (id) => {
+        findSubscriber: async (_id) => {
           consulted = true;
           return { active: true, organizationId: ORG };
         },

@@ -41,7 +41,7 @@ interface CustomData {
  * POST /api/email/send-test
  * Send a test newsletter to a specific email address
  *
- * Body: { email: string, editionId?: string, templateId?: string, customData?: CustomData,
+ * Body: { email: string, templateId?: string, customData?: CustomData,
  *         asideId?: string }
  * - templateId: specific template to use (optional, uses React Email component if omitted)
  * - customData: custom edited data to use (optional, overrides database data)
@@ -56,7 +56,8 @@ export async function POST(request: Request) {
     // separate pre-existing problem.
     const ctx = await requireOrgContext();
     const body = await request.json();
-    const { email, editionId, templateId, customData, asideId } = body;
+    const { email, templateId, asideId } = body;
+    const customData: CustomData | undefined = body.customData;
 
     if (!email) {
       return NextResponse.json(

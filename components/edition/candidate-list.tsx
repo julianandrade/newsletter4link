@@ -231,8 +231,17 @@ export function CandidateList({
     void load();
   }, [load]);
 
-  const articles = showArticles ? pool.articles : [];
-  const projects = showProjects ? pool.projects : [];
+  // Memoized for their identity, not their cost. `visibleIds` below depends on both and
+  // feeds useSelection, so a fresh array every render re-ran the selection bookkeeping
+  // on every keystroke in the search box.
+  const articles = useMemo(
+    () => (showArticles ? pool.articles : []),
+    [showArticles, pool.articles]
+  );
+  const projects = useMemo(
+    () => (showProjects ? pool.projects : []),
+    [showProjects, pool.projects]
+  );
 
   /**
    * Ids in render order, which is what makes a shift-click range follow what is on
