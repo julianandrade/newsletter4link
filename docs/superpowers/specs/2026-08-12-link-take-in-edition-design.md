@@ -88,13 +88,23 @@ A take is **usable** when all of:
 staleness, so this is a predicate over an existing function, not a new query.
 
 **Where the loading happens.** The predicate lives in one new exported function, and every caller
-uses it. There are four places that assemble articles for rendering, and all four must agree or the
-preview will disagree with the send:
+uses it. The places that assemble articles for rendering must agree, or the preview will disagree
+with the send:
 
-- `lib/email/sender.ts` and the send route (`app/api/email/send-all`)
-- `app/api/email/preview` and `app/api/email/send-test`
-- `lib/editions/sent-snapshot.ts` (see §5)
+- `app/api/email/send-all`, both its draft branch and its edition-rows branch
+- `app/api/email/preview`, whose live and approved-draft branches load, while its frozen branch
+  reads the take from the snapshot, which is correct: a preview of a sent edition previews what
+  was sent
+- `lib/editions/sent-snapshot.ts`, which freezes the take, and `renderSourceFor`, which reads it
+  back out (see §5)
+- `lib/email/sender.ts`, whose local `Article` interface has to carry the field for the spread
+  into `buildEditionEmail` to typecheck; it runs no query of its own
 - `app/editions/[id]/page.tsx`, which reads the snapshot and therefore needs no live load
+
+**Not `app/api/email/send-test`**, which the first draft of this spec listed. It has no
+edition-scoped selection at all: it takes `customData` or falls back to a bare
+`prisma.article.findMany`, accepts no `editionId`, and has no caller anywhere in the app. There is
+no join row there to read a flag from.
 
 Loaded only for flagged articles, so an edition with nothing flagged issues no extra query.
 
