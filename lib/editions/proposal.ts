@@ -658,7 +658,10 @@ async function readProjectCandidates(
 async function readEditionArticleRows(db: TenantClient, editionId: string) {
   return db.$raw.editionArticle.findMany({
     where: { editionId },
-    select: { articleId: true, order: true },
+    // useLinkTake rides along even though this function does not read it: any
+    // caller that carries these rows into mergeEditionArticles must have the flag
+    // to preserve it, and a select that dropped it would be silently destructive.
+    select: { articleId: true, order: true, useLinkTake: true },
     orderBy: { order: "asc" },
   });
 }
