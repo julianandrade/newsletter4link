@@ -29,6 +29,7 @@ import { buildSentSnapshot } from "@/lib/editions/sent-snapshot";
 import { toEmailAside } from "@/lib/asides/select";
 import { markAsideUsed } from "@/lib/asides/mark-used";
 import type { EmailAside } from "@/lib/email/edition-template";
+import { readLinkTakesFor } from "@/lib/rewrite/usable";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -370,6 +371,16 @@ export async function POST(request: Request) {
       }
     }
 
+    /**
+     * Loaded only for flagged stories, so an edition with nothing flagged issues no extra
+     * query. `customData` carries no article ids at all, so this has nothing to attach to on
+     * that path; the draft and default branches below are the ones that use it.
+     */
+    const flaggedIds = editionArticles
+      .filter((row) => row.useLinkTake)
+      .map((row) => row.articleId);
+    const takes = await readLinkTakesFor(db, flaggedIds);
+
     // Prepare email data - use custom data if provided, otherwise use edition data
     let emailData: any;
     if (customData) {
@@ -397,6 +408,7 @@ export async function POST(request: Request) {
             summary: article.summary,
             sourceUrl: article.sourceUrl,
             category: source?.category || [],
+            linkTake: takes.get(article.id) ?? null,
           };
         })
       );
@@ -428,6 +440,7 @@ export async function POST(request: Request) {
           relevanceScore: ea.article.relevanceScore,
           // Only the lead's is read, to find the top story's image. See content-image.ts.
           content: ea.article.content,
+          linkTake: takes.get(ea.article.id) ?? null,
         })),
         projects: editionProjects.map((ep: any) => ({
           id: ep.project.id,

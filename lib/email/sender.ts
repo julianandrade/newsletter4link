@@ -15,6 +15,8 @@ interface Article {
   sourceUrl: string;
   category?: string[];
   relevanceScore?: number | null;
+  /** Set only when this edition flagged the story to send its Link Take. */
+  linkTake?: { title: string; body: string; language: string } | null;
 }
 
 interface Project {

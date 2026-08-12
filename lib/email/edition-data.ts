@@ -14,6 +14,7 @@ import type {
   EditionEmail,
   EmailArticle,
   EmailAside,
+  EmailLinkTake,
   EmailSection,
   EmailTrend,
 } from "./edition-template";
@@ -33,6 +34,12 @@ export interface SourceArticle {
    * layout, which is what every send produced before this existed.
    */
   content?: string | null;
+  /**
+   * The verified original piece, when this edition flagged the story to send it. RQ-006
+   * surface 3. Resolved by the caller, like `oneMoreThing` and for the same reason: this
+   * module is reachable from client components and must not import anything Prisma-facing.
+   */
+  linkTake?: EmailLinkTake | null;
 }
 
 export interface SourceProject {
@@ -179,6 +186,7 @@ function toEmailArticle(article: SourceArticle): EmailArticle {
     summary: (article.summary ?? "").trim(),
     url: article.sourceUrl,
     source: publicationName(article.sourceUrl),
+    linkTake: article.linkTake ?? null,
   };
 }
 

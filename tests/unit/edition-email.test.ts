@@ -682,3 +682,44 @@ describe("the masthead", () => {
     expect(email.dateLabel).toBe("the week of the summit");
   });
 });
+
+describe("an edition carrying a Link Take", () => {
+  it("passes the take through to the email article", () => {
+    const email = buildEditionEmail({
+      articles: [
+        {
+          title: "OpenAI ships agent mode",
+          summary: "A one sentence summary.",
+          sourceUrl: "https://techcrunch.com/agent",
+          category: ["tooling"],
+          linkTake: { title: "Os agentes", body: "Corpo.", language: "pt-PT" },
+        },
+      ],
+      projects: [],
+      week: 33,
+      year: 2026,
+    });
+
+    const item = email.sections.flatMap((section) => section.items)[0] ?? email.topStory;
+    expect(item?.linkTake?.title).toBe("Os agentes");
+  });
+
+  it("leaves linkTake undefined when the article has none", () => {
+    const email = buildEditionEmail({
+      articles: [
+        {
+          title: "OpenAI ships agent mode",
+          summary: "A one sentence summary.",
+          sourceUrl: "https://techcrunch.com/agent",
+          category: ["tooling"],
+        },
+      ],
+      projects: [],
+      week: 33,
+      year: 2026,
+    });
+
+    const item = email.sections.flatMap((section) => section.items)[0] ?? email.topStory;
+    expect(item?.linkTake).toBeFalsy();
+  });
+});

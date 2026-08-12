@@ -40,6 +40,13 @@ export interface SentSnapshotArticle {
   relevanceScore: number | null;
   /** Only the lead's is read, to find the top story's image. See content-image.ts. */
   content: string | null;
+  /**
+   * The Link Take exactly as it was sent, when this edition sent one.
+   *
+   * Frozen here for the same reason `summary` is: regenerating a take after a send would
+   * otherwise rewrite what subscribers already received.
+   */
+  linkTake?: { title: string; body: string; language: string } | null;
 }
 
 export interface SentSnapshotProject {
@@ -123,6 +130,7 @@ function toSnapshotArticle(
     category: article.category ?? [],
     relevanceScore: article.relevanceScore ?? null,
     content: article.content ?? null,
+    linkTake: article.linkTake ?? null,
   };
 }
 
@@ -307,6 +315,7 @@ export function renderSourceFor(edition: RenderSourceEdition): RenderSource {
         category: article.category,
         relevanceScore: article.relevanceScore,
         content: article.content,
+        linkTake: article.linkTake ?? null,
       })),
       projects: snapshot.projects.map((project) => ({
         name: project.name,

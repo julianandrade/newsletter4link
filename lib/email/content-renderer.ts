@@ -33,6 +33,8 @@ export interface Article {
   category: string[];
   /** Read only to find the lead story's image. See lib/email/content-image.ts. */
   content?: string | null;
+  /** Set only when this edition flagged the story to send its Link Take. */
+  linkTake?: { title: string; body: string; language: string } | null;
 }
 
 export interface Project {
@@ -68,6 +70,7 @@ export function renderArticlesHtml(articles: Article[]): string {
       summary: article.summary ?? "",
       url: article.sourceUrl,
       source: publicationName(article.sourceUrl),
+      linkTake: article.linkTake ?? null,
     }))
   );
 }
