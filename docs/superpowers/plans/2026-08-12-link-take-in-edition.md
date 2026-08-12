@@ -670,6 +670,26 @@ Then widen the `articleRows` declaration above it to match:
     }> | null = null;
 ```
 
+- [ ] **Step 5b: Return the flag from the GET, or nothing can read it**
+
+`transformEdition` (same file, around line 179) maps articles as
+`{ ...ea.article, order: ea.order }`. It lifts `order` off the join row and not `useLinkTake`, so
+no client can read the flag back and every PATCH round trip writes `false`. That is the same
+silent wipe this task exists to prevent, one layer earlier, and Task 8's toggle reads exactly this
+field.
+
+```ts
+    articles: edition.articles.map((ea) => ({
+      ...ea.article,
+      order: ea.order,
+      useLinkTake: ea.useLinkTake,
+    })),
+```
+
+Check that the Prisma query behind `EditionWithContents` selects `useLinkTake` on the join row. If
+it uses an explicit `select` rather than including the row, add the field there too, or the value
+is `undefined` at runtime while `tsc` stays happy.
+
 - [ ] **Step 6: Fix every caller**
 
 Run: `npx tsc --noEmit`
@@ -1330,9 +1350,24 @@ Beside `handleArticleSelectionChange`, add:
   };
 ```
 
-Then check that `handleArticleSelectionChange` sends `useLinkTake` in the PATCH body's article
-objects. If it maps to `{ articleId, order }` only, add the field: without it Task 4's route reads
-`undefined` and writes `false`, and the toggle appears to work until the page reloads.
+**Then fix the save path, which is confirmed broken for this field.** Task 4's review verified that
+the builder's save handler in this file (around line 548) PATCHes
+`articles: selectedArticleIds.map((id, index) => ({ articleId: id, order: index + 1 }))`, with no
+`useLinkTake`. This is the primary save path, not a secondary one: as written, saving a draft zeroes
+every flag on the edition. Change it to send the flag:
+
+```tsx
+      articles: selectedArticles.map((article, index) => ({
+        articleId: article.id,
+        order: index + 1,
+        useLinkTake: article.useLinkTake === true,
+      })),
+```
+
+Check the surrounding code for the exact variable in scope; if the handler only has ids, take the
+flag from `selectedArticles` by id rather than reintroducing a parallel list. Without this the
+toggle appears to work until the page reloads, which is the worst failure mode available: it looks
+correct in the session where it was set and is silently wrong in the send.
 
 - [ ] **Step 2: Add the readiness card**
 
