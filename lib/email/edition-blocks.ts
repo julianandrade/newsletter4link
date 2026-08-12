@@ -30,6 +30,7 @@ import type {
   EmailSection,
   EmailTrend,
 } from "./edition-template";
+import { parseBlocks, type Block, type Span } from "@/lib/markdown/blocks";
 
 /* -------------------------------------------------------------------- palette */
 
@@ -144,6 +145,49 @@ export function link(url: string | undefined, label: string, style: string): str
   const text = escapeHtml(label);
   if (!safe) return text;
   return `<a href="${escapeHtml(safe)}" style="${style}">${text}</a>`;
+}
+
+/* ------------------------------------------------------- the Link Take body */
+
+function spansHtml(spans: Span[]): string {
+  return spans
+    .map((span) => {
+      const text = escapeHtml(span.text);
+      if (span.strong) return `<strong>${text}</strong>`;
+      if (span.emphasis) return `<em>${text}</em>`;
+      return text;
+    })
+    .join("");
+}
+
+function blockHtml(block: Block): string {
+  switch (block.kind) {
+    case "heading":
+      return `<div class="t-strong" style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; font-weight:bold; letter-spacing:1.4px; color:${ACCENT}; text-transform:uppercase; padding:6px 0 8px 0;">${escapeHtml(
+        block.text
+      )}</div>`;
+    case "bullet":
+      return `<div class="t-body" style="font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${BODY_INK}; padding:0 0 6px 14px; text-indent:-14px;">&bull;&nbsp;${spansHtml(
+        block.spans
+      )}</div>`;
+    case "paragraph":
+      return `<div class="t-body" style="font-family:${SANS}; font-size:14px; line-height:22px; mso-line-height-rule:exactly; color:${BODY_INK}; padding-bottom:12px;">${spansHtml(
+        block.spans
+      )}</div>`;
+  }
+}
+
+/**
+ * A rewrite body as email-safe HTML.
+ *
+ * Built on `lib/markdown/blocks.ts` rather than a second parser, because the dashboard renders
+ * the same blocks as React and two parsers would drift. That module handles no links and no
+ * images and leaves anything it does not recognise as literal text, which is what makes RQ-006
+ * rule 6 a property of this renderer rather than a request in a prompt.
+ */
+export function linkTakeBodyHtml(body: string): string {
+  if (!body.trim()) return "";
+  return parseBlocks(body).map(blockHtml).join("\n");
 }
 
 /* ------------------------------------------------------------------ fragments */
