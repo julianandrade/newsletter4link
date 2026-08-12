@@ -28,7 +28,7 @@ import { personalizeHtml } from "@/lib/email/personalize";
 import { buildSentSnapshot } from "@/lib/editions/sent-snapshot";
 import { toEmailAside } from "@/lib/asides/select";
 import { markAsideUsed } from "@/lib/asides/mark-used";
-import type { EmailAside } from "@/lib/email/edition-template";
+import type { EmailAside, EmailLinkTake } from "@/lib/email/edition-template";
 import { readLinkTakesFor } from "@/lib/rewrite/usable";
 
 export const dynamic = "force-dynamic";
@@ -374,12 +374,14 @@ export async function POST(request: Request) {
     /**
      * Loaded only for flagged stories, so an edition with nothing flagged issues no extra
      * query. `customData` carries no article ids at all, so this has nothing to attach to on
-     * that path; the draft and default branches below are the ones that use it.
+     * that path, and does not even ask: only the draft and default branches below use it.
      */
-    const flaggedIds = editionArticles
-      .filter((row) => row.useLinkTake)
-      .map((row) => row.articleId);
-    const takes = await readLinkTakesFor(db, flaggedIds);
+    const takes: Map<string, EmailLinkTake> = customData
+      ? new Map()
+      : await readLinkTakesFor(
+          db,
+          editionArticles.filter((row) => row.useLinkTake).map((row) => row.articleId)
+        );
 
     // Prepare email data - use custom data if provided, otherwise use edition data
     let emailData: any;

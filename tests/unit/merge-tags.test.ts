@@ -352,7 +352,7 @@ describe("a flagged story reaches the sections merge tag", () => {
     expect(values.sections).toContain("Análise gerada por AI a partir da fonte original");
   });
 
-  it("renders the take in the articles merge tag too", () => {
+  it("renders the take in the articles merge tag too, in the browser renderer", () => {
     const html = renderArticlesHtml([
       {
         title: "OpenAI ships agent mode",
@@ -366,6 +366,39 @@ describe("a flagged story reaches the sections merge tag", () => {
         },
       },
     ] as Parameters<typeof renderArticlesHtml>[0]);
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
+  });
+
+  /**
+   * The same tag, rendered by the other path: a stored Unlayer template through
+   * `renderTemplate`, which is what `renderTemplateById` calls and what `send-all` actually
+   * sends when an edition uses a stored template. `renderArticles` in template-renderer.ts is
+   * not exported, so this drives it through its public entry point rather than reaching in.
+   * Without this test, a regression here would have shipped the ordinary summary to every
+   * subscriber of a template-framed send while every test still passed.
+   */
+  it("renders the take in the articles merge tag too, in the stored-template renderer", () => {
+    const html = renderTemplate("{{articles}}", {
+      articles: [
+        {
+          title: "OpenAI ships agent mode",
+          summary: "A one sentence summary.",
+          sourceUrl: "https://techcrunch.com/agent",
+          category: ["tooling"],
+          linkTake: {
+            title: "Os agentes chegaram ao terminal",
+            body: "A OpenAI lancou um modo agentico.",
+            language: "pt-PT",
+          },
+        },
+      ],
+      projects: [],
+      week: 32,
+      year: 2026,
+    });
 
     expect(html).toContain("Os agentes chegaram ao terminal");
     expect(html).toContain("Análise gerada por AI a partir da fonte original");
