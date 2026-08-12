@@ -23,6 +23,7 @@ import {
 import { personalizeHtml } from "@/lib/email/personalize";
 import { toEmailAside } from "@/lib/asides/select";
 import { readLinkTakesFor } from "@/lib/rewrite/usable";
+import type { EmailLinkTake } from "@/lib/email/edition-template";
 
 export const dynamic = "force-dynamic";
 
@@ -232,14 +233,19 @@ export async function POST(request: Request) {
       });
 
       /**
-       * Loaded only for flagged stories, and only needed by the two branches that render
-       * live rows. A frozen edition previews the take it actually sent, from the snapshot,
-       * not a take regenerated since.
+       * Loaded only for flagged stories, and only when a branch below actually renders live
+       * rows. A frozen edition previews the take it actually sent, from the snapshot, not a
+       * take regenerated since, so it does no work here at all.
        */
-      const flaggedIds = edition.articles
-        .filter((ea: any) => ea.useLinkTake)
-        .map((ea: any) => ea.article.id);
-      const takes = await readLinkTakesFor(ctx.db, flaggedIds);
+      const takes: Map<string, EmailLinkTake> =
+        choice === "frozen"
+          ? new Map()
+          : await readLinkTakesFor(
+              ctx.db,
+              edition.articles
+                .filter((ea: any) => ea.useLinkTake)
+                .map((ea: any) => ea.article.id)
+            );
 
       if (choice === "frozen") {
         emailData = {
