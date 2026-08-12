@@ -777,6 +777,13 @@ describe("isUsableTake", () => {
   it("refuses a take with an empty body", () => {
     expect(isUsableTake({ rewrite: { ...passing, body: "  " }, stale: false })).toBe(false);
   });
+
+  // The title guard needs its own case. A take titled with whitespace would render an
+  // empty headline where the publisher's used to be, and the guard is one line that a
+  // later edit could drop without any test noticing.
+  it("refuses a take with an empty title", () => {
+    expect(isUsableTake({ rewrite: { ...passing, title: "  " }, stale: false })).toBe(false);
+  });
 });
 ```
 
