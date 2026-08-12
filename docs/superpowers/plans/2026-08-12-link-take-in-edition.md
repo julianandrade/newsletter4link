@@ -245,7 +245,9 @@ describe("topicItem with a Link Take", () => {
     const html = topicItem(PLAIN, true, true);
     expect(html).toContain("A one sentence summary.");
     expect(html).toContain("OpenAI ships agent mode");
-    expect(html).not.toContain("Analise gerada por AI");
+    // Accented, matching what aiLabelFor really returns. Against the unaccented
+    // spelling this assertion could never fail, which is worse than not having it.
+    expect(html).not.toContain("Análise gerada por AI");
   });
 
   it("uses the take's own headline instead of the publisher's", () => {
@@ -270,7 +272,7 @@ describe("topicItem with a Link Take", () => {
   // RQ-006 rule 7, in the language of the prose and not of the app.
   it("labels the piece as AI generated, in the prose's language", () => {
     expect(topicItem(FLAGGED, true, true)).toContain(
-      "Analise gerada por AI a partir da fonte original"
+      "Análise gerada por AI a partir da fonte original"
     );
     const english = topicItem({ ...PLAIN, linkTake: { ...TAKE, language: "en" } }, true, true);
     expect(english).toContain("AI analysis generated from the original source");
@@ -496,7 +498,7 @@ describe("a flagged story reaches both renderers", () => {
     const values = editionMergeValues(edition);
 
     expect(values.sections).toContain("Os agentes chegaram ao terminal");
-    expect(values.sections).toContain("Analise gerada por AI a partir da fonte original");
+    expect(values.sections).toContain("Análise gerada por AI a partir da fonte original");
   });
 
   it("renders the take in the articles merge tag", () => {
