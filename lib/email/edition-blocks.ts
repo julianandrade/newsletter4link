@@ -27,10 +27,12 @@ import type {
   EmailArticle,
   EmailAside,
   EmailInternal,
+  EmailLinkTake,
   EmailSection,
   EmailTrend,
 } from "./edition-template";
 import { parseBlocks, type Block, type Span } from "@/lib/markdown/blocks";
+import { aiLabelFor } from "@/lib/rewrite/view";
 
 /* -------------------------------------------------------------------- palette */
 
@@ -190,6 +192,31 @@ export function linkTakeBodyHtml(body: string): string {
   return parseBlocks(body).map(blockHtml).join("\n");
 }
 
+/**
+ * A story rendered as its Link Take: the piece's own headline, its body, the source, and the
+ * label RQ-006 rule 7 requires.
+ *
+ * The attribution is not optional and not conditional. Rule 5 requires it wherever the prose is
+ * rendered, and the newsletter is named in the rule.
+ */
+export function linkTakeBlock(item: EmailArticle): string {
+  const take: EmailLinkTake | null | undefined = item.linkTake;
+  if (!take) return "";
+
+  return `<div class="h2 t-strong" style="font-family:${SERIF}; font-size:22px; line-height:29px; mso-line-height-rule:exactly; font-weight:normal; color:${INK}; padding-bottom:10px;">${escapeHtml(
+    take.title
+  )}</div>
+${linkTakeBodyHtml(take.body)}
+<div class="t-muted" style="font-family:${SANS}; font-size:11px; line-height:16px; mso-line-height-rule:exactly; letter-spacing:0.6px; color:${MUTED}; padding-top:6px;">${escapeHtml(
+    aiLabelFor(take.language)
+  )}</div>
+<div class="link-strong" style="padding-top:8px; font-family:${SANS}; font-size:13px; line-height:19px; mso-line-height-rule:exactly;">${link(
+    item.url,
+    item.source ? `${item.source}: ver artigo original` : "Ver artigo original",
+    `color:${PRIMARY}; font-weight:bold; text-decoration:none; border-bottom:2px solid ${ACCENT};`
+  )}</div>`;
+}
+
 /* ------------------------------------------------------------------ fragments */
 
 export function bulletRow(bullet: { text: string; url: string }): string {
@@ -269,13 +296,19 @@ export function topicItem(
   isFirst: boolean,
   isLast: boolean
 ): string {
-  const meta = [item.source, item.coverage ? `${item.coverage} sources` : null]
-    .filter(Boolean)
-    .join(" · ");
-
   const cellStyle = isFirst
     ? `padding-bottom:${isLast ? "0" : "16px"};`
     : `border-top:1px solid ${RULE_SOFT}; padding-top:16px;${isLast ? "" : " padding-bottom:16px;"}`;
+
+  if (item.linkTake) {
+    return `<tr><td class="${isFirst ? "" : "rule"}" style="${cellStyle}">
+      ${linkTakeBlock(item)}
+    </td></tr>`;
+  }
+
+  const meta = [item.source, item.coverage ? `${item.coverage} sources` : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return `<tr><td class="${isFirst ? "" : "rule"}" style="${cellStyle}">
       <div class="h2 t-strong" style="font-family:${SANS}; font-size:17px; line-height:24px; mso-line-height-rule:exactly; font-weight:bold; color:${INK}; padding-bottom:5px;">${link(
@@ -369,7 +402,10 @@ export function topStoryBlock(data: EditionEmail, options: HeadingOption = {}): 
   const story = data.topStory;
   if (!story) return "";
 
-  const image = safeUrl(data.topStoryImage);
+  // A flagged top story drops to single column. 200 words in a 380px column beside a 152px
+  // thumbnail is unreadable on a phone, and single column is what every send produced before
+  // the image feature existed.
+  const image = story.linkTake ? null : safeUrl(data.topStoryImage);
   const meta = story.source ? `Lead: ${story.source}` : "";
   const heading = options.heading !== false;
 
@@ -382,14 +418,18 @@ export function topStoryBlock(data: EditionEmail, options: HeadingOption = {}): 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
     <td valign="top" class="stack" style="${image ? "width:380px;" : "width:100%;"}">
-      <div class="h1 t-strong" style="font-family:${SERIF}; font-size:30px; line-height:36px; mso-line-height-rule:exactly; font-weight:normal; color:${INK}; padding-bottom:12px;">${link(
+      ${
+        story.linkTake
+          ? linkTakeBlock(story)
+          : `<div class="h1 t-strong" style="font-family:${SERIF}; font-size:30px; line-height:36px; mso-line-height-rule:exactly; font-weight:normal; color:${INK}; padding-bottom:12px;">${link(
         story.url,
         story.title,
         `color:${INK}; text-decoration:none;`
       )}</div>
       <div class="t-body" style="font-family:${SANS}; font-size:15px; line-height:24px; mso-line-height-rule:exactly; color:${BODY_INK}; padding-bottom:14px;">${escapeHtml(
         story.summary
-      )}</div>
+      )}</div>`
+      }
     </td>
     ${
       image

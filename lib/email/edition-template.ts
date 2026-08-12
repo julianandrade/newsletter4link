@@ -53,6 +53,19 @@ import {
  */
 export { escapeHtml };
 
+/**
+ * The verified original piece for a story, when this edition is sending it instead of the
+ * summary. RQ-006 surface 3.
+ *
+ * `language` is the rewrite's own, not the organization's and not the app's: it is what
+ * `aiLabelFor` keys the required label on, and a take can outlive a change to the setting.
+ */
+export interface EmailLinkTake {
+  title: string;
+  body: string;
+  language: string;
+}
+
 export interface EmailArticle {
   title: string;
   summary: string;
@@ -61,6 +74,8 @@ export interface EmailArticle {
   source?: string;
   /** How many tracked sources covered the same story, when known. */
   coverage?: number;
+  /** Set only when this edition flagged the story to send its Link Take. */
+  linkTake?: EmailLinkTake | null;
 }
 
 export interface EmailSection {
