@@ -37,7 +37,10 @@ import {
   type SortState,
 } from "@/components/radar/sortable";
 import { sortBy } from "@/lib/list-sort";
-import { mergeEditionArticles } from "@/lib/editions/add-to-edition";
+import {
+  mergeEditionArticles,
+  type EditionArticleRow,
+} from "@/lib/editions/add-to-edition";
 import { relativeTime, sourceIdentity } from "@/lib/radar/source";
 import { isoWeekAndYear, isoWeekStart } from "@/lib/radar/week";
 import { useOrgRole } from "@/components/radar/use-role";
@@ -577,8 +580,18 @@ export default function EditionsPage() {
         throw new Error(current.error || "Could not read that edition");
       }
 
-      const existing: string[] = (current.data?.articles ?? []).map(
-        (article: { id: string }) => article.id
+      // `order` and `useLinkTake` come from the edition's own read; `useLinkTake`
+      // defaults to false here until the GET response carries it, which keeps this
+      // call forward-compatible rather than silently correct today and wrong later.
+      const existing: EditionArticleRow[] = (current.data?.articles ?? []).map(
+        (
+          article: { id: string; order?: number; useLinkTake?: boolean },
+          index: number
+        ) => ({
+          articleId: article.id,
+          order: article.order ?? index + 1,
+          useLinkTake: article.useLinkTake === true,
+        })
       );
 
       const res = await fetch(`/api/editions/${editionId}`, {

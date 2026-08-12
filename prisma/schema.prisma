@@ -522,6 +522,19 @@ model EditionArticle {
   articleId String
   order     Int
 
+  /**
+   * Whether this edition sends the article's Link Take instead of its summary. RQ-006
+   * surface 3.
+   *
+   * On the join row rather than on Article, because the choice is editorial and belongs to
+   * this edition. Default false, so every edition that predates this renders unchanged.
+   *
+   * PATCH /api/editions/:id deletes every join row and recreates what it is given, so
+   * anything that writes this list has to read this column and send it back. That is what
+   * `mergeEditionArticles` is for.
+   */
+  useLinkTake Boolean @default(false)
+
   @@id([editionId, articleId])
   @@index([editionId, order])
 }

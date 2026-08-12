@@ -418,7 +418,11 @@ export async function PATCH(
 
     // Article and project ids are validated tenant-scoped, before the
     // transaction, so a cross-tenant id cannot be written into a join row.
-    let articleRows: Array<{ articleId: string; order: number }> | null = null;
+    let articleRows: Array<{
+      articleId: string;
+      order: number;
+      useLinkTake: boolean;
+    }> | null = null;
 
     if (articles !== undefined) {
       if (!Array.isArray(articles)) {
@@ -470,9 +474,10 @@ export async function PATCH(
       }
 
       articleRows = articles.map(
-        (a: { articleId: string; order?: number }, index: number) => ({
+        (a: { articleId: string; order?: number; useLinkTake?: boolean }, index: number) => ({
           articleId: a.articleId,
           order: a.order ?? index + 1,
+          useLinkTake: a.useLinkTake === true,
         })
       );
     }
