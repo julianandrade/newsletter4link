@@ -114,6 +114,28 @@ export interface CurrentRewrite {
 }
 
 /**
+ * The hash `isStale` compares a rewrite's `sourceHash` against, from a fetched article
+ * row.
+ *
+ * Extracted so a caller holding several articles in memory already (a batched read)
+ * computes staleness the identical way `readCurrentRewrite` does for one, rather than a
+ * second copy of "fall back to hashing the content" drifting from this one.
+ */
+function currentArticleHash(
+  article: { contentHash: string | null; content: string } | null | undefined
+): string | null {
+  return article?.contentHash ?? (article ? hashSource(article.content) : null);
+}
+
+/** Whether a stored rewrite is stale against a specific article row. The single rule. */
+export function isRewriteStale(
+  rewrite: { sourceHash: string | null },
+  article: { contentHash: string | null; content: string } | null | undefined
+): boolean {
+  return isStale(rewrite, currentArticleHash(article));
+}
+
+/**
  * The rewrite in force for an article, and whether it still matches the article.
  *
  * Returns a FAILED row as well as a passing one. A reader is shown nothing either way,
@@ -134,11 +156,9 @@ export async function readCurrentRewrite(
 
   if (!row) return { rewrite: null, stale: false };
 
-  const hash = article?.contentHash ?? (article ? hashSource(article.content) : null);
-
   return {
     rewrite: row as unknown as StoredRewrite,
-    stale: isStale({ sourceHash: row.sourceHash }, hash),
+    stale: isRewriteStale(row, article),
   };
 }
 
