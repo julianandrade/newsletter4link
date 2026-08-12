@@ -89,6 +89,7 @@ import { Input } from "@/components/radar/compat";
 import { Textarea } from "@/components/radar/compat";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { isBuiltInTemplateId } from "@/lib/email/builtin-template";
+import { linkTakeReadiness, linkTakeBlockReason } from "@/lib/editions/link-take-readiness";
 
 // Types
 interface Template {
@@ -459,6 +460,19 @@ export default function EditionDetailPage() {
     setIsDirty(true);
   };
 
+  // Reports through the same handler the list uses, so there is one write path. The flag
+  // rides along in the PATCH body, which carries useLinkTake per task 4; a second endpoint
+  // would be a second way for the two to disagree.
+  const toggleLinkTake = (articleId: string, useLinkTake: boolean) => {
+    const next = selectedArticles.map((article) =>
+      article.id === articleId ? { ...article, useLinkTake } : article
+    );
+    handleArticleSelectionChange(
+      next.map((article) => article.id),
+      next
+    );
+  };
+
   // Handle project selection change
   const handleProjectSelectionChange = (ids: string[], projects: Project[]) => {
     setSelectedProjectIds(ids);
@@ -545,9 +559,10 @@ export default function EditionDetailPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          articles: selectedArticleIds.map((id, index) => ({
-            articleId: id,
+          articles: selectedArticles.map((article, index) => ({
+            articleId: article.id,
             order: index + 1,
+            useLinkTake: article.useLinkTake === true,
           })),
           projects: selectedProjectIds.map((id, index) => ({
             projectId: id,
@@ -933,10 +948,23 @@ export default function EditionDetailPage() {
   };
   const recipientCount = getRecipientCount();
 
+  // RQ-006 surface 3: whether every flagged story has a take that can actually be sent.
+  // Computed from the same rows `/api/email/send-all` checks, so the screen and the 409
+  // it would otherwise hit say the same thing.
+  const linkTakeState = linkTakeReadiness(
+    selectedArticles.map((article) => ({
+      articleId: article.id,
+      title: article.title,
+      useLinkTake: article.useLinkTake === true,
+      hasUsableTake: article.hasUsableTake === true,
+    }))
+  );
+
   // Check if send is allowed
   const canSend = recipientCount > 0 &&
     (selectedProvider ? providers.find(p => p.id === selectedProvider)?.configured : true) &&
-    (drafts.length === 0 || !!selectedApprovedDraftId);
+    (drafts.length === 0 || !!selectedApprovedDraftId) &&
+    linkTakeState.ready;
 
   const sendBlockReason = !recipientCount
     ? "No recipients selected."
@@ -944,7 +972,9 @@ export default function EditionDetailPage() {
       ? "Select an approved draft before sending."
       : selectedProvider && !providers.find(p => p.id === selectedProvider)?.configured
         ? "Selected email provider is not configured."
-        : null;
+        : !linkTakeState.ready
+          ? linkTakeBlockReason(linkTakeState)
+          : null;
 
   // Configured providers count
   const configuredProviders = providers.filter((p) => p.configured);
@@ -1200,6 +1230,26 @@ export default function EditionDetailPage() {
                 )}
                 <Button variant="ghost" size="sm" asChild>
                   <a href="#preview-panel">Review</a>
+                </Button>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Link Take</p>
+                  <p className="text-xs text-radar-ink2">
+                    {linkTakeState.flagged === 0
+                      ? "No stories flagged"
+                      : linkTakeState.ready
+                        ? `${linkTakeState.flagged} flagged, all ready`
+                        : `${linkTakeState.flagged} flagged, ${linkTakeState.missing.length} with none`}
+                  </p>
+                </div>
+                {linkTakeState.ready ? (
+                  <Badge variant="success">Ready</Badge>
+                ) : (
+                  <Badge variant="warning">Blocked</Badge>
+                )}
+                <Button variant="ghost" size="sm" asChild>
+                  <a href="#articles-panel">Open</a>
                 </Button>
               </div>
             </div>
@@ -1960,7 +2010,7 @@ export default function EditionDetailPage() {
 
         {/* Content Tabs - for Select mode */}
         {contentMode === "select" && (
-          <Tabs defaultValue="articles" className="space-y-4">
+          <Tabs defaultValue="articles" className="space-y-4" id="articles-panel">
             <TabsList>
               <TabsTrigger value="articles" className="gap-2">
                 <FileText className="w-4 h-4" />
@@ -2056,6 +2106,17 @@ export default function EditionDetailPage() {
                       <span className="font-editorial block text-[14px] leading-[1.3] text-radar-ink text-pretty">
                         {article.title}
                       </span>
+                      <label className="mt-1.5 flex items-center gap-2 text-[11px] text-radar-ink2">
+                        <input
+                          type="checkbox"
+                          checked={article.useLinkTake === true}
+                          onChange={(event) => toggleLinkTake(article.id, event.target.checked)}
+                        />
+                        <span>Send the Link Take</span>
+                        {article.useLinkTake && article.hasUsableTake === false && (
+                          <Badge variant="warning">none written</Badge>
+                        )}
+                      </label>
                     </>
                   )}
                 />

@@ -3,6 +3,8 @@ import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { deleteNeverSentEditions } from "@/lib/editions/lifecycle";
 import { editionLabel, editionWriteFields } from "@/lib/editions/identity";
 import { renderSourceFor } from "@/lib/editions/sent-snapshot";
+import { readLinkTakesFor } from "@/lib/rewrite/usable";
+import type { TenantClient } from "@/lib/db/tenant";
 import { EditionStatus, Prisma } from "@prisma/client";
 
 const MAX_TITLE = 120;
@@ -145,7 +147,7 @@ export function toEditionArticleView<T extends { id: string }>(
   return { ...article, order, useLinkTake };
 }
 
-function transformEdition(edition: EditionWithContents) {
+async function transformEdition(edition: EditionWithContents, db: TenantClient) {
   /**
    * What the edition actually contained when it went out, alongside the live rows.
    *
@@ -159,6 +161,17 @@ function transformEdition(edition: EditionWithContents) {
    * which is the signal to fall back to the live rows.
    */
   const source = renderSourceFor(edition);
+
+  /**
+   * Whether each article's Link Take could be sent right now, regardless of whether this
+   * edition currently flags it. Queried for every article rather than only the flagged
+   * ones: the builder's toggle has to tell an editor the moment they check a box, not only
+   * for what was already flagged when the page loaded.
+   */
+  const takes = await readLinkTakesFor(
+    db,
+    edition.articles.map((ea) => ea.article.id)
+  );
 
   return {
     id: edition.id,
@@ -197,10 +210,12 @@ function transformEdition(edition: EditionWithContents) {
     // useLinkTake is lifted onto the article the same way order is: the builder
     // has to read the current flag to send it back through PATCH, and PATCH
     // deletes and recreates every row, so a response that omitted it would
-    // silently clear it on the very next round trip.
-    articles: edition.articles.map((ea) =>
-      toEditionArticleView(ea.article, ea.order, ea.useLinkTake)
-    ),
+    // silently clear it on the very next round trip. hasUsableTake rides beside
+    // it so the row can say why a flag is blocked without a second fetch.
+    articles: edition.articles.map((ea) => ({
+      ...toEditionArticleView(ea.article, ea.order, ea.useLinkTake),
+      hasUsableTake: takes.has(ea.article.id),
+    })),
     projects: edition.projects.map((ep) => ({
       ...ep.project,
       order: ep.order,
@@ -288,7 +303,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: transformEdition(edition),
+      data: await transformEdition(edition, db),
     });
   } catch (error) {
     return errorResponse(error, "Failed to load the edition");
@@ -599,7 +614,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      data: transformEdition(updatedEdition),
+      data: await transformEdition(updatedEdition, db),
       message: "Edition updated successfully",
     });
   } catch (error) {
