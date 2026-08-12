@@ -10,6 +10,7 @@ import {
 import type { EditionEmail } from "@/lib/email/edition-template";
 import {
   generateMergeTagSamples,
+  renderArticlesHtml,
   replaceContentMergeTags,
 } from "@/lib/email/content-renderer";
 import { renderTemplate } from "@/lib/email/template-renderer";
@@ -321,14 +322,9 @@ describe("editionMergeValues", () => {
  * A flagged story's Link Take has to reach the same markup wherever an edition renders its
  * articles, or a hand-built template quietly shows the ordinary summary for a story the editor
  * asked to feature. `sections` is covered here because editionMergeValues owns it, through
- * sectionBlock and topicItem.
- *
- * `articles` is deliberately not covered here. That tag is not built by editionMergeValues at
- * all: it comes from renderArticlesHtml in content-renderer.ts and renderArticles in
- * template-renderer.ts, each from its own local Article interface, and neither carries a
- * linkTake field yet. Threading it through belongs to the task that wires linkTake into the
- * four assembly points; adding it here would collide with that work and this file would still
- * only prove one of the two tags, not both.
+ * sectionBlock and topicItem. `articles` is covered too: that tag is not built by
+ * editionMergeValues at all, it comes from renderArticlesHtml in content-renderer.ts and
+ * renderArticles in template-renderer.ts, each from its own local Article interface.
  */
 describe("a flagged story reaches the sections merge tag", () => {
   const take = {
@@ -354,5 +350,25 @@ describe("a flagged story reaches the sections merge tag", () => {
 
     expect(values.sections).toContain("Os agentes chegaram ao terminal");
     expect(values.sections).toContain("Análise gerada por AI a partir da fonte original");
+  });
+
+  it("renders the take in the articles merge tag too", () => {
+    const html = renderArticlesHtml([
+      {
+        title: "OpenAI ships agent mode",
+        summary: "A one sentence summary.",
+        sourceUrl: "https://techcrunch.com/agent",
+        category: ["tooling"],
+        linkTake: {
+          title: "Os agentes chegaram ao terminal",
+          body: "A OpenAI lancou um modo agentico.",
+          language: "pt-PT",
+        },
+      },
+    ] as Parameters<typeof renderArticlesHtml>[0]);
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
   });
 });

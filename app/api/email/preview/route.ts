@@ -22,6 +22,7 @@ import {
 } from "@/lib/editions/sent-snapshot";
 import { personalizeHtml } from "@/lib/email/personalize";
 import { toEmailAside } from "@/lib/asides/select";
+import { readLinkTakesFor } from "@/lib/rewrite/usable";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +231,16 @@ export async function POST(request: Request) {
         approvedDraftSections: approvedDraft?.content?.sections?.length ?? 0,
       });
 
+      /**
+       * Loaded only for flagged stories, and only needed by the two branches that render
+       * live rows. A frozen edition previews the take it actually sent, from the snapshot,
+       * not a take regenerated since.
+       */
+      const flaggedIds = edition.articles
+        .filter((ea: any) => ea.useLinkTake)
+        .map((ea: any) => ea.article.id);
+      const takes = await readLinkTakesFor(ctx.db, flaggedIds);
+
       if (choice === "frozen") {
         emailData = {
           // Template's Article requires summary as string | null; SourceArticle
@@ -241,6 +252,7 @@ export async function POST(request: Request) {
             category: article.category,
             relevanceScore: article.relevanceScore,
             content: article.content,
+            linkTake: article.linkTake,
           })),
           projects: source.projects,
           week: source.week,
@@ -259,6 +271,7 @@ export async function POST(request: Request) {
               summary: article.summary,
               sourceUrl: article.sourceUrl,
               category: matched?.category || [],
+              linkTake: takes.get(article.id) ?? null,
             };
           })
         );
@@ -290,6 +303,7 @@ export async function POST(request: Request) {
             summary: ea.article.summary || "",
             sourceUrl: ea.article.sourceUrl,
             category: ea.article.category,
+            linkTake: takes.get(ea.article.id) ?? null,
           })),
           projects: edition.projects.map((ep: any) => ({
             name: ep.project.name,
