@@ -580,9 +580,8 @@ export default function EditionsPage() {
         throw new Error(current.error || "Could not read that edition");
       }
 
-      // `order` and `useLinkTake` come from the edition's own read; `useLinkTake`
-      // defaults to false here until the GET response carries it, which keeps this
-      // call forward-compatible rather than silently correct today and wrong later.
+      // `order` and `useLinkTake` both come off the edition's own read, so an
+      // existing flag rides through this add rather than being reset to false.
       const existing: EditionArticleRow[] = (current.data?.articles ?? []).map(
         (
           article: { id: string; order?: number; useLinkTake?: boolean },

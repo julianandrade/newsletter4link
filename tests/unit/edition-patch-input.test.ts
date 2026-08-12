@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseEditionPatch } from "@/app/api/editions/[id]/route";
+import { parseEditionPatch, toEditionArticleView } from "@/app/api/editions/[id]/route";
+import { mergeEditionArticles } from "@/lib/editions/add-to-edition";
 
 /**
  * RQ-008: an unsent edition can be renamed and rescheduled.
@@ -128,5 +129,52 @@ describe("parseEditionPatch and the closing aside", () => {
   it("refuses anything that is not a string or null", () => {
     expect(parseEditionPatch({ asideId: 7 }).ok).toBe(false);
     expect(parseEditionPatch({ asideId: { id: "as-1" } }).ok).toBe(false);
+  });
+});
+
+/**
+ * The Link Take flag's round trip: GET lifts it onto the article the way it lifts
+ * `order`, a screen reads it back off that response, and an add-to-edition merge
+ * must not reset it. `toEditionArticleView` is the piece `GET` actually runs; this
+ * proves what it produces survives `mergeEditionArticles` unchanged, which is the
+ * same shape `app/dashboard/send/page.tsx` reads to build the rows it PATCHes back.
+ */
+describe("toEditionArticleView, and its round trip through mergeEditionArticles", () => {
+  it("carries order and useLinkTake alongside the article's own fields", () => {
+    const article = { id: "a1", title: "OpenAI ships agent mode" };
+
+    expect(toEditionArticleView(article, 2, true)).toEqual({
+      id: "a1",
+      title: "OpenAI ships agent mode",
+      order: 2,
+      useLinkTake: true,
+    });
+  });
+
+  it("defaults to false without lying about it being unset", () => {
+    const article = { id: "a1", title: "OpenAI ships agent mode" };
+    expect(toEditionArticleView(article, 1, false).useLinkTake).toBe(false);
+  });
+
+  it("a flagged row read back from GET keeps its flag through an add", () => {
+    // Exactly what a screen like app/dashboard/send/page.tsx does: read the
+    // GET response, reduce each article to the row shape the merge needs.
+    const fromGet = [
+      toEditionArticleView({ id: "a" }, 1, true),
+      toEditionArticleView({ id: "b" }, 2, false),
+    ];
+    const existing = fromGet.map((article) => ({
+      articleId: article.id,
+      order: article.order,
+      useLinkTake: article.useLinkTake,
+    }));
+
+    const merged = mergeEditionArticles(existing, ["c"]);
+
+    expect(merged).toEqual([
+      { articleId: "a", order: 1, useLinkTake: true },
+      { articleId: "b", order: 2, useLinkTake: false },
+      { articleId: "c", order: 3, useLinkTake: false },
+    ]);
   });
 });
