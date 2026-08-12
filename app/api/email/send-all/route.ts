@@ -30,6 +30,7 @@ import { toEmailAside } from "@/lib/asides/select";
 import { markAsideUsed } from "@/lib/asides/mark-used";
 import type { EmailAside, EmailLinkTake } from "@/lib/email/edition-template";
 import { readLinkTakesFor } from "@/lib/rewrite/usable";
+import { linkTakeReadiness, linkTakeBlockReason } from "@/lib/editions/link-take-readiness";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -382,6 +383,31 @@ export async function POST(request: Request) {
           db,
           editionArticles.filter((row) => row.useLinkTake).map((row) => row.articleId)
         );
+
+    /**
+     * A flag is a promise. `customData` carries no edition article rows at all, so there is
+     * nothing here to check on that branch: an editor who hand-edits the payload is not
+     * choosing to flag a story, and `takes` above is deliberately empty for that path.
+     */
+    if (!customData) {
+      const readiness = linkTakeReadiness(
+        editionArticles.map((row) => ({
+          articleId: row.articleId,
+          title: row.article.title,
+          useLinkTake: row.useLinkTake,
+          hasUsableTake: takes.has(row.articleId),
+        }))
+      );
+
+      if (!readiness.ready) {
+        // 409, not 400 and not 500. The request is well formed and nothing broke on our side:
+        // the edition is in a state that forbids sending, and the fix is one toggle away.
+        return NextResponse.json(
+          { success: false, error: linkTakeBlockReason(readiness) },
+          { status: 409 }
+        );
+      }
+    }
 
     // Prepare email data - use custom data if provided, otherwise use edition data
     let emailData: any;
