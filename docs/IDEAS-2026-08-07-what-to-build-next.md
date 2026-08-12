@@ -168,6 +168,11 @@ asleep.
 the email shows neither. One line under the top story, in the organisation's own words, is the
 difference between a link list and an editorial product. Cheapest high-value item on this page.
 
+> Correction, 12 August 2026: the scorer produces the score only. `scoreArticleRelevance` asks the
+> model to "respond with ONLY a single number" and `Article` has no reason field; `aiRelevanceNote`
+> exists on `SearchResult` and nowhere else. So this needs the reason generated and stored first,
+> not just displayed. See `BRAINSTORM-2026-08-11-saas-teardown.md` §4.
+
 **B. Reading time and story count in the masthead.** "9 stories, 4 min" gives a reader a reason to
 keep scrolling. One line of code, and it was cut from last night's scope only for focus.
 
