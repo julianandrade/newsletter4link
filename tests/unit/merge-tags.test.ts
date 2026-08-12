@@ -316,3 +316,43 @@ describe("editionMergeValues", () => {
     expect(values.sections).toBe("");
   });
 });
+
+/**
+ * A flagged story's Link Take has to reach the same markup wherever an edition renders its
+ * articles, or a hand-built template quietly shows the ordinary summary for a story the editor
+ * asked to feature. `sections` is covered here because editionMergeValues owns it, through
+ * sectionBlock and topicItem.
+ *
+ * `articles` is deliberately not covered here. That tag is not built by editionMergeValues at
+ * all: it comes from renderArticlesHtml in content-renderer.ts and renderArticles in
+ * template-renderer.ts, each from its own local Article interface, and neither carries a
+ * linkTake field yet. Threading it through belongs to the task that wires linkTake into the
+ * four assembly points; adding it here would collide with that work and this file would still
+ * only prove one of the two tags, not both.
+ */
+describe("a flagged story reaches the sections merge tag", () => {
+  const take = {
+    title: "Os agentes chegaram ao terminal",
+    body: "A OpenAI lancou um modo agentico.",
+    language: "pt-PT",
+  };
+
+  function editionWithTake(): EditionEmail {
+    return {
+      ...edition,
+      sections: [
+        {
+          ...edition.sections[0],
+          items: [{ ...edition.sections[0].items[0], linkTake: take }],
+        },
+      ],
+    };
+  }
+
+  it("renders the take's title and the AI attribution, not the ordinary summary fields", () => {
+    const values = editionMergeValues(editionWithTake());
+
+    expect(values.sections).toContain("Os agentes chegaram ao terminal");
+    expect(values.sections).toContain("Análise gerada por AI a partir da fonte original");
+  });
+});
