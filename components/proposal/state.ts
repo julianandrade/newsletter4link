@@ -28,6 +28,10 @@ export interface ProposalArticle {
   category: string[];
   status: string;
   order: number;
+  /** Whether this edition sends this story's Link Take. RQ-006 surface 3. */
+  useLinkTake?: boolean;
+  /** Whether a sendable take exists, so the row can say why it is blocked. */
+  hasUsableTake?: boolean;
 }
 
 export interface ProposalProject {
@@ -514,15 +518,20 @@ export function proposalReducer(
  *
  * Whatever is on screen is what would be sent, and the send itself posts only
  * the edition id, so there is never a stale copy in the client to go out.
+ *
+ * `useLinkTake` rides along for the same reason `order` does: PATCH deletes and
+ * recreates every join row, so a reorder or an add from this screen that omitted
+ * the flag would silently clear every story's Link Take, not just the one moved.
  */
 export function editionPatchPayload(proposal: Proposal): {
-  articles: Array<{ articleId: string; order: number }>;
+  articles: Array<{ articleId: string; order: number; useLinkTake: boolean }>;
   projects: Array<{ projectId: string; order: number }>;
 } {
   return {
     articles: proposal.articles.map((article, index) => ({
       articleId: article.id,
       order: index + 1,
+      useLinkTake: article.useLinkTake === true,
     })),
     projects: proposal.projects.map((project, index) => ({
       projectId: project.id,

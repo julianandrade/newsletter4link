@@ -346,9 +346,9 @@ describe("editionPatchPayload", () => {
 
     const body = editionPatchPayload(moved.proposal!);
     expect(body.articles).toEqual([
-      { articleId: "a1", order: 1 },
-      { articleId: "a3", order: 2 },
-      { articleId: "a2", order: 3 },
+      { articleId: "a1", order: 1, useLinkTake: false },
+      { articleId: "a3", order: 2, useLinkTake: false },
+      { articleId: "a2", order: 3, useLinkTake: false },
     ]);
     expect(body.projects).toEqual([
       { projectId: "p1", order: 1 },
@@ -362,6 +362,35 @@ describe("editionPatchPayload", () => {
       payload: payload(moved.proposal!.articles),
     });
     expect(editionPatchPayload(reloaded.proposal!).articles).toEqual(body.articles);
+  });
+
+  it("carries a flagged story's Link Take through an unrelated reorder", () => {
+    // A save triggered by this screen for any reason, a move, an add, a rejection,
+    // must not silently clear a flag another screen set. PATCH deletes and recreates
+    // every join row, so an omitted useLinkTake here would zero it just as surely as
+    // dropping it from the builder's own save handler would.
+    const state = loaded(["a1", "a2"]);
+    const flagged = {
+      ...state,
+      proposal: {
+        ...state.proposal!,
+        articles: state.proposal!.articles.map((a) =>
+          a.id === "a2" ? { ...a, useLinkTake: true } : a
+        ),
+      },
+    };
+
+    const moved = proposalReducer(flagged, {
+      type: "articleMoved",
+      id: "a2",
+      direction: -1,
+    });
+
+    const body = editionPatchPayload(moved.proposal!);
+    expect(body.articles).toEqual([
+      { articleId: "a2", order: 1, useLinkTake: true },
+      { articleId: "a1", order: 2, useLinkTake: false },
+    ]);
   });
 });
 
