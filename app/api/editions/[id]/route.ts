@@ -127,6 +127,24 @@ type EditionWithContents = Prisma.EditionGetPayload<{
   include: typeof EDITION_INCLUDE;
 }>;
 
+/**
+ * The shape `GET` gives each article: the row, its position, and whether this
+ * edition sends its Link Take instead of its summary.
+ *
+ * Exported as a small pure function, in the style of `parseEditionPatch` above, so
+ * the round trip through `mergeEditionArticles` can be pinned in a unit test without
+ * a database. The builder screens read `order` and `useLinkTake` off exactly this
+ * shape and send both back through PATCH; a version of this that dropped either
+ * field would look correct until the very next save silently reset it.
+ */
+export function toEditionArticleView<T extends { id: string }>(
+  article: T,
+  order: number,
+  useLinkTake: boolean
+): T & { order: number; useLinkTake: boolean } {
+  return { ...article, order, useLinkTake };
+}
+
 function transformEdition(edition: EditionWithContents) {
   /**
    * What the edition actually contained when it went out, alongside the live rows.
@@ -176,10 +194,13 @@ function transformEdition(edition: EditionWithContents) {
     sharePointPageId: edition.sharePointPageId,
     sharePointPublishedAt: edition.sharePointPublishedAt,
     sharePointError: edition.sharePointError,
-    articles: edition.articles.map((ea) => ({
-      ...ea.article,
-      order: ea.order,
-    })),
+    // useLinkTake is lifted onto the article the same way order is: the builder
+    // has to read the current flag to send it back through PATCH, and PATCH
+    // deletes and recreates every row, so a response that omitted it would
+    // silently clear it on the very next round trip.
+    articles: edition.articles.map((ea) =>
+      toEditionArticleView(ea.article, ea.order, ea.useLinkTake)
+    ),
     projects: edition.projects.map((ep) => ({
       ...ep.project,
       order: ep.order,
