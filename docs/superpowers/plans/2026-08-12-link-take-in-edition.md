@@ -501,26 +501,21 @@ describe("a flagged story reaches both renderers", () => {
     expect(values.sections).toContain("Análise gerada por AI a partir da fonte original");
   });
 
-  it("renders the take in the articles merge tag", () => {
-    const edition = buildEdition();
-    edition.sections[0].items[0] = { ...edition.sections[0].items[0], linkTake: take };
-
-    const values = editionMergeValues(edition);
-
-    expect(values.articles).toContain("Os agentes chegaram ao terminal");
-  });
 });
 ```
+
+`{{articles}}` is deliberately **not** covered here. It is not produced by `editionMergeValues`,
+which returns eight keys and no `articles`; it is built by `renderArticlesHtml`
+(`lib/email/content-renderer.ts:101`) and `renderArticles`
+(`lib/email/template-renderer.ts:197`), each from its own local `Article` interface. Neither
+carries `linkTake` yet. Task 6 threads it through and adds the matching assertion. Put a comment
+saying so above this describe block, or a later reader will take this file for full parity cover.
 
 - [ ] **Step 3: Run it**
 
 Run: `npx vitest run tests/unit/merge-tags.test.ts`
-Expected: PASS without any implementation change, because both tags resolve through
-`sectionBlock` and `topicItem`.
-
-If `values.articles` fails, `{{articles}}` resolves through a different path than `{{sections}}`.
-Read `lib/email/merge-tags.ts` around line 252, make `{{articles}}` go through `topicItem` too, and
-say so in the commit message. Do not special-case the take in a second place.
+Expected: PASS without any implementation change, because `{{sections}}` resolves through
+`sectionBlock` and `topicItem`, which Task 2 already branched.
 
 - [ ] **Step 4: Commit**
 
@@ -856,12 +851,23 @@ git commit -m "Rewrite: decide when a Link Take may be sent"
 
 All four must agree, or the preview will disagree with the send.
 
+**This task also closes a gap Task 3 found.** `{{articles}}` is a merge tag an Unlayer template may
+use instead of `{{sections}}`, and it is built by `renderArticlesHtml`
+(`lib/email/content-renderer.ts:64`) and `renderArticles` (`lib/email/template-renderer.ts:88`)
+from **their own local `Article` interfaces**, neither of which carries `linkTake`. Until both are
+threaded, a template built on `{{articles}}` renders the ordinary summary for a flagged story,
+silently and with no error. Steps 5b and 7b below fix that.
+
 **Files:**
 - Modify: `lib/email/edition-data.ts` (`SourceArticle` around line 22, `toEmailArticle` line 176)
 - Modify: `lib/editions/sent-snapshot.ts` (`SentSnapshotArticle` line 35, `toSnapshotArticle` line 117)
+- Modify: `lib/email/content-renderer.ts` (the local `Article` interface around line 31, and
+  `renderArticlesHtml` line 64)
+- Modify: `lib/email/template-renderer.ts` (the local `Article` interface around line 55, and
+  `renderArticles` line 88)
 - Modify: `lib/email/sender.ts`, `app/api/email/send-all`, `app/api/email/preview`,
   `app/api/email/send-test` (wherever each selects articles)
-- Test: `tests/unit/edition-email.test.ts` (extend)
+- Test: `tests/unit/edition-email.test.ts` (extend), `tests/unit/merge-tags.test.ts` (extend)
 
 **Interfaces:**
 - Consumes: `readLinkTakesFor` from Task 5, `EmailLinkTake` from Task 2.
@@ -953,6 +959,53 @@ function toEmailArticle(article: SourceArticle): EmailArticle {
 
 Run: `npx vitest run tests/unit/edition-email.test.ts`
 Expected: PASS.
+
+- [ ] **Step 4b: Thread it through the two `{{articles}}` renderers**
+
+In `lib/email/content-renderer.ts`, add to its local `Article` interface:
+
+```ts
+  linkTake?: { title: string; body: string; language: string } | null;
+```
+
+and in `renderArticlesHtml`, where it maps each article into the `topicItem` input, add
+`linkTake: article.linkTake ?? null,` beside `title`, `summary`, `url` and `source`.
+
+Do exactly the same in `lib/email/template-renderer.ts` for its own `Article` interface and
+`renderArticles`.
+
+Both interfaces are local and structural on purpose; do not try to unify them with
+`SourceArticle` in this task. That is a larger refactor and not what this work is for.
+
+- [ ] **Step 4c: Pin the second merge tag**
+
+Append to `tests/unit/merge-tags.test.ts`, in the describe block Task 3 added, and delete the
+comment Task 3 left saying `{{articles}}` is uncovered:
+
+```ts
+  it("renders the take in the articles merge tag too", () => {
+    const html = renderArticlesHtml([
+      {
+        title: "OpenAI ships agent mode",
+        summary: "A one sentence summary.",
+        sourceUrl: "https://techcrunch.com/agent",
+        category: ["tooling"],
+        linkTake: {
+          title: "Os agentes chegaram ao terminal",
+          body: "A OpenAI lancou um modo agentico.",
+          language: "pt-PT",
+        },
+      },
+    ] as Parameters<typeof renderArticlesHtml>[0]);
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
+  });
+```
+
+Import `renderArticlesHtml` from `@/lib/email/content-renderer`; the file already imports
+`replaceContentMergeTags` from there.
 
 - [ ] **Step 5: Add it to the snapshot**
 
