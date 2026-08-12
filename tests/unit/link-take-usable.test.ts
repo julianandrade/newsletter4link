@@ -46,4 +46,8 @@ describe("isUsableTake", () => {
   it("refuses a take with an empty body", () => {
     expect(isUsableTake({ rewrite: { ...passing, body: "  " }, stale: false })).toBe(false);
   });
+
+  it("refuses a take with an empty title", () => {
+    expect(isUsableTake({ rewrite: { ...passing, title: "  " }, stale: false })).toBe(false);
+  });
 });
