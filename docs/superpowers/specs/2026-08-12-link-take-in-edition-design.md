@@ -109,9 +109,16 @@ every existing edition byte-identical.
 
 ## 3. Rendering
 
-Two new pieces and one branch in each of two existing functions. Both render paths inherit all of
-it, because `merge-tags.ts:252` resolves `{{sections}}` through `sectionBlock` and the built-in
-template calls the same fragments.
+Two new pieces and one branch in each of two existing functions, reaching the render paths through
+the fragments they already share.
+
+**One correction to that claim, found during implementation.** `{{sections}}` does resolve through
+`sectionBlock` at `merge-tags.ts:252`, so it inherits the branch for free. `{{articles}}` does not:
+`editionMergeValues` never produces it, and it is built instead by `renderArticlesHtml`
+(`lib/email/content-renderer.ts:64`) and `renderArticles` (`lib/email/template-renderer.ts:88`),
+each from its own local `Article` interface. Those two interfaces have to carry `linkTake`
+explicitly or a template built on `{{articles}}` renders the summary for a flagged story, silently.
+Both are threaded in §2's wiring, and both merge tags are pinned by tests.
 
 ### `linkTakeBodyHtml()` in `lib/email/edition-blocks.ts` (new)
 
