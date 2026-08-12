@@ -42,7 +42,7 @@ Rule 6, never reproduce or hotlink images from the source, is satisfied mechanic
 | Question | Decision |
 |---|---|
 | What the email shows | The take's own headline plus the full body, replacing both the publisher headline and the one-sentence summary. RQ-006's literal wording. |
-| How a story is flagged | Per article, per edition, off by default, toggled on the row in `components/edition/edition-order-list.tsx`. |
+| How a story is flagged | Per article, per edition, off by default, toggled on the row in the edition builder. |
 | Missing or unusable take at send time | Send Readiness blocks, and the send route refuses. No silent fallback to the summary. |
 | Where it renders | `lib/email/edition-blocks.ts`, which both render paths already share. |
 
@@ -113,18 +113,25 @@ Two new pieces and one branch in each of two existing functions. Both render pat
 it, because `merge-tags.ts:252` resolves `{{sections}}` through `sectionBlock` and the built-in
 template calls the same fragments.
 
-### `lib/email/markdown-html.ts` (new)
+### `linkTakeBodyHtml()` in `lib/email/edition-blocks.ts` (new)
 
 Turns the `Block[]` that `lib/markdown/blocks.ts` already parses into email-safe HTML: paragraphs,
-the relevance heading, bullets, `strong` and `em`. Escaping via the existing `escapeHtml`.
+the relevance heading, bullets, `strong` and `em`.
 
-Here rather than in `lib/markdown/blocks.ts`, because that module is deliberately
-renderer-agnostic and the dashboard renders the same blocks as React.
+Consuming `lib/markdown/blocks.ts` rather than reimplementing it, because that module is
+deliberately renderer-agnostic and the dashboard already renders the same blocks as React.
+
+**In `edition-blocks.ts` rather than a new `markdown-html.ts`.** The first draft of this spec put
+it in its own file; that creates a circular import, because the emitter needs `escapeHtml` and the
+`SANS`/`SERIF`/`INK` constants, all of which live in `edition-blocks.ts`, which would then import
+the emitter back. Breaking the cycle would mean extracting the helpers into a third file to no
+benefit. This is a fragment renderer, and `CLAUDE.md` puts fragments here.
 
 **This is where rule 6 is enforced mechanically.** `parseBlocks` does not handle links or images
 and leaves an unrecognised construct as literal text, so no anchor and no `img` can be emitted from
 model output whatever the prose contains. A prompt asking for no images is a request; this is a
-property.
+property. A future change that teaches `parseBlocks` about links would silently undo it, so the
+test for that case names the reason.
 
 ### `linkTakeBlock()` in `lib/email/edition-blocks.ts` (new)
 
@@ -133,8 +140,8 @@ original URL, rule 5), and `aiLabelFor(language)` (rule 7). Uses the file's exis
 `SERIF`, `INK`, `escapeHtml`, `link` and `safeUrl`, so it inherits the Outlook fidelity and
 dark-mode rules the rest of the file already carries.
 
-The file is 483 lines and has room. If it passes ~600 during implementation, split the long-form
-fragments out rather than letting it grow.
+The file is 483 lines and lands around 570 with both additions. If it passes ~600, split the
+long-form fragments and their style constants out together rather than letting it grow.
 
 ### `topicItem` branch
 
@@ -155,6 +162,13 @@ Take", reading e.g. *"3 flagged, 1 has none"*. `Blocked` when any flagged story 
 `Ready` otherwise, including when nothing is flagged. It joins the existing `canSend` and
 `sendBlockReason` gating. The card links to the offending story.
 
+**The toggle itself goes in the `renderItem` callback** the send page passes to
+`EditionOrderList`, not inside that component. `EditionOrderList` is generic over `{ id: string }`
+and its header states that position is the only thing it owns; it never fetches and never decides
+what may be added. A flag is not position. The page already renders each row's content through
+`renderItem` and already owns persistence through `handleArticleSelectionChange`, so the toggle
+has a home that costs the component nothing.
+
 **The send route** recomputes the same predicate server-side and refuses with **409**, naming the
 articles. The request is well-formed and nothing broke on our side; the edition is in a state that
 forbids sending, which is what 409 says. This mirrors the reasoning behind the 422 chosen for a
@@ -172,9 +186,9 @@ snapshot exists to prevent, and the file's own header comment says so about summ
 
 Unit, all pure, in `tests/unit/`:
 
-- **`markdown-html`**: paragraphs, heading, bullets, `strong`/`em`; escaping of `<`, `&`, quotes;
-  and that an unrecognised construct (a link, an image, a table) survives as literal text rather
-  than markup.
+- **`linkTakeBodyHtml`**: paragraphs, heading, bullets, `strong`/`em`; escaping of `<`, `&`,
+  quotes; and that an unrecognised construct (a link, an image, a table) survives as literal text
+  rather than markup, which is rule 6 as a property.
 - **`topicItem`**: both branches, and that the summary branch output is unchanged.
 - **`topStoryBlock`**: single-column and no `<img>` when flagged; unchanged when not.
 - **Usable-take predicate**: missing, `FAILED`, superseded, stale and usable, one case each.
