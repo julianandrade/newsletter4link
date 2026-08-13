@@ -139,7 +139,7 @@ The two judgment calls in the spec, as pure functions: what the `h1` is allowed 
   - `type HeadingPart = { num?: string; text: string }`
   - `sourcesHeading(input: { feeds: SourceRow[]; emailSources: SourceRow[]; attentionCount: number; isLoading: boolean; lastCollectedLabel?: string | null }): { title: string; subtitle: HeadingPart[] }`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/sources-summary.test.ts`:
 
@@ -385,12 +385,12 @@ describe("sourceAttention", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/unit/sources-summary.test.ts`
 Expected: FAIL, cannot resolve `@/lib/sources/summary`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `lib/sources/summary.ts`:
 
@@ -563,17 +563,17 @@ export function sourcesHeading({
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/unit/sources-summary.test.ts`
-Expected: PASS, 11 tests.
+Expected: PASS, 12 tests.
 
-- [ ] **Step 5: Check nothing else moved**
+- [x] **Step 5: Check nothing else moved**
 
 Run: `npx vitest run tests/unit/inbound-health.test.ts` then `npx tsc --noEmit`
 Expected: PASS, and no type errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/sources/summary.ts tests/unit/sources-summary.test.ts
