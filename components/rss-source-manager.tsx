@@ -626,8 +626,8 @@ export function RSSSourceManager({
    * groups, the id order behind shift-click, and the count on the select-all control all
    * describe the same fifty rows the bulk bar will act on.
    */
-  const window = pageWindow(filteredSources, page, FEEDS_PER_PAGE);
-  const visible = window.rows;
+  const paged = pageWindow(filteredSources, page, FEEDS_PER_PAGE);
+  const visible = paged.rows;
 
   // Group the page by category for display
   const sourcesByCategory = visible.reduce(
@@ -923,7 +923,7 @@ export function RSSSourceManager({
               ? `${selection.count} of ${visible.length} on this page selected`
               : `Select all ${visible.length} on this page`}
           </span>
-          {window.totalPages > 1 && (
+          {paged.totalPages > 1 && (
             <span className="text-[12.5px] text-radar-ink3">
               of <Num>{filteredSources.length}</Num> matching
             </span>
@@ -993,8 +993,8 @@ export function RSSSourceManager({
 
       {/* Below the list, where a pager belongs: it answers "what now", not "what is this". */}
       <Pagination
-        page={window.page}
-        totalPages={window.totalPages}
+        page={paged.page}
+        totalPages={paged.totalPages}
         onPage={setPage}
         busy={loading}
       />
