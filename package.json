@@ -70,6 +70,7 @@
     "react-email-editor": "^1.7.11",
     "resend": "^6.8.0",
     "rss-parser": "^3.13.0",
+    "sharp": "^0.34.5",
     "sonner": "^2.0.7",
     "svix": "^1.99.1",
     "tailwind-merge": "^3.4.0",
