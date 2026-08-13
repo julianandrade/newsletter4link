@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { act, render } from "@testing-library/react";
-import { useSelection, type Selection } from "@/components/radar/selection";
+import { act, fireEvent, render } from "@testing-library/react";
+import {
+  BulkBar,
+  useSelection,
+  type Selection,
+} from "@/components/radar/selection";
 
 /**
  * A selection used to mean one thing: the rows on screen. It now means one of two things,
@@ -145,5 +149,112 @@ describe("useSelection, matching mode", () => {
 
     expect(s.current.mode).toBe("page");
     expect(s.current.count).toBe(0);
+  });
+});
+
+/**
+ * The bar is where an action is launched, so it is where the two modes have to be
+ * reconciled. It used to hand `[...selection.selected]` to every action, which in matching
+ * mode would claim 434 in its own label and then act on the fifty rows that happen to be
+ * rendered. Resolving here rather than in each host keeps that impossible for six screens
+ * at once.
+ */
+describe("BulkBar", () => {
+  const feeds = ["a", "b", "c"];
+  let hostSelection: Selection;
+
+  function bar(
+    options: Parameters<typeof useSelection>[1],
+    onRun: (ids: string[]) => void
+  ) {
+    function Host() {
+      const selection = useSelection(feeds, options);
+      hostSelection = selection;
+      return (
+        <BulkBar
+          selection={selection}
+          noun="feed"
+          filterSummary="category Security, status active"
+          actions={[{ id: "pause", label: "Pause", onRun }]}
+        />
+      );
+    }
+    return render(<Host />);
+  }
+
+  it("says only the count in page mode", () => {
+    const view = bar({}, () => {});
+    act(() => hostSelection.toggle("a"));
+
+    expect(view.container.textContent).toContain("1 feed selected");
+    expect(view.container.textContent).not.toContain("all matching");
+  });
+
+  it("says the selection is a filter, and names it, in matching mode", () => {
+    const view = bar(
+      { matchingTotal: 434, resolveMatchingIds: vi.fn().mockResolvedValue([]) },
+      () => {}
+    );
+    act(() => hostSelection.selectAllMatching());
+
+    expect(view.container.textContent).toContain("434 feeds selected, all matching");
+    expect(view.container.textContent).toContain("category Security, status active");
+  });
+
+  it("runs the action against the resolved ids, not the rendered page", async () => {
+    const every = Array.from({ length: 434 }, (_, i) => `id-${i}`);
+    const onRun = vi.fn();
+    const view = bar(
+      { matchingTotal: 434, resolveMatchingIds: vi.fn().mockResolvedValue(every) },
+      onRun
+    );
+    act(() => hostSelection.selectAllMatching());
+
+    await act(async () => {
+      fireEvent.click(view.getByRole("button", { name: "Pause" }));
+    });
+
+    expect(onRun).toHaveBeenCalledOnce();
+    expect(onRun.mock.calls[0][0]).toHaveLength(434);
+  });
+
+  it("runs against the explicit selection in page mode", async () => {
+    const onRun = vi.fn();
+    const view = bar({}, onRun);
+    act(() => hostSelection.toggle("b"));
+
+    await act(async () => {
+      fireEvent.click(view.getByRole("button", { name: "Pause" }));
+    });
+
+    expect(onRun).toHaveBeenCalledWith(["b"]);
+  });
+
+  it("does not run the action when the ids cannot be resolved", async () => {
+    const onRun = vi.fn();
+    const view = bar(
+      {
+        matchingTotal: 434,
+        resolveMatchingIds: vi.fn().mockRejectedValue(new Error("network")),
+      },
+      onRun
+    );
+    act(() => hostSelection.selectAllMatching());
+
+    await act(async () => {
+      fireEvent.click(view.getByRole("button", { name: "Pause" }));
+    });
+
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it("offers the second step from the bar itself", () => {
+    const view = bar(
+      { matchingTotal: 434, resolveMatchingIds: vi.fn().mockResolvedValue([]) },
+      () => {}
+    );
+    act(() => hostSelection.selectAll());
+
+    expect(view.getByRole("button", { name: "Select all 434 matching" })).toBeTruthy();
   });
 });
