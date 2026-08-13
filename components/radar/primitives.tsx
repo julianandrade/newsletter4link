@@ -226,13 +226,18 @@ export function ChipGroup<T extends string>({
 }) {
   const isTabs = kind === "tabs";
 
+  /*
+   * Ten screens render this, so the keyboard behaviour below is shared by all of them: the
+   * component claimed `role="tablist"` from the start and supported none of that pattern's
+   * keys, which is a promise to a screen reader that the keyboard then breaks.
+   */
   return (
     <div
       role={isTabs ? "tablist" : "radiogroup"}
       aria-label={label}
       className="flex shrink-0 gap-0.5 rounded-lg border border-radar-line bg-radar-surface2 p-0.5"
     >
-      {options.map((option) => {
+      {options.map((option, index) => {
         const active = option.value === value;
         return (
           <button
@@ -243,6 +248,44 @@ export function ChipGroup<T extends string>({
             aria-checked={isTabs ? undefined : active}
             id={idBase ? `${idBase}-tab-${option.value}` : undefined}
             aria-controls={idBase ? `${idBase}-panel-${option.value}` : undefined}
+            /*
+             * Roving tabindex: one stop for the whole row, not one per tab. Tab reaches the
+             * group and moves past it, arrows move within it. Only for `tabs`, since a
+             * radiogroup here is a form control whose own pattern already fits.
+             */
+            tabIndex={isTabs ? (active ? 0 : -1) : undefined}
+            onKeyDown={
+              isTabs
+                ? (event) => {
+                    const last = options.length - 1;
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? last
+                          : event.key === "ArrowRight"
+                            ? (index + 1) % options.length
+                            : event.key === "ArrowLeft"
+                              ? (index - 1 + options.length) % options.length
+                              : null;
+
+                    // Every other key belongs to the browser, Tab above all.
+                    if (next === null) return;
+                    event.preventDefault();
+
+                    onChange(options[next].value);
+
+                    /*
+                     * Selection and focus move together, which is the automatic-activation
+                     * form of the pattern. Every group here switches an already-rendered
+                     * panel with no request behind it, so arrowing through costs nothing
+                     * and manual activation would only add a keypress.
+                     */
+                    const sibling = event.currentTarget.parentElement?.children[next];
+                    if (sibling instanceof HTMLElement) sibling.focus();
+                  }
+                : undefined
+            }
             onClick={() => onChange(option.value)}
             className={cn(
               "rounded-md whitespace-nowrap transition-colors",

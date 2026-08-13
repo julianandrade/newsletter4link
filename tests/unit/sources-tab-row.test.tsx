@@ -62,6 +62,52 @@ describe("SourcesTabRow", () => {
   });
 });
 
+/**
+ * ChipGroup has rendered `role="tablist"` on ten screens without supporting a single key of
+ * the pattern it claims. A tablist that cannot be arrowed through is a promise to a screen
+ * reader that the keyboard then breaks.
+ */
+describe("SourcesTabRow keyboard", () => {
+  it("keeps one tab in the tab order", () => {
+    render(<SourcesTabRow value="email" onChange={() => {}} counts={{}} />);
+
+    const reachable = screen.getAllByRole("tab").filter((tab) => tab.tabIndex === 0);
+    expect(reachable).toHaveLength(1);
+    expect(reachable[0].textContent).toContain("Email");
+  });
+
+  it("moves selection with Left and Right, and wraps", () => {
+    const onChange = vi.fn();
+    render(<SourcesTabRow value="feeds" onChange={onChange} counts={{}} />);
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Feeds/ }), { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("email");
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Feeds/ }), { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenLastCalledWith("received");
+  });
+
+  it("jumps to the ends with Home and End", () => {
+    const onChange = vi.fn();
+    render(<SourcesTabRow value="email" onChange={onChange} counts={{}} />);
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Email/ }), { key: "End" });
+    expect(onChange).toHaveBeenLastCalledWith("received");
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Email/ }), { key: "Home" });
+    expect(onChange).toHaveBeenLastCalledWith("feeds");
+  });
+
+  it("leaves other keys to the browser, so Tab still leaves the row", () => {
+    const onChange = vi.fn();
+    render(<SourcesTabRow value="feeds" onChange={onChange} counts={{}} />);
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Feeds/ }), { key: "Tab" });
+    fireEvent.keyDown(screen.getByRole("tab", { name: /Feeds/ }), { key: "a" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 const FEED_LINE: AttentionLine = {
   tone: "err",
   tab: "feeds",

@@ -1460,7 +1460,7 @@ git commit -m "Feeds: fifty per page, so select-all means what the bulk bar acts
 - Consumes: nothing new.
 - Produces: no signature change. `ChipGroup` gains roving tabindex, Left, Right, Home and End when `kind === "tabs"`. When `kind === "options"` it stays a radiogroup and is untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/sources-tab-row.test.tsx`:
 
@@ -1499,12 +1499,12 @@ describe("SourcesTabRow keyboard", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/unit/sources-tab-row.test.tsx`
 Expected: FAIL on the three new tests, PASS on the earlier seven.
 
-- [ ] **Step 3: Implement in ChipGroup**
+- [x] **Step 3: Implement in ChipGroup**
 
 Inside the `options.map` in `components/radar/primitives.tsx`, add to each button when `isTabs`:
 
@@ -1540,12 +1540,15 @@ onKeyDown={
 
 `options.map` must expose `index`. Add a short comment above the group noting that ten screens share this primitive.
 
-- [ ] **Step 4: Run every test that touches ChipGroup**
+- [x] **Step 4: Run every test that touches ChipGroup**
 
 Run: `npx vitest run` then `npx tsc --noEmit` then `npm run lint`
-Expected: clean. Then open two other screens that use `ChipGroup` in the harness, `?screen=analytics` and `?screen=subscribers`, and confirm clicking still switches and nothing else changed.
+Ran: 1566 pass, tsc clean, lint exit 0. Verified on `?screen=curation`, a screen this
+change never touched: two tabs, one stop in the tab order, ArrowRight moves Runs to Feeds
+and takes focus with it. Analytics and subscribers use `kind="options"`, which is a
+radiogroup and deliberately untouched, so curation is the honest check.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/radar/primitives.tsx tests/unit/sources-tab-row.test.tsx
