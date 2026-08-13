@@ -121,8 +121,6 @@ function SourcesScreen() {
 
   return (
     <>
-      <AppHeader />
-
       <RadarMain width="1240px">
         <PageHeading
           eyebrow="Sources"
@@ -187,7 +185,6 @@ function SourcesScreen() {
               sources={emailRows}
               isLoading={isLoading}
               loadError={error}
-              reload={reload}
               reloadUnknown={collections.reloadUnknown}
               onAdd={() => setDraft(emptyDraft)}
             />
@@ -243,14 +240,22 @@ function SourcesScreen() {
 /**
  * `useSearchParams` needs a Suspense boundary, and this is it.
  *
- * `null` as the fallback rather than a skeleton: the boundary resolves in the same pass on
- * the server, so nothing ever paints it, and a skeleton nobody sees is a skeleton nobody
- * maintains.
+ * `AppHeader` is deliberately outside it. A boundary shifts how React allocates `useId`
+ * values for what follows, and the app shell is full of Radix components that generate
+ * them: with the header inside, the shell's theme button and org switcher hydrated with
+ * different ids than the server sent, which React reports as a mismatch. Nothing inside the
+ * boundary generates an id the shell depends on, so the shell renders before it.
+ *
+ * `null` as the fallback rather than a skeleton, since the boundary resolves in the same
+ * pass and nothing ever paints it.
  */
 export default function SourcesPage() {
   return (
-    <Suspense fallback={null}>
-      <SourcesScreen />
-    </Suspense>
+    <>
+      <AppHeader />
+      <Suspense fallback={null}>
+        <SourcesScreen />
+      </Suspense>
+    </>
   );
 }

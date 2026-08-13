@@ -41,18 +41,39 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  Upload,
   FileUp,
   Link,
   Search,
-  ArrowUpDown,
   X,
 } from "lucide-react";
 import { OPML_PRESETS } from "@/lib/config";
+import { RadarSelect } from "@/components/radar/controls";
+import { radarButtonClass } from "@/components/radar/primitives";
+import { SourceFilterBar } from "@/components/sources/source-filter-bar";
+import { SortSelect, type SortOption as SortChoice } from "@/components/radar/sortable";
 
 type SortOption = "name" | "category" | "createdAt" | "lastFetchedAt";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
+
+/**
+ * Ordering, in the radar dialect.
+ *
+ * The labels were "Name (A-Z)" and "Newest First" while the email list beside them said
+ * "Name, A to Z" and "Added most recently". One screen, one vocabulary, and every option
+ * names the field and the direction together because "Category" plus "ascending" as two
+ * controls is two decisions for one intent.
+ */
+const FEED_SORT_OPTIONS: SortChoice<SortOption>[] = [
+  { field: "name", direction: "asc", label: "Name, A to Z" },
+  { field: "name", direction: "desc", label: "Name, Z to A" },
+  { field: "category", direction: "asc", label: "Category, A to Z" },
+  { field: "category", direction: "desc", label: "Category, Z to A" },
+  { field: "createdAt", direction: "desc", label: "Added most recently" },
+  { field: "createdAt", direction: "asc", label: "Added first" },
+  { field: "lastFetchedAt", direction: "desc", label: "Fetched most recently" },
+  { field: "lastFetchedAt", direction: "asc", label: "Fetched longest ago" },
+];
 
 /**
  * RSS Source from the API
@@ -715,114 +736,75 @@ export function RSSSourceManager({
         className
       )}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">RSS Sources</h2>
-          <p className="text-sm text-radar-ink2">
-            Manage RSS feeds for article curation
-            {sources.length > 0 && (
-              <span className="ml-1">
-                ({filteredSources.length} of {sources.length} shown)
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleOpenImport}>
-            <Upload className="h-4 w-4" />
-            Import OPML
-          </Button>
-          <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4" />
-            Add Source
-          </Button>
-        </div>
-      </div>
-
-      {/* Search, Filter, and Sort Toolbar */}
-      {sources.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-radar-ink2" />
-            <Input
-              placeholder="Search by name or URL..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-9"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-radar-ink2 hover:text-radar-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Category Filter */}
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
+      {/*
+        No header here. The page's own PageHeading names the screen and the tab row carries
+        the count, so the h2, the subtitle and the two buttons that used to sit here were a
+        second page header 400 pixels below the first. Import and Add moved into the bar.
+      */}
+      <SourceFilterBar
+        search={searchQuery}
+        onSearch={setSearchQuery}
+        searchLabel="Search feeds"
+        searchPlaceholder="Search by name or URL"
+        selects={
+          <>
+            <RadarSelect
+              aria-label="Filter feeds by category"
+              className="w-auto min-w-[160px]"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+            >
+              <option value="all">Every category</option>
               {availableCategories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
+                <option key={cat} value={cat}>
                   {cat}
-                </SelectItem>
+                </option>
               ))}
-            </SelectContent>
-          </Select>
+            </RadarSelect>
 
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Sort */}
-          <Select
-            value={`${sortBy}-${sortDirection}`}
-            onValueChange={(v) => {
-              const [field, dir] = v.split("-") as [SortOption, SortDirection];
-              setSortBy(field);
-              setSortDirection(dir);
+            <RadarSelect
+              aria-label="Filter feeds by status"
+              className="w-auto min-w-[140px]"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+            >
+              <option value="all">Every status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Paused</option>
+            </RadarSelect>
+          </>
+        }
+        sort={
+          <SortSelect
+            label="Sort feeds"
+            options={FEED_SORT_OPTIONS}
+            sort={{ field: sortBy, direction: sortDirection }}
+            onChange={(next) => {
+              setSortBy(next.field);
+              setSortDirection(next.direction);
             }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <ArrowUpDown className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-              <SelectItem value="name-desc">Name (Z-A)</SelectItem>
-              <SelectItem value="category-asc">Category (A-Z)</SelectItem>
-              <SelectItem value="category-desc">Category (Z-A)</SelectItem>
-              <SelectItem value="createdAt-desc">Newest First</SelectItem>
-              <SelectItem value="createdAt-asc">Oldest First</SelectItem>
-              <SelectItem value="lastFetchedAt-desc">Recently Fetched</SelectItem>
-              <SelectItem value="lastFetchedAt-asc">Least Recently Fetched</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Clear Filters */}
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X className="h-4 w-4 mr-1" />
-              Clear Filters
-            </Button>
-          )}
-        </div>
-      )}
+          />
+        }
+        onClear={hasActiveFilters ? clearFilters : null}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={handleOpenImport}
+              className={radarButtonClass("outline", "sm")}
+            >
+              Import OPML
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              className={radarButtonClass("accent", "sm")}
+            >
+              Add feed
+            </button>
+          </>
+        }
+      />
 
       {/* Error state */}
       {error && (

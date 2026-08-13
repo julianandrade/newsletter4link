@@ -25,11 +25,10 @@ import {
 import {
   EmptyState,
   LoadError,
-  RadarInput,
   RadarSelect,
   SkeletonRows,
 } from "@/components/radar/controls";
-import { SearchIcon } from "@/components/radar/icons";
+import { SourceFilterBar } from "@/components/sources/source-filter-bar";
 import {
   SortSelect,
   SortAnnouncement,
@@ -255,40 +254,42 @@ export function ReceivedEmails() {
    * success branch would have made "Failed" with no failures a dead end.
    */
   const controls = (
-    <div className="mb-3 flex flex-wrap items-center gap-2.5">
-      <div className="relative min-w-[200px] flex-1 sm:max-w-[320px]">
-        <SearchIcon
-          size={15}
-          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
-        />
-        <RadarInput
-          type="search"
-          aria-label="Search the received emails"
-          placeholder="Search by sender or subject"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      <RadarSelect
-        aria-label="Filter by status"
-        className="w-auto min-w-[170px]"
-        value={statusFilter}
-        onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-      >
-        {STATUS_FILTERS.map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </RadarSelect>
-
-      <SortSelect
-        label="Sort the received emails"
-        options={RECEIVED_SORT_OPTIONS}
-        sort={sort}
-        onChange={setSort}
+    <div className="mb-3">
+      <SourceFilterBar
+        search={searchInput}
+        onSearch={setSearchInput}
+        searchLabel="Search the received emails"
+        searchPlaceholder="Search by sender or subject"
+        selects={
+          <RadarSelect
+            aria-label="Filter by status"
+            className="w-auto min-w-[170px]"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+          >
+            {STATUS_FILTERS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </RadarSelect>
+        }
+        sort={
+          <SortSelect
+            label="Sort the received emails"
+            options={RECEIVED_SORT_OPTIONS}
+            sort={sort}
+            onChange={setSort}
+          />
+        }
+        onClear={
+          narrowed
+            ? () => {
+                setSearchInput("");
+                setStatusFilter("all");
+              }
+            : null
+        }
       />
     </div>
   );
