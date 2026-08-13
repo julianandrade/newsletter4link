@@ -105,6 +105,15 @@ describe("topicItem with a Link Take", () => {
     const english = topicItem({ ...PLAIN, linkTake: { ...TAKE, language: "en" } }, true, true);
     expect(english).toContain("AI analysis generated from the original source");
   });
+
+  // The link text used to be hardcoded Portuguese regardless of the take's language, so an
+  // English take sat next to an English AI label and a Portuguese "ver artigo original".
+  it("keys the link text off the take's language too, not only the AI label", () => {
+    expect(topicItem(FLAGGED, true, true)).toContain("TechCrunch: ver artigo original");
+    const english = topicItem({ ...PLAIN, linkTake: { ...TAKE, language: "en" } }, true, true);
+    expect(english).toContain("TechCrunch: see original article");
+    expect(english).not.toContain("ver artigo original");
+  });
 });
 
 describe("topStoryBlock with a Link Take", () => {

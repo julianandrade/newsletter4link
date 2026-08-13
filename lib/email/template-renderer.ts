@@ -225,8 +225,12 @@ export function renderTemplate(
           category: article.category,
           relevanceScore: article.relevanceScore,
           // Dropped here once, which meant the top story's image reached the built-in edition and
-          // not a single stored template. Only the lead's is read.
+          // not a single stored template. Only the lead's is read. linkTake was dropped here too,
+          // the same mistake one field over: renderArticles below carried the flagged story's
+          // take into {{articles}}, but {{sections}} and {{top_story}}, built through
+          // buildEditionEmail, kept reading the ordinary summary because this map never copied it.
           content: article.content,
+          linkTake: article.linkTake ?? null,
         })),
         projects: projects.map((project) => ({
           name: project.name,

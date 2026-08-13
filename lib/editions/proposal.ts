@@ -36,6 +36,7 @@ import {
 import { bestKnownDate, bestKnownDateRangeWhere } from "@/lib/articles/date";
 import { sortArticles, type ArticleSortField } from "@/lib/articles/sort";
 import type { SortRequest } from "@/lib/list-sort";
+import { readLinkTakesFor } from "@/lib/rewrite/usable";
 
 /** RQ-005 section 2.2 of the specification: product-owner defaults. */
 export const PROPOSAL_ARTICLE_TARGET = 10;
@@ -240,6 +241,16 @@ export interface ProposalArticle {
   category: string[];
   status: string;
   order: number;
+  /**
+   * Whether this edition sends this story's Link Take. RQ-006 surface 3.
+   *
+   * Optional because `readCandidatePool` below shares this shape for rows that are not in
+   * any edition yet, and a row with no join row has no flag to report. `readEditionArticles`
+   * always sets it, since every row it returns came from one.
+   */
+  useLinkTake?: boolean;
+  /** Whether a usable take exists right now, so the screen can say why a flag is blocked. */
+  hasUsableTake?: boolean;
 }
 
 export interface ProposalProject {
@@ -674,7 +685,12 @@ async function readEditionProjectRows(db: TenantClient, editionId: string) {
   });
 }
 
-async function readEditionArticles(
+/**
+ * Exported so the round trip that broke this once, the flag read back as `false` for every
+ * article because this function's return type never carried it, can be pinned without a
+ * database. See tests/unit/proposal.test.ts.
+ */
+export async function readEditionArticles(
   db: TenantClient,
   editionId: string
 ): Promise<ProposalArticle[]> {
@@ -683,6 +699,17 @@ async function readEditionArticles(
     include: { article: true },
     orderBy: { order: "asc" },
   });
+
+  /**
+   * Whether each article's Link Take could be sent right now, regardless of whether this
+   * edition currently flags it. Batched through readLinkTakesFor, the same call
+   * `/api/editions/:id`'s transformEdition makes, so this costs two queries and not one
+   * per article.
+   */
+  const takes = await readLinkTakesFor(
+    db,
+    rows.map((row) => row.article.id)
+  );
 
   return rows.map((row) => ({
     id: row.article.id,
@@ -696,6 +723,13 @@ async function readEditionArticles(
     category: row.article.category,
     status: row.article.status,
     order: row.order,
+    // Read from the join row rather than defaulted, the same hazard readEditionArticleRows'
+    // own comment warns about twenty lines above: this payload feeds GET /api/editions/proposal,
+    // which the dashboard writes back through editionPatchPayload, so an omitted flag here is
+    // not a display bug, it is every flagged story on the edition silently cleared on the next
+    // save.
+    useLinkTake: row.useLinkTake,
+    hasUsableTake: takes.has(row.article.id),
   }));
 }
 

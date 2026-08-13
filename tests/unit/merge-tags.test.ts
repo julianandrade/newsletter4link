@@ -405,3 +405,97 @@ describe("a flagged story reaches the sections merge tag", () => {
     expect(html).not.toContain("A one sentence summary.");
   });
 });
+
+/**
+ * `{{sections}}` and `{{top_story}}` are not built from a hand-assembled `EditionEmail` like
+ * the block above: `renderTemplate` and `replaceContentMergeTags` build one themselves, through
+ * `buildEditionEmail`, from the raw article shape a real caller passes in. That map dropped
+ * `linkTake` and neither renderer's own test caught it, because every test of these two tags so
+ * far started from an `EditionEmail` that already had the take attached. These start from the
+ * raw shape instead, the way a real send does.
+ */
+describe("a flagged story reaches {{sections}} and {{top_story}}, not only {{articles}}", () => {
+  const take = {
+    title: "Os agentes chegaram ao terminal",
+    body: "A OpenAI lancou um modo agentico.",
+    language: "pt-PT",
+  };
+
+  const flaggedArticle = {
+    id: "flagged",
+    title: "OpenAI ships agent mode",
+    summary: "A one sentence summary.",
+    sourceUrl: "https://techcrunch.com/agent",
+    category: ["tooling"],
+    linkTake: take,
+  };
+
+  const otherArticle = {
+    id: "other",
+    title: "A quieter story",
+    summary: "Nothing special here.",
+    sourceUrl: "https://example.com/b",
+    category: ["tooling"],
+  };
+
+  it("renderTemplate resolves {{top_story}} with the lead's take, not its summary", () => {
+    // Highest relevanceScore leads, and buildEditionEmail's topStory is the lead.
+    const html = renderTemplate("{{top_story}}", {
+      articles: [
+        { ...flaggedArticle, relevanceScore: 9 },
+        { ...otherArticle, relevanceScore: 1 },
+      ],
+      projects: [],
+      week: 32,
+      year: 2026,
+    });
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
+  });
+
+  it("renderTemplate resolves {{sections}} with a flagged story that is not the lead", () => {
+    const html = renderTemplate("{{sections}}", {
+      articles: [
+        { ...otherArticle, relevanceScore: 9 },
+        { ...flaggedArticle, relevanceScore: 1 },
+      ],
+      projects: [],
+      week: 32,
+      year: 2026,
+    });
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
+  });
+
+  it("replaceContentMergeTags resolves {{top_story}} with the take, not the summary", () => {
+    // buildEditionEmail's lead is the highest relevanceScore, which this renderer's Article
+    // type does not carry, so a tied score falls back to array order: first is lead.
+    const html = replaceContentMergeTags("{{top_story}}", {
+      articles: [flaggedArticle, otherArticle],
+      projects: [],
+      week: 32,
+      year: 2026,
+    });
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
+  });
+
+  it("replaceContentMergeTags resolves {{sections}} with a flagged non-lead story", () => {
+    const html = replaceContentMergeTags("{{sections}}", {
+      articles: [otherArticle, flaggedArticle],
+      projects: [],
+      week: 32,
+      year: 2026,
+    });
+
+    expect(html).toContain("Os agentes chegaram ao terminal");
+    expect(html).toContain("Análise gerada por AI a partir da fonte original");
+    expect(html).not.toContain("A one sentence summary.");
+  });
+});
