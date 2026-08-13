@@ -22,6 +22,34 @@ export type ArticleListState = "pending" | "approved" | "rejected" | "discarded"
  */
 export const ARTICLE_PAGE_SIZE = 200;
 
+/**
+ * Whether the caller wants every matching id rather than a page of articles.
+ *
+ * Explicit `true` only. A missing parameter, an empty one, or a stray "1" all mean the
+ * normal request: a route that returns a different shape on a typo is a route that fails
+ * quietly.
+ */
+export function wantsIdsOnly(raw: string | null): boolean {
+  return raw === "true";
+}
+
+/**
+ * The ids this request should receive, taken from the set the filter already ordered.
+ *
+ * Both answers come from one ordered array on purpose. "Select all matching" resolves to
+ * ids before any bulk action runs, and if those ids came from a second implementation of
+ * "matching" the two would drift the first time either changed: the visible symptom is a
+ * bulk action hitting rows the screen never listed.
+ */
+export function articleIdsForRequest(
+  ordered: { id: string }[],
+  { page, pageSize, idsOnly }: { page: number; pageSize: number; idsOnly: boolean }
+): string[] {
+  const ids = ordered.map((row) => row.id);
+  if (idsOnly) return ids;
+  return ids.slice((page - 1) * pageSize, page * pageSize);
+}
+
 const STATUS_BY_STATE: Record<string, string> = {
   pending: "PENDING_REVIEW",
   approved: "APPROVED",

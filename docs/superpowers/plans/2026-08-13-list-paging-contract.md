@@ -99,11 +99,11 @@
 
 **Files:** Modify `app/api/articles/route.ts`, create `tests/unit/articles-ids-only.test.ts`
 
-- [ ] **Step 1: Write the failing test.** For a given filter, `idsOnly=true` returns exactly the ids the same filter selects, in the same order, and ignores `page`. The shape is `{ ids }` with no article bodies.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement** by branching after the existing filter is applied and before pagination, so one filter implementation feeds both outputs.
-- [ ] **Step 4: Run green plus `tsc`.**
-- [ ] **Step 5: Commit** `Articles: return just the ids a filter matches, for select-all`
+- [x] **Step 1: Write the failing test.** For a given filter, `idsOnly=true` returns exactly the ids the same filter selects, in the same order, and ignores `page`. The shape is `{ ids }` with no article bodies.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement** by branching after the existing filter is applied and before pagination, so one filter implementation feeds both outputs.
+- [x] **Step 4: Run green plus `tsc`.**
+- [x] **Step 5: Commit** `Articles: return just the ids a filter matches, for select-all`
 
 ---
 
