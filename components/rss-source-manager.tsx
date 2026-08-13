@@ -116,16 +116,52 @@ function formatDate(dateString: string | null): string {
 export interface RSSSourceManagerProps {
   /** Optional class name for the container */
   className?: string;
+  /**
+   * The feeds, already split out of `/api/rss-sources` by the page.
+   *
+   * This component used to fetch the route itself and keep the whole payload, email
+   * sources included, so every EMAIL row was also rendered as a feed with no URL. The
+   * split now happens once, in `lib/sources/summary.ts`.
+   */
+  sources: RSSSource[];
+  loading: boolean;
+  /**
+   * A failure to load, reported by the page above the tab row rather than in here.
+   *
+   * Passed anyway because the empty state has to know: "No RSS sources, add your first
+   * feed" over a list that failed to load is a lie, and the local `error` state below is
+   * for a mutation that failed, which is a different sentence.
+   */
+  loadError: string | null;
+  /** Refetch, owned by the page. Called wherever `fetchSources` was. */
+  reload: () => Promise<void>;
 }
 
 /**
  * RSS Source Manager component
  * Manages RSS feed sources with CRUD operations
  */
-export function RSSSourceManager({ className }: RSSSourceManagerProps) {
-  // State
-  const [sources, setSources] = useState<RSSSource[]>([]);
-  const [loading, setLoading] = useState(true);
+export function RSSSourceManager({
+  className,
+  sources: incoming,
+  loading,
+  loadError,
+  reload,
+}: RSSSourceManagerProps) {
+  /**
+   * A local mirror of the feeds the page fetched.
+   *
+   * Mirrored rather than read straight from props because every mutation here is
+   * optimistic: a create prepends, a delete filters, a toggle swaps one row, and the bulk
+   * bar rolls the whole list back when the request fails. Those all need a local setter,
+   * and losing them would trade one request for a round trip on every click.
+   */
+  const [sources, setSources] = useState<RSSSource[]>(incoming);
+  useEffect(() => {
+    setSources(incoming);
+  }, [incoming]);
+
+  /** A mutation that failed. The page reports a failure to load. */
   const [error, setError] = useState<string | null>(null);
 
   // Dialog state
@@ -174,32 +210,15 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   /**
-   * Fetch all RSS sources
+   * Refetch, through the page.
+   *
+   * This wrapper exists so the six call sites below read the same as before. The request
+   * itself, and the only copy of it, is in `components/sources/use-source-collections.ts`.
    */
   const fetchSources = useCallback(async () => {
-    setLoading(true);
     setError(null);
-    try {
-      const response = await fetch("/api/rss-sources");
-      if (!response.ok) {
-        throw new Error("Failed to fetch RSS sources");
-      }
-      const data = await response.json();
-      setSources(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch sources");
-      console.error("Error fetching RSS sources:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  /**
-   * Load sources on mount
-   */
-  useEffect(() => {
-    fetchSources();
-  }, [fetchSources]);
+    await reload();
+  }, [reload]);
 
   /**
    * Open form dialog for creating a new source
@@ -828,8 +847,9 @@ export function RSSSourceManager({ className }: RSSSourceManagerProps) {
         </div>
       )}
 
-      {/* Empty state - no sources at all */}
-      {!loading && sources.length === 0 && (
+      {/* Empty state - no sources at all. Not shown when the load itself failed: the page
+          says so above the tabs, and "add your first feed" over a failed request is a lie. */}
+      {!loading && !loadError && sources.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Rss className="h-12 w-12 text-radar-ink2 mb-4" />
