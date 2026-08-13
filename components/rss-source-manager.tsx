@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { OPML_PRESETS } from "@/lib/config";
 import { Pagination, RadarSelect } from "@/components/radar/controls";
+import { usePageSize } from "@/components/radar/use-page-size";
 import { Num, radarButtonClass } from "@/components/radar/primitives";
 import { SourceFilterBar } from "@/components/sources/source-filter-bar";
 import { pageWindow } from "@/lib/sources/summary";
@@ -56,15 +57,6 @@ import { SortSelect, type SortOption as SortChoice } from "@/components/radar/so
 type SortOption = "name" | "category" | "createdAt" | "lastFetchedAt";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
-
-/**
- * Rows per page.
- *
- * Fifty because an editor scans a page and acts on a few, and because select-all has to
- * mean something a person can hold in their head: "all 434" was a control whose count
- * nobody could check.
- */
-const FEEDS_PER_PAGE = 50;
 
 /**
  * Ordering, in the radar dialect.
@@ -240,6 +232,7 @@ export function RSSSourceManager({
   const [sortBy, setSortBy] = useState<SortOption>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
+  const [pageSize, setPageSize] = usePageSize("feeds");
   const [page, setPage] = useState(1);
 
   /**
@@ -250,7 +243,7 @@ export function RSSSourceManager({
    */
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, categoryFilter, statusFilter, sortBy, sortDirection]);
+  }, [searchQuery, categoryFilter, statusFilter, sortBy, sortDirection, pageSize]);
 
   /**
    * Refetch, through the page.
@@ -626,7 +619,7 @@ export function RSSSourceManager({
    * groups, the id order behind shift-click, and the count on the select-all control all
    * describe the same fifty rows the bulk bar will act on.
    */
-  const paged = pageWindow(filteredSources, page, FEEDS_PER_PAGE);
+  const paged = pageWindow(filteredSources, page, pageSize);
   const visible = paged.rows;
 
   // Group the page by category for display
@@ -655,7 +648,45 @@ export function RSSSourceManager({
     [sourcesByCategory]
   );
 
-  const selection = useSelection(orderedIds);
+  /**
+   * The second selection step, for the whole filter rather than the page.
+   *
+   * This list holds every row it can match, so resolving is a map over an array already in
+   * memory: no request, and no chance of the ids disagreeing with the count beside them.
+   * A server-paged list wires the same prop to its API instead.
+   */
+  /**
+   * Hoisted so the resolver has a simple dependency: the compiler rules reject a computed
+   * expression inside a dependency array, and rightly, since nobody reading it can tell at
+   * a glance whether it changes on every render.
+   */
+  const matchingKey = filteredSources.map((source) => source.id).join(",");
+
+  const resolveMatchingIds = useCallback(
+    async () => (matchingKey ? matchingKey.split(",") : []),
+    [matchingKey]
+  );
+
+  const selection = useSelection(orderedIds, {
+    matchingTotal: filteredSources.length,
+    resolveMatchingIds,
+  });
+
+  /**
+   * The current filter in words, for the bar and for the delete confirm.
+   *
+   * A count is exactly what cannot be checked once the rows are off screen, so the thing
+   * that cannot be undone says what it was aimed at, not just how many it caught.
+   */
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (categoryFilter !== "all") parts.push(`category ${categoryFilter}`);
+    if (statusFilter !== "all") {
+      parts.push(`status ${statusFilter === "active" ? "active" : "paused"}`);
+    }
+    if (searchQuery.trim()) parts.push(`search "${searchQuery.trim()}"`);
+    return parts.length > 0 ? parts.join(", ") : "every feed, unfiltered";
+  }, [categoryFilter, statusFilter, searchQuery]);
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
 
@@ -918,10 +949,16 @@ export function RSSSourceManager({
           <span className="text-[12.5px] text-radar-ink2">
             {/* On this page, said out loud. The bulk bar acts on the selection, the
                 selection can only hold what is rendered, and 434 was never what a click
-                on this control would touch. */}
-            {selection.count > 0
-              ? `${selection.count} of ${visible.length} on this page selected`
-              : `Select all ${visible.length} on this page`}
+                on this control would touch.
+
+                Except in matching mode, where the count is the filter's and phrasing it
+                per page produces "434 of 100 on this page selected", which is what this
+                line actually said the first time it was rendered. */}
+            {selection.mode === "matching"
+              ? `All ${selection.matchingTotal} matching selected`
+              : selection.count > 0
+                ? `${selection.count} of ${visible.length} on this page selected`
+                : `Select all ${visible.length} on this page`}
           </span>
           {paged.totalPages > 1 && (
             <span className="text-[12.5px] text-radar-ink3">
@@ -997,6 +1034,8 @@ export function RSSSourceManager({
         totalPages={paged.totalPages}
         onPage={setPage}
         busy={loading}
+        pageSize={pageSize}
+        onPageSize={setPageSize}
       />
 
       <BulkBar
@@ -1004,6 +1043,7 @@ export function RSSSourceManager({
         actions={bulkActions}
         noun="feed"
         busyAction={bulkBusy}
+        filterSummary={filterSummary}
       />
 
       {/* Bulk delete confirmation: the one bulk action that cannot be undone. */}
@@ -1018,6 +1058,13 @@ export function RSSSourceManager({
               {pendingBulkDelete?.length === 1 ? "feed" : "feeds"}?
             </DialogTitle>
             <DialogDescription>
+              {/* The filter in words, because the count is the one thing nobody can check
+                  once the rows are off screen, and this is the action that cannot be undone. */}
+              {selection.mode === "matching" && (
+                <>
+                  Everything matching: {filterSummary}.{" "}
+                </>
+              )}
               This cannot be undone. Articles already collected from these feeds
               are kept; only the feeds themselves are removed.
             </DialogDescription>
