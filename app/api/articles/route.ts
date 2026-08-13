@@ -8,8 +8,10 @@ import {
 } from "@/lib/articles/sort";
 import {
   ARTICLE_PAGE_SIZE,
+  articleIdsForRequest,
   articleListPage,
   articleListWhere,
+  wantsIdsOnly,
 } from "@/lib/articles/list-filter";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +71,10 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search"),
     });
     const page = articleListPage(searchParams.get("page"));
+    const idsOnly = wantsIdsOnly(searchParams.get("idsOnly"));
+    // Task 8 of the paging contract makes this the requested size; until then the route's
+    // own constant is the page, so the two outputs stay in step.
+    const pageSize = ARTICLE_PAGE_SIZE;
     const sort = parseSort(
       searchParams,
       ARTICLE_SORT_FIELDS,
@@ -101,9 +107,25 @@ export async function GET(request: NextRequest) {
       db.article.count({ where }),
     ]);
 
-    const pageIds = sortArticles(ordering, sort)
-      .slice((page - 1) * ARTICLE_PAGE_SIZE, page * ARTICLE_PAGE_SIZE)
-      .map((row) => row.id);
+    const ordered = sortArticles(ordering, sort);
+
+    /**
+     * `idsOnly=true` answers with the whole matching set and nothing else.
+     *
+     * This is what "select all 4,812 matching" resolves to before a bulk action runs. It
+     * returns early, above the second query, because the caller wants ids rather than
+     * articles: fetching and shaping thousands of rows to throw the bodies away would make
+     * the safety step the slowest thing on the screen.
+     */
+    if (idsOnly) {
+      return NextResponse.json({
+        success: true,
+        ids: articleIdsForRequest(ordered, { page, pageSize, idsOnly: true }),
+        total,
+      });
+    }
+
+    const pageIds = articleIdsForRequest(ordered, { page, pageSize, idsOnly: false });
 
     const rows = await db.article.findMany({
       where: { id: { in: pageIds } },
