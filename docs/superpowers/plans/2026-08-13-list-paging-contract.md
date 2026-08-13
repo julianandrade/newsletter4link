@@ -166,7 +166,7 @@ loads now. Not attributed, not claimed fixed.
 
 ### Task 10: Verify and open the PR
 
-- [ ] **Step 1:** `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, reporting real counts.
-- [ ] **Step 2:** Rendered at 1440 on all three screens, 0 console errors, and `detect.mjs` over the changed files.
-- [ ] **Step 3:** One row in `CLAUDE.md`'s decision table: what a page size is, where it lives, and what "all matching" is allowed to do.
-- [ ] **Step 4:** Push, open the PR, report the checks. Merge only because shipping was explicitly asked for.
+- [x] **Step 1:** `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, reporting real counts.
+- [x] **Step 2:** Rendered at 1440 on all three screens, 0 console errors, and `detect.mjs` over the changed files.
+- [x] **Step 3:** One row in `CLAUDE.md`'s decision table: what a page size is, where it lives, and what "all matching" is allowed to do.
+- [x] **Step 4:** Push, open the PR, report the checks. Merge only because shipping was explicitly asked for.
