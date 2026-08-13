@@ -1073,11 +1073,35 @@ export interface SourceCollections {
 
 `UnknownSenderGroup` moves here from `components/email-source-manager.tsx:67-77` and is exported from this module. Both managers gain props `{ sources, isLoading, error, reload }` and delete their own `loadSources`; every existing call to `loadSources()` becomes `reload()`.
 
-- [ ] **Step 1: Write the hook**
+**Four things this task turned up, recorded 13 August.**
+
+1. **A defect, fixed as a side effect.** `RSSSourceManager` set its list to the whole
+   `/api/rss-sources` payload, EMAIL rows included, so all four email sources were also
+   rendered as feeds with no URL, under three categories that existed for no other reason.
+   Passing the already-split `feeds` corrects it: the Feeds list went from 438 rows and 10
+   categories to 434 and 7, and no email source name appears in that panel now.
+2. **A second consumer.** `app/dashboard/curation/page.tsx:801` also embeds
+   `RSSSourceManager`, and that screen separately fetched `/api/rss-sources` for its own
+   collect picker. So the hook is split three ways: `useFeedSources`, `useUnknownSenders`,
+   and `useSourceCollections` composing both. Curation takes the first and derives its
+   picker from it, which deletes its own fetch and its effect. One caller of the collection
+   route now exists in the whole codebase.
+3. **`loadError` is a prop on both managers, and neither renders it.** The page reports a
+   failure to load once, above the tab row, per the spec's states table. The managers need
+   to know anyway, because "No RSS sources, add your first feed" over a list that failed to
+   load is a lie. The RSS manager's local `error` state stays for a mutation that failed,
+   which is a different sentence.
+4. **One eslint-disable, with its reason.** `react-hooks/set-state-in-effect` is a warning
+   across the four paths listed in `eslint.config.mjs` and an error for a new hook outside
+   them, deliberately, so it "gets looked at rather than inheriting it". Looked at: it is
+   the load-on-mount effect every screen in this app already has, and collapsing three
+   copies of it into one is the point of the task. Disabled at the site, not in the config.
+
+- [x] **Step 1: Write the hook**
 
 Create `components/sources/use-source-collections.ts` with the two fetches lifted verbatim from `email-source-manager.tsx:136-180` and `page.tsx`, keeping the 403 branch, the `truncated` flag and the error wording exactly as they are. `reloadAll` awaits both in parallel with `Promise.all`.
 
-- [ ] **Step 2: Make the managers prop-driven**
+- [x] **Step 2: Make the managers prop-driven**
 
 In `components/rss-source-manager.tsx`, extend `RSSSourceManagerProps`:
 
@@ -1098,18 +1122,18 @@ Delete the `sources`, `loading` and `error` `useState` declarations at `:127-130
 
 Apply the same change to `components/email-source-manager.tsx`: delete its `loadSources`, `setSources` for the initial load, `loadUnknown`, and the unknown-sender state, taking all of it from props. The optimistic parse-mode update at `:350-389` keeps its local `setSources`, so the component needs a local copy of the rows synchronised from props with a `useEffect`; that is the one place local state stays.
 
-- [ ] **Step 3: Wire the page**
+- [x] **Step 3: Wire the page**
 
 In `app/dashboard/sources/page.tsx`, replace the inline `fetch` and `useState` with `const collections = useSourceCollections();` and pass the pieces down. The `unmatched` panel still renders `EmailSourceManager` until Task 6.
 
-- [ ] **Step 4: Verify one request**
+- [x] **Step 4: Verify one request**
 
 Run the dev server, open the real dashboard route, and confirm in the network panel that `/api/rss-sources` appears **once** per load. Three today.
 
 Run: `npx vitest run`, `npx tsc --noEmit`, `npm run lint`
 Expected: all clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/sources/use-source-collections.ts app/dashboard/sources/page.tsx components/rss-source-manager.tsx components/email-source-manager.tsx

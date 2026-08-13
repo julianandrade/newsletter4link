@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
@@ -34,6 +34,7 @@ import {
   SkeletonRows,
 } from "@/components/radar/controls";
 import { RSSSourceManager } from "@/components/rss-source-manager";
+import { useFeedSources } from "@/components/sources/use-source-collections";
 import {
   SortSelect,
   SortAnnouncement,
@@ -128,8 +129,24 @@ function formatStamp(dateStr: string): string {
   });
 }
 
+/**
+ * `SourceRow` is the subset both kinds of source have in common, so its `url` is optional.
+ * `/api/rss-sources` returns the whole Prisma row, which is why the manager's stricter
+ * interface holds at runtime. Asserted once, here, rather than loosening its props.
+ */
+type RSSSourceRows = ComponentProps<typeof RSSSourceManager>["sources"];
+
 export default function CurationHistoryPage() {
   const [view, setView] = useState<View>("jobs");
+
+  /**
+   * The feeds this screen's "Sources" view lists.
+   *
+   * The manager used to fetch them itself. It takes them as props now, so the sources
+   * screen can fetch the list once instead of three times, and this screen pays for the
+   * list only, not for the unclaimed senders it never shows.
+   */
+  const feedSources = useFeedSources();
 
   const [isLoading, setIsLoading] = useState(true);
   const [jobs, setJobs] = useState<CurationJob[]>([]);
@@ -163,9 +180,19 @@ export default function CurationHistoryPage() {
     message: "",
   });
   const [isCancelling, setIsCancelling] = useState(false);
-  const [rssSources, setRssSources] = useState<RssSourceOption[]>([]);
+  /**
+   * The active feeds this screen offers to collect from.
+   *
+   * Derived from the one fetch above rather than fetched again. This screen used to request
+   * `/api/rss-sources` twice, once here and once inside the feeds manager it embeds.
+   */
+  const rssSources: RssSourceOption[] = useMemo(
+    () => feedSources.feeds.filter((source) => source.active),
+    [feedSources.feeds]
+  );
+  const sourcesLoading = feedSources.isLoading;
+
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
-  const [sourcesLoading, setSourcesLoading] = useState(true);
   const [showSourcePicker, setShowSourcePicker] = useState(false);
 
   /**
@@ -199,19 +226,6 @@ export default function CurationHistoryPage() {
     fetchJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter, sort, dateFrom, dateTo]);
-
-  // Fetch RSS sources on mount
-  useEffect(() => {
-    fetch("/api/rss-sources")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setRssSources(data.filter((s: { active: boolean }) => s.active));
-        }
-      })
-      .catch(console.error)
-      .finally(() => setSourcesLoading(false));
-  }, []);
 
   const handleRunCuration = async () => {
     setCurationStatus({ running: true, message: "Connecting to the collector" });
@@ -798,7 +812,12 @@ export default function CurationHistoryPage() {
             id="curation-view-panel-sources"
             aria-labelledby="curation-view-tab-sources"
           >
-            <RSSSourceManager />
+            <RSSSourceManager
+              sources={feedSources.feeds as unknown as RSSSourceRows}
+              loading={feedSources.isLoading}
+              loadError={feedSources.error}
+              reload={feedSources.reload}
+            />
           </div>
         )}
       </RadarMain>

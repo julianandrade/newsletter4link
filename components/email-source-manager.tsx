@@ -20,6 +20,10 @@ import {
 import { sortBy } from "@/lib/list-sort";
 import { displayName } from "@/lib/inbound/address";
 import { healthWarning, sourceHealth, type SourceHealth } from "@/lib/inbound/health";
+import type {
+  UnknownSenderGroup,
+  UnknownState,
+} from "@/components/sources/use-source-collections";
 import { relativeTime } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
 
@@ -64,18 +68,6 @@ interface EmailSource {
   createdAt: string;
 }
 
-interface UnknownSenderGroup {
-  sender: string;
-  displayFrom: string;
-  count: number;
-  firstSeenAt: string;
-  lastSeenAt: string;
-  subjectSamples: string[];
-  tags: string[];
-  byStatus: Record<string, number>;
-  alreadyIgnored: boolean;
-}
-
 interface NewSourceDraft {
   name: string;
   senderAddress: string;
@@ -108,17 +100,52 @@ const healthLabel: Record<SourceHealth["state"], string> = {
   "unknown-cadence": "no cadence set",
 };
 
-export function EmailSourceManager() {
-  const [sources, setSources] = useState<EmailSource[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+export interface EmailSourceManagerProps {
+  /** The EMAIL rows, already split out of `/api/rss-sources` by the page. */
+  sources: EmailSource[];
+  isLoading: boolean;
+  /**
+   * A failure to load, reported by the page above the tab row rather than in here.
+   *
+   * Passed anyway because the two empty states below have to know: "No email sources yet"
+   * over a list that failed to load says the wrong thing.
+   */
+  loadError: string | null;
+  /** Refetch the sources, owned by the page. Called wherever `loadSources` was. */
+  reload: () => Promise<void>;
+  unknown: UnknownSenderGroup[];
+  unknownState: UnknownState;
+  unknownMessage: string | null;
+  unknownTruncated: boolean;
+  /** Refetch the unclaimed senders, owned by the page. */
+  reloadUnknown: () => Promise<void>;
+}
 
-  const [unknown, setUnknown] = useState<UnknownSenderGroup[]>([]);
-  const [unknownState, setUnknownState] = useState<
-    "loading" | "ready" | "forbidden" | "error"
-  >("loading");
-  const [unknownMessage, setUnknownMessage] = useState<string | null>(null);
-  const [truncated, setTruncated] = useState(false);
+export function EmailSourceManager({
+  sources: incoming,
+  isLoading,
+  loadError,
+  reload,
+  unknown,
+  unknownState,
+  unknownMessage,
+  unknownTruncated: truncated,
+  reloadUnknown,
+}: EmailSourceManagerProps) {
+  /**
+   * A local mirror of the rows the page fetched.
+   *
+   * Needed because the parse-mode toggle is optimistic and rolls itself back when the
+   * request fails: the chip is the only place that value is visible, so a chip claiming
+   * DIGEST over a source the server still has as ESSAY is worse than no change at all.
+   */
+  const [sources, setSources] = useState<EmailSource[]>(incoming);
+  useEffect(() => {
+    setSources(incoming);
+  }, [incoming]);
+
+  const loadSources = reload;
+  const loadUnknown = reloadUnknown;
 
   const [draft, setDraft] = useState<NewSourceDraft>(emptyDraft);
   const [isCreating, setIsCreating] = useState(false);
@@ -132,52 +159,6 @@ export function EmailSourceManager() {
     field: "lastReceivedAt",
     direction: "asc",
   });
-
-  const loadSources = useCallback(async () => {
-    try {
-      const response = await fetch("/api/rss-sources");
-      if (!response.ok) throw new Error(`the sources request answered ${response.status}`);
-
-      const data = await response.json();
-      const all: EmailSource[] = Array.isArray(data) ? data : [];
-      setSources(all.filter((source) => source.type === "EMAIL"));
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "the sources could not be loaded");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const loadUnknown = useCallback(async () => {
-    try {
-      const response = await fetch("/api/inbound/unknown-senders");
-      const data = await response.json().catch(() => null);
-
-      if (response.status === 403) {
-        setUnknownState("forbidden");
-        setUnknownMessage(data?.error ?? "This view is restricted.");
-        return;
-      }
-
-      if (!response.ok) throw new Error(data?.error ?? `answered ${response.status}`);
-
-      setUnknown(Array.isArray(data.groups) ? data.groups : []);
-      setTruncated(Boolean(data.truncated));
-      setUnknownState("ready");
-      setUnknownMessage(null);
-    } catch (error) {
-      setUnknownState("error");
-      setUnknownMessage(
-        error instanceof Error ? error.message : "the senders could not be loaded"
-      );
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadSources();
-    void loadUnknown();
-  }, [loadSources, loadUnknown]);
 
   // `sources` is not read in here, and that is the point: the clock this screen measures
   // staleness against is taken once per load of the sources, not once per render.
@@ -631,11 +612,7 @@ export function EmailSourceManager() {
 
         {isLoading && <SkeletonBar width="240px" />}
 
-        {loadError && (
-          <p className="m-0 rounded-md bg-radar-surface2 px-3 py-2 text-sm text-radar-err">
-            {loadError}
-          </p>
-        )}
+        {/* The failure itself is reported once, by the page, above the tab row. */}
 
         {!isLoading && !loadError && sources.length === 0 && (
           <p className="m-0 text-[12.5px] text-radar-ink3">

@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+} from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { EmailSourceManager } from "@/components/email-source-manager";
@@ -14,12 +20,9 @@ import {
   radarButtonClass,
   RadarMain,
 } from "@/components/radar/primitives";
-import {
-  sourceAttention,
-  sourcesHeading,
-  splitSources,
-  type SourceRow,
-} from "@/lib/sources/summary";
+import { useSourceCollections } from "@/components/sources/use-source-collections";
+import { LoadError } from "@/components/radar/controls";
+import { sourceAttention, sourcesHeading } from "@/lib/sources/summary";
 import { resolveTab, type SourcesTab } from "@/lib/sources/tabs";
 import { relativeTime } from "@/lib/radar/source";
 
@@ -54,23 +57,13 @@ export default function SourcesPage() {
     window.history.replaceState(null, "", url.toString());
   }, []);
 
-  const [rows, setRows] = useState<SourceRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/rss-sources")
-      .then((r) => r.json())
-      .then((data) => setRows(Array.isArray(data) ? data : []))
-      .catch(() => setRows([]))
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  const { feeds, emailSources } = useMemo(() => splitSources(rows), [rows]);
+  const collections = useSourceCollections();
+  const { feeds, emailSources, isLoading, error, reload } = collections;
 
   // The clock this screen measures staleness against is taken once per load of the
   // sources, not once per render, for the reason recorded at email-source-manager.tsx:182.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const now = useMemo(() => new Date(), [rows]);
+  const now = useMemo(() => new Date(), [feeds, emailSources]);
 
   const attention = useMemo(
     () => sourceAttention({ feeds, emailSources, now }),
@@ -85,6 +78,18 @@ export default function SourcesPage() {
       .sort();
     return stamps.length ? relativeTime(stamps[stamps.length - 1]) : null;
   }, [feeds]);
+
+  /**
+   * `SourceRow` is the subset both kinds have in common, so its `url` and its email fields
+   * are optional. `/api/rss-sources` returns the whole Prisma row, which is why each
+   * manager's own stricter interface holds at runtime. The two casts are the only place
+   * that is asserted rather than proved, and they are asserted once, here, instead of
+   * loosening either manager's props.
+   */
+  const feedRows = feeds as unknown as ComponentProps<typeof RSSSourceManager>["sources"];
+  const emailRows = emailSources as unknown as ComponentProps<
+    typeof EmailSourceManager
+  >["sources"];
 
   const heading = sourcesHeading({
     feeds,
@@ -123,12 +128,22 @@ export default function SourcesPage() {
 
         <SourcesAttention lines={attention.lines} onJump={changeTab} />
 
+        {/* Above the tabs, and once: the tab row still renders, so the other three panels
+            stay reachable when the source list is the thing that failed. */}
+        {error && (
+          <div className="mb-5">
+            <LoadError what="The sources" message={error} onRetry={() => void reload()} />
+          </div>
+        )}
+
         <SourcesTabRow
           value={tab}
           onChange={changeTab}
           counts={{
             feeds: isLoading ? null : feeds.length,
             email: isLoading ? null : emailSources.length,
+            unmatched:
+              collections.unknownState === "ready" ? collections.unknown.length : null,
           }}
         />
 
@@ -139,12 +154,30 @@ export default function SourcesPage() {
           tabIndex={0}
           className="mt-5"
         >
-          {tab === "feeds" && <RSSSourceManager />}
+          {tab === "feeds" && (
+            <RSSSourceManager
+              sources={feedRows}
+              loading={isLoading}
+              loadError={error}
+              reload={reload}
+            />
+          )}
           {/* Both of these render the email manager until the unknown-senders block is
               lifted out of it. That happens in task 6 of the plan; the duplication is
               left visible rather than hidden behind a prop task 6 would delete. */}
-          {tab === "email" && <EmailSourceManager />}
-          {tab === "unmatched" && <EmailSourceManager />}
+          {(tab === "email" || tab === "unmatched") && (
+            <EmailSourceManager
+              sources={emailRows}
+              isLoading={isLoading}
+              loadError={error}
+              reload={reload}
+              unknown={collections.unknown}
+              unknownState={collections.unknownState}
+              unknownMessage={collections.unknownMessage}
+              unknownTruncated={collections.unknownTruncated}
+              reloadUnknown={collections.reloadUnknown}
+            />
+          )}
           {tab === "received" && <ReceivedEmails />}
         </div>
       </RadarMain>
