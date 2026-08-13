@@ -70,11 +70,11 @@
 
 **Produces:** `useSelection(visibleIds, options?)` where options are `{ matchingTotal?: number; resolveMatchingIds?: () => Promise<string[]> }`. The returned `Selection` gains `mode: "page" | "matching"`, `matchingTotal`, `canSelectMatching`, `selectAllMatching()`, and `idsForAction(): Promise<string[]>`.
 
-- [ ] **Step 1: Write the failing test.** `canSelectMatching` is false when `matchingTotal` is absent or not greater than `visibleIds.length`. `selectAllMatching()` sets mode and reports `matchingTotal` as the count. `idsForAction()` returns the explicit set in page mode and the resolved list in matching mode. **A change to `visibleIds` drops matching mode back to page**, which is the behaviour that keeps an action from hitting rows nobody can see. A rejecting `resolveMatchingIds` propagates so the caller can abort.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement.** Rewrite the file's header comment: the rule was "select-all means everything currently visible, never everything in the database", and that is now one of two modes rather than the only one. Record why the second mode is explicit, opt-in, and resolves to ids. Replace the literal NUL in `visibleIds.join("\0")` with `"\u0000"`, same value, so the file stops reading as binary to every grep in the repo.
-- [ ] **Step 4: Run the whole suite,** since six screens use this hook.
-- [ ] **Step 5: Commit** `Radar: selection can mean every row a filter matches, resolved to ids`
+- [x] **Step 1: Write the failing test.** `canSelectMatching` is false when `matchingTotal` is absent or not greater than `visibleIds.length`. `selectAllMatching()` sets mode and reports `matchingTotal` as the count. `idsForAction()` returns the explicit set in page mode and the resolved list in matching mode. **A change to `visibleIds` drops matching mode back to page**, which is the behaviour that keeps an action from hitting rows nobody can see. A rejecting `resolveMatchingIds` propagates so the caller can abort.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement.** Rewrite the file's header comment: the rule was "select-all means everything currently visible, never everything in the database", and that is now one of two modes rather than the only one. Record why the second mode is explicit, opt-in, and resolves to ids. Replace the literal NUL in `visibleIds.join("\0")` with `"\u0000"`, same value, so the file stops reading as binary to every grep in the repo.
+- [x] **Step 4: Run the whole suite,** since six screens use this hook.
+- [x] **Step 5: Commit** `Radar: selection can mean every row a filter matches, resolved to ids`
 
 ---
 
