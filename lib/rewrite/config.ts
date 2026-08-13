@@ -77,9 +77,12 @@ export const MAX_RELEVANCE_HEADING_CHARS = 80;
 /**
  * The languages the prose can be written in.
  *
- * A closed list rather than a text field, because the value is not only passed to a model:
- * `asidePickerQuery` matches closing lines on it by exact string, so "Portugues" typed by
- * hand would quietly stop every stored aside from being offered.
+ * A closed list rather than a text field, so the stored value is one of a known set and a
+ * screen can label it. It used to carry a sharper warning than that: `asidePickerQuery`
+ * matched closing lines on this string exactly, so "Portugues" typed by hand would have
+ * quietly stopped every stored "pt-PT" aside from being offered. That coupling is gone, the
+ * picker no longer filters asides by language at all, and the closed list is now a
+ * convenience rather than the thing standing between a typo and an empty send screen.
  */
 export const REWRITE_LANGUAGES = [
   { value: "pt-PT", label: "Portuguese (Portugal)" },

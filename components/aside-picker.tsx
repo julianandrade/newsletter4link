@@ -30,6 +30,7 @@ interface Aside {
   text: string;
   imageUrl: string | null;
   attribution: string | null;
+  language: string;
   lastUsedAt: string | null;
   useCount: number;
 }
@@ -38,6 +39,11 @@ export interface AsidePickerProps {
   editionId: string;
   /** What the edition currently points at, if anything. */
   selectedId: string | null;
+  /**
+   * Narrows the offered rows to one language. Left unset by the send screen on purpose: an
+   * aside goes into an edition whatever language it is written in, and defaulting this to
+   * "pt-PT" is what used to make a stored English joke unofferable and unexplained.
+   */
   language?: string;
   onChange?: (asideId: string | null) => void;
   /** A sent edition cannot be changed, and this says so rather than failing on submit. */
@@ -62,7 +68,7 @@ const PREVIEW_ROWS = 8;
 export function AsidePicker({
   editionId,
   selectedId,
-  language = "pt-PT",
+  language,
   onChange,
   readOnly = false,
 }: AsidePickerProps) {
@@ -85,9 +91,10 @@ export function AsidePicker({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/asides?offerable=true&kind=${kind}&language=${encodeURIComponent(language)}`
-      );
+      const params = new URLSearchParams({ offerable: "true", kind });
+      if (language) params.set("language", language);
+
+      const response = await fetch(`/api/asides?${params.toString()}`);
       const payload = await response.json();
 
       if (!response.ok || !payload.success) {
@@ -308,8 +315,8 @@ export function AsidePicker({
             <p className="text-[12.5px] text-radar-ink2">Loading the library...</p>
           ) : options.length === 0 ? (
             <p className="text-[12.5px] text-radar-ink2">
-              Nothing approved in this kind and language yet. Write one below, or approve
-              something under One more thing.
+              Nothing approved in this kind yet. Write one below, or approve something under
+              One more thing.
             </p>
           ) : (
             <>
@@ -353,6 +360,9 @@ export function AsidePicker({
                         ? `sent ${option.useCount}x`
                         : "never sent"}
                       {option.imageUrl ? " · has an image" : ""}
+                      {/* Shown because the list is no longer filtered to one language, so
+                          which one a row is written in is now the editor's call to make. */}
+                      {option.language ? ` · ${option.language}` : ""}
                     </span>
                   </button>
                 </li>
