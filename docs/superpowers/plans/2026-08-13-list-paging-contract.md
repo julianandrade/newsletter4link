@@ -111,13 +111,18 @@
 
 **Files:** Modify `components/rss-source-manager.tsx`
 
-- [ ] **Step 1: Wire `usePageSize("feeds")`** into `pageWindow`, replacing the `FEEDS_PER_PAGE` constant, and pass the size props to `Pagination`.
-- [ ] **Step 2: Wire the second selection step.** `matchingTotal` is `filteredSources.length`; `resolveMatchingIds` maps the already-loaded rows, since this list holds every row in the browser.
-- [ ] **Step 3: Give the delete confirm a `filterSummary`** built from the search, category and status, reading "category Security, status active, search \"substack\"".
-- [ ] **Step 4: Verify rendered:** change the size and watch the pager recompute, select all matching, and confirm the delete dialog names the filter. Then the CI trio.
-- [ ] **Step 5: Commit** `Feeds: rows per page, and select every feed a filter matches`
+- [x] **Step 1: Wire `usePageSize("feeds")`** into `pageWindow`, replacing the `FEEDS_PER_PAGE` constant, and pass the size props to `Pagination`.
+- [x] **Step 2: Wire the second selection step.** `matchingTotal` is `filteredSources.length`; `resolveMatchingIds` maps the already-loaded rows, since this list holds every row in the browser.
+- [x] **Step 3: Give the delete confirm a `filterSummary`** built from the search, category and status, reading "category Security, status active, search \"substack\"".
+- [x] **Step 4: Verify rendered:** change the size and watch the pager recompute, select all matching, and confirm the delete dialog names the filter. Then the CI trio.
+- [x] **Step 5: Commit** `Feeds: rows per page, and select every feed a filter matches`
 
 ---
+
+**Found by rendering it.** The select-all line read "434 of 100 on this page selected" the
+first time matching mode was used: that copy phrases the count per page, and in matching
+mode the count is the filter's. It now reads "All 434 matching selected". No test would have
+caught it, because the line was correct in the mode the tests exercised.
 
 ### Task 8: Articles adopt both, and 200 becomes 50
 
