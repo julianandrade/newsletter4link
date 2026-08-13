@@ -7,9 +7,9 @@ import {
   sortArticles,
 } from "@/lib/articles/sort";
 import {
-  ARTICLE_PAGE_SIZE,
   articleIdsForRequest,
   articleListPage,
+  articlePageSize,
   articleListWhere,
   wantsIdsOnly,
 } from "@/lib/articles/list-filter";
@@ -72,9 +72,7 @@ export async function GET(request: NextRequest) {
     });
     const page = articleListPage(searchParams.get("page"));
     const idsOnly = wantsIdsOnly(searchParams.get("idsOnly"));
-    // Task 8 of the paging contract makes this the requested size; until then the route's
-    // own constant is the page, so the two outputs stay in step.
-    const pageSize = ARTICLE_PAGE_SIZE;
+    const pageSize = articlePageSize(searchParams.get("pageSize"));
     const sort = parseSort(
       searchParams,
       ARTICLE_SORT_FIELDS,
@@ -147,7 +145,7 @@ export async function GET(request: NextRequest) {
       count: articles.length,
       total,
       page,
-      pageSize: ARTICLE_PAGE_SIZE,
+      pageSize,
       sort,
     });
   } catch (error) {

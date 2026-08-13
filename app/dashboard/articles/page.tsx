@@ -14,9 +14,10 @@
  * deliberate and noted where it happens.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
+import { usePageSize } from "@/components/radar/use-page-size";
 import {
   Dialog,
   DialogContent,
@@ -153,7 +154,7 @@ export default function AllArticlesPage() {
    * with no route to the rest.
    */
   const [total, setTotal] = useState(0);
-  const [pageSize, setPageSize] = useState(0);
+  const [pageSize, setPageSize] = usePageSize("articles");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -194,7 +195,11 @@ export default function AllArticlesPage() {
     setLoading(true);
 
     try {
-      const params = new URLSearchParams({ state, page: String(page) });
+      const params = new URLSearchParams({
+        state,
+        page: String(page),
+        pageSize: String(pageSize),
+      });
       if (search) params.set("search", search);
       applySortParams(params, sort);
 
@@ -212,7 +217,6 @@ export default function AllArticlesPage() {
 
       setArticles(json.data as ListArticle[]);
       setTotal(json.total as number);
-      setPageSize(json.pageSize as number);
       setError(null);
     } catch (cause) {
       if (seq !== requestSeq.current) return;
@@ -220,7 +224,7 @@ export default function AllArticlesPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [state, search, page, sort]);
+  }, [state, search, page, sort, pageSize]);
 
   useEffect(() => {
     void load();
@@ -233,8 +237,48 @@ export default function AllArticlesPage() {
     if (!loading && !error && articles.length === 0 && page > 1) setPage(1);
   }, [loading, error, articles.length, page]);
 
+  /**
+   * Every id the current filter matches, asked of the same route the list came from.
+   *
+   * This list is server-paged, so unlike the feeds it cannot resolve a matching selection
+   * from memory: the rows it holds are one page of the answer. `idsOnly` returns the whole
+   * ordered set through the identical filter, which is what keeps the ids and the count on
+   * the screen describing the same articles.
+   */
+  const resolveMatchingIds = useCallback(async () => {
+    const params = new URLSearchParams({ state, idsOnly: "true" });
+    if (search) params.set("search", search);
+    applySortParams(params, sort);
+
+    const response = await fetch(`/api/articles?${params.toString()}`);
+    const json = await response.json().catch(() => null);
+
+    if (!response.ok || !json?.success) {
+      throw new Error(
+        json?.error ?? `The matching articles could not be listed (${response.status})`
+      );
+    }
+
+    return json.ids as string[];
+  }, [state, search, sort]);
+
   /** Ids in render order, so shift-click ranges follow what is on screen. */
-  const selection = useSelection(articles.map((article) => article.id));
+  const selection = useSelection(
+    articles.map((article) => article.id),
+    { matchingTotal: total, resolveMatchingIds }
+  );
+
+  /**
+   * The filter in words, for the bar and for the confirmations.
+   *
+   * The state is always part of it, because "all 4,812" and "all 4,812 rejected" are very
+   * different things to press Discard on.
+   */
+  const filterSummary = useMemo(() => {
+    const parts = [state === "all" ? "every state" : state];
+    if (search.trim()) parts.push(`search "${search.trim()}"`);
+    return parts.join(", ");
+  }, [state, search]);
 
   /**
    * One request shape for all five actions, the same `PATCH /api/articles/bulk` the
@@ -351,7 +395,7 @@ export default function AllArticlesPage() {
    * means "the 200 of 340 currently on screen" is a trap, and it is the same trap as a
    * subtitle claiming a page size is a count.
    */
-  const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 1;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const paged = totalPages > 1;
   const selectAllLabel = paged
     ? `Select the ${articles.length} stories on this page, of ${total}`
@@ -509,6 +553,10 @@ export default function AllArticlesPage() {
               {renderRows()}
 
               {/*
+                The rows-per-page control appears once there are rows: "25 per page" above
+                an empty state is a control with nothing to act on. It still appears at a
+                single page, which is the case it is most wanted in, 30 rows at 25 a page.
+
                 Renders nothing at one page, which is the common case. It is here because a
                 ceiling with no way past it left the oldest rows of a large filter reachable
                 by nothing at all, search included, which is the unreachability this whole
@@ -523,6 +571,7 @@ export default function AllArticlesPage() {
                 onPage={setPage}
                 busy={loading || bulkBusy !== null}
                 className="mt-5"
+                {...(total > 0 ? { pageSize, onPageSize: setPageSize } : {})}
               />
 
               {/* A VIEWER gets an empty action list, and the bar renders nothing for it. */}
@@ -532,6 +581,7 @@ export default function AllArticlesPage() {
                 noun="story"
                 nounPlural="stories"
                 busyAction={bulkBusy}
+                filterSummary={filterSummary}
               />
             </>
           )}
