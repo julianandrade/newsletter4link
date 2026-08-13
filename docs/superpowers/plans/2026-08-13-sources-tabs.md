@@ -1328,7 +1328,7 @@ git commit -m "Sources: one filter bar in one vocabulary, and the second page he
 **Interfaces:**
 - Produces: `pageWindow<T>(rows: T[], page: number, pageSize: number): { rows: T[]; page: number; totalPages: number }` exported from `lib/sources/summary.ts`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/sources-page-window.test.ts`:
 
@@ -1368,12 +1368,12 @@ describe("pageWindow", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/unit/sources-page-window.test.ts`
 Expected: FAIL, `pageWindow` is not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `lib/sources/summary.ts`:
 
@@ -1396,12 +1396,12 @@ export function pageWindow<T>(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/unit/sources-page-window.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Apply it to the list**
+- [x] **Step 5: Apply it to the list**
 
 In `components/rss-source-manager.tsx`:
 
@@ -1422,7 +1422,7 @@ Then group `window.rows` instead of `filteredSources` when building `sourcesByCa
 
 Render `<Pagination page={window.page} totalPages={window.totalPages} onPage={setPage} />` from `components/radar/controls.tsx` below the list.
 
-- [ ] **Step 6: Verify the height**
+- [x] **Step 6: Verify the height**
 
 In the harness with its 434-feed stub, measure the Feeds tab:
 
@@ -1430,11 +1430,16 @@ In the harness with its 434-feed stub, measure the Feeds tab:
 document.documentElement.scrollHeight / 900
 ```
 
-Expected: under 3. It was 50.6. Confirm the bulk bar's count matches the select-all label, that a filter narrowing the list resets the pager, and that page 2 shows different feeds.
+Measured: **6.8**, from 49.6. The target of "under 3" was not met and was wrong to set:
+fifty card rows at roughly 108px each is 5,400px on their own, before the heading and the
+banner. Getting under 3 needs either a page of about 20, which is 22 pages for 434 feeds, or
+the flatter row and the removal of the per-category `Card` wrappers that this spec put out of
+scope on purpose. Reported rather than papered over by quietly shrinking the page size; the
+lever is `FEEDS_PER_PAGE` and the follow-up pass. Confirm the bulk bar's count matches the select-all label, that a filter narrowing the list resets the pager, and that page 2 shows different feeds.
 
 Run: `npx vitest run`, `npx tsc --noEmit`, `npm run lint`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add lib/sources/summary.ts tests/unit/sources-page-window.test.ts components/rss-source-manager.tsx

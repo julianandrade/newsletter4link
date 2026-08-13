@@ -47,14 +47,24 @@ import {
   X,
 } from "lucide-react";
 import { OPML_PRESETS } from "@/lib/config";
-import { RadarSelect } from "@/components/radar/controls";
-import { radarButtonClass } from "@/components/radar/primitives";
+import { Pagination, RadarSelect } from "@/components/radar/controls";
+import { Num, radarButtonClass } from "@/components/radar/primitives";
 import { SourceFilterBar } from "@/components/sources/source-filter-bar";
+import { pageWindow } from "@/lib/sources/summary";
 import { SortSelect, type SortOption as SortChoice } from "@/components/radar/sortable";
 
 type SortOption = "name" | "category" | "createdAt" | "lastFetchedAt";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
+
+/**
+ * Rows per page.
+ *
+ * Fifty because an editor scans a page and acts on a few, and because select-all has to
+ * mean something a person can hold in their head: "all 434" was a control whose count
+ * nobody could check.
+ */
+const FEEDS_PER_PAGE = 50;
 
 /**
  * Ordering, in the radar dialect.
@@ -229,6 +239,18 @@ export function RSSSourceManager({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const [page, setPage] = useState(1);
+
+  /**
+   * Filters and the sort change what page one even means, so the pager goes back to it.
+   *
+   * `pageWindow` clamps anyway, so this is not what prevents an out-of-range page; it is
+   * what stops a narrowed list from opening on its last page instead of its first.
+   */
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, categoryFilter, statusFilter, sortBy, sortDirection]);
 
   /**
    * Refetch, through the page.
@@ -593,8 +615,22 @@ export function RSSSourceManager({
       return sortDirection === "asc" ? comparison : -comparison;
     });
 
-  // Group filtered sources by category for display
-  const sourcesByCategory = filteredSources.reduce(
+  /**
+   * One page of the filtered list.
+   *
+   * Every feed used to render, which is what made this tab fifty viewports tall. Filtering
+   * and sorting stay in the browser, which `lib/list-sort.ts` permits for a route that
+   * returns the complete set with no `take`; only how many rows reach the DOM changes.
+   *
+   * Everything below derives from `visible` rather than `filteredSources`, so the category
+   * groups, the id order behind shift-click, and the count on the select-all control all
+   * describe the same fifty rows the bulk bar will act on.
+   */
+  const window = pageWindow(filteredSources, page, FEEDS_PER_PAGE);
+  const visible = window.rows;
+
+  // Group the page by category for display
+  const sourcesByCategory = visible.reduce(
     (acc, source) => {
       const cat = source.category || "Other";
       if (!acc[cat]) acc[cat] = [];
@@ -876,14 +912,22 @@ export function RSSSourceManager({
             label={
               selection.allSelected
                 ? "Clear selection"
-                : `Select all ${filteredSources.length} visible feeds`
+                : `Select all ${visible.length} feeds on this page`
             }
           />
           <span className="text-[12.5px] text-radar-ink2">
+            {/* On this page, said out loud. The bulk bar acts on the selection, the
+                selection can only hold what is rendered, and 434 was never what a click
+                on this control would touch. */}
             {selection.count > 0
-              ? `${selection.count} of ${filteredSources.length} selected`
-              : `Select all ${filteredSources.length}`}
+              ? `${selection.count} of ${visible.length} on this page selected`
+              : `Select all ${visible.length} on this page`}
           </span>
+          {window.totalPages > 1 && (
+            <span className="text-[12.5px] text-radar-ink3">
+              of <Num>{filteredSources.length}</Num> matching
+            </span>
+          )}
           <span className="ml-auto text-[11.5px] text-radar-ink3">
             Shift-click to select a range · Esc to clear
           </span>
@@ -946,6 +990,14 @@ export function RSSSourceManager({
             ))}
         </div>
       )}
+
+      {/* Below the list, where a pager belongs: it answers "what now", not "what is this". */}
+      <Pagination
+        page={window.page}
+        totalPages={window.totalPages}
+        onPage={setPage}
+        busy={loading}
+      />
 
       <BulkBar
         selection={selection}
