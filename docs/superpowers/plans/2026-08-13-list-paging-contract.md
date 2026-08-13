@@ -82,11 +82,16 @@
 
 **Files:** Modify `components/radar/selection.tsx` (`BulkBar`), extend `tests/unit/selection-matching.test.tsx`
 
-- [ ] **Step 1: Write the failing test.** In matching mode the bar reads "434 selected, all matching"; in page mode it reads as today. A destructive action passes `filterSummary` to its confirm.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement.** `BulkBar` takes an optional `filterSummary: string` and renders the mode in its count line.
-- [ ] **Step 4: Run green.**
-- [ ] **Step 5: Commit** `Radar: the bulk bar says whether the selection is a page or a filter`
+- [x] **Step 1: Write the failing test.** In matching mode the bar reads "434 selected, all matching"; in page mode it reads as today. A destructive action passes `filterSummary` to its confirm.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement.** `BulkBar` takes an optional `filterSummary: string` and renders
+  the mode in its count line. It also had to stop handing `[...selection.selected]` to every
+  action: that was computed at render, so matching mode would have labelled the bar 434 and
+  acted on the fifty rendered rows. Actions now resolve through `idsForAction` at launch, and
+  a failed resolve toasts and runs nothing. The second step is offered from the bar too,
+  since that is where you are standing when you realise the page is not the set you meant.
+- [x] **Step 4: Run green.**
+- [x] **Step 5: Commit** `Radar: the bulk bar says whether the selection is a page or a filter`
 
 ---
 

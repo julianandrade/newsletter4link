@@ -34,6 +34,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { RadarButton } from "./primitives";
 
@@ -371,6 +372,7 @@ export function BulkBar({
   noun = "item",
   nounPlural,
   busyAction,
+  filterSummary,
   className,
 }: {
   selection: Selection;
@@ -381,14 +383,44 @@ export function BulkBar({
   nounPlural?: string;
   /** Id of the action currently running, so the bar can show progress. */
   busyAction?: string | null;
+  /**
+   * The current filter in words, shown only in matching mode.
+   *
+   * A count is exactly what you cannot verify when the rows are off screen, so the bar
+   * says what the filter was as well as how many it caught.
+   */
+  filterSummary?: string;
   className?: string;
 }) {
   if (selection.count === 0) return null;
 
   const plural = nounPlural ?? `${noun}s`;
+  const matching = selection.mode === "matching";
   const label = `${selection.count} ${selection.count === 1 ? noun : plural}`;
-  const ids = [...selection.selected];
   const busy = Boolean(busyAction);
+
+  /**
+   * The ids an action runs against, resolved at the moment it is launched.
+   *
+   * This used to be `[...selection.selected]`, computed once at render. In matching mode
+   * that would label the bar 434 and then act on the fifty rows that happen to be
+   * rendered. Resolving here means no host can get it wrong, and a resolve that fails
+   * stops the action rather than running it against a partial set.
+   */
+  const run = async (action: BulkAction) => {
+    let ids: string[];
+    try {
+      ids = await selection.idsForAction();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `The selection could not be resolved: ${error.message}`
+          : "The selection could not be resolved, so nothing was changed"
+      );
+      return;
+    }
+    action.onRun(ids);
+  };
   const safe = actions.filter((action) => !action.destructive);
   const destructive = actions.filter((action) => action.destructive);
 
@@ -410,8 +442,11 @@ export function BulkBar({
         className
       )}
     >
-      <span className="text-[12.5px] font-semibold text-radar-ink">
-        {label} selected
+      <span className="min-w-0 text-[12.5px] font-semibold text-radar-ink">
+        {label} selected{matching && ", all matching"}
+        {matching && filterSummary && (
+          <span className="ml-2 font-normal text-radar-ink3">{filterSummary}</span>
+        )}
       </span>
 
       {!selection.allSelected && (
@@ -425,13 +460,26 @@ export function BulkBar({
         </button>
       )}
 
+      {/* The second step, offered here too: this is where you are standing when you
+          realise the page is not the set you meant. */}
+      {!matching && selection.canSelectMatching && (
+        <button
+          type="button"
+          onClick={selection.selectAllMatching}
+          disabled={busy}
+          className="text-[12.5px] text-radar-primary2 underline hover:text-radar-accent disabled:opacity-60"
+        >
+          Select all {selection.matchingTotal} matching
+        </button>
+      )}
+
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {safe.map((action) => (
           <RadarButton
             key={action.id}
             variant="outline"
             disabled={busy}
-            onClick={() => action.onRun(ids)}
+            onClick={() => void run(action)}
           >
             {busyAction === action.id ? "Working…" : action.label}
           </RadarButton>
@@ -441,7 +489,7 @@ export function BulkBar({
             key={action.id}
             variant="outline"
             disabled={busy}
-            onClick={() => action.onRun(ids)}
+            onClick={() => void run(action)}
             className="border-radar-err text-radar-err hover:bg-radar-err hover:text-radar-on-accent"
           >
             {busyAction === action.id ? "Working…" : action.label}
