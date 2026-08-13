@@ -122,6 +122,24 @@ export function sourceAttention({
   return { lines, count: failing.length + quiet.length };
 }
 
+/**
+ * One page of a filtered list, with the page clamped into range.
+ *
+ * Clamped rather than trusted, because the page number outlives the filter that made it
+ * reachable: narrowing the list under a pager sitting on page 6 has to land somewhere real,
+ * and "Page 6 of 1" over an empty list is how the curation history used to blank itself.
+ */
+export function pageWindow<T>(
+  rows: T[],
+  page: number,
+  pageSize: number
+): { rows: T[]; page: number; totalPages: number } {
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const clamped = Math.min(Math.max(1, Math.trunc(page) || 1), totalPages);
+  const start = (clamped - 1) * pageSize;
+  return { rows: rows.slice(start, start + pageSize), page: clamped, totalPages };
+}
+
 /** `num` is rendered inside `<Num>`, so the figures keep the mono face. */
 export interface HeadingPart {
   num?: string;
