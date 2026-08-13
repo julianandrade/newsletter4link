@@ -158,9 +158,9 @@ loads now. Not attributed, not claimed fixed.
 
 **Files:** Modify `app/dashboard/curation/page.tsx`
 
-- [ ] **Step 1: Wire `usePageSize("curation")`** into the existing `limit` query and pass the size props to its `Pagination`. No selection: that list has no bulk actions.
-- [ ] **Step 2: Verify rendered** and run the CI trio.
-- [ ] **Step 3: Commit** `Curation: rows per page on the run history`
+- [x] **Step 1: Wire `usePageSize("curation")`** into the existing `limit` query and pass the size props to its `Pagination`. No selection: that list has no bulk actions.
+- [x] **Step 2: Verify rendered** and run the CI trio.
+- [x] **Step 3: Commit** `Curation: rows per page on the run history`
 
 ---
 
