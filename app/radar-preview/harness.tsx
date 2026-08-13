@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { MEME_TEMPLATES } from "@/lib/memes/templates";
 import { DashboardShell } from "@/components/dashboard-shell";
 import FeedPage from "@/app/dashboard/page";
 import TrendsPage from "@/app/dashboard/trends/page";
@@ -1395,6 +1396,29 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       return json({ success: true, data: articleStateFromUrl() });
     }
     /**
+     * The meme renderer.
+     *
+     * Answers with the chosen template's own blank image rather than a rendered one: the
+     * render is `sharp` on the server, and there is no server here. That is enough to drive
+     * the screen, which is what this harness is for, and it is deliberately not enough to
+     * judge the output. For that, `npx tsx scripts/render-meme.ts --sheet` renders every
+     * format for real.
+     */
+    if (url.includes("/api/memes/render")) {
+      let templateId = "drake-hotline-bling";
+      try {
+        templateId = JSON.parse(String(init?.body ?? "{}")).templateId ?? templateId;
+      } catch {
+        // Keep the default: a preview stub is not worth failing the screen over.
+      }
+
+      const file = MEME_TEMPLATES.find((t) => t.id === templateId)?.file;
+      const stub = file ? `/meme-templates/${file}` : "";
+
+      return json({ success: true, dataUrl: stub, url: stub, bytes: 0 });
+    }
+
+    /**
      * The closing slot's library. Ahead of the catch-all, which would answer with an
      * empty array and make every tab look like the empty state.
      */
@@ -1408,7 +1432,8 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
         return json({ success: true, data: { id: "as-1" } });
       }
 
-      return json({ success: true, data: asidesForUrl() });
+      const { data, languages } = asidesForUrl(url);
+      return json({ success: true, data, languages });
     }
     if (url.includes("/api/articles/approved")) {
       return json({ success: true, data: APPROVED, count: APPROVED.length });
@@ -1815,6 +1840,48 @@ const ASIDES_APPROVED = [
     useCount: 1,
     createdAt: iso(14),
   },
+  /**
+   * The two states the rest of these fixtures could not show: an aside with an image, and
+   * an aside in a second language.
+   *
+   * Without an image there is no thumbnail and no way into the full-size dialog. Without a
+   * second language the filter chips stay hidden, since one chip beside "Any" that selects
+   * the same rows explains nothing.
+   *
+   * The image is a real bucket URL rather than a placeholder because letterboxing a
+   * multi-panel meme is the specific thing the thumbnail had to stop getting wrong, and a
+   * flat square proves nothing about it. Deleting an aside deliberately leaves its image in
+   * the bucket, so the URL keeps working.
+   */
+  {
+    id: "as-4",
+    kind: "JOKE" as const,
+    status: "APPROVED" as const,
+    source: "MODEL" as const,
+    text: "Consultores de tecnologia a jurar, olhos postos no ecrã, que a IA ainda não vai roubar o emprego a ninguém.",
+    imageUrl:
+      "https://rjvneofcssruaovefclt.supabase.co/storage/v1/object/public/newsletter-media/1786627824977-supermeme_2h9_4.jpg",
+    attribution: null,
+    language: "pt-PT",
+    reusable: true,
+    lastUsedAt: null,
+    useCount: 0,
+    createdAt: iso(2),
+  },
+  {
+    id: "as-5",
+    kind: "JOKE" as const,
+    status: "APPROVED" as const,
+    source: "HUMAN" as const,
+    text: "The roadmap said agentic. The sprint said Tuesday.",
+    imageUrl: null,
+    attribution: null,
+    language: "en-GB",
+    reusable: true,
+    lastUsedAt: null,
+    useCount: 0,
+    createdAt: iso(3),
+  },
 ];
 
 const ASIDES_PENDING = [
@@ -1873,7 +1940,7 @@ const ASIDES_RETIRED = [
  * without driving the component, and the heading then said "approved" over a list of
  * pending rows.
  */
-function asidesForUrl() {
+function asidesForStatus() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("screen") === "asides-empty") return [];
 
@@ -1881,6 +1948,35 @@ function asidesForUrl() {
   if (status === "PENDING") return ASIDES_PENDING;
   if (status === "RETIRED") return ASIDES_RETIRED;
   return ASIDES_APPROVED;
+}
+
+/**
+ * The list and its language counts, the shape the real route answers with.
+ *
+ * The language filter is applied to the rows but not to the counts, which is what the route
+ * does and the reason it does it: faceting the counts by the selected language would leave
+ * every other chip reading zero, so choosing one would destroy the only thing telling you
+ * what else is there.
+ *
+ * `requestedLanguage` comes off the fetch URL rather than the page URL, because the screen
+ * holds the filter in state and only the request it makes says what is selected. Reading
+ * `window.location` here would make the chips inert in the preview.
+ */
+function asidesForUrl(url: string) {
+  const rows = asidesForStatus();
+  const requestedLanguage = new URL(url, window.location.origin).searchParams.get("language");
+
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.language, (counts.get(row.language) ?? 0) + 1);
+
+  return {
+    data: requestedLanguage
+      ? rows.filter((row) => row.language === requestedLanguage)
+      : rows,
+    languages: [...counts.entries()]
+      .map(([language, count]) => ({ language, count }))
+      .sort((a, b) => b.count - a.count || a.language.localeCompare(b.language)),
+  };
 }
 
 /** Which of the four the current URL is asking for. */

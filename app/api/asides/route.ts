@@ -25,12 +25,17 @@ export const ASIDE_SORT_FIELDS = [
  * The closing slot's library. VIEWER or above, this organization only.
  *
  * `?offerable=true` asks the question the send screen asks: what may go out right now, in
- * this kind and this language, ordered never-used first. Everything else is the library
- * screen's own filtering, where a retired or pending row is exactly what you want to see.
+ * this kind, ordered never-used first. Everything else is the library screen's own
+ * filtering, where a retired or pending row is exactly what you want to see.
+ *
+ * The library form also returns `languages`, the counts the filter chips are built from.
+ * They ship with the list rather than from a second endpoint so the chips can never
+ * disagree with the rows underneath them.
  */
 export async function GET(request: Request) {
   try {
-    const { db } = await requireOrgContext();
+    const ctx = await requireOrgContext();
+    const { db } = ctx;
     const url = new URL(request.url);
 
     const searchParams = url.searchParams;
@@ -55,13 +60,18 @@ export async function GET(request: Request) {
     }
 
     if (offerable) {
-      const query = asidePickerQuery({
-        kind: (kind ?? "JOKE") as AsideKind,
-        language: language ?? "pt-PT",
-      });
+      const query = asidePickerQuery({ kind: (kind ?? "JOKE") as AsideKind });
 
+      /**
+       * No language means every language, which is the send screen's case.
+       *
+       * It used to default to "pt-PT", so an aside in any other language was stored and
+       * listed but never offered. An aside goes into an edition whatever it is written in.
+       * The parameter still narrows when a caller passes one, rather than being accepted
+       * and ignored.
+       */
       const asides = await db.aside.findMany({
-        where: query.where,
+        where: { ...query.where, ...(language ? { language } : {}) },
         orderBy: query.orderBy,
         take: 50,
       });
@@ -92,25 +102,54 @@ export async function GET(request: Request) {
           ? [{ createdAt: sort.direction }]
           : [{ [sort.field]: sort.direction }, { createdAt: "desc" as const }];
 
+    /** Everything the library filters by except language, which the facet below varies. */
+    const baseWhere = {
+      ...(kind ? { kind: kind as AsideKind } : {}),
+      ...(status ? { status: status as "PENDING" | "APPROVED" | "RETIRED" } : {}),
+      ...(search
+        ? {
+            OR: [
+              { text: { contains: search, mode: "insensitive" as const } },
+              { attribution: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
+
     const asides = await db.aside.findMany({
-      where: {
-        ...(kind ? { kind: kind as AsideKind } : {}),
-        ...(status ? { status: status as "PENDING" | "APPROVED" | "RETIRED" } : {}),
-        ...(language ? { language } : {}),
-        ...(search
-          ? {
-              OR: [
-                { text: { contains: search, mode: "insensitive" as const } },
-                { attribution: { contains: search, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-      },
+      where: { ...baseWhere, ...(language ? { language } : {}) },
       orderBy,
       take: 200,
     });
 
-    return NextResponse.json({ success: true, data: asides, sort });
+    /**
+     * The counts behind the language chips.
+     *
+     * Deliberately computed from `baseWhere`, which excludes the language filter itself.
+     * Applying it would make every chip but the selected one read zero, so choosing a
+     * language would destroy the only thing telling you what else there is.
+     *
+     * `$raw` because groupBy is not on the tenant client, which means the organization scope
+     * this whole route depends on has to be written by hand here. Without that line the
+     * chips would count every organization's asides.
+     */
+    const grouped = await db.$raw.aside.groupBy({
+      by: ["language"],
+      where: { ...baseWhere, organizationId: ctx.organization.id },
+      _count: { id: true },
+    });
+
+    const languages = grouped
+      .map((row: { language: string; _count: { id: number } }) => ({
+        language: row.language,
+        count: row._count.id,
+      }))
+      .sort(
+        (a: { language: string; count: number }, b: { language: string; count: number }) =>
+          b.count - a.count || a.language.localeCompare(b.language)
+      );
+
+    return NextResponse.json({ success: true, data: asides, languages, sort });
   } catch (error) {
     console.error("Error listing asides:", error);
 

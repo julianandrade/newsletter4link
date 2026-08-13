@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { AsideForm, type AsideDraft, type AsideKind } from "@/components/aside-form";
+import { MemeMaker } from "@/components/meme-maker";
 import {
   ChipGroup,
   Num,
@@ -23,6 +24,14 @@ import {
 } from "@/components/radar/primitives";
 import { SearchIcon } from "@/components/radar/icons";
 import { RadarInput } from "@/components/radar/controls";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { REWRITE_LANGUAGES } from "@/lib/rewrite/config";
 import {
   SortSelect,
   SortAnnouncement,
@@ -81,6 +90,25 @@ interface Aside {
 
 const STATUSES: Status[] = ["APPROVED", "PENDING", "RETIRED"];
 
+/** The language filter's "no filter" value. Not a language, so it cannot collide with one. */
+const ANY_LANGUAGE = "";
+
+/** How many languages the counts come back for. */
+interface LanguageFacet {
+  language: string;
+  count: number;
+}
+
+/**
+ * A language tag as a person reads it, falling back to the tag itself.
+ *
+ * The fallback matters: the facet is grouped from the stored column, so a value that predates
+ * `REWRITE_LANGUAGES` or was written by a script still gets a chip rather than an empty one.
+ */
+function languageLabel(tag: string): string {
+  return REWRITE_LANGUAGES.find((entry) => entry.value === tag)?.label ?? tag;
+}
+
 /**
  * The tab is addressable, so /dashboard/asides?status=PENDING opens the queue.
  *
@@ -95,11 +123,27 @@ function statusFromUrl(): Status | null {
   return STATUSES.includes(param as Status) ? (param as Status) : null;
 }
 
+/**
+ * Addressable for the same reason the tab is: ?language=en is a link somebody can send.
+ *
+ * Not validated against a list, unlike the status above. The set of real languages is
+ * whatever is in the column, which the facet reports and a closed list here would
+ * contradict.
+ */
+function languageFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("language");
+}
+
 export default function AsidesPage() {
   const [asides, setAsides] = useState<Aside[]>([]);
   const [status, setStatus] = useState<Status>("APPROVED");
+  const [language, setLanguage] = useState<string>(ANY_LANGUAGE);
+  const [languageFacets, setLanguageFacets] = useState<LanguageFacet[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  /** The image being looked at full size, or null. */
+  const [viewing, setViewing] = useState<Aside | null>(null);
   const [sort, setSort] = useState<SortState<AsideSortField>>({
     field: "createdAt",
     direction: "desc",
@@ -107,8 +151,9 @@ export default function AsidesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
+  const [making, setMaking] = useState(false);
   const [editing, setEditing] = useState<Aside | null>(null);
-  const [suggesting, setSuggesting] = useState(false);
+  const [suggesting, setSuggesting] = useState<null | "text" | "meme">(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -118,6 +163,7 @@ export default function AsidesPage() {
     try {
       const params = new URLSearchParams({ status });
       if (search) params.set("search", search);
+      if (language) params.set("language", language);
       applySortParams(params, sort);
 
       const response = await fetch(`/api/asides?${params.toString()}`);
@@ -128,17 +174,21 @@ export default function AsidesPage() {
       }
 
       setAsides(Array.isArray(payload.data) ? payload.data : []);
+      // Counts come back with the list, so the chips and the rows can never disagree.
+      setLanguageFacets(Array.isArray(payload.languages) ? payload.languages : []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load.");
       setAsides([]);
     } finally {
       setIsLoading(false);
     }
-  }, [status, search, sort]);
+  }, [status, search, language, sort]);
 
   useEffect(() => {
     const fromUrl = statusFromUrl();
     if (fromUrl) setStatus(fromUrl);
+    const languageFromQuery = languageFromUrl();
+    if (languageFromQuery) setLanguage(languageFromQuery);
   }, []);
 
   // Typing is not a query.
@@ -183,17 +233,27 @@ export default function AsidesPage() {
     await load();
   }
 
-  async function suggest() {
-    setSuggesting(true);
+  /**
+   * Both suggestion paths, which differ only in the route and land in the same queue.
+   *
+   * The status flips to Pending on success. Suggestions are written PENDING, so leaving the
+   * Approved tab up reported "5 candidates queued" over a list that had not changed, and the
+   * queue they went to was one click away with nothing pointing at it.
+   */
+  async function suggest(kind: "text" | "meme") {
+    setSuggesting(kind);
     setNotice(null);
     setError(null);
 
     try {
-      const response = await fetch("/api/asides/suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
+      const response = await fetch(
+        kind === "meme" ? "/api/asides/suggest-meme" : "/api/asides/suggest",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
       const payload = await response.json();
 
       if (!response.ok || !payload.success) {
@@ -201,14 +261,27 @@ export default function AsidesPage() {
       }
 
       setNotice(payload.message);
+      setStatus("PENDING");
       await load();
     } catch (suggestError) {
       setError(
         suggestError instanceof Error ? suggestError.message : "Could not get suggestions."
       );
     } finally {
-      setSuggesting(false);
+      setSuggesting(null);
     }
+  }
+
+  /** A made meme is an ordinary aside that happens to carry an image. */
+  async function saveMeme(draft: { imageUrl: string; text: string }) {
+    await create({
+      kind: "JOKE",
+      text: draft.text,
+      imageUrl: draft.imageUrl,
+      attribution: null,
+      language: language || "pt-PT",
+    });
+    setMaking(false);
   }
 
   const neverUsed = useMemo(
@@ -239,12 +312,28 @@ export default function AsidesPage() {
             </>
           }
           actions={
-            <div className="flex gap-2">
-              <RadarButton onClick={() => setWriting((open) => !open)}>
+            <div className="flex flex-wrap gap-2">
+              <RadarButton
+                onClick={() => {
+                  setWriting((open) => !open);
+                  setMaking(false);
+                }}
+              >
                 {writing ? "Close" : "Write one"}
               </RadarButton>
-              <RadarButton onClick={suggest} disabled={suggesting}>
-                {suggesting ? "Asking..." : "Suggest five"}
+              <RadarButton
+                onClick={() => {
+                  setMaking((open) => !open);
+                  setWriting(false);
+                }}
+              >
+                {making ? "Close" : "Make a meme"}
+              </RadarButton>
+              <RadarButton onClick={() => suggest("text")} disabled={suggesting !== null}>
+                {suggesting === "text" ? "Asking..." : "Suggest five"}
+              </RadarButton>
+              <RadarButton onClick={() => suggest("meme")} disabled={suggesting !== null}>
+                {suggesting === "meme" ? "Drawing..." : "Suggest memes"}
               </RadarButton>
             </div>
           }
@@ -270,6 +359,13 @@ export default function AsidesPage() {
               onSubmit={create}
               onCancel={() => setWriting(false)}
             />
+          </div>
+        )}
+
+        {making && (
+          <div className="radar-enter mb-6 rounded-xl border border-radar-line bg-radar-surface p-5">
+            <SectionLabel className="mb-4">Make a meme</SectionLabel>
+            <MemeMaker onSave={saveMeme} onCancel={() => setMaking(false)} />
           </div>
         )}
 
@@ -309,6 +405,36 @@ export default function AsidesPage() {
             onChange={setSort}
           />
         </div>
+
+        {/*
+          One chip per language actually present, plus "Any".
+          Hidden when there is only one, which is the usual case: a single chip next to an
+          "Any" that selects the same rows is a control that explains nothing. The counts
+          come from the server with the language filter left out, so picking one does not
+          zero the others.
+        */}
+        {languageFacets.length > 1 && (
+          <div className="mt-2.5">
+            <ChipGroup<string>
+              label="Filter by language"
+              kind="options"
+              size="sm"
+              value={language}
+              onChange={setLanguage}
+              options={[
+                { value: ANY_LANGUAGE, label: "Any language" },
+                ...languageFacets.map((facet) => ({
+                  value: facet.language,
+                  label: (
+                    <>
+                      {languageLabel(facet.language)} <Num>{facet.count}</Num>
+                    </>
+                  ),
+                })),
+              ]}
+            />
+          </div>
+        )}
 
         <div className="mt-5 flex flex-col gap-3">
           {isLoading && <p className="text-[13px] text-radar-ink2">Loading...</p>}
@@ -359,12 +485,29 @@ export default function AsidesPage() {
                 <>
                   <div className="flex flex-wrap items-start gap-3">
                     {aside.imageUrl && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={aside.imageUrl}
-                        alt={aside.text}
-                        className="h-16 w-16 shrink-0 rounded-lg border border-radar-line object-cover"
-                      />
+                      /*
+                        object-contain on a 4:3-ish box rather than a cropped square.
+                        A meme is usually two or four panels, and centre-cropping one to
+                        64x64 showed a slice of the seam: the thumbnail was there without
+                        being informative. Letterboxing shows the whole thing.
+
+                        A button, so the full image is one click and one Enter away. The
+                        caption is the accessible name because it is also the image's alt
+                        text, which makes the control announce what it opens.
+                      */
+                      <button
+                        type="button"
+                        onClick={() => setViewing(aside)}
+                        aria-label={`See the full image: ${aside.text}`}
+                        className="shrink-0 rounded-lg border border-radar-line bg-radar-surface2 p-0.5 transition-colors hover:border-radar-ink3 focus-visible:border-radar-accent"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={aside.imageUrl}
+                          alt=""
+                          className="h-16 w-24 rounded-md object-contain"
+                        />
+                      </button>
                     )}
 
                     <div className="min-w-0 flex-1">
@@ -423,6 +566,42 @@ export default function AsidesPage() {
           ))}
         </div>
       </RadarMain>
+
+      {/*
+        The image at full size, with its caption under it.
+        Both together on purpose: the caption is the alt text a reader sees when their client
+        blocks images, so whether the pair works is the actual judgement being made here, and
+        it cannot be made from either half alone.
+      */}
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>The image at full size</DialogTitle>
+            <DialogDescription>
+              {viewing?.language} · {viewing?.kind.toLowerCase()} ·{" "}
+              {viewing?.source === "MODEL" ? "AI suggested" : "written"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewing?.imageUrl && (
+            <div className="flex flex-col gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={viewing.imageUrl}
+                alt={viewing.text}
+                className="max-h-[65vh] w-auto self-center rounded-lg border border-radar-line object-contain"
+              />
+              <p className="m-0 text-[13px] leading-[21px] text-radar-ink">{viewing.text}</p>
+              {viewing.attribution && (
+                <p className="m-0 text-[12px] text-radar-ink2">{viewing.attribution}</p>
+              )}
+              <p className="m-0 text-[11.5px] text-radar-ink3">
+                This caption is what a reader sees when their mail client blocks images.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
