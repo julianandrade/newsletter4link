@@ -56,11 +56,11 @@
 
 **Produces:** `Pagination` accepts optional `pageSize`, `onPageSize`, `sizes = PAGE_SIZES`. Existing callers that pass none render exactly as before.
 
-- [ ] **Step 1: Write the failing test.** Without the props, no select renders and the markup matches today. With them, a labelled select shows the three sizes, the current one selected, and choosing one calls `onPageSize` with a number, not a string.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement** with `RadarSelect`, `aria-label="Rows per page"`, options read as "25 per page". Keep the existing early return for a single page, but **render the size control even then**: at 30 rows with a page of 25 you want the control that shows all 30, and hiding it there is the state where it is most needed.
-- [ ] **Step 4: Run green,** and confirm the two current callers (articles, curation) are visually unchanged.
-- [ ] **Step 5: Commit** `Radar: let Pagination carry a rows-per-page control`
+- [x] **Step 1: Write the failing test.** Without the props, no select renders and the markup matches today. With them, a labelled select shows the three sizes, the current one selected, and choosing one calls `onPageSize` with a number, not a string.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement** with `RadarSelect`, `aria-label="Rows per page"`, options read as "25 per page". Keep the existing early return for a single page, but **render the size control even then**: at 30 rows with a page of 25 you want the control that shows all 30, and hiding it there is the state where it is most needed.
+- [x] **Step 4: Run green,** and confirm the two current callers (articles, curation) are visually unchanged.
+- [x] **Step 5: Commit** `Radar: let Pagination carry a rows-per-page control`
 
 ---
 

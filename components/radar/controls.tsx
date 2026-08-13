@@ -14,6 +14,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Num, RadarButton, SectionLabel } from "@/components/radar/primitives";
+import { clampPageSize, PAGE_SIZES, type PageSize } from "@/lib/list-page-size";
 
 /* ------------------------------------------------------------------ surfaces */
 
@@ -617,34 +618,73 @@ export function Pagination({
   onPage,
   busy,
   className,
+  pageSize,
+  onPageSize,
+  sizes = PAGE_SIZES,
 }: {
   page: number;
   totalPages: number;
   onPage: (page: number) => void;
   busy?: boolean;
   className?: string;
+  /**
+   * Rows per page. Optional, and omitted by a list that has not adopted the control yet:
+   * three screens render this component, and a shared primitive that changes shape under
+   * everyone at once is how one consistency change becomes three regressions.
+   */
+  pageSize?: PageSize;
+  onPageSize?: (next: PageSize) => void;
+  sizes?: readonly PageSize[];
 }) {
-  if (totalPages <= 1) return null;
+  const showSize = pageSize !== undefined && onPageSize !== undefined;
+  const showPager = totalPages > 1;
+
+  if (!showPager && !showSize) return null;
 
   return (
-    <div className={cn("flex items-center justify-between gap-3", className)}>
-      <RadarButton
-        size="sm"
-        onClick={() => onPage(page - 1)}
-        disabled={page <= 1 || busy}
-      >
-        Previous
-      </RadarButton>
-      <SectionLabel>
-        Page {page} of {totalPages}
-      </SectionLabel>
-      <RadarButton
-        size="sm"
-        onClick={() => onPage(page + 1)}
-        disabled={page >= totalPages || busy}
-      >
-        Next
-      </RadarButton>
+    <div className={cn("flex flex-wrap items-center justify-between gap-3", className)}>
+      {showPager && (
+        <>
+          <RadarButton
+            size="sm"
+            onClick={() => onPage(page - 1)}
+            disabled={page <= 1 || busy}
+          >
+            Previous
+          </RadarButton>
+          <SectionLabel>
+            Page {page} of {totalPages}
+          </SectionLabel>
+          <RadarButton
+            size="sm"
+            onClick={() => onPage(page + 1)}
+            disabled={page >= totalPages || busy}
+          >
+            Next
+          </RadarButton>
+        </>
+      )}
+
+      {/*
+        Rendered even when there is only one page. Thirty rows at twenty-five per page is
+        exactly when someone wants to see all of them, and hiding the control there hides it
+        in the state that most needs it.
+      */}
+      {showSize && (
+        <RadarSelect
+          aria-label="Rows per page"
+          className="ml-auto w-auto min-w-[130px]"
+          value={String(pageSize)}
+          disabled={busy}
+          onChange={(event) => onPageSize(clampPageSize(event.target.value))}
+        >
+          {sizes.map((size) => (
+            <option key={size} value={size}>
+              {size} per page
+            </option>
+          ))}
+        </RadarSelect>
+      )}
     </div>
   );
 }
