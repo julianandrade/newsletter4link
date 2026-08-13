@@ -576,7 +576,18 @@ export default function EditionDetailPage() {
       const result = await res.json();
 
       if (result.success) {
-        setEdition(result.data);
+        const saved = result.data as EditionDetail;
+        setEdition(saved);
+        /**
+         * Refreshed from the PATCH response rather than left alone.
+         *
+         * A story added and flagged in this same session carried no `hasUsableTake` from
+         * `CandidateList.onAdd`, so the readiness check below read it as blocked until a full
+         * page reload. The PATCH response already carries the server's answer for every
+         * article; discarding it here is what made a fresh add look stuck.
+         */
+        setSelectedArticleIds(saved.articles.map((a) => a.id));
+        setSelectedArticles(saved.articles);
         setIsDirty(false);
         setIsEditorDirty(false);
         toast.success("Draft saved");
@@ -951,12 +962,18 @@ export default function EditionDetailPage() {
   // RQ-006 surface 3: whether every flagged story has a take that can actually be sent.
   // Computed from the same rows `/api/email/send-all` checks, so the screen and the 409
   // it would otherwise hit say the same thing.
+  //
+  // hasUsableTake reads as usable unless the server said otherwise: a row just added by
+  // CandidateList.onAdd carries no hasUsableTake at all, and `=== true` turned that absence
+  // into "blocked", which read as "none written" for a take that was actually fine. Only an
+  // explicit `false` from the server counts as missing here; the 409 on the send route
+  // remains the real gate, so an unknown state never gets to falsely block the button.
   const linkTakeState = linkTakeReadiness(
     selectedArticles.map((article) => ({
       articleId: article.id,
       title: article.title,
       useLinkTake: article.useLinkTake === true,
-      hasUsableTake: article.hasUsableTake === true,
+      hasUsableTake: article.hasUsableTake !== false,
     }))
   );
 

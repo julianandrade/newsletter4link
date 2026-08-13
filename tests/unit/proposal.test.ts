@@ -8,10 +8,12 @@ import {
   planProjectTopUp,
   planTopUp,
   rankCandidates,
+  readEditionArticles,
   type Candidate,
   type ProjectCandidate,
   type ProposalWeek,
 } from "@/lib/editions/proposal";
+import { editionPatchPayload } from "@/components/proposal/state";
 import type { TenantClient } from "@/lib/db/tenant";
 
 /**
@@ -521,5 +523,137 @@ describe("ensureProposal", () => {
     });
 
     await expect(ensureProposal(db, WEEK)).rejects.toThrow("connection lost");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readEditionArticles: the fourth silent-wipe instance
+// ---------------------------------------------------------------------------
+
+/**
+ * `readEditionArticleRows`, twenty lines above the function under test, carries a comment
+ * warning that any reader of the join table must keep `useLinkTake`. This function did not,
+ * so `GET /api/editions/proposal` answered `useLinkTake: undefined` for every article, the
+ * dashboard's `editionPatchPayload` wrote that back as `false`, and the very next reorder on
+ * the proposal screen cleared every flag on the edition with no Link Take UI anywhere on that
+ * screen to reveal it.
+ */
+describe("readEditionArticles", () => {
+  function fakeArticle(id: string, overrides: Record<string, unknown> = {}) {
+    return {
+      id,
+      title: `Story ${id}`,
+      sourceUrl: `https://example.test/${id}`,
+      author: null,
+      publishedAt: new Date("2026-08-03T00:00:00.000Z"),
+      capturedAt: new Date("2026-08-03T00:00:00.000Z"),
+      relevanceScore: 8,
+      summary: "One sentence.",
+      category: ["Models"],
+      status: "APPROVED",
+      content: "",
+      contentHash: null,
+      ...overrides,
+    };
+  }
+
+  function fakeDbForArticles(options: {
+    rows: Array<{ order: number; useLinkTake: boolean; article: ReturnType<typeof fakeArticle> }>;
+    rewrites?: Array<Record<string, unknown>>;
+  }) {
+    const db = {
+      $raw: {
+        editionArticle: {
+          findMany: () => Promise.resolve(options.rows),
+        },
+      },
+      articleRewrite: {
+        findMany: () => Promise.resolve(options.rewrites ?? []),
+      },
+      article: {
+        findMany: (args: { where: { id: { in: string[] } } }) => {
+          const ids = args.where.id.in;
+          return Promise.resolve(
+            options.rows.map((row) => row.article).filter((a) => ids.includes(a.id))
+          );
+        },
+      },
+    };
+
+    return db as unknown as TenantClient;
+  }
+
+  it("carries useLinkTake off the join row, not defaulted to false", async () => {
+    const db = fakeDbForArticles({
+      rows: [
+        { order: 1, useLinkTake: true, article: fakeArticle("flagged") },
+        { order: 2, useLinkTake: false, article: fakeArticle("plain") },
+      ],
+    });
+
+    const result = await readEditionArticles(db, "edition-1");
+
+    expect(result.map((a) => ({ id: a.id, useLinkTake: a.useLinkTake }))).toEqual([
+      { id: "flagged", useLinkTake: true },
+      { id: "plain", useLinkTake: false },
+    ]);
+  });
+
+  it("reports hasUsableTake from a batched read, not a default", async () => {
+    const db = fakeDbForArticles({
+      rows: [
+        { order: 1, useLinkTake: true, article: fakeArticle("has-take") },
+        { order: 2, useLinkTake: true, article: fakeArticle("no-take") },
+      ],
+      rewrites: [
+        {
+          articleId: "has-take",
+          title: "A verified take",
+          body: "Body text.",
+          language: "pt-PT",
+          status: "GENERATED",
+          checksPassed: true,
+          supersededAt: null,
+          sourceHash: null,
+          generatedAt: new Date("2026-08-03T00:00:00.000Z"),
+        },
+      ],
+    });
+
+    const result = await readEditionArticles(db, "edition-1");
+
+    expect(result.find((a) => a.id === "has-take")?.hasUsableTake).toBe(true);
+    expect(result.find((a) => a.id === "no-take")?.hasUsableTake).toBe(false);
+  });
+
+  it("survives the round trip GET /api/editions/proposal feeds into editionPatchPayload", async () => {
+    // The regression itself: read, hand to the screen's payload builder exactly as the
+    // dashboard does on load, and check the flag a person set is still true rather than
+    // silently reset to false.
+    const db = fakeDbForArticles({
+      rows: [{ order: 1, useLinkTake: true, article: fakeArticle("flagged") }],
+    });
+
+    const articles = await readEditionArticles(db, "edition-1");
+
+    const body = editionPatchPayload({
+      id: "edition-1",
+      week: 32,
+      year: 2026,
+      title: null,
+      kind: "WEEKLY",
+      publishDate: "2026-08-03T00:00:00.000Z",
+      label: "Week 32",
+      status: "DRAFT",
+      thin: false,
+      archivedAt: null,
+      sentAt: null,
+      approvedAt: null,
+      approvedByEmail: null,
+      articles,
+      projects: [],
+    });
+
+    expect(body.articles).toEqual([{ articleId: "flagged", order: 1, useLinkTake: true }]);
   });
 });

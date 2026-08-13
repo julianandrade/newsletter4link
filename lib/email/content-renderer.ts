@@ -121,6 +121,10 @@ export function replaceContentMergeTags(
           category: article.category,
           // Only the lead's is read, to find the top story's image.
           content: article.content,
+          // Same hazard as content above: renderArticlesHtml carried a flagged story's take
+          // into {{articles}}, but {{sections}} and {{top_story}}, built through
+          // buildEditionEmail, kept reading the ordinary summary until this line existed.
+          linkTake: article.linkTake ?? null,
         })),
         projects: projects.map((project) => ({
           name: project.name,

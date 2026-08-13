@@ -203,6 +203,13 @@ export function linkTakeBlock(item: EmailArticle): string {
   const take: EmailLinkTake | null | undefined = item.linkTake;
   if (!take) return "";
 
+  // Keyed off take.language the same way aiLabelFor is, two lines up: this text sits right
+  // beside that label, and it read Portuguese there even when the take, and the label next to
+  // it, were in English.
+  const originalArticleLabel = take.language.toLowerCase().startsWith("pt")
+    ? "ver artigo original"
+    : "see original article";
+
   return `<div class="h2 t-strong" style="font-family:${SERIF}; font-size:22px; line-height:29px; mso-line-height-rule:exactly; font-weight:normal; color:${INK}; padding-bottom:10px;">${escapeHtml(
     take.title
   )}</div>
@@ -212,7 +219,7 @@ ${linkTakeBodyHtml(take.body)}
   )}</div>
 <div class="link-strong" style="padding-top:8px; font-family:${SANS}; font-size:13px; line-height:19px; mso-line-height-rule:exactly;">${link(
     item.url,
-    item.source ? `${item.source}: ver artigo original` : "Ver artigo original",
+    item.source ? `${item.source}: ${originalArticleLabel}` : originalArticleLabel.charAt(0).toUpperCase() + originalArticleLabel.slice(1),
     `color:${PRIMARY}; font-weight:bold; text-decoration:none; border-bottom:2px solid ${ACCENT};`
   )}</div>`;
 }

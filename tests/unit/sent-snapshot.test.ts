@@ -59,6 +59,7 @@ describe("buildSentSnapshot", () => {
         category: ["Models"],
         relevanceScore: 8.5,
         content: "<p>Body <img src='https://example.test/i.png'></p>",
+        linkTake: null,
       },
     ]);
   });
@@ -81,6 +82,7 @@ describe("buildSentSnapshot", () => {
       category: [],
       relevanceScore: null,
       content: null,
+      linkTake: null,
     });
     expect(snapshot.projects[0]).toEqual({
       name: "Bare project",
