@@ -28,11 +28,11 @@
 
 **Produces:** `PAGE_SIZES`, `PageSize`, `DEFAULT_PAGE_SIZE`, `clampPageSize(value: unknown): PageSize`, `pageSizeKey(list: string): string`.
 
-- [ ] **Step 1: Write the failing test** covering each valid size, `"50"` as a string, `null`, `undefined`, `0`, `5000`, `NaN`, and an object. Every one that is not exactly 25, 50 or 100 returns 50. `pageSizeKey("feeds")` is `"n4l.pageSize.feeds"`.
-- [ ] **Step 2: Run it and watch it fail** on the unresolved import.
-- [ ] **Step 3: Implement**, with a comment recording why a stored value is clamped rather than trusted: the key is editable in devtools and a 5,000-row page is a hung tab.
-- [ ] **Step 4: Run it green.**
-- [ ] **Step 5: Commit** `Lists: name the three page sizes, and clamp anything else`
+- [x] **Step 1: Write the failing test** covering each valid size, `"50"` as a string, `null`, `undefined`, `0`, `5000`, `NaN`, and an object. Every one that is not exactly 25, 50 or 100 returns 50. `pageSizeKey("feeds")` is `"n4l.pageSize.feeds"`.
+- [x] **Step 2: Run it and watch it fail** on the unresolved import.
+- [x] **Step 3: Implement**, with a comment recording why a stored value is clamped rather than trusted: the key is editable in devtools and a 5,000-row page is a hung tab.
+- [x] **Step 4: Run it green.**
+- [x] **Step 5: Commit** `Lists: name the three page sizes, and clamp anything else`
 
 ---
 
