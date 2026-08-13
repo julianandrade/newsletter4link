@@ -598,7 +598,7 @@ Two presentational components. Nothing fetches; both take what they render.
   - `SourcesAttention({ lines, onJump }: { lines: AttentionLine[]; onJump: (tab: SourcesTab) => void })`
 - The panel id contract every consumer relies on: `idBase="sources"`, so a panel must carry `id={`sources-panel-${tab}`}` and `aria-labelledby={`sources-tab-${tab}`}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/sources-tab-row.test.tsx`:
 
@@ -697,12 +697,12 @@ describe("SourcesAttention", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/unit/sources-tab-row.test.tsx`
 Expected: FAIL, cannot resolve `@/components/sources/sources-tabs`.
 
-- [ ] **Step 3: Write the tab row**
+- [x] **Step 3: Write the tab row**
 
 Create `components/sources/sources-tabs.tsx`:
 
@@ -757,7 +757,7 @@ export function SourcesTabRow({
 }
 ```
 
-- [ ] **Step 4: Write the attention banner**
+- [x] **Step 4: Write the attention banner**
 
 Create `components/sources/sources-attention.tsx`:
 
@@ -828,12 +828,12 @@ export function SourcesAttention({
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `npx vitest run tests/unit/sources-tab-row.test.tsx`
-Expected: PASS, 7 tests. If `toHaveTextContent` is unavailable, the repo has no jest-dom setup: replace those two assertions with `expect(tab.textContent).toContain("434")` rather than adding a dependency.
+Expected: PASS, 7 tests. The repo has no jest-dom, confirmed while running this task, so every assertion is plain DOM: `textContent`, `getAttribute`, and `container.innerHTML`. No dependency was added.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add components/sources/sources-tabs.tsx components/sources/sources-attention.tsx tests/unit/sources-tab-row.test.tsx
