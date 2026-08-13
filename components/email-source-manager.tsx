@@ -113,12 +113,15 @@ export interface EmailSourceManagerProps {
   loadError: string | null;
   /** Refetch the sources, owned by the page. Called wherever `loadSources` was. */
   reload: () => Promise<void>;
-  unknown: UnknownSenderGroup[];
-  unknownState: UnknownState;
-  unknownMessage: string | null;
-  unknownTruncated: boolean;
-  /** Refetch the unclaimed senders, owned by the page. */
+  /**
+   * Refetch the unclaimed senders.
+   *
+   * Still needed although the unmatched list itself moved to its own tab: pausing a source
+   * stops it claiming its sender, so that list changes when this one does.
+   */
   reloadUnknown: () => Promise<void>;
+  /** Open the create dialog, which the page owns because Promote opens it too. */
+  onAdd: () => void;
 }
 
 export function EmailSourceManager({
@@ -126,11 +129,8 @@ export function EmailSourceManager({
   isLoading,
   loadError,
   reload,
-  unknown,
-  unknownState,
-  unknownMessage,
-  unknownTruncated: truncated,
-  reloadUnknown,
+  reloadUnknown: loadUnknown,
+  onAdd,
 }: EmailSourceManagerProps) {
   /**
    * A local mirror of the rows the page fetched.
@@ -145,11 +145,7 @@ export function EmailSourceManager({
   }, [incoming]);
 
   const loadSources = reload;
-  const loadUnknown = reloadUnknown;
 
-  const [draft, setDraft] = useState<NewSourceDraft>(emptyDraft);
-  const [isCreating, setIsCreating] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
   /** The source whose parse mode is in flight, so its toggle cannot be double-clicked. */
   const [savingMode, setSavingMode] = useState<string | null>(null);
 
@@ -219,103 +215,6 @@ export function EmailSourceManager({
     );
   }, [withHealth, search, statusFilter, sort]);
 
-  const warnings = useMemo(
-    () =>
-      withHealth
-        .filter(({ source }) => source.active)
-        .map(({ source, health }) => healthWarning(health, source.name))
-        .filter((line): line is string => line !== null),
-    [withHealth]
-  );
-
-  /** Pre-fill the form from a sender the mailbox has actually seen. */
-  const promote = useCallback((group: UnknownSenderGroup) => {
-    // The From header's display name when there is one, since it is the newsletter's own
-    // name. The local part is the fallback, and a poor one: it turns "The Rundown AI"
-    // into "News".
-    const local = group.sender.split("@")[0] ?? group.sender;
-    const fromLocal = local
-      .replace(/[._-]+/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .trim();
-
-    setDraft({
-      ...emptyDraft,
-      name: displayName(group.displayFrom) ?? fromLocal ?? group.sender,
-      senderAddress: group.sender,
-      inboundTag: group.tags[0] ?? "",
-    });
-    setFormOpen(true);
-
-    // The form is above the panel, so a click at the bottom of a long list would otherwise
-    // look like it did nothing.
-    if (typeof document !== "undefined") {
-      document
-        .getElementById("email-source-form")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, []);
-
-  const submit = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
-      setIsCreating(true);
-
-      try {
-        const response = await fetch("/api/rss-sources", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "EMAIL",
-            name: draft.name,
-            senderAddress: draft.senderAddress,
-            inboundTag: draft.inboundTag || undefined,
-            parseMode: draft.parseMode,
-            expectedCadenceDays: draft.expectedCadenceDays || undefined,
-            category: draft.category,
-          }),
-        });
-
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          toast.error(data?.error ?? `The source could not be created (${response.status})`);
-          return;
-        }
-
-        const sender = draft.senderAddress.trim().toLowerCase();
-        const held = unknown.find((group) => group.sender === sender);
-
-        toast.success(`${data.name} is now a source for ${sender}`);
-        setDraft(emptyDraft);
-        setFormOpen(false);
-        await loadSources();
-
-        // Only worth offering when something is actually held. Requeueing is a separate
-        // call so that creating a source without reprocessing stays possible.
-        if (held && held.count > 0) {
-          const requeue = await fetch("/api/inbound/unknown-senders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sender }),
-          });
-          const requeueData = await requeue.json().catch(() => null);
-
-          if (requeue.ok) toast.success(requeueData?.message ?? "Held emails requeued");
-          else toast.error(requeueData?.error ?? "The held emails could not be requeued");
-        }
-
-        await loadUnknown();
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "The source could not be created"
-        );
-      } finally {
-        setIsCreating(false);
-      }
-    },
-    [draft, unknown, loadSources, loadUnknown]
-  );
 
   /**
    * Change how a source's emails are read.
@@ -398,174 +297,18 @@ export function EmailSourceManager({
 
   return (
     <div className="space-y-6">
-      {/* ---- health summary ---- */}
-      {warnings.length > 0 && (
-        <div className="radar-enter flex flex-wrap items-start gap-3 rounded-xl border border-radar-warn bg-radar-surface px-4 py-3">
-          <span
-            aria-hidden="true"
-            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-radar-warn"
-          />
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="m-0 text-[12.5px] font-semibold text-radar-ink">
-              {warnings.length} email {warnings.length === 1 ? "source needs" : "sources need"} a
-              look
-            </p>
-            {warnings.map((line) => (
-              <p key={line} className="m-0 text-[12.5px] text-radar-ink2">
-                {line}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ---- create ---- */}
-      <div id="email-source-form">
-        {!formOpen ? (
-          <button
-            type="button"
-            onClick={() => setFormOpen(true)}
-            className={radarButtonClass("accent")}
-          >
-            Add an email source
-          </button>
-        ) : (
-          <form
-            onSubmit={submit}
-            className="radar-enter space-y-4 rounded-xl border border-radar-line bg-radar-surface p-4"
-          >
-            <div className="flex items-center justify-between">
-              <SectionLabel>New email source</SectionLabel>
-              <button
-                type="button"
-                onClick={() => {
-                  setFormOpen(false);
-                  setDraft(emptyDraft);
-                }}
-                className={radarButtonClass("ghost", "sm")}
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="es-name">Name</Label>
-                <Input
-                  id="es-name"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="TLDR AI"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="es-sender">Sender address</Label>
-                <Input
-                  id="es-sender"
-                  type="email"
-                  value={draft.senderAddress}
-                  onChange={(e) => setDraft({ ...draft, senderAddress: e.target.value })}
-                  placeholder="news@tldr.tech"
-                  required
-                />
-                <p className="m-0 text-[11.5px] text-radar-ink3">
-                  The address the newsletter sends <em>from</em>. This is the primary match
-                  key, and it must be exact.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="es-tag">Inbound tag</Label>
-                <Input
-                  id="es-tag"
-                  value={draft.inboundTag}
-                  onChange={(e) => setDraft({ ...draft, inboundTag: e.target.value })}
-                  placeholder="tldr"
-                />
-                <p className="m-0 text-[11.5px] text-radar-ink3">
-                  Optional. The <code>+tag</code> used when subscribing, and the fallback if
-                  the sender ever changes its address.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="es-cadence">Expected cadence (days)</Label>
-                <Input
-                  id="es-cadence"
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={draft.expectedCadenceDays}
-                  onChange={(e) =>
-                    setDraft({ ...draft, expectedCadenceDays: e.target.value })
-                  }
-                  placeholder="7"
-                />
-                <p className="m-0 text-[11.5px] text-radar-ink3">
-                  Optional, but without it silence cannot be judged and no warning will ever
-                  fire for this source.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="es-category">Category</Label>
-                <Input
-                  id="es-category"
-                  value={draft.category}
-                  onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-radar-ink3">
-                  Parse mode
-                </span>
-                <div className="flex gap-2">
-                  {(
-                    [
-                      { value: "DIGEST", label: "Digest", hint: "many linked articles" },
-                      { value: "ESSAY", label: "Essay", hint: "the email is the article" },
-                    ] as const
-                  ).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setDraft({ ...draft, parseMode: option.value })}
-                      className={cn(
-                        "flex-1 rounded-lg border px-3 py-2 text-left transition-colors",
-                        draft.parseMode === option.value
-                          ? "border-radar-accent bg-radar-surface2"
-                          : "border-radar-line hover:border-radar-ink3"
-                      )}
-                      aria-pressed={draft.parseMode === option.value}
-                    >
-                      <span className="block text-[12.5px] font-semibold text-radar-ink">
-                        {option.label}
-                      </span>
-                      <span className="block text-[11.5px] text-radar-ink3">
-                        {option.hint}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <Button type="submit" disabled={isCreating}>
-              {isCreating ? "Creating…" : "Create source"}
-            </Button>
-          </form>
-        )}
-      </div>
-
       {/* ---- existing email sources ---- */}
       <div className="space-y-2">
-        <SectionLabel>
-          Email sources {!isLoading && <Num>{sources.length}</Num>}
-        </SectionLabel>
+        {/* The count moved to the tab row, so this label carries the action instead. Task 7
+            of the plan folds the button into the shared filter bar. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionLabel>
+            Email sources {!isLoading && <Num>{sources.length}</Num>}
+          </SectionLabel>
+          <button type="button" onClick={onAdd} className={radarButtonClass("accent", "sm")}>
+            Add email source
+          </button>
+        </div>
 
         {/* Rendered whatever the list is doing, so a filter that matches nothing keeps the
             control that widens it. */}
@@ -703,96 +446,6 @@ export function EmailSourceManager({
         ))}
       </div>
 
-      {/* ---- unknown senders ---- */}
-      <div className="space-y-2">
-        <SectionLabel>
-          Unknown senders{" "}
-          {unknownState === "ready" && <Num>{unknown.length}</Num>}
-        </SectionLabel>
-
-        {unknownState === "loading" && <SkeletonBar width="240px" />}
-
-        {unknownState === "forbidden" && (
-          <p className="m-0 rounded-md border border-radar-line bg-radar-surface px-3 py-2 text-[12.5px] text-radar-ink2">
-            {unknownMessage}
-          </p>
-        )}
-
-        {unknownState === "error" && (
-          <p className="m-0 rounded-md bg-radar-surface2 px-3 py-2 text-sm text-radar-err">
-            {unknownMessage}
-          </p>
-        )}
-
-        {unknownState === "ready" && (
-          <>
-            <p className="m-0 text-[11.5px] text-radar-ink3">
-              Senders no active source claims, so their emails would be dropped if the ingest
-              ran now. This view is platform-wide: inbound mail arrives at a shared address
-              and belongs to no organization until a source claims it.
-              {truncated && " Showing a sample, not the whole backlog."}
-            </p>
-
-            {unknown.length === 0 && (
-              <p className="m-0 text-[12.5px] text-radar-ink3">
-                Nothing unmatched. Every sender that has arrived has a source.
-              </p>
-            )}
-
-            {unknown.map((group) => (
-              <div
-                key={group.sender}
-                className="flex flex-wrap items-start gap-3 rounded-xl border border-radar-line bg-radar-surface px-4 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-semibold text-radar-ink">
-                      {group.sender}
-                    </span>
-                    <StatusChip tone={group.alreadyIgnored ? "warn" : "neutral"}>
-                      {group.count} {group.count === 1 ? "email" : "emails"}
-                    </StatusChip>
-                    {group.alreadyIgnored && (
-                      <StatusChip tone="warn">already dropped</StatusChip>
-                    )}
-                    {group.tags.map((tag) => (
-                      <StatusChip key={tag} tone="neutral">
-                        +{tag}
-                      </StatusChip>
-                    ))}
-                  </div>
-
-                  {group.subjectSamples.length > 0 && (
-                    <ul className="m-0 mt-1 list-none space-y-0.5 p-0">
-                      {group.subjectSamples.map((subject, index) => (
-                        <li
-                          key={`${group.sender}-${index}`}
-                          className="truncate text-[11.5px] text-radar-ink3"
-                        >
-                          {subject}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <p className="m-0 mt-1 text-[11.5px] text-radar-ink3">
-                    last {relativeTime(group.lastSeenAt)} · first{" "}
-                    {relativeTime(group.firstSeenAt)}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => promote(group)}
-                  className={radarButtonClass("accent", "sm")}
-                >
-                  Promote
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
     </div>
   );
 }
