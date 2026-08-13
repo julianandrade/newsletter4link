@@ -1,13 +1,14 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
-  useEffect,
   useMemo,
   useState,
   type ComponentProps,
 } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { EmailSourceManager } from "@/components/email-source-manager";
 import { ReceivedEmails } from "@/components/inbound/received-emails";
@@ -20,7 +21,15 @@ import {
   radarButtonClass,
   RadarMain,
 } from "@/components/radar/primitives";
+import { toast } from "sonner";
 import { useSourceCollections } from "@/components/sources/use-source-collections";
+import { UnknownSenders } from "@/components/sources/unknown-senders";
+import {
+  draftFromSender,
+  emptyDraft,
+  EmailSourceDialog,
+  type NewSourceDraft,
+} from "@/components/sources/email-source-dialog";
 import { LoadError } from "@/components/radar/controls";
 import { sourceAttention, sourcesHeading } from "@/lib/sources/summary";
 import { resolveTab, type SourcesTab } from "@/lib/sources/tabs";
@@ -33,19 +42,27 @@ import { relativeTime } from "@/lib/radar/source";
  * which measured fifty viewports and twelve headings. What replaces them is one heading
  * covering both kinds, one attention banner, and one list at a time.
  *
- * The tab is in the URL so the banner can link to it and a bookmark survives a reload,
- * read from `window.location` in an effect and written with `replaceState` rather than
- * through `useSearchParams`. That is the pattern this project already settled on twice,
- * in `app/dashboard/page.tsx` and `app/dashboard/asides/page.tsx`: `useSearchParams`
- * would make the whole screen need a Suspense boundary to prerender. Only the `tab`
- * parameter is touched, so the preview harness keeps its own `?screen=`.
+ * The tab is in the URL so the banner can link to it and a bookmark survives a reload.
+ *
+ * Read once through `useSearchParams`, then kept in local state and written back with
+ * `replaceState`. The two halves are deliberate, and each one is a bug that was measured:
+ *
+ *  - `useSearchParams` for the initial value, rather than `window.location` in an effect
+ *    the way `app/dashboard/page.tsx` and `app/dashboard/asides/page.tsx` do it, because
+ *    the server knows the URL and this panel does not hold plain divs. Reading it in an
+ *    effect made the server render the Feeds panel, Radix dialogs and all, and then swap
+ *    that subtree out during hydration, which React reports as mismatched `useId` values.
+ *    Landing on `?tab=unmatched` logged a hydration error; `?tab=feeds` did not.
+ *  - Local state plus `replaceState` for changes, rather than `router.replace`, so
+ *    switching tabs stays a render instead of a navigation. Only the `tab` parameter is
+ *    touched, so the preview harness keeps its own `?screen=`.
+ *
+ * The Suspense boundary at the bottom of this file is what `useSearchParams` costs, and it
+ * is the whole cost.
  */
-export default function SourcesPage() {
-  const [tab, setTab] = useState<SourcesTab>("feeds");
-
-  useEffect(() => {
-    setTab(resolveTab(new URLSearchParams(window.location.search).get("tab")));
-  }, []);
+function SourcesScreen() {
+  const params = useSearchParams();
+  const [tab, setTab] = useState<SourcesTab>(() => resolveTab(params.get("tab")));
 
   const changeTab = useCallback((next: SourcesTab) => {
     setTab(next);
@@ -56,6 +73,9 @@ export default function SourcesPage() {
     else url.searchParams.set("tab", next);
     window.history.replaceState(null, "", url.toString());
   }, []);
+
+  /** A draft means the create dialog is open. Promote fills it; Add starts it empty. */
+  const [draft, setDraft] = useState<NewSourceDraft | null>(null);
 
   const collections = useSourceCollections();
   const { feeds, emailSources, isLoading, error, reload } = collections;
@@ -162,25 +182,75 @@ export default function SourcesPage() {
               reload={reload}
             />
           )}
-          {/* Both of these render the email manager until the unknown-senders block is
-              lifted out of it. That happens in task 6 of the plan; the duplication is
-              left visible rather than hidden behind a prop task 6 would delete. */}
-          {(tab === "email" || tab === "unmatched") && (
+          {tab === "email" && (
             <EmailSourceManager
               sources={emailRows}
               isLoading={isLoading}
               loadError={error}
               reload={reload}
-              unknown={collections.unknown}
-              unknownState={collections.unknownState}
-              unknownMessage={collections.unknownMessage}
-              unknownTruncated={collections.unknownTruncated}
               reloadUnknown={collections.reloadUnknown}
+              onAdd={() => setDraft(emptyDraft)}
+            />
+          )}
+          {tab === "unmatched" && (
+            <UnknownSenders
+              groups={collections.unknown}
+              state={collections.unknownState}
+              message={collections.unknownMessage}
+              truncated={collections.unknownTruncated}
+              onPromote={(group) => setDraft(draftFromSender(group))}
             />
           )}
           {tab === "received" && <ReceivedEmails />}
         </div>
+
+        {/*
+          The create dialog lives here because two tabs open it: Add on the Email tab, and
+          Promote on the Unmatched tab, which prefills it from a sender the mailbox has
+          actually seen. Owning the draft here is what lets Promote land on the source it
+          just created instead of leaving you where you were.
+        */}
+        <EmailSourceDialog
+          draft={draft}
+          onDraftChange={setDraft}
+          onClose={() => setDraft(null)}
+          onCreated={async (sender) => {
+            const held = collections.unknown.find((group) => group.sender === sender);
+
+            // Only worth offering when something is actually held. Requeueing is a separate
+            // call so that creating a source without reprocessing stays possible.
+            if (held && held.count > 0) {
+              const requeue = await fetch("/api/inbound/unknown-senders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sender }),
+              });
+              const data = await requeue.json().catch(() => null);
+
+              if (requeue.ok) toast.success(data?.message ?? "Held emails requeued");
+              else toast.error(data?.error ?? "The held emails could not be requeued");
+            }
+
+            await collections.reloadAll();
+            changeTab("email");
+          }}
+        />
       </RadarMain>
     </>
+  );
+}
+
+/**
+ * `useSearchParams` needs a Suspense boundary, and this is it.
+ *
+ * `null` as the fallback rather than a skeleton: the boundary resolves in the same pass on
+ * the server, so nothing ever paints it, and a skeleton nobody sees is a skeleton nobody
+ * maintains.
+ */
+export default function SourcesPage() {
+  return (
+    <Suspense fallback={null}>
+      <SourcesScreen />
+    </Suspense>
   );
 }

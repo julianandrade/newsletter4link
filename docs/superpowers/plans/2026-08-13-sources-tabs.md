@@ -1156,18 +1156,36 @@ git commit -m "Sources: one fetch of the source list, owned by the page"
   - `UnknownSenders({ groups, state, message, truncated, onPromote }: { groups: UnknownSenderGroup[]; state: "loading" | "ready" | "forbidden" | "error"; message: string | null; truncated: boolean; onPromote: (group: UnknownSenderGroup) => void })`
   - `EmailSourceDialog({ draft, onDraftChange, onClose, onCreated }: { draft: NewSourceDraft | null; onDraftChange: (draft: NewSourceDraft) => void; onClose: () => void; onCreated: (sender: string) => Promise<void> })`
   - `NewSourceDraft` and `emptyDraft` move to `components/sources/email-source-dialog.tsx` and are exported from it.
+  - `draftFromSender(group)` is exported too: the prefill rule belongs beside the form it
+    fills, not in the tab that triggers it.
 
-- [ ] **Step 1: Lift the unknown-senders block**
+**Task 4's deviation is reverted here, and the rendered check is why.** Reading the tab from
+`window.location` in an effect made the server render the Feeds panel, the RSS manager's
+Radix dialogs included, and then swap that whole subtree out during the hydration commit.
+React reported it as mismatched `useId` values: landing on `?tab=unmatched` logged a
+hydration error while `?tab=feeds` did not. `useSearchParams` fixes it because the server
+knows the URL too, so both sides render the same tab, and `?tab=` links now render the right
+panel server-side instead of painting Feeds and swapping. The screen is wrapped in
+`<Suspense fallback={null}>`, which is the whole cost. The two screens that use the
+`window.location` pattern switch plain divs and are unaffected.
+
+Changes are still local state plus `replaceState`, so switching tabs is a render and not a
+navigation.
+
+**The email manager keeps `reloadUnknown`.** Not dead with the panel it fed: pausing a
+source stops it claiming its sender, so the unmatched list changes when this one does.
+
+- [x] **Step 1: Lift the unknown-senders block**
 
 Move `components/email-source-manager.tsx:729-818` into the new component unchanged, including the explanation paragraph, the `truncated` sentence, the subject samples and the 403 and error branches. The only change is that `promote` becomes the `onPromote` prop.
 
-- [ ] **Step 2: Lift the create form into a dialog**
+- [x] **Step 2: Lift the create form into a dialog**
 
 Move the form at `components/email-source-manager.tsx:441-581` into `EmailSourceDialog`, wrapped in the `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle` and `DialogFooter` primitives already imported by `rss-source-manager.tsx`. The dialog is open when `draft !== null`. Keep all six fields, all their helper paragraphs, and the parse-mode pair exactly as written. Delete the `scrollIntoView` call: a dialog does not need it.
 
 `onCreated` receives the normalised sender address and is where the page requeues held emails, which is the behaviour at `:305-327`, moved rather than rewritten.
 
-- [ ] **Step 3: Own the draft in the page**
+- [x] **Step 3: Own the draft in the page**
 
 ```tsx
 const [draft, setDraft] = useState<NewSourceDraft | null>(null);
@@ -1193,13 +1211,13 @@ const promote = useCallback((group: UnknownSenderGroup) => {
 
 On success the page calls `reloadAll()` and `setTab("email")`, so promoting from Unmatched lands on the source it just created.
 
-- [ ] **Step 4: Verify the whole promote path**
+- [x] **Step 4: Verify the whole promote path**
 
 Run the dev server against the harness. Open the Unmatched tab, press Promote, confirm the dialog opens prefilled with the sender and a sensible name, cancel it, press Promote again, and submit. Confirm the tab switches to Email.
 
 Run: `npx vitest run`, `npx tsc --noEmit`, `npm run lint`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/sources/unknown-senders.tsx components/sources/email-source-dialog.tsx components/email-source-manager.tsx app/dashboard/sources/page.tsx
