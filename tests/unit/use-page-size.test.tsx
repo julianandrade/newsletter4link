@@ -1,24 +1,41 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, act } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { usePageSize } from "@/components/radar/use-page-size";
 import { pageSizeKey } from "@/lib/list-page-size";
 
 /**
- * The stored size is read in an effect, never during render.
+ * Storage is read through `useSyncExternalStore`, so the server and the first client render
+ * agree by construction rather than by anyone remembering to keep the read in an effect.
  *
- * Reading storage during render is a server/client branch: the server has no
- * `localStorage`, so it would emit 50 while the browser emits 100, and React reports the
- * difference as a hydration mismatch. This project has already paid for that twice on the
- * sources screen, both times through a subtree that rendered differently on the two sides.
- * The first client render therefore matches the server exactly, and the stored preference
- * arrives one render later.
+ * The first test is the one that matters: it server-renders the component while storage
+ * holds a different size, and asserts the emitted markup carries the default. That is the
+ * property behind the rule. This project has paid twice on the sources screen for renders
+ * that disagreed across that boundary, and both times the symptom was a console error
+ * nobody would have caught in a unit test asserting client behaviour alone.
+ *
+ * Tests that call the setter use their own list key: chosen sizes live in a module-level
+ * map for the lifetime of the page, which is right in a browser and leaks between tests.
  */
 
-/** Records the value of every render, so the first one can be asserted separately. */
+/** Records the value of every render. */
 function Probe({ list, seen }: { list: string; seen: number[] }) {
   const [size] = usePageSize(list);
   seen.push(size);
   return <span data-testid="size">{size}</span>;
+}
+
+/** Renders the size and a control that changes it, so no setter escapes during render. */
+function Chooser({ list, to }: { list: string; to: 25 | 50 | 100 }) {
+  const [size, choose] = usePageSize(list);
+  return (
+    <>
+      <span data-testid="size">{size}</span>
+      <button type="button" data-testid="choose" onClick={() => choose(to)}>
+        choose
+      </button>
+    </>
+  );
 }
 
 afterEach(() => {
@@ -27,13 +44,24 @@ afterEach(() => {
 });
 
 describe("usePageSize", () => {
-  it("renders the default first, then the stored size", () => {
+  it("server-renders the default even when storage holds another size", () => {
+    window.localStorage.setItem(pageSizeKey("feeds"), "100");
+
+    // The real assertion behind the hydration rule: what the server emits. React uses the
+    // server snapshot here, so the markup the browser receives says 50 and hydration has
+    // nothing to disagree about.
+    const html = renderToString(<Probe list="feeds" seen={[]} />);
+
+    expect(html).toContain(">50<");
+    expect(html).not.toContain(">100<");
+  });
+
+  it("reads the stored size on the client", () => {
     window.localStorage.setItem(pageSizeKey("feeds"), "100");
 
     const seen: number[] = [];
     const { getByTestId } = render(<Probe list="feeds" seen={seen} />);
 
-    expect(seen[0]).toBe(50);
     expect(getByTestId("size").textContent).toBe("100");
   });
 
@@ -69,19 +97,11 @@ describe("usePageSize", () => {
   });
 
   it("writes the chosen size through the namespaced key", () => {
-    let setSize: ((next: 25 | 50 | 100) => void) | null = null;
-
-    function Setter() {
-      const [size, set] = usePageSize("feeds");
-      setSize = set;
-      return <span data-testid="size">{size}</span>;
-    }
-
-    const { getByTestId } = render(<Setter />);
-    act(() => setSize?.(100));
+    const { getByTestId } = render(<Chooser list="writes" to={100} />);
+    fireEvent.click(getByTestId("choose"));
 
     expect(getByTestId("size").textContent).toBe("100");
-    expect(window.localStorage.getItem(pageSizeKey("feeds"))).toBe("100");
+    expect(window.localStorage.getItem(pageSizeKey("writes"))).toBe("100");
   });
 
   it("survives storage that throws, which is Safari in private mode", () => {
@@ -92,19 +112,11 @@ describe("usePageSize", () => {
       throw new Error("access denied");
     });
 
-    let setSize: ((next: 25 | 50 | 100) => void) | null = null;
-
-    function Setter() {
-      const [size, set] = usePageSize("feeds");
-      setSize = set;
-      return <span data-testid="size">{size}</span>;
-    }
-
-    const { getByTestId } = render(<Setter />);
+    const { getByTestId } = render(<Chooser list="private-mode" to={25} />);
     expect(getByTestId("size").textContent).toBe("50");
 
     // The preference cannot be stored, but the control still has to work this session.
-    act(() => setSize?.(25));
+    fireEvent.click(getByTestId("choose"));
     expect(getByTestId("size").textContent).toBe("25");
   });
 });
