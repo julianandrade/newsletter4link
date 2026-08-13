@@ -37,7 +37,7 @@ The four tabs, and the rule that an unknown `?tab=` value resolves to Feeds rath
 - Consumes: nothing.
 - Produces: `SOURCES_TABS: readonly ["feeds","email","unmatched","received"]`, `type SourcesTab`, `TAB_LABELS: Record<SourcesTab, string>`, `resolveTab(raw: string | null | undefined): SourcesTab`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/sources-tabs.test.ts`:
 
@@ -73,12 +73,12 @@ describe("resolveTab", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/unit/sources-tabs.test.ts`
 Expected: FAIL, cannot resolve `@/lib/sources/tabs`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `lib/sources/tabs.ts`:
 
@@ -107,12 +107,12 @@ export function resolveTab(raw: string | null | undefined): SourcesTab {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/unit/sources-tabs.test.ts`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/sources/tabs.ts tests/unit/sources-tabs.test.ts
