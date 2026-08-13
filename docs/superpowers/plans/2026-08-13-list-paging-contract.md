@@ -42,11 +42,11 @@
 
 **Produces:** `usePageSize(list: string): [PageSize, (next: PageSize) => void]`
 
-- [ ] **Step 1: Write the failing test.** First render returns 50 even when storage holds 100, because the server rendered 50; after the effect flushes it reads 100. A junk value yields 50. Setting writes through `pageSizeKey`. A throwing `localStorage` (private mode) does not crash the hook.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement.** `useState(DEFAULT_PAGE_SIZE)`, then a mount effect that reads and clamps. Every storage access wrapped, because Safari private mode throws on write. Comment the render/effect split and point at the two hydration bugs in `2026-08-13-sources-tabs-design.md`.
-- [ ] **Step 4: Run it green, plus `tsc`.**
-- [ ] **Step 5: Commit** `Lists: remember a page size per list, in storage rather than the URL`
+- [x] **Step 1: Write the failing test.** First render returns 50 even when storage holds 100, because the server rendered 50; after the effect flushes it reads 100. A junk value yields 50. Setting writes through `pageSizeKey`. A throwing `localStorage` (private mode) does not crash the hook.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement.** `useState(DEFAULT_PAGE_SIZE)`, then a mount effect that reads and clamps. Every storage access wrapped, because Safari private mode throws on write. Comment the render/effect split and point at the two hydration bugs in `2026-08-13-sources-tabs-design.md`.
+- [x] **Step 4: Run it green, plus `tsc`.**
+- [x] **Step 5: Commit** `Lists: remember a page size per list, in storage rather than the URL`
 
 ---
 
