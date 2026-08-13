@@ -7,6 +7,7 @@ import { messageText, describeBlocks } from "@/lib/ai/message";
 import { resolveAiModels, withModelRejection } from "@/lib/ai/model";
 import { modelRejectionResponse } from "@/lib/ai/model-http";
 import { parseAsideCreate } from "@/lib/asides/input";
+import { MAX_INSTRUCTION_CHARS } from "@/lib/rewrite/config";
 import { buildMemePrompt, parseMemeReply } from "@/lib/memes/caption";
 import { renderMeme } from "@/lib/memes/render";
 import { MEME_TEMPLATES, findTemplate, type MemeTemplate } from "@/lib/memes/templates";
@@ -23,7 +24,10 @@ const MAX_COUNT = 6;
  *
  * Ask the model for closing-slot memes. EDITOR or above.
  *
- * Body: { editionId?: string, templateId?: string, count?: number, language?: string }
+ * Body: { editionId?, templateId?, count?, language?, instruction? }
+ *
+ * `instruction` is one ask for this batch only, fenced below the rules in the prompt so it
+ * cannot read as the newest word on them.
  *
  * The text half of this already existed at /api/asides/suggest. This one picks a format,
  * asks for a caption per slot, renders it with `sharp` and stores the result, so the whole
@@ -60,6 +64,33 @@ export async function POST(request: Request) {
     const count = Number.isInteger(requested)
       ? Math.min(Math.max(requested, 1), MAX_COUNT)
       : DEFAULT_COUNT;
+
+    /**
+     * One ask for this batch only: "about the migration", "shorter", "less about code".
+     *
+     * Validated rather than trimmed silently, the same handling POST /api/articles/:id/rewrite
+     * gives its own instruction and for the same reason: this text goes into a prompt, so an
+     * unbounded field is an unbounded prompt.
+     *
+     * Nowhere to store it, and that is a real difference from the rewrite, which keeps its
+     * instruction on the row it produced so the history can say which ask wrote which
+     * version. An Aside has no column for one and the schema is not changing here, so "why
+     * was this batch about the migration" is a question the queue cannot answer.
+     */
+    let instruction: string | null = null;
+    if (typeof body?.instruction === "string") {
+      const trimmed = body.instruction.trim();
+      if (trimmed.length > MAX_INSTRUCTION_CHARS) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `The instruction must be ${MAX_INSTRUCTION_CHARS} characters or less.`,
+          },
+          { status: 400 }
+        );
+      }
+      instruction = trimmed.length > 0 ? trimmed : null;
+    }
 
     /**
      * Which formats to use.
@@ -118,7 +149,7 @@ export async function POST(request: Request) {
     const skipped: Array<{ template: string; reason: string }> = [];
 
     for (const template of templates) {
-      const prompt = buildMemePrompt({ template, topics, samples, language });
+      const prompt = buildMemePrompt({ template, topics, samples, language, instruction });
 
       /**
        * One failed format does not fail the request, but a refused model does. The guard is

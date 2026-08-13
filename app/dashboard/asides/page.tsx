@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { AsideForm, type AsideDraft, type AsideKind } from "@/components/aside-form";
 import { MemeMaker } from "@/components/meme-maker";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ChipGroup,
   Num,
@@ -31,7 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { REWRITE_LANGUAGES } from "@/lib/rewrite/config";
+import { MAX_INSTRUCTION_CHARS, REWRITE_LANGUAGES } from "@/lib/rewrite/config";
 import {
   SortSelect,
   SortAnnouncement,
@@ -154,6 +155,9 @@ export default function AsidesPage() {
   const [making, setMaking] = useState(false);
   const [editing, setEditing] = useState<Aside | null>(null);
   const [suggesting, setSuggesting] = useState<null | "text" | "meme">(null);
+  /** The panel where an ask for the next meme batch is typed, and the ask itself. */
+  const [asking, setAsking] = useState(false);
+  const [instruction, setInstruction] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -246,12 +250,16 @@ export default function AsidesPage() {
     setError(null);
 
     try {
+      const asked = instruction.trim();
+
       const response = await fetch(
         kind === "meme" ? "/api/asides/suggest-meme" : "/api/asides/suggest",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          // Only the meme route reads it. Sending it to the text one would be a field that
+          // silently does nothing, which is worse than not offering it there.
+          body: JSON.stringify(kind === "meme" && asked ? { instruction: asked } : {}),
         }
       );
       const payload = await response.json();
@@ -262,6 +270,10 @@ export default function AsidesPage() {
 
       setNotice(payload.message);
       setStatus("PENDING");
+      // Cleared on success only. A failed batch is one the editor will want to retry with
+      // the same words, and retyping them is the sort of thing that makes a field unused.
+      setInstruction("");
+      setAsking(false);
       await load();
     } catch (suggestError) {
       setError(
@@ -332,8 +344,20 @@ export default function AsidesPage() {
               <RadarButton onClick={() => suggest("text")} disabled={suggesting !== null}>
                 {suggesting === "text" ? "Asking..." : "Suggest five"}
               </RadarButton>
-              <RadarButton onClick={() => suggest("meme")} disabled={suggesting !== null}>
-                {suggesting === "meme" ? "Drawing..." : "Suggest memes"}
+              {/*
+                Opens the panel rather than generating. Suggesting memes costs a model call
+                and a render per format, so the click that spends that should be the one
+                next to the words being spent on, not this one.
+              */}
+              <RadarButton
+                onClick={() => {
+                  setAsking((open) => !open);
+                  setWriting(false);
+                  setMaking(false);
+                }}
+                disabled={suggesting !== null}
+              >
+                {suggesting === "meme" ? "Drawing..." : asking ? "Close" : "Suggest memes"}
               </RadarButton>
             </div>
           }
@@ -366,6 +390,57 @@ export default function AsidesPage() {
           <div className="radar-enter mb-6 rounded-xl border border-radar-line bg-radar-surface p-5">
             <SectionLabel className="mb-4">Make a meme</SectionLabel>
             <MemeMaker onSave={saveMeme} onCancel={() => setMaking(false)} />
+          </div>
+        )}
+
+        {/*
+          The ask, before the batch is generated rather than after it disappoints.
+          Optional: an empty field generates exactly what the button did before.
+        */}
+        {asking && (
+          <div className="radar-enter mb-6 rounded-xl border border-radar-line bg-radar-surface p-5">
+            <SectionLabel className="mb-2">Suggest memes</SectionLabel>
+            <p className="m-0 mb-3 max-w-[70ch] text-[12.5px] leading-[20px] text-radar-ink2">
+              Say what this batch should be about, or leave it empty. It applies to this batch
+              only: the standing rule for how everything sounds is Brand voice, in Settings.
+            </p>
+
+            <Textarea
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              rows={2}
+              placeholder="About the data migration, and less about code review."
+              aria-label="What this batch of memes should be about"
+            />
+            <p className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-radar-ink2">
+              <span>
+                Three formats, picked at random. Each lands in Pending, and nothing sends
+                until you approve it.
+              </span>
+              <span
+                className={
+                  instruction.trim().length > MAX_INSTRUCTION_CHARS
+                    ? "font-semibold text-radar-err"
+                    : ""
+                }
+              >
+                {instruction.trim().length}/{MAX_INSTRUCTION_CHARS}
+              </span>
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <RadarButton
+                onClick={() => suggest("meme")}
+                disabled={
+                  suggesting !== null || instruction.trim().length > MAX_INSTRUCTION_CHARS
+                }
+              >
+                {suggesting === "meme" ? "Drawing..." : "Generate"}
+              </RadarButton>
+              <RadarButton onClick={() => setAsking(false)} disabled={suggesting !== null}>
+                Cancel
+              </RadarButton>
+            </div>
           </div>
         )}
 
