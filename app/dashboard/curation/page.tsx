@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
+import { usePageSize } from "@/components/radar/use-page-size";
 import {
   Dialog,
   DialogContent,
@@ -150,6 +151,7 @@ export default function CurationHistoryPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [jobs, setJobs] = useState<CurationJob[]>([]);
+  const [pageSize, setPageSize] = usePageSize("curation");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -206,7 +208,12 @@ export default function CurationHistoryPage() {
    */
   const fetchJobs = () => {
     setIsLoading(true);
-    const params = new URLSearchParams({ page: page.toString(), limit: "10" });
+    // The route calls it `limit`; the control calls it rows per page. Ten was hardcoded
+    // here and nowhere else, which is how one list ended up twenty times denser than another.
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: pageSize.toString(),
+    });
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
@@ -225,7 +232,16 @@ export default function CurationHistoryPage() {
   useEffect(() => {
     fetchJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, sort, dateFrom, dateTo]);
+  }, [page, pageSize, statusFilter, sort, dateFrom, dateTo]);
+
+  /**
+   * A wider page changes what page one means, and page 12 of a ten-row history does not
+   * exist once the rows are a hundred at a time. Back to the first page, as a filter change
+   * already does.
+   */
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   const handleRunCuration = async () => {
     setCurationStatus({ running: true, message: "Connecting to the collector" });
@@ -800,6 +816,8 @@ export default function CurationHistoryPage() {
                   totalPages={totalPages}
                   onPage={setPage}
                   busy={isLoading}
+                  pageSize={pageSize}
+                  onPageSize={setPageSize}
                 />
               </>
             )}
