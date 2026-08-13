@@ -28,8 +28,16 @@ export interface ProposalArticle {
   category: string[];
   status: string;
   order: number;
-  /** Whether this edition sends this story's Link Take. RQ-006 surface 3. */
-  useLinkTake?: boolean;
+  /**
+   * Whether this edition sends this story's Link Take. RQ-006 surface 3.
+   *
+   * Required, not optional: the flag round-trips through a PATCH that deletes and
+   * recreates every join row, so a shape that lets it be omitted is a shape that
+   * loses it, and this branch lost it four times before the type was tightened.
+   * There is no tri-state here, every consumer collapses `undefined` to `false`
+   * anyway.
+   */
+  useLinkTake: boolean;
   /** Whether a sendable take exists, so the row can say why it is blocked. */
   hasUsableTake?: boolean;
 }
