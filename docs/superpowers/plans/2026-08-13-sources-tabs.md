@@ -1562,7 +1562,7 @@ git commit -m "Radar: give ChipGroup the keyboard contract its tablist role clai
 **Files:**
 - Modify: `CLAUDE.md` (one row in the decision table)
 
-- [ ] **Step 1: The CI trio, in CI's order**
+- [x] **Step 1: The CI trio, in CI's order**
 
 ```bash
 npx vitest run
@@ -1572,7 +1572,7 @@ npm run lint
 
 All three must pass. Report the actual counts, not "tests pass".
 
-- [ ] **Step 2: Rendered, at both widths**
+- [x] **Step 2: Rendered, at both widths**
 
 In the harness on port 3119, capture all four tabs at 1440 by 900 and at 390 by 844, into `.playwright-mcp/`. Confirm:
 - Feeds tab under 3 viewports at 1440. It was 50.6.
@@ -1580,7 +1580,7 @@ In the harness on port 3119, capture all four tabs at 1440 by 900 and at 390 by 
 - No horizontal scroll on the page body at either width.
 - `/api/rss-sources` requested once per load.
 
-- [ ] **Step 3: The mechanical scan**
+- [x] **Step 3: The mechanical scan**
 
 ```bash
 node "C:/Users/julian.andrade/.claude/skills/impeccable/scripts/detect.mjs" --json --scope layout app/dashboard/sources/page.tsx components/sources
@@ -1588,11 +1588,11 @@ node "C:/Users/julian.andrade/.claude/skills/impeccable/scripts/detect.mjs" --js
 
 Fix what it finds, or record why a finding does not apply.
 
-- [ ] **Step 4: Add the decision row**
+- [x] **Step 4: Add the decision row**
 
 Append one row to `CLAUDE.md`'s Architecture Decisions table, in the voice of the rows already there: everything a source screen shows is a tab on one row, the heading counts both kinds and never vouches for health nothing measured, and the feeds list pages in the browser because the route returns the complete set.
 
-- [ ] **Step 5: Commit and open the PR**
+- [x] **Step 5: Commit and open the PR**
 
 ```bash
 git add CLAUDE.md
