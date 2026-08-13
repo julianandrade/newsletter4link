@@ -1262,15 +1262,15 @@ export function SourceFilterBar({
 }): React.JSX.Element;
 ```
 
-- [ ] **Step 1: Build the bar**
+- [x] **Step 1: Build the bar**
 
 Search box on the left using `RadarInput` with `SearchIcon`, copied from the shape at `email-source-manager.tsx:592-606` since that one is already radar-native. Then `selects`, then `sort`, then a spacer, then `actions`. `onClear` renders a ghost button reading "Clear filters".
 
-- [ ] **Step 2: Delete the second page header**
+- [x] **Step 2: Delete the second page header**
 
 Remove `components/rss-source-manager.tsx:699-722` entirely: the `h2`, the subtitle, and the two buttons. `Import OPML` and `Add Source` move into the bar's `actions`, and `Add Source` becomes `Add feed`. The count that was in the subtitle is now in the tab row. This is **D1**.
 
-- [ ] **Step 3: Convert the three toolbars**
+- [x] **Step 3: Convert the three toolbars**
 
 Replace the RSS toolbar's shadcn `Select` trio with `RadarSelect` inside the bar, and change the option copy to the radar dialect:
 
@@ -1291,11 +1291,24 @@ Use `SortSelect` from `components/radar/sortable.tsx` with a `SortOption<SortOpt
 
 Do the same for the email and received toolbars, which keep their existing option copy since it is already in the right dialect.
 
-- [ ] **Step 4: Verify**
+**A second hydration mismatch, and where the Suspense boundary belongs.** With the boundary
+wrapping the whole screen, `AppHeader` sat inside it, and a boundary shifts how React
+allocates `useId` for what follows. The shell's own Radix components, the theme button and
+the org switcher, hydrated with different ids than the server sent, which React reported as
+a mismatch: `?tab=feeds` logged one error while `?tab=email` logged none. The original page
+on master logs none at all, measured on a second dev server, so it was mine either way.
+`AppHeader` now renders before the boundary and all four tabs log zero. Nothing inside the
+boundary generates an id the shell depends on.
+
+**The email manager lost its `reload` prop.** Creating happens in the dialog the page owns,
+and the page refetches after it; a pause and a parse-mode change are optimistic and local.
+Nothing called it, and a prop nothing calls goes stale.
+
+- [x] **Step 4: Verify**
 
 Run: `npx vitest run`, `npx tsc --noEmit`, `npm run lint`. Then in the harness, confirm each of the three tabs shows one toolbar, that filtering and sorting still work on all three, and that the second heading is gone.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/sources/source-filter-bar.tsx components/rss-source-manager.tsx components/email-source-manager.tsx components/inbound/received-emails.tsx

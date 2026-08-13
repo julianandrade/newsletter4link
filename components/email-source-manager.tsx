@@ -2,28 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Input, Label } from "@/components/radar/compat";
 import {
-  Num,
   radarButtonClass,
-  SectionLabel,
   SkeletonBar,
   StatusChip,
 } from "@/components/radar/primitives";
-import { RadarInput, RadarSelect } from "@/components/radar/controls";
-import { SearchIcon } from "@/components/radar/icons";
+import { RadarSelect } from "@/components/radar/controls";
+import { SourceFilterBar } from "@/components/sources/source-filter-bar";
 import {
   SortSelect,
   type SortOption,
   type SortState,
 } from "@/components/radar/sortable";
 import { sortBy } from "@/lib/list-sort";
-import { displayName } from "@/lib/inbound/address";
-import { healthWarning, sourceHealth, type SourceHealth } from "@/lib/inbound/health";
-import type {
-  UnknownSenderGroup,
-  UnknownState,
-} from "@/components/sources/use-source-collections";
+import { sourceHealth, type SourceHealth } from "@/lib/inbound/health";
 import { relativeTime } from "@/lib/radar/source";
 import { cn } from "@/lib/utils";
 
@@ -68,23 +60,8 @@ interface EmailSource {
   createdAt: string;
 }
 
-interface NewSourceDraft {
-  name: string;
-  senderAddress: string;
-  inboundTag: string;
-  parseMode: "DIGEST" | "ESSAY";
-  expectedCadenceDays: string;
-  category: string;
-}
-
-const emptyDraft: NewSourceDraft = {
-  name: "",
-  senderAddress: "",
-  inboundTag: "",
-  parseMode: "DIGEST",
-  expectedCadenceDays: "",
-  category: "AI",
-};
+/* The draft type, its empty value and the create form all live in
+   `components/sources/email-source-dialog.tsx` now, because two tabs open that form. */
 
 const healthTone: Record<SourceHealth["state"], "ok" | "warn" | "err" | "neutral"> = {
   ok: "ok",
@@ -111,8 +88,11 @@ export interface EmailSourceManagerProps {
    * over a list that failed to load says the wrong thing.
    */
   loadError: string | null;
-  /** Refetch the sources, owned by the page. Called wherever `loadSources` was. */
-  reload: () => Promise<void>;
+  /*
+   * No `reload` here. Creating a source happens in the dialog the page owns, and the page
+   * refetches after it; a pause and a parse-mode change are optimistic and local. A prop
+   * nothing calls is a prop that goes stale.
+   */
   /**
    * Refetch the unclaimed senders.
    *
@@ -128,7 +108,6 @@ export function EmailSourceManager({
   sources: incoming,
   isLoading,
   loadError,
-  reload,
   reloadUnknown: loadUnknown,
   onAdd,
 }: EmailSourceManagerProps) {
@@ -143,8 +122,6 @@ export function EmailSourceManager({
   useEffect(() => {
     setSources(incoming);
   }, [incoming]);
-
-  const loadSources = reload;
 
   /** The source whose parse mode is in flight, so its toggle cannot be double-clicked. */
   const [savingMode, setSavingMode] = useState<string | null>(null);
@@ -299,36 +276,15 @@ export function EmailSourceManager({
     <div className="space-y-6">
       {/* ---- existing email sources ---- */}
       <div className="space-y-2">
-        {/* The count moved to the tab row, so this label carries the action instead. Task 7
-            of the plan folds the button into the shared filter bar. */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionLabel>
-            Email sources {!isLoading && <Num>{sources.length}</Num>}
-          </SectionLabel>
-          <button type="button" onClick={onAdd} className={radarButtonClass("accent", "sm")}>
-            Add email source
-          </button>
-        </div>
-
         {/* Rendered whatever the list is doing, so a filter that matches nothing keeps the
-            control that widens it. */}
-        {sources.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2.5 pb-1">
-            <div className="relative min-w-[180px] flex-1 sm:max-w-[280px]">
-              <SearchIcon
-                size={15}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-radar-ink3"
-              />
-              <RadarInput
-                type="search"
-                aria-label="Search email sources"
-                placeholder="Search by name or sender"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="pl-9"
-              />
-            </div>
-
+            control that widens it. Add lives in the bar, at the end, with Import and Add on
+            the feeds tab: what acts on the collection sits apart from what narrows it. */}
+        <SourceFilterBar
+          search={search}
+          onSearch={setSearch}
+          searchLabel="Search email sources"
+          searchPlaceholder="Search by name or sender"
+          selects={
             <RadarSelect
               aria-label="Filter email sources"
               className="w-auto min-w-[160px]"
@@ -343,15 +299,33 @@ export function EmailSourceManager({
                 </option>
               ))}
             </RadarSelect>
-
+          }
+          sort={
             <SortSelect
               label="Sort email sources"
               options={SOURCE_SORT_OPTIONS}
               sort={sort}
               onChange={setSort}
             />
-          </div>
-        )}
+          }
+          onClear={
+            search || statusFilter !== "all"
+              ? () => {
+                  setSearch("");
+                  setStatusFilter("all");
+                }
+              : null
+          }
+          actions={
+            <button
+              type="button"
+              onClick={onAdd}
+              className={radarButtonClass("accent", "sm")}
+            >
+              Add email source
+            </button>
+          }
+        />
 
         {isLoading && <SkeletonBar width="240px" />}
 
