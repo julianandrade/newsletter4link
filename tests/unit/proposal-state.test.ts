@@ -31,6 +31,7 @@ const article = (id: string, order: number): ProposalArticle => ({
   category: [],
   status: "APPROVED",
   order,
+  useLinkTake: false,
 });
 
 const queueArticle = (id: string): QueueArticle => ({

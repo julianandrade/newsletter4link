@@ -244,11 +244,14 @@ export interface ProposalArticle {
   /**
    * Whether this edition sends this story's Link Take. RQ-006 surface 3.
    *
-   * Optional because `readCandidatePool` below shares this shape for rows that are not in
-   * any edition yet, and a row with no join row has no flag to report. `readEditionArticles`
-   * always sets it, since every row it returns came from one.
+   * Required, not optional: the flag round-trips through a PATCH that deletes and
+   * recreates every join row, so a shape that lets it be omitted is a shape that
+   * loses it, and this branch lost it four times before the type was tightened.
+   * There is no tri-state to preserve, every consumer collapses `undefined` to
+   * `false` anyway, so `readCandidatePool` below, whose rows are not in any
+   * edition yet, states the true value, `false`, rather than leaving it out.
    */
-  useLinkTake?: boolean;
+  useLinkTake: boolean;
   /** Whether a usable take exists right now, so the screen can say why a flag is blocked. */
   hasUsableTake?: boolean;
 }
@@ -1020,6 +1023,9 @@ export async function readCandidatePool(
       category: article.category,
       status: article.status,
       order: 0,
+      // Not in any edition, per the `eligible` where clause above, so there is no join
+      // row and no flag to report. False is the truthful value, not a default.
+      useLinkTake: false,
     })),
     projects: projectRows.map((project) => ({
       id: project.id,

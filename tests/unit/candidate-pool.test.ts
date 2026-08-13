@@ -388,6 +388,8 @@ describe("readCandidatePool shaping", () => {
       status: "APPROVED",
       // Not in an edition yet, so position is the caller's to assign.
       order: 0,
+      // Not in an edition yet, so there is no join row and no flag to report.
+      useLinkTake: false,
     });
 
     expect(pool.projects[0]).toMatchObject({
