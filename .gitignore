@@ -61,3 +61,7 @@ public/link-linkroad logos/
 # filename, so these accumulate at the root; real image assets live in subdirectories.
 /*.png
 
+# Working files for scripts/import-memes.ts: re-encoded JPEGs and the caption manifest.
+# Intermediate output, regenerable from public/images/memes by re-running the dry run.
+scripts/.meme-import/
+
