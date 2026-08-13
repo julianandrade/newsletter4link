@@ -10,17 +10,32 @@
  */
 
 import type { BulkAction } from "./bulk-action";
+import { clampPageSize, DEFAULT_PAGE_SIZE, type PageSize } from "@/lib/list-page-size";
 
 export type ArticleListState = "pending" | "approved" | "rejected" | "discarded" | "all";
 
 /**
- * Rows per page.
+ * Rows per page, when the caller asks for none.
  *
  * There is a ceiling because a filter over a year of collection is thousands of rows and one
  * response should not carry them. There is a page number because the ceiling on its own made
  * everything past it unreachable, which is the defect this screen exists to remove.
+ *
+ * It was 200, which is a cap with a pager attached rather than a page anyone reads. The
+ * screen now asks for one of the three shared sizes and this is what an unasked request
+ * gets: the same 50 every other list starts at.
  */
-export const ARTICLE_PAGE_SIZE = 200;
+export const ARTICLE_PAGE_SIZE: PageSize = DEFAULT_PAGE_SIZE;
+
+/**
+ * The page size this request asked for, clamped to the three the product offers.
+ *
+ * Clamped rather than honoured, because it arrives in a query string: `?pageSize=100000`
+ * would otherwise be a way to ask the database for everything at once.
+ */
+export function articlePageSize(raw: string | null): PageSize {
+  return raw === null ? ARTICLE_PAGE_SIZE : clampPageSize(raw);
+}
 
 /**
  * Whether the caller wants every matching id rather than a page of articles.

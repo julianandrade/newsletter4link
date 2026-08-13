@@ -128,13 +128,31 @@ caught it, because the line was correct in the mode the tests exercised.
 
 **Files:** Modify `app/dashboard/articles/page.tsx`, `lib/articles/list-filter.ts`
 
-- [ ] **Step 1: Replace `ARTICLE_PAGE_SIZE = 200`** with the requested size, clamped, defaulting to 50. The route reads it from the query; the screen sends what `usePageSize("articles")` holds.
-- [ ] **Step 2: Wire the second selection step** using `idsOnly` for `resolveMatchingIds`.
-- [ ] **Step 3: Give its destructive confirms a `filterSummary`.**
-- [ ] **Step 4: Verify rendered,** including that a filter change while "all matching" is active drops back to page mode. Then the CI trio.
-- [ ] **Step 5: Commit** `Articles: fifty per page by default, and select every article a filter matches`
+- [x] **Step 1: Replace `ARTICLE_PAGE_SIZE = 200`** with the requested size, clamped, defaulting to 50. The route reads it from the query; the screen sends what `usePageSize("articles")` holds.
+- [x] **Step 2: Wire the second selection step** using `idsOnly` for `resolveMatchingIds`.
+- [x] **Step 3: Give its destructive confirms a `filterSummary`.**
+- [x] **Step 4: Verify rendered,** including that a filter change while "all matching" is active drops back to page mode. Then the CI trio.
+- [x] **Step 5: Commit** `Articles: fifty per page by default, and select every article a filter matches`
 
 ---
+
+**The harness could not show this screen at all.** `?screen=articles` was never registered,
+so it silently fell back to the dashboard, and `/api/articles` was never stubbed. Two
+measurements I took early in this task were therefore of the wrong screen, including a
+hydration error I briefly attributed to the page-size control. Registering the screen and
+stubbing the route with 213 rows shows the real thing: 50 per page, "Page 1 of 5", and
+"213 stories selected, all matching, every state" after the second step. With and without
+the control the real screen logs zero console errors, so the hydration claim was wrong and
+the comment in the code no longer makes it.
+
+The control is still gated on having rows, for the reason that survives: "25 per page" above
+an empty state is a control with nothing to act on. It still shows at a single page, which is
+the case it is most wanted in.
+
+**Unexplained, and left that way:** a hydration mismatch on the dashboard screen appeared
+twice while these URLs were falling back to it, and does not reproduce on repeated fresh
+loads now. Not attributed, not claimed fixed.
+
 
 ### Task 9: Curation jobs take the size
 

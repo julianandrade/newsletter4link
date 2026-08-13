@@ -27,6 +27,7 @@ import SettingsPage from "@/app/dashboard/settings/page";
 import BuilderPage from "@/app/dashboard/send/[id]/page";
 import SourcesPage from "@/app/dashboard/sources/page";
 import ArticleDetailPage from "@/app/dashboard/articles/[id]/page";
+import AllArticlesPage from "@/app/dashboard/articles/page";
 import AsidesPage from "@/app/dashboard/asides/page";
 import { editionLabel } from "@/lib/editions/identity";
 import { isoWeekStart } from "@/lib/radar/week";
@@ -1350,6 +1351,50 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
 
+    /**
+     * The all-articles list, which this harness never stubbed, so that screen has only ever
+     * shown its empty state here. It honours `page`, `pageSize` and `idsOnly` because those
+     * are exactly what the paging contract needs looked at.
+     */
+    if (
+      url.includes("/api/articles?") &&
+      !url.includes("/pending") &&
+      !url.includes("/approved")
+    ) {
+      const params = new URL(url, window.location.origin).searchParams;
+      const state = params.get("state") ?? "all";
+      const search = (params.get("search") ?? "").toLowerCase();
+
+      // Enough rows to page: the fixtures are a handful, so they repeat with distinct ids.
+      const every = Array.from({ length: 213 }, (_, index) => {
+        const seed = ARTICLES[index % ARTICLES.length];
+        return { ...seed, id: `art-${index}`, title: `${seed.title} (${index + 1})` };
+      }).filter((article) => {
+        if (search && !article.title.toLowerCase().includes(search)) return false;
+        if (state === "all") return true;
+        if (state === "approved") return article.status === "APPROVED";
+        if (state === "pending") return article.status === "PENDING_REVIEW";
+        return article.status === state.toUpperCase();
+      });
+
+      if (params.get("idsOnly") === "true") {
+        return json({ success: true, ids: every.map((a) => a.id), total: every.length });
+      }
+
+      const page = Math.max(1, parseInt(params.get("page") || "1", 10));
+      const pageSize = Math.max(1, parseInt(params.get("pageSize") || "50", 10));
+      const start = (page - 1) * pageSize;
+
+      return json({
+        success: true,
+        data: every.slice(start, start + pageSize),
+        count: Math.min(pageSize, Math.max(0, every.length - start)),
+        total: every.length,
+        page,
+        pageSize,
+      });
+    }
+
     if (url.includes("/api/articles/pending")) {
       const params = new URL(url, window.location.origin).searchParams;
       const min = parseFloat(params.get("scoreMin") || "0");
@@ -2002,6 +2047,8 @@ const SCREENS = {
   // RQ-006_03: the same screen four times, once per state. The fetch stub reads the
   // `?screen=` value to decide which payload to answer with.
   article: ArticleDetailPage,
+  // The all-articles list. Absent until now, so this screen could not be looked at here.
+  articles: AllArticlesPage,
   "article-stale": ArticleDetailPage,
   "article-absent": ArticleDetailPage,
   "article-refused": ArticleDetailPage,
