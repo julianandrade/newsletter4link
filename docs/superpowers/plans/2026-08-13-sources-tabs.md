@@ -853,11 +853,19 @@ The page becomes four tabs over the existing lists. The managers still fetch for
 - Consumes: everything from Tasks 1 to 3. `ReceivedEmails` from `components/inbound/received-emails.tsx`, `EmailSourceManager` from `components/email-source-manager.tsx`, `RSSSourceManager` from `components/rss-source-manager.tsx`, all with their current props.
 - Produces: the panel id contract, `sources-panel-<tab>`. `useSourcesTab()` is inlined here, not exported.
 
-- [ ] **Step 1: Write the failing test**
+**Deviation, recorded while executing on 13 August.** The code below reads the tab with
+`useSearchParams`. The implementation does not: it reads `window.location.search` in an
+effect and writes with `window.history.replaceState`, because this project has already
+settled that question twice, at `app/dashboard/page.tsx:112` and
+`app/dashboard/asides/page.tsx:87`, both recording that `useSearchParams` would force a
+Suspense boundary on the whole screen to prerender. Only the `tab` parameter is touched, so
+the preview harness keeps its own `?screen=`. Feeds is the default and stays out of the URL.
+
+- [x] **Step 1: Write the failing test**
 
 There is no test for this task: it is composition over units already tested, and the page reads `useSearchParams`, which needs a router. The gate is Step 4's rendered check. Do not fake a router to manufacture a test here.
 
-- [ ] **Step 2: Rewrite the page**
+- [x] **Step 2: Rewrite the page**
 
 Replace the whole of `app/dashboard/sources/page.tsx`:
 
@@ -1011,12 +1019,12 @@ export default function SourcesPage() {
 
 Both `email` and `unmatched` render `EmailSourceManager` for now: the unknown-senders block is still inside it and Task 6 is what separates them. This is deliberate and temporary. Leave the duplication visible rather than hiding it behind a prop that Task 6 would delete.
 
-- [ ] **Step 3: Typecheck and lint**
+- [x] **Step 3: Typecheck and lint**
 
 Run: `npx tsc --noEmit` then `npm run lint`
 Expected: clean. `useSearchParams` in a client component under App Router needs no Suspense boundary here because the page is already `"use client"` and rendered inside the dashboard layout; if the build complains, wrap the export in a `<Suspense fallback={null}>` in this file rather than changing the layout.
 
-- [ ] **Step 4: Verify rendered**
+- [x] **Step 4: Verify rendered**
 
 ```bash
 npx next dev --port 3119
@@ -1024,7 +1032,7 @@ npx next dev --port 3119
 
 Then open `http://localhost:3119/radar-preview?screen=sources` and confirm: the heading counts both kinds, the banner shows both lines, all four tabs switch, `?tab=` changes in the URL, and a hand-typed `?tab=nonsense` still renders Feeds. Take a screenshot to `.playwright-mcp/`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/dashboard/sources/page.tsx

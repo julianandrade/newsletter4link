@@ -1,74 +1,98 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { EmailSourceManager } from "@/components/email-source-manager";
 import { ReceivedEmails } from "@/components/inbound/received-emails";
 import { RSSSourceManager } from "@/components/rss-source-manager";
+import { SourcesAttention } from "@/components/sources/sources-attention";
+import { SourcesTabRow } from "@/components/sources/sources-tabs";
 import {
-  ChipGroup,
   Num,
   PageHeading,
   radarButtonClass,
   RadarMain,
-  SectionLabel,
-  StatusChip,
 } from "@/components/radar/primitives";
+import {
+  sourceAttention,
+  sourcesHeading,
+  splitSources,
+  type SourceRow,
+} from "@/lib/sources/summary";
+import { resolveTab, type SourcesTab } from "@/lib/sources/tabs";
 import { relativeTime } from "@/lib/radar/source";
 
-interface RssSource {
-  id: string;
-  name: string;
-  category: string;
-  active: boolean;
-  type?: string;
-  lastFetchedAt: string | null;
-  lastError: string | null;
-}
-
-type Panel = "sources" | "received";
-
+/**
+ * The sources screen: four tabs over one shell.
+ *
+ * It carried two whole collection managers stacked, each with its own header and toolbar,
+ * which measured fifty viewports and twelve headings. What replaces them is one heading
+ * covering both kinds, one attention banner, and one list at a time.
+ *
+ * The tab is in the URL so the banner can link to it and a bookmark survives a reload,
+ * read from `window.location` in an effect and written with `replaceState` rather than
+ * through `useSearchParams`. That is the pattern this project already settled on twice,
+ * in `app/dashboard/page.tsx` and `app/dashboard/asides/page.tsx`: `useSearchParams`
+ * would make the whole screen need a Suspense boundary to prerender. Only the `tab`
+ * parameter is touched, so the preview harness keeps its own `?screen=`.
+ */
 export default function SourcesPage() {
-  const [sources, setSources] = useState<RssSource[]>([]);
+  const [tab, setTab] = useState<SourcesTab>("feeds");
+
+  useEffect(() => {
+    setTab(resolveTab(new URLSearchParams(window.location.search).get("tab")));
+  }, []);
+
+  const changeTab = useCallback((next: SourcesTab) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    // Feeds is the default, so it stays out of the URL: a bare /dashboard/sources and
+    // ?tab=feeds are the same screen and should not be two links to it.
+    if (next === "feeds") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url.toString());
+  }, []);
+
+  const [rows, setRows] = useState<SourceRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [panel, setPanel] = useState<Panel>("sources");
 
   useEffect(() => {
     fetch("/api/rss-sources")
       .then((r) => r.json())
-      .then((data) => setSources(Array.isArray(data) ? data : []))
-      .catch(() => setSources([]))
+      .then((data) => setRows(Array.isArray(data) ? data : []))
+      .catch(() => setRows([]))
       .finally(() => setIsLoading(false));
   }, []);
 
-  // RQ-007: /api/rss-sources now returns email sources too. Counted apart, because an
-  // email source has no feed URL and never reports a fetch error, so folding it into
-  // "N feeds, all healthy" would inflate the count and vouch for health nothing measured.
-  const feeds = useMemo(() => sources.filter((s) => s.type !== "EMAIL"), [sources]);
-  const emailSources = useMemo(
-    () => sources.filter((s) => s.type === "EMAIL"),
-    [sources]
+  const { feeds, emailSources } = useMemo(() => splitSources(rows), [rows]);
+
+  // The clock this screen measures staleness against is taken once per load of the
+  // sources, not once per render, for the reason recorded at email-source-manager.tsx:182.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => new Date(), [rows]);
+
+  const attention = useMemo(
+    () => sourceAttention({ feeds, emailSources, now }),
+    [feeds, emailSources, now]
   );
 
-  const active = useMemo(() => feeds.filter((s) => s.active), [feeds]);
-  const failing = useMemo(
-    () => active.filter((s) => Boolean(s.lastError)),
-    [active]
-  );
-  const lastFetched = useMemo(() => {
-    const stamps = active
-      .map((s) => s.lastFetchedAt)
-      .filter((v): v is string => Boolean(v))
+  const lastCollected = useMemo(() => {
+    const stamps = feeds
+      .filter((feed) => feed.active)
+      .map((feed) => feed.lastFetchedAt)
+      .filter((value): value is string => Boolean(value))
       .sort();
-    return stamps.length ? stamps[stamps.length - 1] : null;
-  }, [active]);
+    return stamps.length ? relativeTime(stamps[stamps.length - 1]) : null;
+  }, [feeds]);
 
-  const title = isLoading
-    ? "Sources"
-    : failing.length > 0
-      ? `${active.length} feeds, ${failing.length} unhealthy`
-      : `${active.length} ${active.length === 1 ? "feed" : "feeds"}, all healthy`;
+  const heading = sourcesHeading({
+    feeds,
+    emailSources,
+    attentionCount: attention.count,
+    isLoading,
+    lastCollectedLabel: lastCollected,
+  });
 
   return (
     <>
@@ -77,21 +101,19 @@ export default function SourcesPage() {
       <RadarMain width="1240px">
         <PageHeading
           eyebrow="Sources"
-          title={title}
-          subtitle={
-            <>
-              <Num>{feeds.length}</Num> configured ·{" "}
-              <Num>{active.length}</Num> active
-              {emailSources.length > 0 && (
+          title={heading.title}
+          subtitle={heading.subtitle.map((part, index) => (
+            <span key={`${part.text}-${index}`}>
+              {index > 0 && " · "}
+              {part.num ? (
                 <>
-                  {" · "}
-                  <Num>{emailSources.length}</Num> email{" "}
-                  {emailSources.length === 1 ? "source" : "sources"}
+                  <Num>{part.num}</Num> {part.text}
                 </>
+              ) : (
+                part.text
               )}
-              {lastFetched && <> · last collected {relativeTime(lastFetched)}</>}
-            </>
-          }
+            </span>
+          ))}
           actions={
             <Link href="/dashboard/curation" className={radarButtonClass()}>
               Curation jobs
@@ -99,66 +121,32 @@ export default function SourcesPage() {
           }
         />
 
-        {failing.length > 0 && (
-          <div className="radar-enter mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-radar-err bg-radar-surface px-4 py-3">
-            <span
-              aria-hidden="true"
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-radar-err"
-            />
-            <p className="m-0 min-w-0 flex-1 text-[12.5px] text-radar-ink2">
-              <span className="font-semibold text-radar-ink">
-                {failing.length} {failing.length === 1 ? "feed" : "feeds"} failed on
-                the last run.
-              </span>{" "}
-              {failing
-                .slice(0, 2)
-                .map((s) => `${s.name}: ${s.lastError}`)
-                .join(" · ")}
-              {failing.length > 2 && ` · and ${failing.length - 2} more`}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {failing.slice(0, 4).map((source) => (
-                <StatusChip key={source.id} tone="err">
-                  {source.name}
-                </StatusChip>
-              ))}
-            </div>
-          </div>
-        )}
+        <SourcesAttention lines={attention.lines} onJump={changeTab} />
 
-        {/*
-          Finding D2: the emails, beside the sources that claim them.
-
-          Here rather than in its own navigation entry, and not inside a single source,
-          because the question that goes unanswered today is "what arrived, and what did it
-          give us", which is about the mail rather than about one subscription.
-        */}
-        <ChipGroup<Panel>
-          label="Sources view"
-          value={panel}
-          onChange={setPanel}
-          options={[
-            { value: "sources", label: "Sources" },
-            { value: "received", label: "Received" },
-          ]}
+        <SourcesTabRow
+          value={tab}
+          onChange={changeTab}
+          counts={{
+            feeds: isLoading ? null : feeds.length,
+            email: isLoading ? null : emailSources.length,
+          }}
         />
 
-        {panel === "received" ? (
-          <div className="mt-5">
-            <SectionLabel className="mb-3">Emails received</SectionLabel>
-            <ReceivedEmails />
-          </div>
-        ) : (
-          <div className="mt-5">
-            <SectionLabel className="mb-3">Email newsletters</SectionLabel>
-            <div className="mb-8">
-              <EmailSourceManager />
-            </div>
-
-            <SectionLabel className="mb-3">Feed management</SectionLabel>
-            <RSSSourceManager />
-          </div>
-        )}
+        <div
+          id={`sources-panel-${tab}`}
+          role="tabpanel"
+          aria-labelledby={`sources-tab-${tab}`}
+          tabIndex={0}
+          className="mt-5"
+        >
+          {tab === "feeds" && <RSSSourceManager />}
+          {/* Both of these render the email manager until the unknown-senders block is
+              lifted out of it. That happens in task 6 of the plan; the duplication is
+              left visible rather than hidden behind a prop task 6 would delete. */}
+          {tab === "email" && <EmailSourceManager />}
+          {tab === "unmatched" && <EmailSourceManager />}
+          {tab === "received" && <ReceivedEmails />}
+        </div>
       </RadarMain>
     </>
   );
