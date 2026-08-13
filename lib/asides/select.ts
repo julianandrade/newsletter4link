@@ -15,9 +15,23 @@ import type { EmailAside } from "@/lib/email/edition-template";
 
 export interface AsidePickerFilter {
   kind: AsideKind;
-  language: string;
 }
 
+/**
+ * Language is deliberately not a filter here.
+ *
+ * It used to be, and it excluded rather than narrowed: an English joke could be stored,
+ * listed in the library and never once offered on the send screen, with nothing anywhere
+ * saying why. An aside goes into an edition whatever language it is written in, so the
+ * column is metadata to browse by, not a gate.
+ *
+ * Removing it also retires a footgun that lib/rewrite/config.ts had already written down:
+ * the match was on the exact string, so "Portugues" chosen for the organization's prose
+ * would have quietly stopped every stored "pt-PT" aside from being offered.
+ *
+ * A caller that genuinely wants one language can still narrow this query's `where` itself,
+ * which is what `GET /api/asides?offerable=true&language=` does.
+ */
 export function asidePickerQuery(filter: AsidePickerFilter) {
   return {
     where: {
@@ -25,7 +39,6 @@ export function asidePickerQuery(filter: AsidePickerFilter) {
       /** A one-off written on the send screen is reusable: false, so it never comes back. */
       reusable: true,
       kind: filter.kind,
-      language: filter.language,
     },
     /**
      * Never-used first, then least recently used.
