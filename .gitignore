@@ -39,7 +39,10 @@ yarn-error.log*
 
 # Prisma
 /lib/generated/prisma
-prisma/migrations/**/migration_lock.toml
+# migration_lock.toml is deliberately tracked, not ignored. It records which provider the
+# migration history was written against, which is how Prisma catches this schema being
+# pointed at a different engine. Ignoring it was harmless while there were no migrations;
+# with a history in place and a move to Cloud SQL coming, it is the file that catches it.
 
 # Playwright test screenshots
 .playwright-mcp/
