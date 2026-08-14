@@ -1,0 +1,19 @@
+# Terraform state contains the generated DB password and secret metadata.
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# .terraform.lock.hcl is deliberately tracked, not ignored. It pins the provider versions
+# and their checksums, which is what makes an apply from CI resolve the same providers as an
+# apply from a laptop. HashiCorp's own guidance is to commit it, and it holds no secret:
+# versions and hashes only. Same reasoning as prisma's migration_lock.toml, un-ignored in
+# Phase A of this migration for the same reason.
+
+# Local var files (cron_secret is sensitive). The committed example is fine.
+terraform.tfvars
+*.auto.tfvars
+!terraform.tfvars.example
+
+# Crash logs / plans
+crash.log
+*.tfplan

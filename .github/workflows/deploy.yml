@@ -1,0 +1,108 @@
+# =============================================================================
+# Cloud Run deploy: builds the Docker image and patches the running service.
+#
+# REQUIRED REPO VARIABLES (Settings -> Secrets and variables -> Actions -> Variables):
+#   GCP_WIF_PROVIDER          Full Workload Identity provider resource name, e.g.
+#                             projects/123/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+#   GCP_DEPLOYER_SA           Deployer service account email (...@newsletter-link-ai-radar.iam.gserviceaccount.com)
+#   NEXT_PUBLIC_SUPABASE_URL       Inlined into the client bundle at BUILD time.
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  Inlined into the client bundle at BUILD time.
+#   NEXT_PUBLIC_APP_URL            Public app URL, inlined at BUILD time.
+#
+# This workflow is INERT until the infra (infra/terraform) is applied and the
+# variables above are set: with WIF unconfigured the auth step fails fast and
+# nothing is deployed. It does NOT touch Vercel: existing Vercel deploys on
+# push to master continue independently and are unaffected by this file.
+#
+# Service config (CPU/memory/env/secrets/scaling/ingress) is owned by Terraform.
+# This workflow only ships a new image: `gcloud run deploy --image <ref>` on an
+# existing service patches the image and PRESERVES all other Terraform-managed
+# settings. Do NOT add --set-env-vars / --set-secrets here or they would drift.
+# =============================================================================
+
+name: Deploy to Cloud Run
+
+on:
+  # Manual only, deliberately, until Phase E cuts traffic over.
+  #
+  # The ported version also ran on every push to master, with a header arguing it was
+  # harmless because unconfigured WIF makes the auth step fail fast. That is true and it is
+  # not the problem. The problem is what it looks like: a red job on master after every
+  # merge, for weeks, which is how a team learns to ignore a failing check. And once
+  # Phase B does set the repo variables, it would begin deploying on every merge through
+  # Phases C and D, when the service is deliberately idle and pointed at a database that is
+  # mid-migration.
+  #
+  # Phase E adds `push: branches: [master]` back, in the same change that unpauses Cloud
+  # Scheduler and points the domain here. Until then a deploy is something someone chose.
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT: newsletter-link-ai-radar
+  GCP_REGION: europe-southwest1
+  SERVICE: newsletter4link
+  # Artifact Registry repo `app` is created by infra/terraform/registry.tf.
+  IMAGE_REPO: europe-southwest1-docker.pkg.dev/newsletter-link-ai-radar/app/newsletter4link
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ vars.NEXT_PUBLIC_SUPABASE_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            --build-arg NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            -t "${IMAGE_REPO}:${GITHUB_SHA}" \
+            -t "${IMAGE_REPO}:latest" \
+            .
+
+      - name: Push image
+        run: |
+          docker push "${IMAGE_REPO}:${GITHUB_SHA}"
+          docker push "${IMAGE_REPO}:latest"
+
+      - name: Deploy to Cloud Run (image only)
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE_REPO}:${GITHUB_SHA}" \
+            --region "${GCP_REGION}" \
+            --project "${GCP_PROJECT}" \
+            --quiet
+
+      # -----------------------------------------------------------------------
+      # Database migrations are intentionally NOT run here. Per repo convention
+      # (CLAUDE.md), `prisma migrate deploy` is an explicit, auditable release
+      # step run by a human, not on every push. Running it from this runner
+      # would also require reaching Cloud SQL via the Cloud SQL Auth Proxy (or a
+      # dedicated Cloud Run Job with the proxy sidecar), which is out of scope.
+      #
+      # Recommended: run the documented manual release step, e.g. with the proxy:
+      #   cloud-sql-proxy --port 5432 <PROJECT>:<REGION>:<INSTANCE> &
+      #   DIRECT_URL="postgresql://USER:PASS@127.0.0.1:5432/DB" npx prisma migrate deploy
+      #
+      # - name: Run migrations (manual / opt-in only, do NOT enable unattended)
+      #   run: |
+      #     # Requires Cloud SQL Auth Proxy + DIRECT_URL pointing at it.
+      #     npx prisma migrate deploy
+      # -----------------------------------------------------------------------
