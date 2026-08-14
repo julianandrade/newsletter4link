@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { subscriberListArgs } from "@/lib/subscribers/list-query";
+import { projectListArgs } from "@/lib/projects/list-query";
 
 /**
  * The route's filter and order, lifted out so the rules can be read without a database.
@@ -69,5 +70,51 @@ describe("subscriberListArgs", () => {
   it("reads idsOnly, for a selection that means the whole filter", () => {
     expect(subscriberListArgs(new URLSearchParams("idsOnly=true")).idsOnly).toBe(true);
     expect(subscriberListArgs(new URLSearchParams("idsOnly=yes")).idsOnly).toBe(false);
+  });
+});
+
+/**
+ * The same shape for projects. Two list routes that disagree about what an absent `page`
+ * means is how the next caller gets it wrong, so they agree.
+ */
+describe("projectListArgs", () => {
+  it("does not page a request that asked for no page", () => {
+    expect(projectListArgs(new URLSearchParams("")).page.paged).toBe(false);
+  });
+
+  it("pages one that did", () => {
+    const args = projectListArgs(new URLSearchParams("page=2&pageSize=100"));
+
+    expect(args.page.paged).toBe(true);
+    expect(args.page.page).toBe(2);
+    expect(args.page.pageSize).toBe(100);
+  });
+
+  it("searches the name, the description and the team", () => {
+    const { where } = projectListArgs(new URLSearchParams("search=radar"));
+
+    expect(where.OR).toHaveLength(3);
+  });
+
+  it("reads featured as three states, not two", () => {
+    expect(projectListArgs(new URLSearchParams("featured=true")).where.featured).toBe(true);
+    expect(projectListArgs(new URLSearchParams("featured=false")).where.featured).toBe(
+      false
+    );
+    expect(projectListArgs(new URLSearchParams("")).where.featured).toBeUndefined();
+  });
+
+  it("includes the whole of the last named day, not its first instant", () => {
+    const { where } = projectListArgs(new URLSearchParams("dateTo=2026-08-08"));
+    const end = (where.projectDate as { lte: Date }).lte;
+
+    expect(end.getHours()).toBe(23);
+    expect(end.getMinutes()).toBe(59);
+  });
+
+  it("breaks every tie on name, so two identical requests agree", () => {
+    const { orderBy } = projectListArgs(new URLSearchParams("sortBy=team&sortOrder=asc"));
+
+    expect(orderBy[orderBy.length - 1]).toEqual({ name: "asc" });
   });
 });
