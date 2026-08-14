@@ -101,7 +101,7 @@ export default function PlatformPage() {
   return (
     <>
       <AppHeader />
-      <RadarMain>
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Platform"
           title="Organizations"
