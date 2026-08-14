@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
+import { usePageSize } from "@/components/radar/use-page-size";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,7 @@ import {
   tableClass,
   tdClass,
   theadClass,
+  Pagination,
   thClass,
   trClass,
 } from "@/components/radar/controls";
@@ -99,6 +101,10 @@ const STYLES: [string, string][] = [
 
 export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [pageSize, setPageSize] = usePageSize("subscribers");
+  const [page, setPage] = useState(1);
+  /** The population under the current filter, from the server. */
+  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -150,7 +156,10 @@ export default function SubscribersPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      });
       if (audience === "everyone") params.set("all", "true");
       if (searchQuery) params.set("search", searchQuery);
       applySortParams(params, sort);
@@ -159,6 +168,7 @@ export default function SubscribersPage() {
       const data = await res.json();
       if (data.success) {
         setSubscribers(data.data);
+        setTotal(typeof data.total === "number" ? data.total : data.data.length);
         if (data.meta) setTotals(data.meta);
       } else {
         setLoadError(data.error || "The subscriber list request failed");
@@ -168,11 +178,19 @@ export default function SubscribersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [audience, searchQuery, sort]);
+  }, [audience, searchQuery, sort, page, pageSize]);
 
   useEffect(() => {
     void loadSubscribers();
   }, [loadSubscribers]);
+
+  /**
+   * A new filter, order or density is a new population, so page four of the old one means
+   * nothing. The same rule the feeds and articles lists follow.
+   */
+  useEffect(() => {
+    setPage(1);
+  }, [audience, searchQuery, sort, pageSize]);
 
   const handleAddSubscriber = async () => {
     if (!newEmail.trim() || isAdding) return;
@@ -320,7 +338,36 @@ export default function SubscribersPage() {
    * Bulk selection. Ids are in render order so shift-click ranges match the
    * table, and the selection is pruned automatically when the search narrows.
    */
-  const selection = useSelection(subscribers.map((s) => s.id));
+  /**
+   * Every id the filter matches, asked of the same route the page came from.
+   *
+   * Server-paged, so the rows in hand are one page of the answer; `idsOnly` returns the
+   * whole ordered set through the identical filter.
+   */
+  const resolveMatchingIds = useCallback(async () => {
+    const params = new URLSearchParams({ idsOnly: "true" });
+    if (audience === "everyone") params.set("all", "true");
+    if (searchQuery) params.set("search", searchQuery);
+
+    const res = await fetch(`/api/subscribers?${params.toString()}`);
+    const data = await res.json().catch(() => null);
+    if (!data?.success) {
+      throw new Error(data?.error ?? "The matching subscribers could not be listed");
+    }
+    return data.ids as string[];
+  }, [audience, searchQuery]);
+
+  const selection = useSelection(
+    subscribers.map((s) => s.id),
+    { matchingTotal: total, resolveMatchingIds }
+  );
+
+  /** The filter in words, for the bar and for the delete confirm. */
+  const filterSummary = useMemo(() => {
+    const parts = [audience === "everyone" ? "everyone" : "active subscribers"];
+    if (searchQuery.trim()) parts.push(`search "${searchQuery.trim()}"`);
+    return parts.join(", ");
+  }, [audience, searchQuery]);
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
 
@@ -671,11 +718,21 @@ export default function SubscribersPage() {
               )}
             </p>
 
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(total / pageSize))}
+              onPage={setPage}
+              busy={isLoading}
+              className="mt-5"
+              {...(total > 0 ? { pageSize, onPageSize: setPageSize } : {})}
+            />
+
             <BulkBar
               selection={selection}
               actions={bulkActions}
               noun="subscriber"
               busyAction={bulkBusy}
+              filterSummary={filterSummary}
             />
           </>
         )}
@@ -693,6 +750,11 @@ export default function SubscribersPage() {
               {pendingBulkDelete?.length === 1 ? "subscriber" : "subscribers"}?
             </DialogTitle>
             <DialogDescription>
+              {/* The filter in words. The count is the one thing nobody can check once the
+                  rows are off screen, and this is the least reversible action here. */}
+              {selection.mode === "matching" && (
+                <>Everyone matching: {filterSummary}. </>
+              )}
               This cannot be undone, and it deletes their delivery history with
               them. To stop sending without losing the record, use Unsubscribe
               instead.

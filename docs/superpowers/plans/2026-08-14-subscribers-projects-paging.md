@@ -88,14 +88,20 @@ CSS pipeline.
 
 **Files:** Modify `app/dashboard/subscribers/page.tsx`
 
-- [ ] **Step 1:** `usePageSize("subscribers")`, send `page` and `pageSize`, reset to page one when a filter, the sort or the size changes.
-- [ ] **Step 2:** `Pagination` with the size control, rendered when there are rows.
-- [ ] **Step 3:** The two-step selection: `matchingTotal` from the route's `total`, `resolveMatchingIds` through `idsOnly`.
-- [ ] **Step 4:** A `filterSummary` in words, on the bar and in the delete confirm. Deleting subscribers is the most destructive thing on this screen.
-- [ ] **Step 5:** Verify rendered, then the CI trio.
-- [ ] **Step 6: Commit** `Subscribers: rows per page, and select everyone a filter matches`
+- [x] **Step 1:** `usePageSize("subscribers")`, send `page` and `pageSize`, reset to page one when a filter, the sort or the size changes.
+- [x] **Step 2:** `Pagination` with the size control, rendered when there are rows.
+- [x] **Step 3:** The two-step selection: `matchingTotal` from the route's `total`, `resolveMatchingIds` through `idsOnly`.
+- [x] **Step 4:** A `filterSummary` in words, on the bar and in the delete confirm. Deleting subscribers is the most destructive thing on this screen.
+- [x] **Step 5:** Verify rendered, then the CI trio.
+- [x] **Step 6: Commit** `Subscribers: rows per page, and select everyone a filter matches`
 
 ---
+
+Verified on a **webpack** dev server: `next dev --webpack` works where Turbopack panics, which
+also localises yesterday's failure to Turbopack's worker spawn rather than to the CSS or this
+branch. 50 rows, "Page 1 of 4", and "198 subscribers selected, all matching, active
+subscribers" after the second step. Zero console errors.
+
 
 ### Task 6: Projects screen adopts the contract
 
