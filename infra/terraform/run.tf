@@ -180,6 +180,14 @@ resource "google_cloud_run_v2_service" "app" {
       template[0].containers[0].image,
       client,
       client_version,
+
+      # Service-level scaling, which is NOT the `scaling` block inside `template` above.
+      # `gcloud run deploy` writes this one on every deploy, so after the first real image
+      # landed, `terraform plan` reported "1 to change" forever: it wanted to remove a block
+      # it had never set. Harmless to apply and corrosive to leave, for the same reason the
+      # deploy workflow is not wired to every push. A plan that always shows a phantom change
+      # is a plan nobody reads, and the one time it says something real it gets skimmed too.
+      scaling,
     ]
   }
 
