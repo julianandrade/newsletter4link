@@ -57,11 +57,11 @@ export function clampToTotal(page: number, pageSize: number, total: number): num
 
 **Files:** Modify `app/api/projects/route.ts`, extend the Task 2 test file
 
-- [ ] **Step 1: Write the failing test** for the same shape, plus one that `teams=true` is untouched.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement**, mirroring Task 2 exactly.
-- [ ] **Step 4: Run green, `tsc`, lint.**
-- [ ] **Step 5: Commit** `Projects: page the list when a page is asked for`
+- [x] **Step 1: Write the failing test** for the same shape, plus one that `teams=true` is untouched.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement**, mirroring Task 2 exactly.
+- [x] **Step 4: Run green, `tsc`, lint.**
+- [x] **Step 5: Commit** `Projects: page the list when a page is asked for`
 
 ---
 

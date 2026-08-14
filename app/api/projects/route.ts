@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { createProject } from "@/lib/queries";
-import { Prisma } from "@prisma/client";
-import { parseSort } from "@/lib/list-sort";
+import { pageArgs } from "@/lib/list-page";
+import { projectListArgs, PROJECT_SORT_FIELDS } from "@/lib/projects/list-query";
 
 export const dynamic = "force-dynamic";
 
 /** Every column the projects table draws, and nothing that is not on screen. */
-export const PROJECT_SORT_FIELDS = [
-  "name",
-  "team",
-  "projectDate",
-  "createdAt",
-  "featured",
-] as const;
+/** Re-exported: the list lives beside the query it orders, in lib/projects/list-query.ts. */
+export { PROJECT_SORT_FIELDS };
 
 /**
  * GET /api/projects
@@ -51,69 +46,38 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Build filter conditions
-    const where: Prisma.ProjectWhereInput = {};
+    const { where, orderBy, sort, page, idsOnly } = projectListArgs(searchParams);
 
-    const search = searchParams.get("search");
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-        { team: { contains: search, mode: "insensitive" } },
-      ];
+    /** Every matching id, through the same filter and order the list uses. */
+    if (idsOnly) {
+      const rows = await db.project.findMany({ where, orderBy, select: { id: true } });
+      return NextResponse.json({
+        success: true,
+        ids: rows.map((row) => row.id),
+        total: rows.length,
+      });
     }
 
-    const team = searchParams.get("team");
-    if (team) {
-      where.team = team;
-    }
-
-    const featured = searchParams.get("featured");
-    if (featured === "true") {
-      where.featured = true;
-    } else if (featured === "false") {
-      where.featured = false;
-    }
-
-    const dateFrom = searchParams.get("dateFrom");
-    const dateTo = searchParams.get("dateTo");
-    if (dateFrom || dateTo) {
-      where.projectDate = {};
-      if (dateFrom) {
-        where.projectDate.gte = new Date(dateFrom);
-      }
-      if (dateTo) {
-        // The end of the named day, not its first instant. "Delivered to 8 August"
-        // excluded everything shipped on 8 August.
-        const end = new Date(dateTo);
-        end.setHours(23, 59, 59, 999);
-        where.projectDate.lte = end;
-      }
-    }
-
-    const sort = parseSort(searchParams, PROJECT_SORT_FIELDS, {
-      field: "createdAt",
-      direction: "desc",
-    });
-
-    // `name` is the second key throughout: every other field has duplicates in a list this
-    // size, so without it a team of six projects comes back in an arbitrary order that
-    // changes between two identical requests.
-    const orderBy: Prisma.ProjectOrderByWithRelationInput[] =
-      sort.field === "name"
-        ? [{ name: sort.direction }]
-        : [{ [sort.field]: sort.direction }, { name: "asc" }];
-
-    const projects = await db.project.findMany({
-      where,
-      orderBy,
-    });
+    const [projects, total] = await Promise.all([
+      db.project.findMany({
+        where,
+        orderBy,
+        // Unpaged unless a page was asked for, matching /api/subscribers. An absent
+        // parameter means the whole list on both, so no caller has to remember which.
+        ...(page.paged ? pageArgs(page.page, page.pageSize) : {}),
+      }),
+      page.paged ? db.project.count({ where }) : Promise.resolve(0),
+    ]);
 
     return NextResponse.json({
       success: true,
       data: projects,
       count: projects.length,
       sort,
+      // Present only for a paged request, so an unpaged response keeps its old shape.
+      ...(page.paged
+        ? { total, page: page.page, pageSize: page.pageSize }
+        : {}),
     });
   } catch (error) {
     console.error("Error fetching projects:", error);
