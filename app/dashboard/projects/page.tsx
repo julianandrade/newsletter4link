@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
+import { usePageSize } from "@/components/radar/use-page-size";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ import {
   EmptyState,
   RadarField,
   RadarInput,
+  Pagination,
   RadarTextarea,
   SkeletonRows,
   TableShell,
@@ -90,6 +92,10 @@ function formatMonth(dateString: string | null | undefined) {
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [pageSize, setPageSize] = usePageSize("projects");
+  const [page, setPage] = useState(1);
+  /** The population under the current filter, from the server. */
+  const [total, setTotal] = useState(0);
   const [teams, setTeams] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -119,11 +125,17 @@ export default function ProjectsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const queryString = buildProjectQueryString(filters);
-      const res = await fetch(`/api/projects${queryString}`);
+      // The filters build their own query; the page is appended, which is what turns this
+      // from "every project this organization has" into one screenful.
+      const params = new URLSearchParams(buildProjectQueryString(filters).replace(/^\?/, ""));
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+
+      const res = await fetch(`/api/projects?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setProjects(data.data);
+        setTotal(typeof data.total === "number" ? data.total : data.data.length);
       } else {
         setLoadError(data.error || "The project list request failed");
       }
@@ -135,11 +147,16 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, page, pageSize]);
 
   useEffect(() => {
     fetchTeams();
   }, []);
+
+  /** A new filter or density is a new population, so page four of the old one is nothing. */
+  useEffect(() => {
+    setPage(1);
+  }, [filters, pageSize]);
 
   useEffect(() => {
     void fetchProjects();
@@ -257,7 +274,36 @@ export default function ProjectsPage() {
   };
 
   /** Bulk selection, in render order so shift-click ranges match the screen. */
-  const selection = useSelection(projects.map((project) => project.id));
+  /** Every id the filter matches, through the same route and filter the page came from. */
+  const resolveMatchingIds = useCallback(async () => {
+    const params = new URLSearchParams(buildProjectQueryString(filters).replace(/^\?/, ""));
+    params.set("idsOnly", "true");
+
+    const res = await fetch(`/api/projects?${params.toString()}`);
+    const data = await res.json().catch(() => null);
+    if (!data?.success) {
+      throw new Error(data?.error ?? "The matching projects could not be listed");
+    }
+    return data.ids as string[];
+  }, [filters]);
+
+  const selection = useSelection(
+    projects.map((project) => project.id),
+    { matchingTotal: total, resolveMatchingIds }
+  );
+
+  /** The filter in words, for the bar and the delete confirm. */
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (filters.search) parts.push(`search "${filters.search}"`);
+    if (filters.team && filters.team !== "all") parts.push(`team ${filters.team}`);
+    if (filters.featured && filters.featured !== "all") {
+      parts.push(filters.featured === "true" ? "featured only" : "not featured");
+    }
+    if (filters.dateFrom) parts.push(`from ${filters.dateFrom}`);
+    if (filters.dateTo) parts.push(`to ${filters.dateTo}`);
+    return parts.length > 0 ? parts.join(", ") : "every project, unfiltered";
+  }, [filters]);
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [pendingBulkDelete, setPendingBulkDelete] = useState<string[] | null>(null);
 
@@ -697,11 +743,21 @@ export default function ProjectsPage() {
               )}
             </p>
 
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(total / pageSize))}
+              onPage={setPage}
+              busy={loading}
+              className="mt-5"
+              {...(total > 0 ? { pageSize, onPageSize: setPageSize } : {})}
+            />
+
             <BulkBar
               selection={selection}
               actions={bulkActions}
               noun="project"
               busyAction={bulkBusy}
+              filterSummary={filterSummary}
             />
           </>
         )}
@@ -719,6 +775,11 @@ export default function ProjectsPage() {
               {pendingBulkDelete?.length === 1 ? "project" : "projects"}?
             </DialogTitle>
             <DialogDescription>
+              {/* The filter in words: a count cannot be checked once the rows are off
+                  screen, and this is the action that cannot be undone. */}
+              {selection.mode === "matching" && (
+                <>Everything matching: {filterSummary}. </>
+              )}
               This cannot be undone. Editions that already featured them keep
               their copy of the text.
             </DialogDescription>

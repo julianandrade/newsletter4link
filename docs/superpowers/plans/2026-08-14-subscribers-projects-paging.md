@@ -107,10 +107,14 @@ subscribers" after the second step. Zero console errors.
 
 **Files:** Modify `app/dashboard/projects/page.tsx`
 
-- [ ] **Step 1 to 5:** The same five steps as Task 5, with `usePageSize("projects")`.
-- [ ] **Step 6: Commit** `Projects: rows per page, and select every project a filter matches`
+- [x] **Step 1 to 5:** The same five steps as Task 5, with `usePageSize("projects")`.
+- [x] **Step 6: Commit** `Projects: rows per page, and select every project a filter matches`
 
 ---
+
+Verified rendered: 50 rows, "Page 1 of 3", and "137 projects selected, all matching, every
+project, unfiltered" after the second step. Zero console errors.
+
 
 ### Task 7: Verify and open the PR
 
