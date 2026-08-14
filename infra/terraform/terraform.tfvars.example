@@ -1,0 +1,40 @@
+# Copy to terraform.tfvars (or *.auto.tfvars) and fill in.
+# Do NOT commit the real file: cron_secret is sensitive.
+
+project_id  = "newsletter-link-ai-radar"
+region      = "europe-southwest1" # Madrid (closest to Lisbon)
+app_name    = "newsletter4link"
+db_tier     = "db-g1-small" # budget option: "db-f1-micro" (discouraged for pgvector)
+github_repo = "julianandrade/newsletter4link"
+
+# Leave empty on first apply; after `terraform output cloud_run_url`, set this to
+# the run.app URL (or a mapped custom domain) and re-apply so NEXT_PUBLIC_APP_URL
+# and the Cloud Scheduler target URLs are correct.
+app_url = ""
+
+# Range for the Cloud Run egress subnet. A /26 is the floor for direct VPC egress; this
+# leaves room to raise max_instance_count without re-cutting the range.
+subnet_cidr = "10.20.0.0/24"
+
+# Auth stays on Supabase, so these point at the same project they do today.
+#
+# Both are NEXT_PUBLIC_, which Next.js inlines into the client bundle at BUILD time. Setting
+# them here covers server-side reads only: they must ALSO be set as GitHub repo variables so
+# `docker build` receives them, or the browser bundle ships with them undefined and sign-in
+# fails on a service whose logs look healthy. The anon key is deliberately not a secret;
+# it is compiled into JavaScript every visitor downloads.
+supabase_url      = ""
+supabase_anon_key = ""
+
+# Empty falls back to the defaults in lib/config.ts.
+from_email = ""
+from_name  = ""
+
+# Which optional secrets the Cloud Run revision references. A revision naming a secret with
+# no version does not start, so add the id here only after adding its first version. The
+# default matches what `.env` holds today.
+mounted_optional_secrets = ["resend-webhook-secret", "tavily-api-key"]
+
+# MUST equal the value you store in the `cron-secret` Secret Manager secret.
+# Prefer supplying via env: export TF_VAR_cron_secret="..."
+# cron_secret = "replace-with-a-long-random-string"

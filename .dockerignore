@@ -1,0 +1,32 @@
+# Dependencies / build output (reinstalled & rebuilt inside the image)
+node_modules
+.next
+
+# VCS
+.git
+.gitignore
+
+# Local dev / preview / test artifacts
+.preview
+test-results
+playwright-report
+supabase/.temp
+coverage
+
+# Docs & markdown (not needed at runtime/build)
+docs
+
+# Agent and tooling configuration. All of this postdates the migration branch, none of it
+# is read at build or runtime, and it is only build-context weight.
+.claude
+.impeccable
+.playwright-mcp
+
+# Secrets and local env: NEVER ship these into the image layers
+.env
+.env.*
+
+# Editor / OS cruft
+.vscode
+.idea
+.DS_Store
