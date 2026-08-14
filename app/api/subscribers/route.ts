@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/context";
 import { createSubscriber } from "@/lib/queries";
-import { Prisma } from "@prisma/client";
-import { parseSort } from "@/lib/list-sort";
+import { pageArgs } from "@/lib/list-page";
+import {
+  subscriberListArgs,
+  SUBSCRIBER_SORT_FIELDS,
+} from "@/lib/subscribers/list-query";
 
 export const dynamic = "force-dynamic";
 
-/** The columns the subscribers table draws. `variant` orders by language then style. */
-export const SUBSCRIBER_SORT_FIELDS = [
-  "email",
-  "name",
-  "variant",
-  "active",
-  "createdAt",
-] as const;
+/**
+ * Re-exported so the name still resolves here: the list is defined beside the query it
+ * orders now, in `lib/subscribers/list-query.ts`.
+ */
+export { SUBSCRIBER_SORT_FIELDS };
 
 /**
  * GET /api/subscribers
@@ -35,42 +35,21 @@ export async function GET(request: Request) {
     const { db } = ctx;
 
     const { searchParams } = new URL(request.url);
-    const showAll = searchParams.get("all") === "true";
-    const search = searchParams.get("search")?.trim();
+    const { where, orderBy, sort, page, idsOnly } = subscriberListArgs(searchParams);
 
-    const where: Prisma.SubscriberWhereInput = {};
-    if (!showAll) where.active = true;
-    if (search) {
-      where.OR = [
-        { email: { contains: search, mode: "insensitive" } },
-        { name: { contains: search, mode: "insensitive" } },
-      ];
+    /**
+     * Every matching id, for a selection that means the filter rather than the page.
+     * Same `where` and `orderBy` as the list, so the ids and the count agree by
+     * construction.
+     */
+    if (idsOnly) {
+      const rows = await db.subscriber.findMany({ where, orderBy, select: { id: true } });
+      return NextResponse.json({
+        success: true,
+        ids: rows.map((row) => row.id),
+        total: rows.length,
+      });
     }
-
-    const sort = parseSort(searchParams, SUBSCRIBER_SORT_FIELDS, {
-      field: "createdAt",
-      direction: "desc",
-    });
-
-    // Email is the second key because it is the only column guaranteed to be distinct: two
-    // people with no name and the same variant would otherwise swap places between loads.
-    const orderBy: Prisma.SubscriberOrderByWithRelationInput[] =
-      sort.field === "variant"
-        ? [
-            { preferredLanguage: sort.direction },
-            { preferredStyle: sort.direction },
-            { email: "asc" },
-          ]
-        : sort.field === "email"
-          ? [{ email: sort.direction }]
-          : [
-              // A subscriber with no name goes to the end of the column rather than to the
-              // top of it, matching how every other list here treats a missing value.
-              sort.field === "name"
-                ? { name: { sort: sort.direction, nulls: "last" } }
-                : { [sort.field]: sort.direction },
-              { email: "asc" },
-            ];
 
     /**
      * The three figures above the table, counted over the whole list rather than over the
@@ -81,14 +60,23 @@ export async function GET(request: Request) {
      * same code would have reported "3 active" while someone typed, and "Languages: 1" is a
      * statement about the audience, not about a search.
      */
-    const [subscribers, activeCount, inactiveCount, languages] = await Promise.all([
-      db.subscriber.findMany({ where, orderBy }),
+    const [subscribers, activeCount, inactiveCount, languages, total] = await Promise.all([
+      db.subscriber.findMany({
+        where,
+        orderBy,
+        // Unpaged unless a page was asked for. The edition builder asks for none and sends
+        // to everyone it gets back, so a default page size would truncate a newsletter.
+        ...(page.paged ? pageArgs(page.page, page.pageSize) : {}),
+      }),
       db.subscriber.count({ where: { active: true } }),
       db.subscriber.count({ where: { active: false } }),
       db.subscriber.findMany({
         distinct: ["preferredLanguage"],
         select: { preferredLanguage: true },
       }),
+      // Only a paged caller has any use for the population under its own filter, and only a
+      // paged caller should pay for the query.
+      page.paged ? db.subscriber.count({ where }) : Promise.resolve(0),
     ]);
 
     return NextResponse.json({
@@ -96,6 +84,10 @@ export async function GET(request: Request) {
       data: subscribers,
       count: subscribers.length,
       sort,
+      // Present only for a paged request, so an unpaged response is the shape it always was.
+      ...(page.paged
+        ? { total, page: page.page, pageSize: page.pageSize }
+        : {}),
       meta: {
         activeCount,
         inactiveCount,

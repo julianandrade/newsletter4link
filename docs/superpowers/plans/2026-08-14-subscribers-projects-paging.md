@@ -45,11 +45,11 @@ export function clampToTotal(page: number, pageSize: number, total: number): num
 
 **Files:** Modify `app/api/subscribers/route.ts`, create `tests/unit/subscribers-paging.test.ts`
 
-- [ ] **Step 1: Write the failing test** over a small pure helper `subscriberListArgs(params)` that returns `{ where, orderBy, page }`, asserting the unpaged case has no `skip`/`take` and the paged case has both. The route's Prisma calls stay untested here, as everywhere else in this repo.
-- [ ] **Step 2: Run it and watch it fail.**
-- [ ] **Step 3: Implement.** `findMany` gains `...(page.paged ? pageArgs(...) : {})`. `total` is counted only when paged, in the same `Promise.all`. `idsOnly=true` returns `{ ids, total }` selecting `id` alone. The response gains `total`, `page`, `pageSize` only when paged, so the builder's response shape is byte-identical to today.
-- [ ] **Step 4: Run green, `tsc`, lint.**
-- [ ] **Step 5: Commit** `Subscribers: page the list when a page is asked for, and not before`
+- [x] **Step 1: Write the failing test** over a small pure helper `subscriberListArgs(params)` that returns `{ where, orderBy, page }`, asserting the unpaged case has no `skip`/`take` and the paged case has both. The route's Prisma calls stay untested here, as everywhere else in this repo.
+- [x] **Step 2: Run it and watch it fail.**
+- [x] **Step 3: Implement.** `findMany` gains `...(page.paged ? pageArgs(...) : {})`. `total` is counted only when paged, in the same `Promise.all`. `idsOnly=true` returns `{ ids, total }` selecting `id` alone. The response gains `total`, `page`, `pageSize` only when paged, so the builder's response shape is byte-identical to today.
+- [x] **Step 4: Run green, `tsc`, lint.**
+- [x] **Step 5: Commit** `Subscribers: page the list when a page is asked for, and not before`
 
 ---
 
