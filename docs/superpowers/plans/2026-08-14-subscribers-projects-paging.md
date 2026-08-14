@@ -118,7 +118,14 @@ project, unfiltered" after the second step. Zero console errors.
 
 ### Task 7: Verify and open the PR
 
-- [ ] **Step 1:** `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, with real counts.
-- [ ] **Step 2:** Rendered on both screens at 1440, 0 console errors, plus **the builder's subscriber list still loading every active subscriber**, which is the regression this PR is shaped around.
-- [ ] **Step 3:** `detect.mjs` over the changed files.
-- [ ] **Step 4:** Push, open the PR, report the checks, merge, confirm the production deployment carries the merge commit.
+- [x] **Step 1:** `npx vitest run`, `npx tsc --noEmit`, `npm run lint`, with real counts.
+- [x] **Step 2:** Rendered on both screens at 1440, 0 console errors, plus **the builder's subscriber list still loading every active subscriber**, which is the regression this PR is shaped around.
+- [x] **Step 3:** `detect.mjs` over the changed files.
+- [x] **Step 4:** Push, open the PR, report the checks, merge, confirm the production deployment carries the merge commit.
+
+**The regression check, measured in the browser.** `fetch("/api/subscribers")` with no
+parameters returns all 198 rows and no `total` field, the shape the edition builder has
+always received. The same request with `page=1&pageSize=50` returns 50 of 198. The builder
+cannot be truncated by this change.
+
+
