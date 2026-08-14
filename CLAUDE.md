@@ -228,17 +228,46 @@ NEXT_PUBLIC_APP_URL=https://newsletter4link.vercel.app  # Production
 
 **Schema Location:** `prisma/schema.prisma`
 
-**Migration Commands:**
-```bash
-# Run migrations
-npx prisma db push
+**Schema changes go through Prisma Migrate, not `db push`.** The baseline is
+`prisma/migrations/0_init/migration.sql`, generated from the schema on 14 August 2026 and
+recorded as already applied, because these tables were created by `db push` and hand-run SQL
+long before there was any migration history. Recording it was honest rather than a fudge:
+`prisma migrate diff` between the live database and the schema came back **empty**, so the
+schema already described production exactly, down to all 30 tables and 24 enums.
 
-# Generate client
+```bash
+# Turn a schema edit into a migration, and apply it
+npx prisma migrate dev --name what_changed
+
+# Apply pending migrations to an environment
+npx prisma migrate deploy
+
+# What does this database think is applied?
+npx prisma migrate status
+
+# Generate the client
 npx prisma generate
 
 # Open Prisma Studio
 npx prisma studio
 ```
+
+`prisma.config.ts` points migrations at `DIRECT_URL`, which bypasses the pooler, while the
+runtime uses `DATABASE_URL` through the adapter in `lib/db.ts`. Migrations run against the
+pooler fail in ways that read like network flakes.
+
+Two rules this history bought:
+
+- **No more `prisma db push` on a shared database.** It applies a schema and records nothing,
+  which is how a project ends up with five hand-applied SQL files and no way to answer what
+  is deployed. Those files stay in `prisma/sql/` with a README marking them superseded.
+- **`prisma migrate deploy` will not reconcile a mismatch.** On a database that already has
+  the tables it tries to create them again. `prisma migrate resolve --applied <name>` is the
+  command that records reality without touching data, and it is what baselined this one.
+
+The migration history also carries pgvector: `0_init` includes
+`CREATE EXTENSION IF NOT EXISTS "vector"`, so a fresh instance gets the extension with the
+schema instead of someone remembering to enable it by hand.
 
 ---
 
