@@ -115,7 +115,7 @@ export default function SettingsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="980px">
+      <RadarMain width="form">
         <PageHeading
           eyebrow="Settings"
           title="How the engine behaves"

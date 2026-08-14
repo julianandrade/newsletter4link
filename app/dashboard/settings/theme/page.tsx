@@ -93,7 +93,7 @@ export default function ThemeSettingsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1180px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Settings · theme"
           title={activeName ? `You are on ${activeName}` : "Pick a theme"}

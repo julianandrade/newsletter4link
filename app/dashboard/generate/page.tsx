@@ -768,7 +768,7 @@ export default function GeneratePage() {
         currentPlan={orgPlan}
         hasAccess={hasGhostWriterAccess || isLoadingOrg}
       >
-        <RadarMain width="980px">
+        <RadarMain width="form">
           <PageHeading
             eyebrow="Ghost Writer"
             title={heading}

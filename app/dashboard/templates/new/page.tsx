@@ -109,7 +109,7 @@ export default function NewTemplatePage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1320px">
+      <RadarMain width="workspace">
         <PageHeading
           eyebrow="Templates"
           title="Build a template"

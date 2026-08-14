@@ -9,6 +9,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { sourceIdentity, relativeTime } from "@/lib/radar/source";
+import { pageWidth, type PageWidth } from "@/lib/page-width";
 
 /* ---------------------------------------------------------------- typography */
 
@@ -606,16 +607,23 @@ export function SkeletonBar({
 
 export function RadarMain({
   children,
-  width = "820px",
+  width,
   className,
 }: {
   children: React.ReactNode;
-  width?: string;
+  /**
+   * One of four names, not a number.
+   *
+   * This took a raw CSS width and 35 call sites chose nine different values, four of them
+   * by not passing one at all. The names are in `lib/page-width.ts`, and the type is the
+   * part that matters: a tenth value stops compiling rather than shipping.
+   */
+  width?: PageWidth;
   className?: string;
 }) {
   return (
     <main className={cn("flex-1 px-4 pb-24 sm:px-6 lg:px-7", className)}>
-      <div className="mx-auto w-full" style={{ maxWidth: width }}>
+      <div className="mx-auto w-full" style={{ maxWidth: pageWidth(width) }}>
         {children}
       </div>
     </main>

@@ -256,7 +256,7 @@ export function LinkTakeView({
     ) : undefined;
 
   return (
-    <RadarMain width="780px">
+    <RadarMain width="reading">
       <PageHeading
         eyebrow="Article"
         title={rewrite ? rewrite.title : payload.attribution.originalTitle}

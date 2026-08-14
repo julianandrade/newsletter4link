@@ -1030,7 +1030,7 @@ export default function EditionDetailPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="1320px">
+        <RadarMain width="workspace">
           <PageHeading eyebrow="Edition" title="Opening the builder" />
           <SkeletonRows rows={5} />
         </RadarMain>
@@ -1043,7 +1043,7 @@ export default function EditionDetailPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="980px">
+        <RadarMain width="form">
           <PageHeading eyebrow="Edition" title="That edition could not be opened" />
           <EmptyState
             title="The edition would not load"
@@ -1071,7 +1071,7 @@ export default function EditionDetailPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1320px">
+      <RadarMain width="workspace">
         <PageHeading
           eyebrow={`Edition · ${edition.label}`}
           title={

@@ -318,7 +318,7 @@ export default function EditTemplatePage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="1320px">
+        <RadarMain width="workspace">
           <PageHeading eyebrow="Templates" title="Loading the template" />
           <SkeletonRows rows={4} />
         </RadarMain>
@@ -330,7 +330,7 @@ export default function EditTemplatePage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="980px">
+        <RadarMain width="form">
           <PageHeading eyebrow="Templates" title="That template is not here" />
           <EmptyState
             title="No template with that id"
@@ -356,7 +356,7 @@ export default function EditTemplatePage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1320px">
+      <RadarMain width="workspace">
         <PageHeading
           eyebrow="Templates"
           title={template.name}

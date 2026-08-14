@@ -132,7 +132,7 @@ export default function CurationJobDetailPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="980px">
+        <RadarMain width="form">
           <PageHeading eyebrow="Curation run" title="Loading the run" />
           <SkeletonRows rows={6} />
         </RadarMain>
@@ -144,7 +144,7 @@ export default function CurationJobDetailPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="980px">
+        <RadarMain width="form">
           <PageHeading eyebrow="Curation run" title="That run is not here" />
           <EmptyState
             title="No run with that id"
@@ -171,7 +171,7 @@ export default function CurationJobDetailPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="980px">
+      <RadarMain width="form">
         <PageHeading
           eyebrow="Curation run"
           title={

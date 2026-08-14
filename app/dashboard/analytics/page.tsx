@@ -305,7 +305,7 @@ export default function AnalyticsPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="1180px">
+        <RadarMain width="list">
           <PageHeading eyebrow="Analytics" title="Analytics are unavailable" />
           <EmptyState
             title="The analytics request failed"
@@ -326,7 +326,7 @@ export default function AnalyticsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1180px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Analytics"
           title={
