@@ -692,7 +692,7 @@ export default function EditionsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1320px">
+      <RadarMain width="workspace">
         <PageHeading
           eyebrow="Editions"
           title={headline}

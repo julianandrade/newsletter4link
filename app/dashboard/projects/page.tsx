@@ -625,7 +625,7 @@ export default function ProjectsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1240px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Projects"
           title={

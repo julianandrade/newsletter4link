@@ -416,7 +416,7 @@ export default function ProposalPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1180px">
+      <RadarMain width="list">
         {/* RQ-008: the edition names itself. The eyebrow used to carry the week and the
             title said "this week's edition", which is two ways of saying the same thing
             and neither of them survives a special edition. */}

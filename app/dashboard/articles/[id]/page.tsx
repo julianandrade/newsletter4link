@@ -70,7 +70,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
   return (
     <>
       <AppHeader />
-      <RadarMain width="780px">
+      <RadarMain width="reading">
         <PageHeading eyebrow="Article" title={title} />
         {children}
       </RadarMain>

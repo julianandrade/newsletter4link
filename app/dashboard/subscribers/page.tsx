@@ -457,7 +457,7 @@ export default function SubscribersPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1180px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Subscribers"
           title={

@@ -309,7 +309,7 @@ export default function AsidesPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1000px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="One more thing"
           title={title}

@@ -121,7 +121,7 @@ function SourcesScreen() {
 
   return (
     <>
-      <RadarMain width="1240px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Sources"
           title={heading.title}

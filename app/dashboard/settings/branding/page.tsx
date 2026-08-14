@@ -160,7 +160,7 @@ export default function BrandingSettingsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="980px">
+      <RadarMain width="form">
         <PageHeading
           eyebrow="Settings · branding"
           title="What the newsletter wears"

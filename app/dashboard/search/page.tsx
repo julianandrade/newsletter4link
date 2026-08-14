@@ -840,7 +840,7 @@ export default function SearchPage() {
         hasAccess={hasTrendRadarAccess || isLoadingOrg}
       >
         {/* The search view is a reading column; the other two need table width. */}
-        <RadarMain width={view === "search" ? "880px" : "1160px"}>
+        <RadarMain width={view === "search" ? "reading" : "list"}>
           <PageHeading
             eyebrow={eyebrow}
             title={title}

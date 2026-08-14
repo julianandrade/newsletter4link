@@ -128,7 +128,7 @@ export default function TrendsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1180px" className="relative">
+      <RadarMain width="list" className="relative">
         <PageHeading
           eyebrow={`Trend radar · ${windowDays} days`}
           title={

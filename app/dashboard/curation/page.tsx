@@ -456,7 +456,7 @@ export default function CurationHistoryPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1180px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Curation"
           title={heading}

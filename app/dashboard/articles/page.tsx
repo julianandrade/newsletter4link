@@ -405,7 +405,7 @@ export default function AllArticlesPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="1080px">
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Articles"
           title="Everything collected, whatever state it is in"

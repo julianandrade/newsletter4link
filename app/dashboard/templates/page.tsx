@@ -215,7 +215,7 @@ export default function TemplatesPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="980px">
+      <RadarMain width="form">
         <PageHeading
           eyebrow="Templates"
           title={

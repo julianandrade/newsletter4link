@@ -172,7 +172,7 @@ export default function OrganizationSettingsPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain width="980px">
+        <RadarMain width="form">
           <PageHeading eyebrow="Settings · organization" title="Organization" />
           <SkeletonRows rows={4} />
         </RadarMain>
@@ -184,7 +184,7 @@ export default function OrganizationSettingsPage() {
     <>
       <AppHeader />
 
-      <RadarMain width="980px">
+      <RadarMain width="form">
         <PageHeading
           eyebrow="Settings · organization"
           title={organization?.name || "Organization"}
