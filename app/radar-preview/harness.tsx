@@ -1487,7 +1487,36 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       return json({ success: true, data: TEAMS });
     }
     if (url.includes("/api/projects")) {
-      return json({ success: true, data: PROJECTS, count: PROJECTS.length });
+      const params = new URL(url, window.location.origin).searchParams;
+      const search = (params.get("search") ?? "").toLowerCase();
+
+      // Enough rows to page. The fixtures are a handful, so they repeat with distinct ids.
+      const every = Array.from({ length: 137 }, (_, index) => {
+        const seed = PROJECTS[index % PROJECTS.length];
+        return { ...seed, id: `proj-${index}`, name: `${seed.name} ${index + 1}` };
+      }).filter((project) => !search || project.name.toLowerCase().includes(search));
+
+      if (params.get("idsOnly") === "true") {
+        return json({ success: true, ids: every.map((p) => p.id), total: every.length });
+      }
+
+      // Absence of `page` means the whole list, the same rule the route follows.
+      if (!params.has("page")) {
+        return json({ success: true, data: every, count: every.length });
+      }
+
+      const page = Math.max(1, parseInt(params.get("page") || "1", 10));
+      const pageSize = Math.max(1, parseInt(params.get("pageSize") || "50", 10));
+      const start = (page - 1) * pageSize;
+
+      return json({
+        success: true,
+        data: every.slice(start, start + pageSize),
+        count: Math.min(pageSize, Math.max(0, every.length - start)),
+        total: every.length,
+        page,
+        pageSize,
+      });
     }
     if (url.includes("/api/inbound/received")) {
       const match = /emailId=([^&]+)/.exec(url);
@@ -1511,21 +1540,54 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
       return json({ jobs: CURATION_JOBS, page: 1, totalPages: 2 });
     }
     if (url.includes("/api/subscribers")) {
+      const params = new URL(url, window.location.origin).searchParams;
       const all = url.includes("all=true");
-      const data = all ? SUBSCRIBERS : SUBSCRIBERS.filter((s) => s.active);
-      // `meta` carries the three figures above the table. They are counted over the whole
-      // audience rather than over the rows returned, because the search narrows the query
-      // now: a stub without them showed "Active 0" beside three active subscribers.
-      return json({
-        success: true,
-        data,
-        count: data.length,
-        meta: {
-          activeCount: SUBSCRIBERS.filter((s) => s.active).length,
-          inactiveCount: SUBSCRIBERS.filter((s) => !s.active).length,
-          languageCount: new Set(SUBSCRIBERS.map((s) => s.preferredLanguage)).size,
-        },
-      });
+      const search = (params.get("search") ?? "").toLowerCase();
+
+      // Enough rows to page, and enough to make "select all matching" mean something.
+      const every = Array.from({ length: 264 }, (_, index) => {
+        const seed = SUBSCRIBERS[index % SUBSCRIBERS.length];
+        return {
+          ...seed,
+          id: `sub-${index}`,
+          email: `person${index + 1}@linkconsulting.com`,
+        };
+      })
+        .filter((s) => (all ? true : s.active))
+        .filter((s) => !search || s.email.toLowerCase().includes(search));
+
+      if (params.get("idsOnly") === "true") {
+        return json({ success: true, ids: every.map((s) => s.id), total: every.length });
+      }
+
+      const meta = {
+        activeCount: SUBSCRIBERS.filter((s) => s.active).length,
+        inactiveCount: SUBSCRIBERS.filter((s) => !s.active).length,
+        languageCount: new Set(SUBSCRIBERS.map((s) => s.preferredLanguage)).size,
+      };
+
+      // No `page` means everything, which is what the edition builder relies on.
+      if (params.has("page")) {
+        const page = Math.max(1, parseInt(params.get("page") || "1", 10));
+        const pageSize = Math.max(1, parseInt(params.get("pageSize") || "50", 10));
+        const start = (page - 1) * pageSize;
+
+        return json({
+          success: true,
+          data: every.slice(start, start + pageSize),
+          count: Math.min(pageSize, Math.max(0, every.length - start)),
+          total: every.length,
+          page,
+          pageSize,
+          meta,
+        });
+      }
+
+      const data = every;
+      // `meta` carries the three figures above the table, counted over the whole audience
+      // rather than over the rows returned: a stub without them showed "Active 0" beside
+      // three active subscribers.
+      return json({ success: true, data, count: data.length, meta });
     }
     if (url.includes("/api/templates")) {
       return json(TEMPLATES);

@@ -69,11 +69,20 @@ export function clampToTotal(page: number, pageSize: number, total: number): num
 
 **Files:** Modify `app/radar-preview/harness.tsx`
 
-- [ ] **Step 1:** Teach the subscribers and projects stubs `page`, `pageSize` and `idsOnly`, and give each enough fixture rows to page: the current handful cannot show a pager. Same approach as the articles stub added in the previous PR.
-- [ ] **Step 2:** Confirm both screens still render, then `tsc` and lint.
-- [ ] **Step 3: Commit** `Harness: let the subscribers and projects stubs page`
+- [x] **Step 1:** Teach the subscribers and projects stubs `page`, `pageSize` and `idsOnly`, and give each enough fixture rows to page: the current handful cannot show a pager. Same approach as the articles stub added in the previous PR.
+- [x] **Step 2:** Confirm both screens still render, then `tsc` and lint.
+- [x] **Step 3: Commit** `Harness: let the subscribers and projects stubs page`
 
 ---
+
+**The rendered check is deferred, not done.** The dev server started failing every request
+with a Turbopack panic, `node process exited before we could connect to it with exit code
+0xc0000142`, while spawning its PostCSS worker. A fresh server on a clean port does the same,
+plain `node` spawns children fine, and vitest, tsc and lint all pass, so it is the machine
+rather than this change: the same server rendered these screens an hour ago. Task 7 repeats
+the rendered pass, and Vercel's build on the PR is the other check that would catch a broken
+CSS pipeline.
+
 
 ### Task 5: Subscribers screen adopts the contract
 
