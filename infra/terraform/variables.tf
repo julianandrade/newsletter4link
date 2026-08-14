@@ -43,6 +43,22 @@ variable "app_url" {
   default     = ""
 }
 
+variable "scheduler_region" {
+  description = <<-EOT
+    Region for Cloud Scheduler jobs, separate from var.region because Cloud Scheduler is not
+    available everywhere Cloud Run is. `europe-southwest1` (Madrid) is not on its list, and
+    the first apply failed with "Location 'europe-southwest1' is not a valid location":
+    Scheduler is limited to the older App Engine region set, which in Europe is
+    europe-central2, west1, west2, west3, west4, west6, west8 and west9.
+
+    europe-west1 (Belgium) by default. The cross-region hop costs nothing that matters: a
+    job is an HTTPS GET to a public URL, so a few milliseconds of extra latency lands on a
+    request whose deadline is 320 seconds.
+  EOT
+  type        = string
+  default     = "europe-west1"
+}
+
 variable "subnet_cidr" {
   description = <<-EOT
     Range for the Cloud Run egress subnet. Direct VPC egress takes an address per

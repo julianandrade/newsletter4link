@@ -28,7 +28,23 @@ resource "google_sql_database_instance" "main" {
   deletion_protection = true
 
   settings {
-    tier              = var.db_tier
+    tier = var.db_tier
+
+    # Pinned, not inherited. The ported stack left this unset, and the first apply failed:
+    #
+    #   Invalid Tier (db-g1-small) for (ENTERPRISE_PLUS) Edition.
+    #   Use a predefined Tier like db-perf-optimized-N-* instead.
+    #
+    # This project defaults new instances to ENTERPRISE_PLUS, which does not offer
+    # shared-core machines at all. Its smallest tier is db-perf-optimized-N-2, at 2 vCPU
+    # and 16 GB, which is roughly ten times the monthly cost this stack is sized for and
+    # far beyond what one newsletter's worth of articles and embeddings needs.
+    #
+    # ENTERPRISE is the edition that offers db-g1-small and db-f1-micro. Naming it here
+    # means the tier and the edition can never disagree again, whatever a project or
+    # organization default happens to be on the day someone runs this.
+    edition = "ENTERPRISE"
+
     availability_type = "ZONAL" # bump to REGIONAL for HA in real prod
     disk_type         = "PD_SSD"
     disk_size         = 10
