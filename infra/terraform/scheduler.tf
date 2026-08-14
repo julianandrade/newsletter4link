@@ -53,10 +53,15 @@ locals {
 resource "google_cloud_scheduler_job" "cron" {
   for_each = local.cron_jobs
 
-  name      = "${var.app_name}-${each.key}"
-  project   = var.project_id
-  region    = var.region
-  schedule  = each.value
+  name = "${var.app_name}-${each.key}"
+
+  project = var.project_id
+
+  # Not var.region. Cloud Scheduler is limited to the older App Engine region set and Madrid
+  # is not in it, which the first apply found the hard way. See var.scheduler_region.
+  region = var.scheduler_region
+
+  schedule = each.value
   time_zone = "Etc/UTC"
 
   # Paused until Phase E cuts traffic over. Removing this line is the switch.

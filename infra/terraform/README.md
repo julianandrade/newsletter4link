@@ -169,13 +169,33 @@ Cloud SQL dominates. The levers are `var.db_tier` and `availability_type` in `sq
 NAT and the address add roughly 5 to 8 a month, which is the price of an allowlistable
 egress source; nothing else in this stack buys that.
 
-## Validation
+## Applied
 
-`terraform fmt`, `terraform init -backend=false` and `terraform validate` all pass, run
-14 August 2026 against Terraform v1.15.2.
+All 66 resources exist in `newsletter-link-ai-radar`, applied 14 August 2026 with
+Terraform v1.15.2. Cloud Run answers at the generated `run.app` URL on a placeholder image,
+and every Cloud Scheduler job is `PAUSED`.
 
-`terraform plan` has **not** been run, because it needs credentials for the project. Run
-`plan` and read it before the first `apply`. The original version of this README noted that
-the CLI was unavailable in the authoring sandbox and that the HCL was only self-reviewed;
-that is no longer the case for syntax, and is still the case for anything only the API can
-answer, such as whether a quota or an org policy refuses a resource.
+The apply ran in three stages, which `stage1.ps1` reproduces:
+
+1. `stage1.ps1 apply`, everything except Cloud Run and the Scheduler jobs
+2. the secret values, loaded out of band
+3. a plain `terraform plan -out` and `terraform apply <planfile>`
+
+Two things only the API could answer, both of which failed the first apply and are now
+pinned in code so they cannot recur:
+
+- **Cloud SQL edition.** The stack never set `edition`, so the instance inherited this
+  project's `ENTERPRISE_PLUS` default, which offers no shared-core machine at all and
+  rejected `db-g1-small` outright. Its smallest tier is around ten times the cost this is
+  sized for. `sql.tf` now names `ENTERPRISE`.
+- **Cloud Scheduler region.** `europe-southwest1` is not a valid Scheduler location. It is
+  limited to the older App Engine region set, so the jobs run in `europe-west1` via
+  `var.scheduler_region` while everything else stays in Madrid.
+
+### Still unverified
+
+The egress IP is allocated, `IN_USE` by the NAT, and Cloud Run is configured with
+`all-traffic`. What has **not** happened is observing that address from inside a request,
+which is the only thing that proves the setting took effect. The service runs Google's
+placeholder container, which makes no outbound calls. Do this immediately after the first
+real image deploys, and compare to `terraform output egress_ip`.
