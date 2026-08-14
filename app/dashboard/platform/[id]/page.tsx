@@ -162,7 +162,7 @@ export default function PlatformOrgPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain>
+        <RadarMain width="list">
           <SkeletonRows rows={6} />
         </RadarMain>
       </>
@@ -173,7 +173,7 @@ export default function PlatformOrgPage() {
     return (
       <>
         <AppHeader />
-        <RadarMain>
+        <RadarMain width="list">
           <Callout tone="err" title="Not available">
             {error ?? "This organization could not be loaded."}
           </Callout>
@@ -188,7 +188,7 @@ export default function PlatformOrgPage() {
   return (
     <>
       <AppHeader />
-      <RadarMain>
+      <RadarMain width="list">
         <PageHeading
           eyebrow="Platform · Organization"
           title={org.name}
