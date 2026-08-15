@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { uploadFile } from "@/lib/supabase/storage";
+import { uploadFile } from "@/lib/storage";
 import { requireOrgContext } from "@/lib/auth/context";
 import { sniffImageType } from "@/lib/media/sniff";
 

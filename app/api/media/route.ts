@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { deleteFile } from "@/lib/supabase/storage";
+import { deleteFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 

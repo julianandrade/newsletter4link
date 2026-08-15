@@ -3,7 +3,7 @@ import { requireOrgContext, requireRole } from "@/lib/auth/context";
 import { MAX_ASIDE_TEXT } from "@/lib/asides/input";
 import { renderMeme, MemeRenderError } from "@/lib/memes/render";
 import { findTemplate, validateTemplate } from "@/lib/memes/templates";
-import { uploadFile } from "@/lib/supabase/storage";
+import { uploadFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 

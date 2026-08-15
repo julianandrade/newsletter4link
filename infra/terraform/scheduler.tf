@@ -61,7 +61,7 @@ resource "google_cloud_scheduler_job" "cron" {
   # is not in it, which the first apply found the hard way. See var.scheduler_region.
   region = var.scheduler_region
 
-  schedule = each.value
+  schedule  = each.value
   time_zone = "Etc/UTC"
 
   # Paused until Phase E cuts traffic over. Removing this line is the switch.
