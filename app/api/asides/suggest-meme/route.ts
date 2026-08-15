@@ -11,7 +11,7 @@ import { MAX_INSTRUCTION_CHARS } from "@/lib/rewrite/config";
 import { buildMemePrompt, parseMemeReply } from "@/lib/memes/caption";
 import { renderMeme } from "@/lib/memes/render";
 import { MEME_TEMPLATES, findTemplate, type MemeTemplate } from "@/lib/memes/templates";
-import { uploadFile } from "@/lib/supabase/storage";
+import { uploadFile } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 

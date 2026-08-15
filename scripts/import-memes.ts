@@ -17,7 +17,7 @@ import { sniffImageType } from "../lib/media/sniff";
 import { parseSuggestions } from "../lib/asides/suggest";
 import { parseAsideCreate, MAX_ASIDE_TEXT } from "../lib/asides/input";
 import { NO_LONG_DASH_RULE } from "../lib/ai/typography";
-import { uploadFile } from "../lib/supabase/storage";
+import { uploadFile } from "../lib/storage";
 
 /**
  * Land a folder of meme images in the closing-slot library.
