@@ -120,6 +120,22 @@ resource "google_apikeys_key" "browser" {
         "http://localhost:3111/*",
         "http://localhost:3000/*",
         var.app_url != "" ? "${var.app_url}/*" : "",
+
+        # The auth handler's own domain, and the reason it is easy to miss.
+        #
+        # Sign-in does not happen on the app's origin. The SDK opens a popup on
+        # `<project>.firebaseapp.com/__/auth/handler`, and THAT page calls Identity Toolkit
+        # with this key. So the app's origin being allowed is irrelevant to the call that
+        # matters, and leaving this out blocks sign-in with:
+        #
+        #   API_KEY_HTTP_REFERRER_BLOCKED
+        #   Requests from referer https://<project>.firebaseapp.com/ are blocked.
+        #
+        # Which is the restriction working correctly against the wrong list, not a
+        # misconfigured provider. It cost one round trip to find and is worth the comment,
+        # because the error names a domain nobody put in the configuration and the instinct is
+        # to go looking at Entra.
+        "https://${var.project_id}.firebaseapp.com/*",
       ])
     }
   }
