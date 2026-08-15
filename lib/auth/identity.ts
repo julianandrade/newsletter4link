@@ -18,7 +18,9 @@
  * held.
  */
 
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { SESSION_COOKIE, verifySessionCookie } from "@/lib/gcip/admin";
 
 /** The subset of an authenticated user that this application actually uses. */
 export interface Identity {
@@ -55,6 +57,22 @@ export function identityProvider(): IdentityProvider {
  * an exception here would turn an ordinary logged-out request into a 500.
  */
 export async function getCurrentIdentity(): Promise<Identity | null> {
+  if (identityProvider() === "identity-platform") {
+    const store = await cookies();
+    const decoded = await verifySessionCookie(store.get(SESSION_COOKIE)?.value);
+    if (!decoded) return null;
+
+    // `name` is Identity Platform's normalised display name, which for a Microsoft sign-in is
+    // populated from the same claim Supabase surfaced as `user_metadata.full_name`.
+    const name = typeof decoded.name === "string" ? decoded.name : null;
+
+    return {
+      id: decoded.uid,
+      email: decoded.email ?? null,
+      name: name && name.length > 0 ? name : null,
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

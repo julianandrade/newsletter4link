@@ -17,6 +17,8 @@
 resource "google_project_service" "identity_apis" {
   for_each = toset([
     "identitytoolkit.googleapis.com",
+    # Needed to create the browser key below, and not enabled by default.
+    "apikeys.googleapis.com",
   ])
 
   project            = var.project_id
@@ -91,6 +93,51 @@ resource "google_identity_platform_default_supported_idp_config" "microsoft" {
   client_secret = var.azure_client_secret
 
   depends_on = [google_identity_platform_config.auth]
+}
+
+# The browser API key the Identity Platform client SDK needs.
+#
+# Not a secret, and treating it as one causes more harm than it prevents: it is compiled into
+# the JavaScript every visitor downloads, exactly like the Supabase anon key it replaces. What
+# protects it is the restriction below, not concealment.
+#
+# Created here rather than by hand because the Firebase console's auto-created key arrives
+# unrestricted, and an unrestricted key is one that works from anybody's page.
+resource "google_apikeys_key" "browser" {
+  name         = "${var.app_name}-browser"
+  display_name = "${var.app_name} Identity Platform browser key"
+  project      = var.project_id
+
+  restrictions {
+    # Identity Toolkit only. The default key can call every enabled API in the project, which
+    # is a much larger thing to hand to a browser than sign-in.
+    api_targets {
+      service = "identitytoolkit.googleapis.com"
+    }
+
+    browser_key_restrictions {
+      allowed_referrers = compact([
+        "http://localhost:3111/*",
+        "http://localhost:3000/*",
+        var.app_url != "" ? "${var.app_url}/*" : "",
+      ])
+    }
+  }
+
+  depends_on = [google_project_service.identity_apis]
+}
+
+output "gcip_api_key" {
+  description = <<-EOT
+    NEXT_PUBLIC_GCIP_API_KEY. Referrer-restricted to this app's origins and scoped to Identity
+    Toolkit alone. Public by design: it ships in the client bundle, as the Supabase anon key
+    does today, so it is a Terraform variable rather than a Secret Manager entry.
+
+    Also a build-time value. Next.js inlines every NEXT_PUBLIC_ variable, so it has to reach
+    `docker build` as a build argument, not only Cloud Run's environment.
+  EOT
+  value       = google_apikeys_key.browser.key_string
+  sensitive   = true
 }
 
 output "identity_platform_callback" {
