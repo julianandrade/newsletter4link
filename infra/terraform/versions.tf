@@ -31,4 +31,16 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  # Identity Platform needs these two, and nothing else in the stack does.
+  #
+  # `identitytoolkit.googleapis.com` refuses a request authenticated with user Application
+  # Default Credentials unless a quota project is named, and answers with a 403 whose reason
+  # is `SERVICE_DISABLED` even though the service is enabled. That message sends you looking
+  # for a disabled API rather than a missing attribution header.
+  #
+  # Setting it here rather than with `gcloud auth application-default set-quota-project` means
+  # the fix travels with the configuration instead of living in one operator's local state.
+  user_project_override = true
+  billing_project       = var.project_id
 }
