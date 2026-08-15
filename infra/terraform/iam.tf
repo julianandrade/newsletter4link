@@ -45,6 +45,31 @@ resource "google_secret_manager_secret_iam_member" "runtime_accessor" {
   ]
 }
 
+# Sign its own JWTs, which is what minting a session cookie is.
+#
+# Identity Platform session cookies are signed tokens, and `createSessionCookie` has to sign
+# one. With a downloaded service account key the SDK signs locally with the private key; on
+# Cloud Run there is no key, deliberately, so it calls the IAM `signBlob` API and asks Google
+# to sign on the service account's behalf. That requires the account to be a token creator FOR
+# ITSELF, which running as it does not imply.
+#
+# Without this, sign-in fails AFTER the token has been verified successfully, with:
+#
+#   Credential implementation provided to initializeApp() via the "credential" property has
+#   insufficient permission to access the requested resource.
+#
+# which names the credential rather than the missing role, and reads like the wrong service
+# account instead of a missing grant on the right one.
+#
+# Scoped to this one service account, not project-wide: `serviceAccountTokenCreator` at the
+# project level would let this identity mint tokens as every service account in the project,
+# the deployer included.
+resource "google_service_account_iam_member" "runtime_token_creator" {
+  service_account_id = google_service_account.runtime.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 # objectAdmin on the MEDIA bucket only (read/write/sign). No access to backups.
 resource "google_storage_bucket_iam_member" "runtime_media" {
   bucket = google_storage_bucket.media.name
