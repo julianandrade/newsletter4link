@@ -31,7 +31,7 @@ import AllArticlesPage from "@/app/dashboard/articles/page";
 import AsidesPage from "@/app/dashboard/asides/page";
 import { editionLabel } from "@/lib/editions/identity";
 import { isoWeekStart } from "@/lib/radar/week";
-import type { User } from "@supabase/supabase-js";
+import type { Identity } from "@/lib/auth/identity";
 
 const DAY = 86400000;
 const iso = (daysAgo: number, hour = 9) =>
@@ -1764,10 +1764,14 @@ if (typeof window !== "undefined" && !(window as never as { __radarStub?: boolea
   };
 }
 
-const FAKE_USER = {
+// No cast any more. The shell takes `Identity`, which is the two fields it actually reads plus
+// a name, so a fixture can satisfy it honestly instead of pretending to be a Supabase `User`
+// through `as unknown as`.
+const FAKE_USER: Identity = {
   id: "preview",
   email: "julian.andrade@linkconsulting.com",
-} as unknown as User;
+  name: "Julian Andrade",
+};
 
 /**
  * RQ-006_03: one fixture per state of the article detail view.

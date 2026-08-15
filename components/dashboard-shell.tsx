@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { RadarNavContext } from "@/components/radar/nav-context";
-import type { User } from "@supabase/supabase-js";
+import type { Identity } from "@/lib/auth/identity";
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  user: User;
+  /** Only `email` is read here. Narrowed from Supabase's `User` so the shell does not
+   * depend on which identity provider issued the session: see lib/auth/identity.ts. */
+  user: Identity;
   /**
    * Passed through to the sidebar so it can show the platform area. Resolved in
    * `app/dashboard/layout.tsx`, because the allowlist it comes from is server-only.

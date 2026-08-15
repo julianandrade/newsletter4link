@@ -14,12 +14,14 @@ import { createClient } from "@/lib/supabase/client";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { JobIndicator } from "@/components/job-indicator";
 import { RadarIcon, RadarMark, type RadarIconName } from "@/components/radar/icons";
-import type { User } from "@supabase/supabase-js";
+import type { Identity } from "@/lib/auth/identity";
 
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
-  user: User;
+  /** Only `email` is read here. Narrowed from Supabase's `User` so the shell does not
+   * depend on which identity provider issued the session: see lib/auth/identity.ts. */
+  user: Identity;
   /** Live counts rendered beside primary nav entries. */
   counts?: Partial<Record<"feed" | "editions" | "sources", number>>;
   /**

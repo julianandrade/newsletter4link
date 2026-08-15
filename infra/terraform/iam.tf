@@ -70,6 +70,29 @@ resource "google_service_account_iam_member" "runtime_token_creator" {
   member             = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+# Create session cookies, which is an authenticated Identity Toolkit ADMIN call.
+#
+# This is the role that was actually missing, and the distinction is worth recording because
+# the first guess above looked right and changed nothing:
+#
+#   verifyIdToken       needs no permission at all. It fetches Google's public signing keys
+#                       and checks a signature, which is why sign-in got as far as a verified
+#                       token with no Identity Toolkit role granted.
+#   createSessionCookie is a call to the Identity Toolkit API on behalf of the project, so the
+#                       caller has to be an administrator of it.
+#
+# The error says "insufficient permission to access the requested resource" for both cases and
+# names the credential rather than the resource, so it does not distinguish a missing signing
+# right from a missing API right. Granting token creator and retrying produced exactly the same
+# message, which is how the wrong theory survived one round.
+#
+# `firebaseauth.admin` also covers `getUserByEmail`, which scripts/relink-identities.ts needs.
+resource "google_project_iam_member" "runtime_firebase_auth" {
+  project = var.project_id
+  role    = "roles/firebaseauth.admin"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 # objectAdmin on the MEDIA bucket only (read/write/sign). No access to backups.
 resource "google_storage_bucket_iam_member" "runtime_media" {
   bucket = google_storage_bucket.media.name
