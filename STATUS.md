@@ -43,18 +43,35 @@ gone and the project has to be imported resource by resource. `versions.tf` carr
 commented-out GCS backend for exactly this. **This is the highest-value small task after
 deployments**, and it is about twenty minutes.
 
-### 3. The 76 media objects are still in Supabase
+### 3. Media: 33 of 39 objects restored from the repository, 6 remain
 
-Blocked, and not by us: Supabase restricted the project for `exceed_egress_quota`, so the
-Storage API and even public object URLs answer **402**. Consequences:
+Supabase restricted the project, so nothing could be copied out of its Storage: the API and
+even the public object URLs answer **402**. The way through was not to wait for it. The 76
+stored references resolve to **39 distinct objects**, and 33 of those are meme files still
+present in `public/images/memes/` in the main checkout, under the same base name minus the
+millisecond prefix and the extension.
 
-- Every image in every **already delivered** newsletter is a broken box right now.
-- `scripts/migrate-media-to-gcs.ts` is written and dry-run at 76 to copy, 0 failures, and
-  cannot run until the quota lifts.
+Those 33 were uploaded to GCS under their **original object names**, so the database rewrite
+was a pure change of host, and with the content type sniffed from the bytes rather than taken
+from the name, because several are called `.jpg` and are really PNGs. Verified by fetching one
+anonymously: 200, `image/png`.
 
-New uploads already go to GCS, so this only concerns existing objects. Most are memes this
-project generates itself, so `scripts/import-memes.ts` can regenerate them if the copy never
-becomes possible.
+`MediaAsset` and `Aside` now hold 33 GCS URLs each.
+
+**Six objects remain on Supabase and are unrecoverable from the repository:**
+
+- `1785843829973-v-color-dark.png`, which is `OrgSettings.logoUrl`
+- `1769283812713-02___Link_LRPlayer___Cor.png` and `1769283822514-Cover_LinkedIN_1.png`
+- three memes with descriptive names, `meme-tuxedo-winnie-the-pooh`,
+  `meme-a-train-hitting-a-school-bus`, `meme-inhaling-seagull`
+
+Their rows deliberately keep the Supabase URL. That URL is broken either way, and leaving it is
+more honest than pointing at a GCS object that does not exist: one is a known gap, the other is
+a 404 that looks like a bug in the bucket. They come back either by lifting the Supabase quota,
+or by re-uploading the originals if anyone still has them.
+
+`scripts/migrate-media-to-gcs.ts` remains the tool for the general case, and still needs the
+quota lifted.
 
 ### 4. Two of three members are not relinked
 
