@@ -46,6 +46,20 @@ ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 
+# Identity Platform. Empty by default, which builds the Supabase Auth path: the app switches
+# on the presence of the API key. A build that should authenticate with Identity Platform must
+# pass all four, because the key alone flips the switch and the other three are what make it
+# work.
+ARG NEXT_PUBLIC_GCIP_API_KEY=""
+ARG NEXT_PUBLIC_GCIP_PROJECT_ID=""
+ARG NEXT_PUBLIC_GCIP_AUTH_DOMAIN=""
+ARG NEXT_PUBLIC_ENTRA_TENANT_ID=""
+
+ENV NEXT_PUBLIC_GCIP_API_KEY=${NEXT_PUBLIC_GCIP_API_KEY}
+ENV NEXT_PUBLIC_GCIP_PROJECT_ID=${NEXT_PUBLIC_GCIP_PROJECT_ID}
+ENV NEXT_PUBLIC_GCIP_AUTH_DOMAIN=${NEXT_PUBLIC_GCIP_AUTH_DOMAIN}
+ENV NEXT_PUBLIC_ENTRA_TENANT_ID=${NEXT_PUBLIC_ENTRA_TENANT_ID}
+
 # `npm run build` runs `prisma generate && next build`; dummy DIRECT_URL again.
 ENV DIRECT_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ENV NEXT_TELEMETRY_DISABLED=1

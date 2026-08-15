@@ -56,6 +56,56 @@ export async function middleware(request: NextRequest) {
 
   const isMfaPath = request.nextUrl.pathname.startsWith(MFA_PATH);
   const isLoginPath = request.nextUrl.pathname === "/login";
+  const isProtectedPath =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/api/");
+
+  /**
+   * Identity Platform path, taken when GCIP is configured. Vercel has no such variable and
+   * falls through to the Supabase block below, so both deployments work from one file.
+   *
+   * Middleware runs in the Edge runtime, where `firebase-admin` cannot run: it needs Node
+   * APIs. So this branch checks only that a session cookie is PRESENT and does not verify its
+   * signature. That is deliberate, and worth being exact about, because "the middleware checks
+   * the cookie" is the kind of sentence that hides a hole.
+   *
+   * Middleware here is a redirect optimiser, not the authorization boundary. It reads no data
+   * and decides nothing about what a request may touch. Three things in the Node runtime do:
+   *
+   *  - `POST /api/auth/session` verifies the ID token and enforces the domain allowlist BEFORE
+   *    any cookie exists, so a disallowed address never gets a session. That is stronger than
+   *    the Supabase branch below, which has to sign out an address that already holds one,
+   *    because Supabase's signup endpoint is reachable by anyone with the anon key.
+   *  - `getCurrentIdentity()` verifies the cookie's signature, with revocation checked, on
+   *    every server-side read.
+   *  - `getAuthContext()` re-checks the allowlist and resolves organization membership.
+   *
+   * So a forged cookie gets past this redirect and then fails at the first thing that matters.
+   *
+   * MFA is absent here on purpose. Identity Platform accepts Microsoft sign-in only, and Entra
+   * applies the tenant's MFA and Conditional Access before we ever see the identity;
+   * `lib/auth/mfa.ts` only ever guarded password accounts, and there are none.
+   */
+  if (process.env.NEXT_PUBLIC_GCIP_API_KEY) {
+    const hasSession = Boolean(request.cookies.get("n4l_session")?.value);
+    const url = request.nextUrl.clone();
+    url.search = "";
+
+    if (!hasSession) {
+      if (isProtectedPath || isMfaPath) {
+        url.pathname = "/login";
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.next();
+    }
+
+    if (isLoginPath || isMfaPath) {
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    return NextResponse.next();
+  }
 
   let response = NextResponse.next({
     request,
@@ -105,10 +155,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const isProtectedPath =
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/api/");
 
   if (!user) {
     // The login page is exactly where an unauthenticated visitor belongs.
