@@ -115,7 +115,24 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    if (isLoginPath || isMfaPath) {
+    /**
+     * A cookie that EXISTS is not a session that WORKS, and the difference is an infinite
+     * loop.
+     *
+     * This used to redirect /login to /dashboard whenever a cookie was present. Middleware
+     * cannot verify the cookie (Edge runtime, no firebase-admin), so any cookie that fails
+     * verification server-side produced: /login -> /dashboard -> the layout finds no identity
+     * -> /login, forever, with nothing in the logs. That happened for real, from a cookie that
+     * was genuinely valid but whose verification was failing for a different reason.
+     *
+     * The nicety it provided, an already-signed-in visitor skipping the login page, is not
+     * worth a bounce with no exit. The real sign-in path does not rely on it either: the
+     * client navigates to /dashboard itself once the session exchange returns.
+     *
+     * The MFA page still redirects away, since it has no meaning under Identity Platform:
+     * Microsoft is the only sign-in and Entra applies the tenant's MFA before we see anything.
+     */
+    if (isMfaPath) {
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
     }
