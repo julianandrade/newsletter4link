@@ -45,6 +45,22 @@ export async function middleware(request: NextRequest) {
     "/api/cron",
     "/api/webhooks",
     "/editions",
+    /**
+     * `/api/auth/session` is the route that CREATES a session, so requiring one to reach it is
+     * circular. Without this line the middleware redirected the POST to `/login`, which does
+     * not accept POST, and the browser got a 405 in the middle of signing in. Sign-in could
+     * never have completed.
+     *
+     * Found by calling the route on the deployed service rather than by reading the code: the
+     * status was 405, which reads like a missing handler and is actually a redirect landing on
+     * a page that has none.
+     *
+     * Being public is safe because this route authenticates its own caller. It verifies the
+     * Identity Platform ID token, with revocation checked, and enforces the domain allowlist
+     * before issuing anything. That is strictly more than the middleware could do for it,
+     * since the middleware runs in the Edge runtime and cannot verify the token at all.
+     */
+    "/api/auth/session",
   ];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
