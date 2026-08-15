@@ -43,6 +43,35 @@ variable "app_url" {
   default     = ""
 }
 
+variable "azure_client_id" {
+  description = <<-EOT
+    Application (client) ID of the Entra app registration used for Office 365 sign-in.
+
+    This is the same registration Supabase's Azure provider uses today, or a new one. It is
+    not a secret: it appears in the OAuth redirect the browser performs.
+
+    Empty by default so the stack applies before the Entra side exists. The Microsoft provider
+    in identity.tf is created only when this and the secret are both set, because a provider
+    with an empty client id exists and rejects every sign-in, which is worse than one that is
+    absent.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "azure_client_secret" {
+  description = <<-EOT
+    Client secret for the Entra app registration. Supply via TF_VAR_azure_client_secret, never
+    a committed file.
+
+    Terraform state holds this in cleartext once applied, which is the same reason versions.tf
+    says not to commit terraform.tfstate.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "scheduler_region" {
   description = <<-EOT
     Region for Cloud Scheduler jobs, separate from var.region because Cloud Scheduler is not
