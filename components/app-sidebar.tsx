@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { createClient } from "@/lib/supabase/client";
+import { gcipConfigured, signOutEverywhere } from "@/lib/gcip/client";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { JobIndicator } from "@/components/job-indicator";
 import { RadarIcon, RadarMark, type RadarIconName } from "@/components/radar/icons";
@@ -91,9 +92,30 @@ export function AppSidebar({
   const router = useRouter();
 
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    /**
+     * Whichever provider issued the session has to be the one that ends it.
+     *
+     * This called `supabase.auth.signOut()` unconditionally, which under Identity Platform
+     * clears a Supabase session that does not exist and leaves the `n4l_session` cookie
+     * untouched. The button appeared to work, the router moved to /login, and the user was
+     * still signed in: the next protected page let them straight back in.
+     *
+     * `signOutEverywhere` clears both halves, the httpOnly cookie via the session route and
+     * the client SDK's own token, because clearing one and not the other leaves the UI and
+     * the server disagreeing about who is here.
+     */
+    if (gcipConfigured()) {
+      await signOutEverywhere();
+    } else {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    }
+
+    // `refresh` as well as `push`, and the order matters: push navigates, refresh discards the
+    // router's cached server payloads. Without it the signed-in user's rendered dashboard can
+    // be served again from cache on the way back in.
     router.push("/login");
+    router.refresh();
   };
 
   // /dashboard must match exactly, or it would light up on every child route.
@@ -135,15 +157,20 @@ export function AppSidebar({
           }
         }}
       >
-        {/* Wordmark */}
-        <div className="flex h-[60px] items-center gap-2.5 border-b border-radar-line2 px-[18px]">
+        {/* Wordmark. A link, because a product logo that does not go home is a dead control in
+            the first place everyone tries. */}
+        <Link
+          href="/dashboard"
+          aria-label="AI Radar, go to the dashboard"
+          className="flex h-[60px] items-center gap-2.5 border-b border-radar-line2 px-[18px] transition-opacity hover:opacity-80"
+        >
           <RadarMark />
           {!collapsed && (
             <span className="text-[14.5px] font-semibold tracking-[-0.01em] whitespace-nowrap text-radar-ink">
               AI Radar
             </span>
           )}
-        </div>
+        </Link>
 
         {/* Organization */}
         <div className="border-b border-radar-line2">
