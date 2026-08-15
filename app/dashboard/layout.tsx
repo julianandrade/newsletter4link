@@ -1,7 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { getAuthContext } from "@/lib/auth/context";
+import { getCurrentIdentity } from "@/lib/auth/identity";
 import { isSuperAdmin } from "@/lib/auth/superadmin";
 
 export default async function DashboardLayout({
@@ -9,13 +9,21 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  /**
+   * Through the identity seam, not `supabase.auth.getUser()` directly.
+   *
+   * This one line produced an infinite redirect the first time Identity Platform was switched
+   * on. The session cookie was valid and the middleware let the request through; then this
+   * asked SUPABASE who the user was, Supabase Auth was answering 402, and it redirected to
+   * /login, where the middleware saw the same valid cookie and sent it straight back here.
+   *
+   * Nothing was logged, because neither side believed anything had failed. The seam already
+   * existed and this file simply did not use it, which is the lesson worth keeping: a seam
+   * only helps where it is actually the way through.
+   */
+  const user = await getCurrentIdentity();
 
-  if (error || !user) {
+  if (!user) {
     redirect("/login");
   }
 

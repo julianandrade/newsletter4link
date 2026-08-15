@@ -1,16 +1,14 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth/context";
+import { getCurrentIdentity } from "@/lib/auth/identity";
 import { OnboardingForm } from "./onboarding-form";
 
 export default async function OnboardingPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  // Through the seam. Asking Supabase directly here is what made the dashboard loop between
+  // itself and /login once Identity Platform was switched on.
+  const user = await getCurrentIdentity();
 
-  if (error || !user) {
+  if (!user) {
     redirect("/login");
   }
 

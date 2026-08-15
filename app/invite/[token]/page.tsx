@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentIdentity } from "@/lib/auth/identity";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { AcceptInviteForm } from "./accept-invite-form";
@@ -42,11 +42,9 @@ export default async function InvitePage({ params }: InvitePageProps) {
     );
   }
 
-  // Check if user is logged in
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Check if user is logged in, through the seam rather than Supabase directly, so an invite
+  // resolves the same way whichever identity provider issued the session.
+  const user = await getCurrentIdentity();
 
   // If not logged in, redirect to login with return URL
   if (!user) {

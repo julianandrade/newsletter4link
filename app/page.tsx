@@ -1,11 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCurrentIdentity } from "@/lib/auth/identity";
 
 export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Through the seam, not Supabase directly: this has to answer the same way whichever
+  // identity provider is configured. See lib/auth/identity.ts.
+  const user = await getCurrentIdentity();
 
   if (user) {
     redirect("/dashboard");

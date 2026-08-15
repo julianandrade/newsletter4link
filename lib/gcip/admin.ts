@@ -98,7 +98,23 @@ export async function verifySessionCookie(
 
   try {
     return await getAuth(adminApp()).verifySessionCookie(cookie, true);
-  } catch {
+  } catch (error) {
+    /**
+     * Logged, not swallowed. An empty catch here cost real time: a valid cookie was being
+     * rejected, the middleware only checks that the cookie EXISTS, so `/login` redirected to
+     * `/dashboard`, the dashboard failed to resolve an identity and redirected back, and the
+     * result was an infinite redirect with nothing whatsoever in the logs to explain it.
+     *
+     * An expired session is the ordinary case and is not worth a line, so it is separated
+     * from the rest: anything other than expiry means the session should have worked.
+     */
+    const code = (error as { code?: string })?.code ?? "";
+    if (code !== "auth/session-cookie-expired") {
+      console.error("Session cookie verification failed", {
+        code: code || "unknown",
+        message: (error as Error)?.message?.slice(0, 300),
+      });
+    }
     return null;
   }
 }
