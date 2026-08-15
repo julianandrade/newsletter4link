@@ -1,20 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/daily-collection",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/weekly-proposal",
-      "schedule": "30 9 * * *"
-    },
-    {
-      "path": "/api/cron/radar-collect",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/email-ingest",
-      "schedule": "30 5 * * *"
-    }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": []
 }
