@@ -87,6 +87,23 @@ locals {
     FROM_EMAIL     = var.from_email
     FROM_NAME      = var.from_name
 
+    # Identity Platform. Presence of the API key is what switches the app off Supabase Auth,
+    # in `lib/auth/identity.ts` and in the middleware, so these four arrive together or not at
+    # all. All public: the key ships in the client bundle and is protected by the referrer
+    # restriction in identity.tf, not by being hidden.
+    #
+    # The three NEXT_PUBLIC_ ones are also BUILD-time values. Setting them here reaches the
+    # server only; the Docker build must receive them as build arguments or the browser bundle
+    # ships with them undefined and the sign-in button does nothing on a service whose logs
+    # look healthy.
+    NEXT_PUBLIC_GCIP_API_KEY     = var.gcip_enabled ? google_apikeys_key.browser.key_string : ""
+    NEXT_PUBLIC_GCIP_PROJECT_ID  = var.gcip_enabled ? var.project_id : ""
+    NEXT_PUBLIC_GCIP_AUTH_DOMAIN = var.gcip_enabled ? "${var.project_id}.firebaseapp.com" : ""
+    NEXT_PUBLIC_ENTRA_TENANT_ID  = var.gcip_enabled ? var.entra_tenant_id : ""
+
+    # Server side only, for firebase-admin. Not NEXT_PUBLIC_: nothing in the browser needs it.
+    GCP_PROJECT_ID = var.project_id
+
     # GCS media bucket name (Phase D). Auth is the runtime SA's ADC plus the objectAdmin
     # grant in iam.tf, so no key is needed, just the name.
     GCS_MEDIA_BUCKET = google_storage_bucket.media.name

@@ -43,6 +43,34 @@ variable "app_url" {
   default     = ""
 }
 
+variable "gcip_enabled" {
+  description = <<-EOT
+    Whether Cloud Run should authenticate with Identity Platform instead of Supabase Auth.
+
+    A single switch rather than four independently settable variables, because the app decides
+    by the presence of NEXT_PUBLIC_GCIP_API_KEY and a half-set group would mean an app that
+    thinks it is on Identity Platform while missing the auth domain it needs. One flag cannot
+    be half true.
+
+    False until a real Microsoft sign-in has been completed against the deployed service.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "entra_tenant_id" {
+  description = <<-EOT
+    Entra tenant GUID, sent as the `tenant` parameter on the sign-in request so this is a Link
+    Consulting sign-in rather than any Microsoft account. Without it the provider accepts
+    personal accounts, which the domain allowlist then refuses after the user has already
+    consented, which is a poor way to tell somebody they used the wrong account.
+
+    Discoverable rather than secret: it is in the public OIDC document for the domain.
+  EOT
+  type        = string
+  default     = "7df72313-91ad-497c-aff0-6786830b8734"
+}
+
 variable "azure_client_id" {
   description = <<-EOT
     Application (client) ID of the Entra app registration used for Office 365 sign-in.

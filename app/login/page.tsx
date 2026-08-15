@@ -14,6 +14,7 @@ import { Label } from "@/components/radar/compat";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/lib/auth/hooks";
+import { gcipConfigured, signInWithMicrosoft } from "@/lib/gcip/client";
 
 /**
  * Messages for the error codes the auth callback can hand back. Without these
@@ -51,6 +52,24 @@ function LoginForm() {
   const handleAzureLogin = async () => {
     setError(null);
     setLoading(true);
+
+    // Identity Platform where it is configured, Supabase everywhere else. The same button and
+    // the same Entra app registration behind both, so a user sees no difference; only the
+    // service issuing the session changes.
+    if (gcipConfigured()) {
+      const result = await signInWithMicrosoft();
+      if (!result.ok) {
+        // An empty message means the user closed the popup, which is a decision rather than a
+        // failure and does not deserve an error banner.
+        if (result.error) setError(result.error);
+        setLoading(false);
+        return;
+      }
+      // The session cookie exists now, and a full navigation is what makes the server see it.
+      window.location.assign("/dashboard");
+      return;
+    }
+
     const { error } = await signInWithAzure();
     if (error) {
       setError(error.message);
