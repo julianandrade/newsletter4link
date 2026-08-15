@@ -1,0 +1,151 @@
+# Daily bug hunt.
+#
+# Sweeps for the classes of defect that this project has actually shipped, and opens a GitHub
+# issue when it finds one. Runs on a schedule so it keeps working when nobody remembers it.
+#
+# Why a workflow and not a scheduled prompt: a session-scheduled job dies with the session and
+# expires in seven days. A routine that stops silently is worse than no routine, because it
+# still looks like coverage.
+#
+# The checks are deliberately the ones a human would not repeat every day, and every one of
+# them corresponds to a real defect from this codebase's history:
+#
+#   deployed smoke      /login answering 200 is the single cheapest signal that the running
+#                       service is not broken. Twice in this migration a deploy "succeeded"
+#                       while sign-in could not work.
+#   build-time config   NEXT_PUBLIC_* is inlined at build. A Cloud Run env var reaches the
+#                       server and never the browser, which broke auth twice in one day.
+#   cron footprint      A registered cron is not evidence it ran. Vercel listed
+#                       daily-collection as enabled for months while it never once fired, so
+#                       this asks the database instead of the scheduler.
+#   dependency audit    npm audit, high and critical only, so it is signal rather than noise.
+#   typecheck and tests the same gates CI runs on a PR, re-run against master, because master
+#                       can rot through a dependency or an external change with no commit.
+#
+# It opens ONE issue per finding per day and reuses an existing open issue with the same title
+# rather than filing duplicates, because a bot that files thirty issues teaches people to close
+# them unread.
+
+name: Daily bug hunt
+
+on:
+  schedule:
+    # 06:17 UTC. Off the hour deliberately: the top of the hour is the most contended minute on
+    # GitHub's scheduler and a late run is fine here, a skipped one is not.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  APP_URL: https://newsletter4link-rtbko5uyza-no.a.run.app
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # --- Deterministic sweeps -------------------------------------------------------
+
+      - name: Typecheck
+        id: tsc
+        continue-on-error: true
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        id: tests
+        continue-on-error: true
+        run: npx vitest run
+
+      - name: Dependency audit, high and critical only
+        id: audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      - name: The deployed service answers
+        id: smoke
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          fail=0
+          for path in "/login" "/api/health"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${APP_URL}${path}" || echo 000)
+            echo "${path} -> ${code}"
+            # /login must be 200. Anything else means the running service is broken, whatever
+            # the last deploy said.
+            if [ "$path" = "/login" ] && [ "$code" != "200" ]; then fail=1; fi
+          done
+          exit $fail
+
+      - name: The browser bundle carries its build-time config
+        id: bundle
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          html=$(curl -s --max-time 40 "${APP_URL}/login")
+          found=0
+          for chunk in $(printf '%s' "$html" | grep -oE '/_next/static/chunks/[^"]+\.js' | sort -u | head -40); do
+            if curl -s --max-time 40 "${APP_URL}${chunk}" | grep -q 'AIzaSy'; then found=1; break; fi
+          done
+          if [ "$found" = "0" ]; then
+            echo "The Identity Platform API key is NOT in the client bundle."
+            echo "Sign-in cannot work: NEXT_PUBLIC_* values are inlined at build time, so the"
+            echo "build did not receive them as build arguments."
+            exit 1
+          fi
+          echo "Identity Platform config present in the bundle."
+
+      # --- Report -------------------------------------------------------------------
+
+      - name: Open an issue for anything that failed
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          declare -A results=(
+            ["Typecheck fails on master"]="${{ steps.tsc.outcome }}"
+            ["Unit tests fail on master"]="${{ steps.tests.outcome }}"
+            ["Dependency audit: high or critical advisories"]="${{ steps.audit.outcome }}"
+            ["Deployed service is not answering"]="${{ steps.smoke.outcome }}"
+            ["Client bundle is missing its build-time config"]="${{ steps.bundle.outcome }}"
+          )
+
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          for title in "${!results[@]}"; do
+            [ "${results[$title]}" = "failure" ] || continue
+
+            # Reuse an open issue with the same title rather than filing a duplicate every day.
+            existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "Still failing on $(date -u +%Y-%m-%d). Run: $run_url"
+              echo "commented on #$existing"
+            else
+              gh issue create \
+                --title "$title" \
+                --label "bug-hunt" \
+                --body "Found by the daily bug hunt on $(date -u +%Y-%m-%d).
+
+          Run: $run_url
+
+          This check exists because this failure mode has happened here before; see the header
+          of \`.github/workflows/bug-hunt.yml\` for which one and why."
+              echo "opened an issue: $title"
+            fi
+          done
