@@ -17,9 +17,9 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_MS,
   createSessionCookie,
+  verifyIdToken,
 } from "@/lib/gcip/admin";
 import { DOMAIN_REJECTED_MESSAGE, isAllowedEmail } from "@/lib/auth/allowed-domains";
-import { getAuth } from "firebase-admin/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,9 +30,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing idToken" }, { status: 400 });
     }
 
-    // Verified before the exchange so the email can be checked against the allowlist. A
-    // token that fails verification throws and is answered as 401 below, never as a 500.
-    const decoded = await getAuth().verifyIdToken(idToken, true);
+    // Verified before the exchange so the email can be checked against the allowlist. A token
+    // that fails verification throws and is answered as 401 below, never as a 500.
+    //
+    // Through the helper, not `getAuth()` directly: the bare call resolves the DEFAULT Firebase
+    // app, which does not exist until something initialises it, and nothing had at this point.
+    // Every real sign-in failed with "The default Firebase app does not exist", reported to the
+    // user as "Invalid credentials" because the catch below cannot tell the two apart.
+    const decoded = await verifyIdToken(idToken);
 
     if (!isAllowedEmail(decoded.email ?? null)) {
       return NextResponse.json({ error: DOMAIN_REJECTED_MESSAGE }, { status: 403 });
@@ -55,9 +60,29 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    // Deliberately not echoed to the client: the reason a token failed is information about
-    // the token. Logged server-side, where it is useful and not disclosed.
+    // Never echoed to the client: why a token failed is information about the token. Logged
+    // server-side, where it is useful and not disclosed.
     console.error("Session exchange failed", error);
+
+    /**
+     * Not everything caught here is a bad token, and conflating the two cost a debugging round
+     * trip. A missing Firebase app, absent credentials or an unreachable Google endpoint are
+     * OUR faults, and answering 401 tells the user their perfectly good Microsoft sign-in was
+     * refused, which sends them to check their password while the server is misconfigured.
+     *
+     * Firebase's token failures carry a code beginning `auth/`. Anything without one is
+     * infrastructure, and 500 is the honest answer.
+     */
+    const code = (error as { code?: string })?.code ?? "";
+    const isTokenProblem = code.startsWith("auth/");
+
+    if (!isTokenProblem) {
+      return NextResponse.json(
+        { error: "Sign-in is temporarily unavailable. This is a server problem, not your account." },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 }

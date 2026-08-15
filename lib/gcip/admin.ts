@@ -62,12 +62,25 @@ function adminApp(): App {
 }
 
 /**
- * Exchange a freshly minted ID token for a session cookie.
+ * Verify an ID token.
  *
- * `checkRevoked` is deliberately on: without it a token issued before an account was disabled
- * still verifies until it expires, which is exactly the window that matters when someone
- * leaves the company.
+ * Exported rather than left for callers to do with `getAuth()` themselves, and that is not
+ * tidiness. `getAuth()` with no argument resolves the DEFAULT Firebase app, which only exists
+ * once something has called `initializeApp`. The session route did exactly that, verifying the
+ * token before calling anything that initialises, and every real sign-in failed with "The
+ * default Firebase app does not exist", surfaced to the user as "Invalid credentials" because
+ * the catch cannot tell a bad token from a missing app.
+ *
+ * Going through `adminApp()` means initialisation cannot be skipped by call order.
+ *
+ * `checkRevoked` is on: without it a token issued before an account was disabled still
+ * verifies until it expires, which is the window that matters when someone leaves.
  */
+export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
+  return getAuth(adminApp()).verifyIdToken(idToken, true);
+}
+
+/** Exchange a freshly minted ID token for a session cookie. */
 export async function createSessionCookie(idToken: string): Promise<string> {
   const auth = getAuth(adminApp());
   await auth.verifyIdToken(idToken, true);
