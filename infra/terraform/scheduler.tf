@@ -27,9 +27,13 @@
 # decision with an invoice attached rather than a migration detail. Today's effective
 # cadence is preserved exactly; raising it is a one-line change once someone chooses to.
 #
-# Every job is created PAUSED. An unpaused job would start firing at the Cloud Run
-# service the moment it exists, while Vercel is still the live site, which is two
-# schedulers driving the same database.
+# The jobs are LIVE as of Phase E, 15 August 2026. They were created paused, because an
+# unpaused job would have started firing at Cloud Run the moment it existed, while Vercel was
+# still the live site, which is two schedulers driving two databases.
+#
+# Unpausing was the second half of the cutover. The first half removed the Vercel crons and
+# the GitHub Actions workflow, in that order, so the old schedulers stopped writing to Supabase
+# before these started writing to Cloud SQL.
 
 locals {
   # One job per route, with the hour list carrying what used to need two schedulers.
@@ -64,8 +68,9 @@ resource "google_cloud_scheduler_job" "cron" {
   schedule  = each.value
   time_zone = "Etc/UTC"
 
-  # Paused until Phase E cuts traffic over. Removing this line is the switch.
-  paused = true
+  # Live. Set to true to stop every job without destroying it, which is the fastest way to
+  # halt scheduled work if something is wrong: it leaves the definitions and the history alone.
+  paused = false
 
   attempt_deadline = "320s" # routes set maxDuration 300s; give headroom
 
