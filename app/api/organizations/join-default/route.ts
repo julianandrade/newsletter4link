@@ -53,7 +53,7 @@ export async function POST() {
       data: {
         supabaseUserId: user.id,
         email: user.email || "",
-        name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+        name: user.name || user.email?.split("@")[0] || "User",
         role: "OWNER",
         organizationId: DEFAULT_ORG_ID,
       },

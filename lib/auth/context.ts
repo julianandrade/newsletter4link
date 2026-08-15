@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentIdentity, type Identity } from "@/lib/auth/identity";
 import { prisma } from "@/lib/db";
 import { createTenantClient, TenantClient } from "@/lib/db/tenant";
 import { cookies } from "next/headers";
@@ -34,14 +34,18 @@ export interface AuthContext {
 }
 
 /**
- * Get the Supabase user from the current session
+ * The current request's identity, or null when there is no valid session.
+ *
+ * Delegates to `lib/auth/identity.ts`, which is where the choice of identity provider lives.
+ * The name is kept because five call sites and 25 references to `supabaseUserId` use it, and
+ * renaming them is churn that would bury the one change that matters in Phase F.
+ *
+ * What it returns is narrower than it was: `{ id, email }` rather than Supabase's `User`.
+ * That is not a loss, it is the measurement: between them, every caller read exactly those
+ * two fields.
  */
-export async function getSupabaseUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+export async function getSupabaseUser(): Promise<Identity | null> {
+  return getCurrentIdentity();
 }
 
 /**
