@@ -8,6 +8,23 @@
 #   NEXT_PUBLIC_SUPABASE_URL       Inlined into the client bundle at BUILD time.
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY  Inlined into the client bundle at BUILD time.
 #   NEXT_PUBLIC_APP_URL            Public app URL, inlined at BUILD time.
+#   NEXT_PUBLIC_GCIP_API_KEY       Identity Platform browser key. BUILD time.
+#   NEXT_PUBLIC_GCIP_PROJECT_ID    Identity Platform project. BUILD time.
+#   NEXT_PUBLIC_GCIP_AUTH_DOMAIN   Where the sign-in popup lives. BUILD time.
+#   NEXT_PUBLIC_ENTRA_TENANT_ID    The only sign-in provider. BUILD time.
+#
+# The four GCIP values are variables rather than secrets on purpose: every one of
+# them is inlined into a bundle any visitor can download, so treating them as
+# secret would be theatre. The browser key is restricted by HTTP referrer in
+# infra/terraform/identity.tf, which is what actually protects it.
+#
+# They are also the reason this workflow was a trap until now. It passed only the
+# three Supabase arguments, so a build from CI produced an image whose browser
+# bundle had no Identity Platform config and silently fell back to Supabase auth:
+# a green deploy that nobody could sign in to. NEXT_PUBLIC_* is inlined at build
+# time, so the values Terraform sets on the Cloud Run service reach the server and
+# never the browser. That failure mode has already cost this project two days, and
+# it is why the daily bug hunt greps the deployed chunks for `AIzaSy`.
 #
 # This workflow is INERT until the infra (infra/terraform) is applied and the
 # variables above are set: with WIF unconfigured the auth step fails fast and
@@ -55,6 +72,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Refuse before building, not after deploying. An image is only wrong once it is
+      # running, and the way this goes wrong is invisible: sign-in falls back to Supabase
+      # and the deploy reports success. Checking costs nothing and the alternative is an
+      # outage discovered by a person trying to log in.
+      - name: Every build-time variable is set
+        run: |
+          set -uo pipefail
+          missing=""
+          for name in \
+            NEXT_PUBLIC_APP_URL \
+            NEXT_PUBLIC_GCIP_API_KEY \
+            NEXT_PUBLIC_GCIP_PROJECT_ID \
+            NEXT_PUBLIC_GCIP_AUTH_DOMAIN \
+            NEXT_PUBLIC_ENTRA_TENANT_ID
+          do
+            eval "value=\${$name:-}"
+            [ -n "$value" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Unset repo variables:${missing}. NEXT_PUBLIC_* is inlined at build"
+            echo "::error::time, so building without them yields a bundle that cannot sign anyone in."
+            echo "::error::Set them under Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+          echo "All build-time variables present."
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_GCIP_API_KEY: ${{ vars.NEXT_PUBLIC_GCIP_API_KEY }}
+          NEXT_PUBLIC_GCIP_PROJECT_ID: ${{ vars.NEXT_PUBLIC_GCIP_PROJECT_ID }}
+          NEXT_PUBLIC_GCIP_AUTH_DOMAIN: ${{ vars.NEXT_PUBLIC_GCIP_AUTH_DOMAIN }}
+          NEXT_PUBLIC_ENTRA_TENANT_ID: ${{ vars.NEXT_PUBLIC_ENTRA_TENANT_ID }}
+
       - name: Authenticate to Google Cloud (Workload Identity Federation)
         uses: google-github-actions/auth@v2
         with:
@@ -73,6 +122,10 @@ jobs:
             --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ vars.NEXT_PUBLIC_SUPABASE_URL }}" \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
             --build-arg NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            --build-arg NEXT_PUBLIC_GCIP_API_KEY="${{ vars.NEXT_PUBLIC_GCIP_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_GCIP_PROJECT_ID="${{ vars.NEXT_PUBLIC_GCIP_PROJECT_ID }}" \
+            --build-arg NEXT_PUBLIC_GCIP_AUTH_DOMAIN="${{ vars.NEXT_PUBLIC_GCIP_AUTH_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_ENTRA_TENANT_ID="${{ vars.NEXT_PUBLIC_ENTRA_TENANT_ID }}" \
             -t "${IMAGE_REPO}:${GITHUB_SHA}" \
             -t "${IMAGE_REPO}:latest" \
             .
