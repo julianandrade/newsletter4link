@@ -12,20 +12,32 @@ terraform {
     }
   }
 
-  # State note: this stack defaults to LOCAL state (terraform.tfstate on disk).
-  # That is fine for a single operator bootstrapping the project, but the state
-  # contains the generated DB password and secret-version metadata, so do NOT
-  # commit terraform.tfstate. For team use, uncomment the GCS backend below and
-  # run `terraform init -migrate-state` after creating the bucket manually:
+  # State lives in GCS, not on disk.
+  #
+  # It was local through the migration, which was correct while one operator was
+  # bootstrapping the project and wrong the moment the stack became the thing the
+  # product runs on: the file holds the generated DB password and secret-version
+  # metadata, it is gitignored, and it existed in exactly one copy on one laptop.
+  # Losing that machine meant importing every resource by hand to change anything.
+  #
+  # The bucket is created by hand rather than by this stack, because Terraform
+  # cannot create the bucket its own state lives in. It needs versioning, which is
+  # the actual recovery mechanism if a bad apply corrupts state, and public access
+  # prevention, because of the password:
   #
   #   gcloud storage buckets create gs://newsletter-link-ai-radar-tfstate \
   #     --project=newsletter-link-ai-radar --location=europe-southwest1 \
-  #     --uniform-bucket-level-access
+  #     --uniform-bucket-level-access --public-access-prevention
+  #   gcloud storage buckets update gs://newsletter-link-ai-radar-tfstate --versioning
   #
-  # backend "gcs" {
-  #   bucket = "newsletter-link-ai-radar-tfstate"
-  #   prefix = "newsletter4link"
-  # }
+  # Then, once per machine holding local state:  terraform init -migrate-state
+  #
+  # Until that bucket exists `terraform init` fails loudly, which is the intended
+  # behaviour: a missing bucket is better than a second divergent local state.
+  backend "gcs" {
+    bucket = "newsletter-link-ai-radar-tfstate"
+    prefix = "newsletter4link"
+  }
 }
 
 provider "google" {
