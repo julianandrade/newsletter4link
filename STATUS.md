@@ -28,20 +28,40 @@ intent was to keep both alive for a week, so until **22 August**.
 
 ## Unfinished
 
-### 1. Deployments are manual. This is tomorrow's job, see below.
+### 1. Deployments are manual, but the workflow is no longer a trap
 
-`.github/workflows/deploy.yml` is `workflow_dispatch` only, and **it is currently a trap**: it
-does not pass the four `NEXT_PUBLIC_GCIP_*` build arguments, so a build from CI would produce
-an image whose browser bundle falls back to Supabase auth and cannot sign anyone in. Do not
-press "Run workflow" before fixing that. Every deployment so far has been a `docker build` from
-a laptop.
+`.github/workflows/deploy.yml` is still `workflow_dispatch` only, deliberately. What changed on
+16 August is that pressing "Run workflow" is now safe: it passes the four `NEXT_PUBLIC_GCIP_*`
+build arguments, and a preflight step refuses the build outright when any build-time variable
+is unset. Before this, a CI build produced an image whose browser bundle fell back to Supabase
+auth and could not sign anyone in, while reporting a successful deploy.
 
-### 2. Terraform state lives on one laptop, and it holds the database password
+All nine repo variables are set (`GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`, and the seven
+`NEXT_PUBLIC_*`), taken from the running Cloud Run service so a CI build reproduces the image
+that currently works. WIF was already applied by `infra/terraform/wif.tf`, so nothing else is
+needed to authenticate.
 
-`infra/terraform/terraform.tfstate` is local and gitignored. If that machine dies, the state is
-gone and the project has to be imported resource by resource. `versions.tf` carries a
-commented-out GCS backend for exactly this. **This is the highest-value small task after
-deployments**, and it is about twenty minutes.
+**Still untested end to end: this workflow has never run.** The first press is a real deploy to
+production, so it is Julian's call rather than something to prove unattended. Adding
+`push: branches: [master]` is the step after that, and should wait until one manual run has
+succeeded.
+
+### 2. Terraform state: the backend is configured, the bucket is not created yet
+
+`versions.tf` now declares the GCS backend rather than carrying it commented out. **The bucket
+does not exist yet**, so `terraform init` fails until someone runs the two commands recorded in
+the comment in that file: create
+`gs://newsletter-link-ai-radar-tfstate` with uniform access and public access prevention, then
+enable versioning. After that, `terraform init -migrate-state` once, from
+`C:\Users\julian.andrade\prj\n4l-gcp-b\infra\terraform`, which is where the only copy of the
+state currently lives.
+
+Until that migration runs, the risk this was meant to close is still open: one gitignored file,
+on one laptop, holding the generated database password. **Do not merge this change without
+creating the bucket**, or the next `terraform init` fails on a bucket that is not there.
+
+There is a second, stale `terraform.tfstate` in the `n4l-gcp-b` worktree that becomes redundant
+once the migration is done. Delete it then, not before, and remember it holds the password.
 
 ### 3. Media: 33 of 39 objects restored from the repository, 6 remain
 
@@ -97,10 +117,23 @@ can be downgraded or deleted, which also ends whatever the egress restriction is
 
 ## Ideas for improvement, roughly by value
 
-**Nothing watches anything.** There is no alerting. If Cloud Run starts erroring, or a
-Scheduler job fails every night, the first sign will be a person noticing. Cloud Monitoring
-alerts on Cloud Run 5xx rate and on Scheduler job failures are cheap and would close the
-biggest gap in operability. Sentry was on the parallel track and is still not a dependency.
+**Something watches daily now, but nothing watches continuously.**
+`.github/workflows/bug-hunt.yml` sweeps every morning at 06:17 UTC and opens an issue per
+finding: typecheck, unit tests, `npm audit` at high and above, `/login` answering 200, and the
+Identity Platform key actually being present in the deployed client bundle.
+
+Its first real run, 16 August, is worth knowing about because it failed in the way this
+project keeps failing. Every check ran correctly and the audit legitimately found 24 high and
+1 critical advisory, and then the reporting step died: it called
+`gh issue create --label "bug-hunt"` against a repository where that label did not exist, so
+`gh` refused, `set -euo pipefail` killed the job, and the finding was never filed. A watchdog
+whose only symptom of failure is a red tick on a workflow nobody watches is indistinguishable
+from one finding nothing. The label exists now.
+
+What it still does not do is notice anything **between** runs. If Cloud Run starts erroring at
+09:00 the first sign is a person, or tomorrow's sweep. Cloud Monitoring alerts on Cloud Run 5xx
+rate and on Scheduler job failures remain the cheap fix, and are now the actual biggest gap in
+operability. Sentry was on the parallel track and is still not a dependency.
 
 **The durable job queue.** `archive/claude-project-launch-recommendations` holds a Postgres
 job queue (`lib/jobs/queue.ts`, `worker.ts`, handlers, with tests) written to fix
