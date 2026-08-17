@@ -46,19 +46,19 @@ production, so it is Julian's call rather than something to prove unattended. Ad
 `push: branches: [master]` is the step after that, and should wait until one manual run has
 succeeded.
 
-### 2. Terraform state: the backend is configured, the bucket is not created yet
+### 2. Terraform state: the bucket exists, the state has not moved into it yet
 
-`versions.tf` now declares the GCS backend rather than carrying it commented out. **The bucket
-does not exist yet**, so `terraform init` fails until someone runs the two commands recorded in
-the comment in that file: create
-`gs://newsletter-link-ai-radar-tfstate` with uniform access and public access prevention, then
-enable versioning. After that, `terraform init -migrate-state` once, from
+`versions.tf` declares the GCS backend, and `gs://newsletter-link-ai-radar-tfstate` was created
+on 17 August in `europe-southwest1` with uniform access, public access prevention enforced and
+versioning on. So `terraform init` no longer fails on a missing bucket.
+
+**What remains is the migration itself:** `terraform init -migrate-state` once, from
 `C:\Users\julian.andrade\prj\n4l-gcp-b\infra\terraform`, which is where the only copy of the
-state currently lives.
+state currently lives. That is one keystroke and was deliberately left to a person, because the
+state file carries the generated database password.
 
 Until that migration runs, the risk this was meant to close is still open: one gitignored file,
-on one laptop, holding the generated database password. **Do not merge this change without
-creating the bucket**, or the next `terraform init` fails on a bucket that is not there.
+on one laptop, holding that password.
 
 There is a second, stale `terraform.tfstate` in the `n4l-gcp-b` worktree that becomes redundant
 once the migration is done. Delete it then, not before, and remember it holds the password.
@@ -223,13 +223,11 @@ today's problems before a human did.
 
 ### Then, if there is time
 
-Migrate Terraform state to GCS, which is item 2 above and about twenty minutes:
+Migrate Terraform state to GCS, which is item 2 above. The bucket and the backend block are
+both done, so what is left is one command, run from the worktree that holds the state:
 
 ```
-gcloud storage buckets create gs://newsletter-link-ai-radar-tfstate \
-  --project=newsletter-link-ai-radar --location=europe-southwest1 \
-  --uniform-bucket-level-access
-# uncomment the backend block in versions.tf
+cd C:\Users\julian.andrade\prj\n4l-gcp-b\infra\terraform
 terraform init -migrate-state
 ```
 
