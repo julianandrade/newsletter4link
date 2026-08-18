@@ -22,9 +22,12 @@ Project `newsletter-link-ai-radar` (number 113920832028). App URL:
 Running cost is roughly **40 to 65 EUR a month**, dominated by Cloud SQL. The NAT and the
 reserved address are about 5 to 8 of that.
 
-**Rollback** is still free: Supabase is untouched and holds every row, and the Vercel project
-is still deployable. Tag `pre-gcp-migration` at `48a53d2` is the pre-migration commit. The
-intent was to keep both alive for a week, so until **22 August**.
+**Rollback is no longer one click.** Both old projects were **paused** on 18 August, before the
+22 August date the original week-long overlap was aiming at. They are archived rather than
+deleted, so the data and the configuration stay readable, but neither serves traffic: reaching
+the old stack now means un-pausing it first. Supabase still holds every row it held on
+14 August, and Tag `pre-gcp-migration` at `48a53d2` is still the pre-migration commit, so the
+path exists. It is just no longer instant, and it gets colder the further Cloud SQL diverges.
 
 ## Unfinished
 
@@ -143,10 +146,16 @@ The app lives on its `run.app` URL. Mapping a domain is a Cloud Run domain mappi
 record, and it also means adding the new origin to Identity Platform's authorized domains and
 to the browser API key's referrer list. Both are in `infra/terraform/identity.tf`.
 
-### 7. The Supabase project is still needed, for now
+### 7. Supabase is paused, and six media objects are inside it
 
-It holds the media objects and is the rollback. Once those are copied and the week is up, it
-can be downgraded or deleted, which also ends whatever the egress restriction is costing.
+Paused on 18 August, as archived-but-accessible rather than deleted. Two things are still in
+there and nowhere else: the six media objects from item 4, and the rollback copy of the data.
+
+Being paused does not resolve the egress restriction, it just stops anything reaching the
+quota. So the six objects are now behind two doors rather than one: un-pause the project, then
+get the quota lifted. If nobody wants them badly enough to do that, they are gone, and the
+honest move then is to say so in the rows rather than leave a Supabase URL that will never
+answer again.
 
 ## Ideas for improvement, roughly by value
 
