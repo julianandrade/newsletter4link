@@ -50,7 +50,7 @@ const parser = new Parser({
    */
   headers: {
     "User-Agent":
-      "newsletter4link/1.0 (+https://newsletter4link.vercel.app; julian.andrade@linkconsulting.com)",
+      "newsletter4link/1.0 (+https://newsletter4link-rtbko5uyza-no.a.run.app; julian.andrade@linkconsulting.com)",
     Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
   },
   customFields: {

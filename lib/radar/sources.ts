@@ -91,7 +91,7 @@ async function fetchWithTimeout(
         // Identifying the caller is both the courteous and the defensible choice,
         // and both APIs are within their rights to block an anonymous scraper.
         "User-Agent":
-          "newsletter4link-radar/1.0 (+https://newsletter4link.vercel.app; julian.andrade@linkconsulting.com)",
+          "newsletter4link-radar/1.0 (+https://newsletter4link-rtbko5uyza-no.a.run.app; julian.andrade@linkconsulting.com)",
       },
     });
 

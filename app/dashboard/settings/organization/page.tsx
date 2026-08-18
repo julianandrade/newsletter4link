@@ -381,7 +381,7 @@ export default function OrganizationSettingsPage() {
                     {[
                       ["Type", "CNAME"],
                       ["Name", "newsletter"],
-                      ["Value", "newsletter4link.vercel.app"],
+                      ["Value", "ghs.googlehosted.com"],
                     ].map(([label, value]) => (
                       <div key={label} className="min-w-0">
                         <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-radar-ink3">

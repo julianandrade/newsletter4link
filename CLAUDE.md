@@ -10,14 +10,23 @@ AI-powered internal newsletter engine for Link company. Automatically curates ar
 - Next.js 16 (App Router)
 - React 19 with TypeScript
 - TailwindCSS 4 + shadcn/ui
-- Prisma 7 ORM + PostgreSQL (Supabase)
+- Prisma 7 ORM + PostgreSQL (Cloud SQL)
 - Claude AI (@anthropic-ai/sdk) for content scoring
 - OpenAI for embeddings
 - Resend for email delivery
 - React Email for templates
 
 **Repository:** https://github.com/julianandrade/newsletter4link
-**Live Site:** https://newsletter4link.vercel.app
+**Live Site:** https://newsletter4link-rtbko5uyza-no.a.run.app
+
+The old `newsletter4link.vercel.app` is **paused**, along with the Supabase project. Both are
+archived rather than deleted, so their data and configuration stay readable, and neither
+serves traffic.
+
+Two kinds of `vercel.app` string are still in the tree on purpose: test fixtures, where the
+value is arbitrary, and the `VERCEL_URL` / `VERCEL_PROJECT_PRODUCTION_URL` fallbacks in
+`lib/inbound`, which simply never fire on Cloud Run because those variables do not exist there.
+Anything else pointing at `vercel.app` is either history under `docs/history/` or a bug.
 
 ---
 
@@ -209,7 +218,7 @@ RESEND_API_KEY=re_...
 RESEND_FROM_EMAIL=newsletter@yourcompany.com
 
 # App Config
-NEXT_PUBLIC_APP_URL=https://newsletter4link.vercel.app  # Production
+NEXT_PUBLIC_APP_URL=https://newsletter4link-rtbko5uyza-no.a.run.app  # Production
 # For local: http://localhost:3000
 ```
 
@@ -217,14 +226,14 @@ NEXT_PUBLIC_APP_URL=https://newsletter4link.vercel.app  # Production
 
 1. Copy `.env.example` to `.env`
 2. Fill in API keys
-3. Run `npx prisma generate && npx prisma db push`
+3. Run `npx prisma generate && npx prisma migrate deploy`
 4. Start dev server with `npm run dev`
 
 ---
 
 ## Database
 
-**Provider:** PostgreSQL via Supabase (with pgvector extension)
+**Provider:** Cloud SQL Postgres 17, instance `newsletter4link-pg` (with pgvector extension)
 
 **Schema Location:** `prisma/schema.prisma`
 
@@ -324,18 +333,26 @@ markup you changed. A green Vercel build is not evidence that the change shipped
 ## Deployment
 
 **Environments:**
-- **Production:** https://newsletter4link.vercel.app
+- **Production:** https://newsletter4link-rtbko5uyza-no.a.run.app, Cloud Run service
+  `newsletter4link` in `europe-southwest1`, project `newsletter-link-ai-radar`
 - **Repository:** https://github.com/julianandrade/newsletter4link
 
-**Deploy Process:**
-- Push to master triggers automatic Vercel deployment
-- All environment variables configured in Vercel dashboard
-- Build includes Prisma client generation and Next.js optimization
+**Deploy Process:** deploys are **manual**, and pushing to master deploys nothing.
+`.github/workflows/deploy.yml` is `workflow_dispatch` only, deliberately, and as of
+18 August it has never run: the first press is a real deploy to production. It
+authenticates with Workload Identity Federation, so no key is involved.
+
+`vercel.json` sets `git.deploymentEnabled: false`. The Vercel project is paused, so
+every push was producing a failed "Deployment was blocked" check on the pull request.
+It was never a required check and never blocked a merge, but a permanently red tick
+teaches people to ignore red ticks.
 
 **Build Requirements:**
 - Node.js 18+
 - PostgreSQL with pgvector extension
-- All environment variables must be set in Vercel project settings
+- The seven `NEXT_PUBLIC_*` values must be present as **build arguments**, not just as
+  Cloud Run env vars. Setting them on the service reaches the server and never the
+  browser, which produces an image that deploys cleanly and can sign nobody in
 
 ---
 
@@ -541,7 +558,7 @@ This project follows OWASP Top 10 2025 guidelines for both web and LLM applicati
 - Never use default credentials or configurations
 - Remove unused features, endpoints, and dependencies
 - Minimize error message verbosity in production
-- Review cloud storage permissions (Supabase)
+- Review cloud storage permissions (GCS)
 
 #### Supply Chain Security (A03)
 - Verify package integrity before installation

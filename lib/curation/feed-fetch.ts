@@ -45,7 +45,7 @@ export type FetchLike = (
 }>;
 
 const USER_AGENT =
-  "newsletter4link/1.0 (+https://newsletter4link.vercel.app; julian.andrade@linkconsulting.com)";
+  "newsletter4link/1.0 (+https://newsletter4link-rtbko5uyza-no.a.run.app; julian.andrade@linkconsulting.com)";
 
 const ACCEPT =
   "application/rss+xml, application/atom+xml, application/xml, text/xml, text/x-opml, */*";
