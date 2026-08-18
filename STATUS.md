@@ -1,6 +1,6 @@
 # Status
 
-> Last updated: 15 August 2026, end of the GCP migration.
+> Last updated: 18 August 2026, after the Terraform state moved into GCS.
 > Read this first when picking the project up after a break.
 
 ## Where things stand
@@ -46,24 +46,57 @@ production, so it is Julian's call rather than something to prove unattended. Ad
 `push: branches: [master]` is the step after that, and should wait until one manual run has
 succeeded.
 
-### 2. Terraform state: the bucket exists, the state has not moved into it yet
+### 2. Terraform state lives in GCS, and the local copies are still on the laptop
 
-`versions.tf` declares the GCS backend, and `gs://newsletter-link-ai-radar-tfstate` was created
-on 17 August in `europe-southwest1` with uniform access, public access prevention enforced and
-versioning on. So `terraform init` no longer fails on a missing bucket.
+Done on 18 August. `terraform init -migrate-state` ran from
+`C:\Users\julian.andrade\prj\n4l-gcp-b\infra\terraform`, and the state is now in
+`gs://newsletter-link-ai-radar-tfstate` under prefix `newsletter4link`, on a bucket with
+versioning, uniform access and public access prevention enforced.
 
-**What remains is the migration itself:** `terraform init -migrate-state` once, from
-`C:\Users\julian.andrade\prj\n4l-gcp-b\infra\terraform`, which is where the only copy of the
-state currently lives. That is one keystroke and was deliberately left to a person, because the
-state file carries the generated database password.
+Verified rather than assumed: the object's `lineage` matches the local file exactly, `serial`
+went 114 to 115 (the migration write bumps it by one), the byte size is identical, and
+`terraform state list` returns all 74 resources reading from the backend.
 
-Until that migration runs, the risk this was meant to close is still open: one gitignored file,
-on one laptop, holding that password.
+**What is left is deleting the local copies**, which is the half that actually closes the risk.
+Three files in that directory still hold the generated database password in plaintext:
+`terraform.tfstate`, `terraform.tfstate.backup`, and `pre-migrate-20260818.tfstate`, taken as a
+safety net before the migration. They are gitignored, so this is about the disk, not the repo.
+Deleting them is deliberately still a person's call, because until someone has run one
+successful `apply` against the GCS backend they are the only offline copy of that state.
 
-There is a second, stale `terraform.tfstate` in the `n4l-gcp-b` worktree that becomes redundant
-once the migration is done. Delete it then, not before, and remember it holds the password.
+### 3. A plain `terraform apply` from that directory would destroy sign-in
 
-### 3. Media: 33 of 39 objects restored from the repository, 6 remain
+Found on 18 August while verifying the migration, and it is the sharpest edge in the stack.
+
+`terraform plan` with no extra inputs reports **1 to change, 1 to destroy**, and both are
+Identity Platform:
+
+- `google_identity_platform_default_supported_idp_config.microsoft[0]` destroyed, because its
+  `count` is `var.azure_client_id != "" && var.azure_client_secret != "" ? 1 : 0`
+- the four Identity Platform env vars stripped from the Cloud Run service, because
+  `plain_env` drops any value that is `""` and all four are gated on `var.gcip_enabled`:
+  `NEXT_PUBLIC_GCIP_API_KEY`, `NEXT_PUBLIC_GCIP_PROJECT_ID`, `NEXT_PUBLIC_GCIP_AUTH_DOMAIN`,
+  `NEXT_PUBLIC_ENTRA_TENANT_ID`
+
+**This is not drift.** Every other one of the 74 resources matches live infrastructure exactly.
+It is missing inputs: `gcip_enabled` defaults to `false`, `azure_client_id` and
+`azure_client_secret` default to `""`, and **none of the three is in `terraform.tfvars`**. They
+were passed at apply time on 15 August and persisted nowhere. The `azure-client-secret` secret
+in Secret Manager exists as a container with **no versions**, so the value is not recoverable
+from GCP either; it survives only in Terraform state and in Entra.
+
+So the stack as checked out today describes a product with Supabase Auth, while the running
+service is on Identity Platform. Whoever applies next, without knowing to pass three variables,
+takes Microsoft sign-in down and ships a service whose logs look healthy and lets nobody in.
+That is the same failure shape as the `NEXT_PUBLIC_*` build-argument bug, and the third time it
+has appeared in this migration.
+
+Worth fixing properly rather than remembering: flip `gcip_enabled` to default `true` now that
+Identity Platform *is* the auth system, put `azure_client_id` in `terraform.tfvars` since it is
+not a secret, and give `azure_client_secret` a version in the Secret Manager secret that is
+already sitting there empty waiting for it.
+
+### 4. Media: 33 of 39 objects restored from the repository, 6 remain
 
 Supabase restricted the project, so nothing could be copied out of its Storage: the API and
 even the public object URLs answer **402**. The way through was not to wait for it. The 76
@@ -93,7 +126,7 @@ or by re-uploading the originals if anyone still has them.
 `scripts/migrate-media-to-gcs.ts` remains the tool for the general case, and still needs the
 quota lifted.
 
-### 4. Two of three members are not relinked
+### 5. Two of three members are not relinked
 
 Identity Platform issues different subject ids than Supabase. Only
 `julian.andrade@linkconsulting.com` has been repointed. `pedro.samorrinha@linkconsulting.com`
@@ -104,13 +137,13 @@ email **local part**, deliberately, because the company is moving from `linkcons
 `linkroad.com` and Identity Platform already returns the new domain while `OrgUser` holds the
 old one. Point `DATABASE_URL` at Cloud SQL first.
 
-### 5. No custom domain
+### 6. No custom domain
 
 The app lives on its `run.app` URL. Mapping a domain is a Cloud Run domain mapping plus a DNS
 record, and it also means adding the new origin to Identity Platform's authorized domains and
 to the browser API key's referrer list. Both are in `infra/terraform/identity.tf`.
 
-### 6. The Supabase project is still needed, for now
+### 7. The Supabase project is still needed, for now
 
 It holds the media objects and is the rollback. Once those are copied and the week is up, it
 can be downgraded or deleted, which also ends whatever the egress restriction is costing.
@@ -223,13 +256,9 @@ today's problems before a human did.
 
 ### Then, if there is time
 
-Migrate Terraform state to GCS, which is item 2 above. The bucket and the backend block are
-both done, so what is left is one command, run from the worktree that holds the state:
-
-```
-cd C:\Users\julian.andrade\prj\n4l-gcp-b\infra\terraform
-terraform init -migrate-state
-```
+Terraform state is already in GCS as of 18 August, so that job is off this list. What replaced
+it is item 3 above, and it is bigger: the stack cannot be applied at all right now without
+taking sign-in down. Closing that is the prerequisite for any further infrastructure work.
 
 ## Things worth knowing before touching any of this
 
