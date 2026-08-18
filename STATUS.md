@@ -78,7 +78,7 @@ Identity Platform:
   `NEXT_PUBLIC_GCIP_API_KEY`, `NEXT_PUBLIC_GCIP_PROJECT_ID`, `NEXT_PUBLIC_GCIP_AUTH_DOMAIN`,
   `NEXT_PUBLIC_ENTRA_TENANT_ID`
 
-**This is not drift.** Every other one of the 74 resources matches live infrastructure exactly.
+**This is not drift.** The other 72 of the 74 resources match live infrastructure exactly.
 It is missing inputs: `gcip_enabled` defaults to `false`, `azure_client_id` and
 `azure_client_secret` default to `""`, and **none of the three is in `terraform.tfvars`**. They
 were passed at apply time on 15 August and persisted nowhere. The `azure-client-secret` secret
