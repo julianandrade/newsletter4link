@@ -99,35 +99,14 @@ jobs:
       - name: The deployed service answers
         id: smoke
         continue-on-error: true
-        run: |
-          set -uo pipefail
-          fail=0
-          for path in "/login" "/api/health"; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${APP_URL}${path}" || echo 000)
-            echo "${path} -> ${code}"
-            # /login must be 200. Anything else means the running service is broken, whatever
-            # the last deploy said.
-            if [ "$path" = "/login" ] && [ "$code" != "200" ]; then fail=1; fi
-          done
-          exit $fail
+        run: bash .github/scripts/smoke.sh answers "$APP_URL"
 
+      # Same script the deploy runs, so the two cannot drift into disagreeing about what
+      # "the service is fine" means.
       - name: The browser bundle carries its build-time config
         id: bundle
         continue-on-error: true
-        run: |
-          set -uo pipefail
-          html=$(curl -s --max-time 40 "${APP_URL}/login")
-          found=0
-          for chunk in $(printf '%s' "$html" | grep -oE '/_next/static/chunks/[^"]+\.js' | sort -u | head -40); do
-            if curl -s --max-time 40 "${APP_URL}${chunk}" | grep -q 'AIzaSy'; then found=1; break; fi
-          done
-          if [ "$found" = "0" ]; then
-            echo "The Identity Platform API key is NOT in the client bundle."
-            echo "Sign-in cannot work: NEXT_PUBLIC_* values are inlined at build time, so the"
-            echo "build did not receive them as build arguments."
-            exit 1
-          fi
-          echo "Identity Platform config present in the bundle."
+        run: bash .github/scripts/smoke.sh bundle "$APP_URL"
 
       # --- Report -------------------------------------------------------------------
 

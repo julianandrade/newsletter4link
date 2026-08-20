@@ -143,6 +143,22 @@ jobs:
             --project "${GCP_PROJECT}" \
             --quiet
 
+      # A deploy that reports success and serves a broken revision is the failure mode this
+      # repository keeps hitting, and it is invisible until someone tries to sign in. These
+      # are the same two probes the daily bug hunt runs, from the same script, so the two
+      # cannot drift; the difference is only when they run. Before this step the window
+      # between shipping a broken image and noticing was up to a day, since the sweep fires
+      # at 06:17.
+      #
+      # It gates the job deliberately: a red deploy is the point. The revision is already
+      # taking traffic by the time this runs, so a failure here is a signal to roll back, not
+      # a prevention. `gcloud run services update-traffic` to the previous revision is the
+      # rollback, and Cloud Run keeps them.
+      - name: Smoke check the revision that just took traffic
+        env:
+          APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+        run: bash .github/scripts/smoke.sh all "$APP_URL"
+
       # -----------------------------------------------------------------------
       # Database migrations are intentionally NOT run here. Per repo convention
       # (CLAUDE.md), `prisma migrate deploy` is an explicit, auditable release
