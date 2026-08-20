@@ -1,6 +1,6 @@
 # Status
 
-> Last updated: 20 August 2026, after the first deploy through the workflow reached production.
+> Last updated: 20 August 2026, after the deploy gained its own smoke check.
 > Read this first when picking the project up after a break.
 
 ## Where things stand
@@ -253,10 +253,9 @@ the `/_next/static/chunks/*.js` hashes had all changed from before the deploy, a
 still inlined in one of them. The whole daily bug hunt was then re-run against the new image and
 came back green.
 
-One part of step 4 was **not** done: nobody signed in through a browser. `/login` answering 200
-and the key being present prove the build is capable of sign-in, not that the round trip to
-Microsoft and back works on this revision. That is the one remaining unknown about the 20 August
-deploy, and it takes a person about thirty seconds.
+The browser round trip is confirmed too, by Julian, on revision `newsletter4link-00013-82n`
+after the second deploy: signed in through Microsoft and got in. So the identity path is
+verified end to end on `next` 16.3.1 rather than inferred from the key being present.
 
 ### Step 5: the push trigger, which is a decision
 
@@ -267,18 +266,33 @@ expired.
 
 The reason to still say no is different: there is no staging environment and one Cloud SQL
 instance, so a merge would reach the only database the product has without a person choosing the
-moment. Manual dispatch costs one click and buys the choice of when. Worth revisiting once
-either a staging service or the smoke check in step 6 exists, because a bad automatic deploy that
-is detected in ninety seconds is a very different risk from one nobody notices.
+moment. Manual dispatch costs one click and buys the choice of when.
 
-### Step 6: a smoke check inside the deploy, still open
+**Its stated prerequisite now exists.** Step 6 is done, so a bad automatic deploy fails its own
+job within a minute or two instead of sitting unnoticed until 06:17. That was the condition this
+page set for revisiting the question, so the question is genuinely open rather than parked. What
+has not changed is the missing staging environment: the check tells you quickly that production
+is broken, it does not stop production from breaking.
 
-The daily sweep already curls `/login` at 06:17, but nothing checks the service immediately
-**after** a deploy. A step at the end of `deploy.yml` that fetches `/login`, fails on anything
-but 200, and greps a chunk for `AIzaSy` would close the window between shipping a broken image
-and the next morning. It is the same two probes the bug hunt already runs, so the logic exists
-and only needs to run in the other place. This is the cheapest remaining item on this page, and
-it is the prerequisite that would make step 5 defensible.
+### Step 6: a smoke check inside the deploy, done
+
+`deploy.yml` ends with a smoke check now, and it gates the job. Before it, the window between
+shipping a broken image and anyone noticing was up to a day, because the sweep fires at 06:17.
+
+Both probes moved into `.github/scripts/smoke.sh`, which the bug hunt and the deploy now share.
+Two copies of "is the service fine" is how the two drift until one of them is quietly wrong, the
+same reasoning as `lib/email/merge-tags.ts`. The script takes a subcommand, so the sweep keeps
+one step per failure mode, and therefore one issue title per failure mode, while the deploy runs
+both at once. `all` runs both before reporting rather than short circuiting, so one failure never
+hides the other's result.
+
+The `/login` check retries three times over about ten seconds, because a revision that has just
+taken traffic can refuse a request while it warms. Ten seconds does not hide an outage, and a
+smoke check that flakes gets switched off, which is worse than not having one.
+
+Note what this buys and what it does not: the revision is already serving by the time the check
+runs, so a red deploy is a signal to roll back rather than a prevention. The rollback is
+`gcloud run services update-traffic` to the previous revision, and Cloud Run keeps them.
 
 ### Then, if there is time
 

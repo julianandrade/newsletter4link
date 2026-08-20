@@ -349,7 +349,10 @@ variables are set, so the workflow is **not inert**: `gh workflow run deploy.yml
 master` is a real production deploy.
 
 A green run is still not a shipped change, which this project has proved more than once.
-Four cheap signals settle it, and all four were checked on 20 August:
+Four cheap signals settle it, and all four were checked on 20 August. **Signals 1 and 4 now
+run inside the deploy itself**, as a gating step calling `.github/scripts/smoke.sh all`, the
+same script the daily bug hunt uses, so a broken revision fails its own deploy instead of
+waiting for the 06:17 sweep. Check 2 and 3 by hand when you want them:
 
 1. `/login` answers **200**.
 2. `/api/health` answers **307**, and always has. Not a regression, and the bug hunt
@@ -362,6 +365,10 @@ Four cheap signals settle it, and all four were checked on 20 August:
 Local `gcloud` is no help for reading the running revision: it wants an interactive
 `gcloud auth login` and cannot prompt from a tool call. Take the revision from the
 workflow log instead.
+
+The smoke check runs **after** traffic has moved, so a red deploy means roll back rather than
+"nothing shipped". `gcloud run services update-traffic` to the previous revision is the
+rollback, and Cloud Run keeps them.
 
 Service config (CPU, memory, env, secrets, scaling, ingress) belongs to Terraform. The
 workflow only patches the image, so never add `--set-env-vars` or `--set-secrets` to it.
