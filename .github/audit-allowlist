@@ -11,32 +11,21 @@
 # we are shipping anyway". Removing one is free and the workflow tells you when it is safe,
 # so the list shrinks as upstream releases land.
 #
-# Baseline taken 2026-08-20 at 25f6d8e, after #55: 21 high advisories, 0 critical.
-# None of these has a reachable non-breaking fix today. `npm audit fix` reports
-# "up to date" and `--force` changes nothing.
+# Pruned 2026-08-20 from 21 entries to 3, after next 16.3.1 and sharp 0.35.3. 18 entries
+# went stale in one bump, which is the case a count-based baseline would have passed in
+# silence while leaving eighteen advisories of headroom for new ones to hide in.
 #
-#   next and prisma do not appear below. Both are flagged transitively, next via postcss
-#   and sharp, prisma via @prisma/config, so fixing those fixes these.
-#   sharp needs 0.35.3, a deliberate major with image-pipeline testing behind it.
+# The three left are all resource-exhaustion (ReDoS or stack/CPU exhaustion) in build-side
+# tooling, reached by our own toolchain on inputs we control rather than by a request.
 #
-GHSA-28wg-ghj8-5hjv     # nanoid
-GHSA-2v37-7h3g-55p8     # nanoid
-GHSA-46wh-pxpv-q5gq     # express-rate-limit
-GHSA-4c8g-83qw-93j6     # fast-uri
-GHSA-6g55-p6wh-862q     # postcss
-GHSA-7p8r-x3mc-p8w7     # fast-uri
-GHSA-96hv-2xvq-fx4p     # ws
+# npm reports a fix as "available" for picomatch and path-to-regexp, and `npm audit fix`
+# still changes nothing, including with --force. Both are pinned by a transitive parent that
+# wants the vulnerable major: micromatch wants picomatch@^2.3.1 while everything else in the
+# tree is already on 4.x, and router wants path-to-regexp@^8.0.0. Neither is reachable until
+# those parents move. deepmerge-ts is honest about it: the only fix npm offers is a prisma
+# downgrade to 6.12.0, flagged semver-major, via @prisma/config which pins deepmerge-ts@7.1.5
+# exactly.
+#
 GHSA-c2c7-rcm5-vvqj     # picomatch
-GHSA-f88m-g3jw-g9cj     # sharp
-GHSA-fx2h-pf6j-xcff     # vite
 GHSA-ggr8-5vv4-36mx     # deepmerge-ts
 GHSA-j3q9-mxjg-w52f     # path-to-regexp
-GHSA-mwp4-54f8-5fhr     # ip-address
-GHSA-p9ff-h696-f583     # vite
-GHSA-q3j6-qgpj-74h6     # fast-uri
-GHSA-r28c-9q8g-f849     # postcss
-GHSA-r635-g3xr-vw7x     # engine.io
-GHSA-v2hh-gcrm-f6hx     # fast-uri
-GHSA-v2wj-q39q-566r     # vite
-GHSA-v39h-62p7-jpjc     # fast-uri
-GHSA-wc8c-qw6v-h7f6     # @hono/node-server

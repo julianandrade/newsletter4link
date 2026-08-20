@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import { composeMeme, renderMeme, MAX_WIDTH } from "../lib/memes/render";
 import {
   MEME_TEMPLATES,
@@ -241,7 +241,7 @@ async function sheet(): Promise<void> {
   }
 
   const rows = Math.ceil(cells.length / COLS);
-  const layers: sharp.OverlayOptions[] = [];
+  const layers: OverlayOptions[] = [];
 
   for (const [index, cell] of cells.entries()) {
     const left = (index % COLS) * CELL;
