@@ -26,10 +26,11 @@
 # never the browser. That failure mode has already cost this project two days, and
 # it is why the daily bug hunt greps the deployed chunks for `AIzaSy`.
 #
-# This workflow is INERT until the infra (infra/terraform) is applied and the
-# variables above are set: with WIF unconfigured the auth step fails fast and
-# nothing is deployed. It does NOT touch Vercel: existing Vercel deploys on
-# push to master continue independently and are unaffected by this file.
+# This workflow is LIVE. All nine variables are set, WIF authenticates, and since
+# 20 August every merge to master ships to production after `verify` passes. It
+# ran manually twice first, on 08664a4 and 6d64a10, both verified in the browser.
+# Vercel is irrelevant now: that project is paused and `vercel.json` sets
+# `git.deploymentEnabled: false`.
 #
 # Service config (CPU/memory/env/secrets/scaling/ingress) is owned by Terraform.
 # This workflow only ships a new image: `gcloud run deploy --image <ref>` on an
@@ -40,19 +41,32 @@
 name: Deploy to Cloud Run
 
 on:
-  # Manual only, deliberately, until Phase E cuts traffic over.
+  # Every merge to master ships. Julian's call, 20 August, after two manual deploys had
+  # succeeded and the deploy gained its own smoke check.
   #
-  # The ported version also ran on every push to master, with a header arguing it was
-  # harmless because unconfigured WIF makes the auth step fail fast. That is true and it is
-  # not the problem. The problem is what it looks like: a red job on master after every
-  # merge, for weeks, which is how a team learns to ignore a failing check. And once
-  # Phase B does set the repo variables, it would begin deploying on every merge through
-  # Phases C and D, when the service is deliberately idle and pointed at a database that is
-  # mid-migration.
+  # This trigger was deliberately absent for weeks, for a reason that has now expired: with
+  # WIF unconfigured the auth step failed fast, so it would have painted master red after
+  # every merge for weeks, which is how a team learns to ignore a failing check. Then through
+  # Phases C and D it would have deployed on every merge while the service was idle and its
+  # database mid-migration. Neither is true any more.
   #
-  # Phase E adds `push: branches: [master]` back, in the same change that unpauses Cloud
-  # Scheduler and points the domain here. Until then a deploy is something someone chose.
+  # The risk that remains, and it is real: there is no staging environment and one Cloud SQL
+  # instance, so a merge reaches the only database the product has. The smoke check below
+  # makes a bad revision loud within a couple of minutes rather than silent until 06:17. It
+  # does not make one impossible. Rollback is `gcloud run services update-traffic` to the
+  # previous revision, and Cloud Run keeps them.
+  push:
+    branches: [master]
   workflow_dispatch:
+
+# One deploy at a time, and a queued one waits rather than replacing the running one. Two
+# merges a minute apart would otherwise race to `gcloud run deploy` and the revision that
+# ends up serving is whichever finished last, not whichever is newer. cancel-in-progress is
+# off on purpose: cancelling a job midway through `gcloud run deploy` is how you get a
+# half-applied service.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT: newsletter-link-ai-radar
@@ -62,7 +76,35 @@ env:
   IMAGE_REPO: europe-southwest1-docker.pkg.dev/newsletter-link-ai-radar/app/newsletter4link
 
 jobs:
+  # Nothing ships that has not passed the same three gates a PR passes. Master is behind a
+  # required PR, so this is usually a formality, but a rebase merge lands a sha that no check
+  # has ever seen: different parent, different commit. That is exactly why `ci.yml` re-runs on
+  # master, and it is not a gate if the deploy does not wait for it.
+  #
+  # Deliberately duplicated here rather than chained off `ci.yml` with `workflow_run`. That
+  # trigger runs in the context of the default branch and reports `GITHUB_SHA` as the branch
+  # tip rather than the commit that fired it, so the image would occasionally be tagged with a
+  # sha it was not built from. Three npm commands is a cheaper price than a deploy pipeline
+  # that mislabels what it shipped.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Types
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npx vitest run
+      - name: Lint
+        run: npm run lint
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -162,7 +204,15 @@ jobs:
       # -----------------------------------------------------------------------
       # Database migrations are intentionally NOT run here. Per repo convention
       # (CLAUDE.md), `prisma migrate deploy` is an explicit, auditable release
-      # step run by a human, not on every push. Running it from this runner
+      # step run by a human, not on every push.
+      #
+      # Deploy-on-push makes this sharper than it was. A merge that carries a
+      # Prisma migration now ships code expecting a schema the database does not
+      # have yet, within minutes and with nobody choosing the moment. So for any
+      # change with a migration in it: run `prisma migrate deploy` FIRST, against
+      # a schema the currently running code still tolerates, and merge second.
+      # Additive migrations make that easy; a rename or a drop needs two releases,
+      # the first of which is additive. Running it from this runner
       # would also require reaching Cloud SQL via the Cloud SQL Auth Proxy (or a
       # dedicated Cloud Run Job with the proxy sidecar), which is out of scope.
       #
