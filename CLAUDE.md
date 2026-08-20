@@ -338,9 +338,38 @@ markup you changed. A green Vercel build is not evidence that the change shipped
 - **Repository:** https://github.com/julianandrade/newsletter4link
 
 **Deploy Process:** deploys are **manual**, and pushing to master deploys nothing.
-`.github/workflows/deploy.yml` is `workflow_dispatch` only, deliberately, and as of
-18 August it has never run: the first press is a real deploy to production. It
+`.github/workflows/deploy.yml` is `workflow_dispatch` only, deliberately. It
 authenticates with Workload Identity Federation, so no key is involved.
+
+It first ran on **20 August 2026**, against master `08664a4`, and worked: every step
+green, WIF authenticating on its first ever use, image tagged with the commit sha in
+`europe-southwest1-docker.pkg.dev/newsletter-link-ai-radar/app/newsletter4link`, and
+revision `newsletter4link-00012-gbg` taking 100% of traffic. All nine required repo
+variables are set, so the workflow is **not inert**: `gh workflow run deploy.yml --ref
+master` is a real production deploy.
+
+A green run is still not a shipped change, which this project has proved more than once.
+Four cheap signals settle it, and all four were checked on 20 August:
+
+1. `/login` answers **200**.
+2. `/api/health` answers **307**, and always has. Not a regression, and the bug hunt
+   probes it without gating on it.
+3. The `/_next/static/chunks/*.js` hashes in `/login` differ from before the deploy.
+   Identical hashes mean nothing shipped, whatever the run said.
+4. One of those chunks contains `AIzaSy`. This is the only proof sign-in can work, for
+   the build-argument reason under Build Requirements below.
+
+Local `gcloud` is no help for reading the running revision: it wants an interactive
+`gcloud auth login` and cannot prompt from a tool call. Take the revision from the
+workflow log instead.
+
+Service config (CPU, memory, env, secrets, scaling, ingress) belongs to Terraform. The
+workflow only patches the image, so never add `--set-env-vars` or `--set-secrets` to it.
+
+**Still open, and a policy call rather than a task:** whether master should deploy on
+push. Everything needed for it works now; the question is whether every merge should
+reach production without a person choosing the moment. Until that is answered, the
+dispatch stays manual.
 
 `vercel.json` sets `git.deploymentEnabled: false`. The Vercel project is paused, so
 every push was producing a failed "Deployment was blocked" check on the pull request.

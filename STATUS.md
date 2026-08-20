@@ -1,6 +1,6 @@
 # Status
 
-> Last updated: 18 August 2026, after the Terraform state moved into GCS.
+> Last updated: 20 August 2026, after the first deploy through the workflow reached production.
 > Read this first when picking the project up after a break.
 
 ## Where things stand
@@ -31,7 +31,7 @@ path exists. It is just no longer instant, and it gets colder the further Cloud 
 
 ## Unfinished
 
-### 1. Deployments are manual, but the workflow is no longer a trap
+### 1. Deployments are manual, and the workflow now has one successful run behind it
 
 `.github/workflows/deploy.yml` is still `workflow_dispatch` only, deliberately. What changed on
 16 August is that pressing "Run workflow" is now safe: it passes the four `NEXT_PUBLIC_GCIP_*`
@@ -44,10 +44,19 @@ All nine repo variables are set (`GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`, and the 
 that currently works. WIF was already applied by `infra/terraform/wif.tf`, so nothing else is
 needed to authenticate.
 
-**Still untested end to end: this workflow has never run.** The first press is a real deploy to
-production, so it is Julian's call rather than something to prove unattended. Adding
-`push: branches: [master]` is the step after that, and should wait until one manual run has
-succeeded.
+**It has now run.** On 20 August, against master `08664a4`, on Julian's explicit go-ahead:
+every step green, WIF authenticating on its first ever use, image tagged with the commit sha,
+and revision `newsletter4link-00012-gbg` taking 100% of traffic. Production was then probed
+rather than assumed: `/login` answered 200, the `/_next/static/chunks/*.js` hashes had all
+changed, and `AIzaSy` was still inlined in one of them, which is the only evidence sign-in can
+work. `/api/health` answers 307 and did so before the deploy too.
+
+So the preflight and the build arguments are no longer a claim about what should happen. What
+remains is the policy question, not the plumbing: **should master deploy on push?** Everything
+needed for it works. The question is whether every merge should reach production without a
+person choosing the moment, and on a service this small with no staging environment and one
+Cloud SQL instance behind it, that is a real trade rather than an obvious yes. Until it is
+answered the dispatch stays manual, which costs one click and buys the choice of when.
 
 ### 2. Terraform state lives in GCS, and the local copies are still on the laptop
 
@@ -219,70 +228,57 @@ revisiting.
 **Rate limiting, send idempotency and Zod on write routes** are all still absent, and all were
 on the parallel track.
 
-## Tomorrow: make deployments automatic
+## Deployments: done, minus one decision
 
-Goal: pushing to master builds, pushes and deploys to Cloud Run, with no laptop involved.
+Goal was: pushing to master builds, pushes and deploys to Cloud Run with no laptop involved.
+Steps 1 to 4 below are **done**, proven by a real deploy on 20 August. Step 5 is a decision
+rather than a task. Step 6 is still open and now costs almost nothing.
 
-The infrastructure for this already exists and is applied. Workload Identity Federation, the
-deployer service account and Artifact Registry were created in Phase B and have never been
-used, because every deploy so far was manual. So tomorrow is mostly wiring and proving, not
-building.
+### Steps 1 to 4: done, 16 to 20 August
 
-### Step 1: fix the workflow's build arguments, first and before anything else
+**Step 1, the build arguments.** `deploy.yml` passed three and needed seven. All seven are
+passed now, and a preflight step refuses the build outright when any is unset. Without this the
+image builds and deploys happily and nobody can sign in, which is the worst shape a bug has.
 
-`deploy.yml` passes three build arguments and needs seven. Add:
+**Step 2, the repository variables.** All nine are set: `GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`
+and the seven `NEXT_PUBLIC_*`. Every one is a public value; none is a secret, because each is
+inlined into a bundle any visitor can download. The browser key is restricted by HTTP referrer
+in `infra/terraform/identity.tf`, which is what actually protects it.
 
-```
---build-arg NEXT_PUBLIC_GCIP_API_KEY="${{ vars.NEXT_PUBLIC_GCIP_API_KEY }}"
---build-arg NEXT_PUBLIC_GCIP_PROJECT_ID="${{ vars.NEXT_PUBLIC_GCIP_PROJECT_ID }}"
---build-arg NEXT_PUBLIC_GCIP_AUTH_DOMAIN="${{ vars.NEXT_PUBLIC_GCIP_AUTH_DOMAIN }}"
---build-arg NEXT_PUBLIC_ENTRA_TENANT_ID="${{ vars.NEXT_PUBLIC_ENTRA_TENANT_ID }}"
-```
+**Step 3, Workload Identity Federation.** Authenticated on its first ever use, 20 August. This
+was expected to be where a problem showed, and it was not.
 
-Without these the image builds and deploys happily and nobody can sign in, which is the worst
-shape a bug can have.
+**Step 4, verify rather than assume.** Checked on the 20 August deploy: `/login` answered 200,
+the `/_next/static/chunks/*.js` hashes had all changed from before the deploy, and `AIzaSy` was
+still inlined in one of them. The whole daily bug hunt was then re-run against the new image and
+came back green.
 
-### Step 2: set the GitHub repository variables
+One part of step 4 was **not** done: nobody signed in through a browser. `/login` answering 200
+and the key being present prove the build is capable of sign-in, not that the round trip to
+Microsoft and back works on this revision. That is the one remaining unknown about the 20 August
+deploy, and it takes a person about thirty seconds.
 
-Settings, Secrets and variables, Actions, Variables. All seven are public values; none is a
-secret.
+### Step 5: the push trigger, which is a decision
 
-| Variable | Where to get it |
-|---|---|
-| `GCP_WIF_PROVIDER` | `terraform output wif_provider` |
-| `GCP_DEPLOYER_SA` | `terraform output deployer_sa` |
-| `NEXT_PUBLIC_SUPABASE_URL` | current Vercel production value |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | current Vercel production value |
-| `NEXT_PUBLIC_APP_URL` | `https://newsletter4link-rtbko5uyza-no.a.run.app` |
-| `NEXT_PUBLIC_GCIP_API_KEY` | `terraform output gcip_api_key` |
-| `NEXT_PUBLIC_GCIP_PROJECT_ID` | `newsletter-link-ai-radar` |
-| `NEXT_PUBLIC_GCIP_AUTH_DOMAIN` | `newsletter-link-ai-radar.firebaseapp.com` |
-| `NEXT_PUBLIC_ENTRA_TENANT_ID` | `7df72313-91ad-497c-aff0-6786830b8734` |
+Adding `push: branches: [master]` to `deploy.yml` is now purely a policy call, since everything
+it depends on works. It was removed deliberately in Phase B because a workflow that deploys on
+every merge before it can succeed teaches people to ignore a failing check. That reason has
+expired.
 
-### Step 3: prove Workload Identity Federation works, manually
+The reason to still say no is different: there is no staging environment and one Cloud SQL
+instance, so a merge would reach the only database the product has without a person choosing the
+moment. Manual dispatch costs one click and buys the choice of when. Worth revisiting once
+either a staging service or the smoke check in step 6 exists, because a bad automatic deploy that
+is detected in ninety seconds is a very different risk from one nobody notices.
 
-Run the workflow with `workflow_dispatch` while it is still manual-only. This is the step that
-either works or fails in an interesting way, since WIF has never authenticated once. Expect the
-auth step to be where a problem shows.
+### Step 6: a smoke check inside the deploy, still open
 
-### Step 4: verify the deployed image, do not assume it
-
-Two checks, both of which caught real bugs today:
-
-1. Fetch `/login` on the deployed service and grep the JavaScript chunks for `AIzaSy`. If the
-   key is absent, the build arguments did not arrive and sign-in is broken.
-2. Sign in, in a browser. `/login` returning 200 proves nothing about whether anyone can get in.
-
-### Step 5: only then, add the push trigger
-
-Add `push: branches: [master]` back to `deploy.yml`. It was removed deliberately in Phase B,
-because a workflow that deploys on every merge before it can succeed teaches people to ignore
-a failing check.
-
-### Step 6: consider a smoke check after deploy
-
-A step that curls `/login` and fails the job on anything but 200 would have caught two of
-today's problems before a human did.
+The daily sweep already curls `/login` at 06:17, but nothing checks the service immediately
+**after** a deploy. A step at the end of `deploy.yml` that fetches `/login`, fails on anything
+but 200, and greps a chunk for `AIzaSy` would close the window between shipping a broken image
+and the next morning. It is the same two probes the bug hunt already runs, so the logic exists
+and only needs to run in the other place. This is the cheapest remaining item on this page, and
+it is the prerequisite that would make step 5 defensible.
 
 ### Then, if there is time
 
