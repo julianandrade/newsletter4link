@@ -1,6 +1,6 @@
 # Status
 
-> Last updated: 20 August 2026, after the deploy gained its own smoke check.
+> Last updated: 20 August 2026. Master now deploys to production on every merge.
 > Read this first when picking the project up after a break.
 
 ## Where things stand
@@ -31,13 +31,18 @@ path exists. It is just no longer instant, and it gets colder the further Cloud 
 
 ## Unfinished
 
-### 1. Deployments are manual, and the workflow now has one successful run behind it
+### 1. Deployments are automatic on merge to master
 
-`.github/workflows/deploy.yml` is still `workflow_dispatch` only, deliberately. What changed on
-16 August is that pressing "Run workflow" is now safe: it passes the four `NEXT_PUBLIC_GCIP_*`
-build arguments, and a preflight step refuses the build outright when any build-time variable
-is unset. Before this, a CI build produced an image whose browser bundle fell back to Supabase
-auth and could not sign anyone in, while reporting a successful deploy.
+`.github/workflows/deploy.yml` runs on `push: branches: [master]` and on `workflow_dispatch`,
+behind a `verify` job that must pass `tsc`, `vitest` and `lint` on the merged sha. A
+`deploy-production` concurrency group serialises deploys so two quick merges queue instead of
+racing. See step 5 below for what went in with the trigger and why.
+
+It was dispatch-only until 20 August. What made pressing "Run workflow" safe in the first place,
+on 16 August, is that it passes the four `NEXT_PUBLIC_GCIP_*` build arguments and refuses the
+build outright when any build-time variable is unset. Before that, a CI build produced an image
+whose browser bundle fell back to Supabase auth and could not sign anyone in, while reporting a
+successful deploy.
 
 All nine repo variables are set (`GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`, and the seven
 `NEXT_PUBLIC_*`), taken from the running Cloud Run service so a CI build reproduces the image
@@ -51,12 +56,13 @@ rather than assumed: `/login` answered 200, the `/_next/static/chunks/*.js` hash
 changed, and `AIzaSy` was still inlined in one of them, which is the only evidence sign-in can
 work. `/api/health` answers 307 and did so before the deploy too.
 
-So the preflight and the build arguments are no longer a claim about what should happen. What
-remains is the policy question, not the plumbing: **should master deploy on push?** Everything
-needed for it works. The question is whether every merge should reach production without a
-person choosing the moment, and on a service this small with no staging environment and one
-Cloud SQL instance behind it, that is a real trade rather than an obvious yes. Until it is
-answered the dispatch stays manual, which costs one click and buys the choice of when.
+It then ran a second time, on `6d64a10`, shipping `next` 16.3.1 and `sharp` 0.35.3 as revision
+`newsletter4link-00013-82n`. Julian signed in through a browser on that one, so the identity
+path is verified end to end and not merely inferred.
+
+Those two runs are what the push trigger was waiting on, and it landed the same day. The policy
+question that used to sit here is answered; step 5 records the answer and the two things that
+had to go in beside it.
 
 ### 2. Terraform state lives in GCS, and the local copies are still on the laptop
 
@@ -257,22 +263,42 @@ The browser round trip is confirmed too, by Julian, on revision `newsletter4link
 after the second deploy: signed in through Microsoft and got in. So the identity path is
 verified end to end on `next` 16.3.1 rather than inferred from the key being present.
 
-### Step 5: the push trigger, which is a decision
+### Step 5: the push trigger, done
 
-Adding `push: branches: [master]` to `deploy.yml` is now purely a policy call, since everything
-it depends on works. It was removed deliberately in Phase B because a workflow that deploys on
-every merge before it can succeed teaches people to ignore a failing check. That reason has
-expired.
+`deploy.yml` runs on `push: branches: [master]` as of 20 August, Julian's call, made after two
+manual deploys had succeeded and step 6 had closed the detection window.
 
-The reason to still say no is different: there is no staging environment and one Cloud SQL
-instance, so a merge would reach the only database the product has without a person choosing the
-moment. Manual dispatch costs one click and buys the choice of when.
+Two things went in with it that the original one-line plan did not mention, because both are
+only obvious once the trigger is real:
 
-**Its stated prerequisite now exists.** Step 6 is done, so a bad automatic deploy fails its own
-job within a minute or two instead of sitting unnoticed until 06:17. That was the condition this
-page set for revisiting the question, so the question is genuinely open rather than parked. What
-has not changed is the missing staging environment: the check tells you quickly that production
-is broken, it does not stop production from breaking.
+**A `verify` job gates the deploy.** Nothing ships that has not passed `tsc`, `vitest` and
+`lint` on the merged sha. Master is behind a required PR, so this is usually a formality, but a
+rebase merge lands a sha no check has ever seen: different parent, different commit. That is
+the whole reason `ci.yml` re-runs on master, and it is not a gate if the deploy does not wait
+for it. It is duplicated in `deploy.yml` rather than chained off `ci.yml` with `workflow_run`,
+because that trigger reports `GITHUB_SHA` as the default-branch tip rather than the commit that
+fired it, so the image would sometimes be tagged with a sha it was not built from. Three npm
+commands is cheaper than a pipeline that mislabels what it shipped.
+
+**A `deploy-production` concurrency group, with `cancel-in-progress: false`.** Two merges a
+minute apart would otherwise race to `gcloud run deploy`, and the revision left serving is
+whichever finished last rather than whichever is newer. Cancellation is off because cancelling
+midway through `gcloud run deploy` is how a service ends up half applied.
+
+**What did not change, and is now the live risk.** There is still no staging environment and
+one Cloud SQL instance. A merge reaches the only database the product has. The smoke check
+makes a bad revision loud in a couple of minutes instead of silent until 06:17; it does not make
+one impossible. Rollback is `gcloud run services update-traffic` to the previous revision.
+
+**The migration hazard this creates.** A merge carrying a Prisma migration now ships code
+expecting a schema the database does not have, within minutes, with nobody choosing the moment.
+Apply the migration first, against a schema the running code still tolerates, then merge.
+Additive migrations make that easy; a rename or a drop needs two releases, the first additive.
+This is written into `CLAUDE.md` and into `deploy.yml` beside the commented-out migration step.
+
+A path filter was considered and left out. Skipping `**.md`-only merges would save a build, and
+two of today's five merges were docs-only, but "why did my merge not deploy" is a worse failure
+than a redundant deploy that ships identical bytes. Predictable beats clever in a deploy path.
 
 ### Step 6: a smoke check inside the deploy, done
 

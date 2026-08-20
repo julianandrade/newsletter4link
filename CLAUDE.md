@@ -337,9 +337,18 @@ markup you changed. A green Vercel build is not evidence that the change shipped
   `newsletter4link` in `europe-southwest1`, project `newsletter-link-ai-radar`
 - **Repository:** https://github.com/julianandrade/newsletter4link
 
-**Deploy Process:** deploys are **manual**, and pushing to master deploys nothing.
-`.github/workflows/deploy.yml` is `workflow_dispatch` only, deliberately. It
-authenticates with Workload Identity Federation, so no key is involved.
+**Deploy Process:** **every merge to master ships to production.** Julian's call,
+20 August. `.github/workflows/deploy.yml` runs on `push: branches: [master]` and on
+`workflow_dispatch`, authenticates with Workload Identity Federation so no key is
+involved, and will not deploy until its `verify` job passes `tsc`, `vitest` and `lint`
+on the merged sha. A `deploy-production` concurrency group serialises deploys, with
+`cancel-in-progress: false`, so two quick merges queue rather than racing.
+
+**If your change carries a Prisma migration, apply it before you merge.** This is the
+one thing deploy-on-push made materially riskier: code that expects a new column now
+reaches production minutes after merge, with nobody picking the moment. Run
+`prisma migrate deploy` first, against a schema the running code still tolerates, then
+merge. A rename or a drop needs two releases, the first additive.
 
 It first ran on **20 August 2026**, against master `08664a4`, and worked: every step
 green, WIF authenticating on its first ever use, image tagged with the commit sha in
