@@ -161,8 +161,9 @@ answer again.
 
 **Something watches daily now, but nothing watches continuously.**
 `.github/workflows/bug-hunt.yml` sweeps every morning at 06:17 UTC and opens an issue per
-finding: typecheck, unit tests, `npm audit` at high and above, `/login` answering 200, and the
-Identity Platform key actually being present in the deployed client bundle.
+finding: typecheck, unit tests, a critical `npm audit` advisory, a high advisory that
+`.github/audit-allowlist` does not already accept, `/login` answering 200, and the Identity
+Platform key actually being present in the deployed client bundle.
 
 Its first real run, 16 August, is worth knowing about because it failed in the way this
 project keeps failing. Every check ran correctly and the audit legitimately found 24 high and
@@ -171,6 +172,26 @@ project keeps failing. Every check ran correctly and the audit legitimately foun
 `gh` refused, `set -euo pipefail` killed the job, and the finding was never filed. A watchdog
 whose only symptom of failure is a red tick on a workflow nobody watches is indistinguishable
 from one finding nothing. The label exists now.
+
+The audit check was then re-scoped on 20 August, because it could not go green and so said
+nothing. It ran `npm audit --audit-level=high`, which exits non-zero on any high advisory, and
+25 high plus 1 critical stood across 1,487 dependencies. #55 cleared the critical and nine of
+the high; #56 was closed as a subset of it. That left 21 distinct high advisories with no
+reachable non-breaking fix at all, since `npm audit fix` reports "up to date" and `--force`
+changes nothing, and the two headline bumps in #55 do not clear their own advisories: 16.2.11
+is still inside `next`'s vulnerable range and 7.9.1 inside `prisma`'s, and both are flagged
+transitively anyway, `next` via `postcss` and `sharp`, `prisma` via `@prisma/config`.
+
+So #48 was a standing-debt ticket wearing a bug's clothes, commented on for three consecutive
+days with nothing actionable changing, which is precisely how a repository learns to stop
+reading its own watchdog. The gate is two checks now. A critical fails unconditionally at any
+depth, including dev tooling, because this workflow holds `issues: write` and the one critical
+the sweep ever found was in the test runner. A high fails only when its GHSA id is absent from
+`.github/audit-allowlist`, so the sweep reports what is **new** and stays quiet about what is
+merely still true. The list is a set rather than a count deliberately: a count has a stale
+window where it falls to 10, nobody lowers the 21, and five new advisories arrive unnoticed
+under the old ceiling. Accepting an advisory is a line in a reviewed diff; pruning one is free,
+and the workflow says which entries have gone stale without failing on the good news.
 
 What it still does not do is notice anything **between** runs. If Cloud Run starts erroring at
 09:00 the first sign is a person, or tomorrow's sweep. Cloud Monitoring alerts on Cloud Run 5xx
