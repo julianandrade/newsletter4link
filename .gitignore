@@ -68,3 +68,7 @@ public/link-linkroad logos/
 # Intermediate output, regenerable from public/images/memes by re-running the dry run.
 scripts/.meme-import/
 
+
+# Written by .github/scripts/audit-gate.mjs, in CI and when running it by hand.
+/audit.json
+/audit-new.md

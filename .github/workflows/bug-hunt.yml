@@ -18,7 +18,16 @@
 #   cron footprint      A registered cron is not evidence it ran. Vercel listed
 #                       daily-collection as enabled for months while it never once fired, so
 #                       this asks the database instead of the scheduler.
-#   dependency audit    npm audit, high and critical only, so it is signal rather than noise.
+#   critical advisory   npm audit at critical only, at any depth including dev tooling. This
+#                       workflow holds `issues: write`, and the one critical this sweep has
+#                       ever found was in the test runner. A critical is never allowlisted.
+#   new high advisory   npm audit at high, compared against .github/audit-allowlist, failing
+#                       only on an advisory that is not accepted yet. A count would be red
+#                       forever: 21 high advisories stand across 1,487 dependencies with no
+#                       reachable non-breaking fix, and a check that is always red teaches
+#                       people to ignore red, which is the same failure this file's own
+#                       history is about. A set has no stale window either, where the count
+#                       falls and new advisories arrive unnoticed under the old ceiling.
 #   typecheck and tests the same gates CI runs on a PR, re-run against master, because master
 #                       can rot through a dependency or an external change with no commit.
 #
@@ -70,10 +79,22 @@ jobs:
         continue-on-error: true
         run: npx vitest run
 
-      - name: Dependency audit, high and critical only
-        id: audit
+      # A critical is an emergency whatever depth it sits at, so this one is unconditional.
+      - name: Dependency audit, critical at any depth
+        id: audit_critical
         continue-on-error: true
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
+
+      # High advisories gate on what is NEW. The accepted set, and why each entry is there,
+      # is .github/audit-allowlist. `npm audit --json` exits non-zero whenever it finds
+      # anything, which is not the question being asked here, hence the `|| true`.
+      - name: Dependency audit, high advisories not yet accepted
+        id: audit_high
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          npm audit --json > audit.json || true
+          node .github/scripts/audit-gate.mjs audit.json .github/audit-allowlist audit-new.md
 
       - name: The deployed service answers
         id: smoke
@@ -120,9 +141,17 @@ jobs:
           declare -A results=(
             ["Typecheck fails on master"]="${{ steps.tsc.outcome }}"
             ["Unit tests fail on master"]="${{ steps.tests.outcome }}"
-            ["Dependency audit: high or critical advisories"]="${{ steps.audit.outcome }}"
+            ["Dependency audit: a critical advisory"]="${{ steps.audit_critical.outcome }}"
+            ["Dependency audit: new high-severity advisories"]="${{ steps.audit_high.outcome }}"
             ["Deployed service is not answering"]="${{ steps.smoke.outcome }}"
             ["Client bundle is missing its build-time config"]="${{ steps.bundle.outcome }}"
+          )
+
+          # A finding that can name itself does. Without this the high-advisory issue would say
+          # "something is new" and send the reader to a log that expires, which is how #48 spent
+          # three days restating a number nobody could act on.
+          declare -A details=(
+            ["Dependency audit: new high-severity advisories"]="audit-new.md"
           )
 
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -130,11 +159,19 @@ jobs:
           for title in "${!results[@]}"; do
             [ "${results[$title]}" = "failure" ] || continue
 
+            detail=""
+            file="${details[$title]:-}"
+            if [ -n "$file" ] && [ -s "$file" ]; then
+              detail="
+
+          $(cat "$file")"
+            fi
+
             # Reuse an open issue with the same title rather than filing a duplicate every day.
             existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
 
             if [ -n "$existing" ]; then
-              gh issue comment "$existing" --body "Still failing on $(date -u +%Y-%m-%d). Run: $run_url"
+              gh issue comment "$existing" --body "Still failing on $(date -u +%Y-%m-%d). Run: $run_url$detail"
               echo "commented on #$existing"
             else
               gh issue create \
@@ -142,7 +179,7 @@ jobs:
                 --label "bug-hunt" \
                 --body "Found by the daily bug hunt on $(date -u +%Y-%m-%d).
 
-          Run: $run_url
+          Run: $run_url$detail
 
           This check exists because this failure mode has happened here before; see the header
           of \`.github/workflows/bug-hunt.yml\` for which one and why."
