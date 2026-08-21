@@ -234,11 +234,20 @@ revisiting.
 **Rate limiting, send idempotency and Zod on write routes** are all still absent, and all were
 on the parallel track.
 
-## Deployments: done, minus one decision
+## Deployments: done
 
 Goal was: pushing to master builds, pushes and deploys to Cloud Run with no laptop involved.
-Steps 1 to 4 below are **done**, proven by a real deploy on 20 August. Step 5 is a decision
-rather than a task. Step 6 is still open and now costs almost nothing.
+**All six steps are done, as of 20 August.** Master deploys on merge, behind a `verify` gate,
+serialised by a concurrency group, and the deploy smoke-checks the revision it just shipped.
+
+The steps are kept below rather than deleted, because two of them record a bug that cost this
+project two days and would otherwise be rediscovered: `NEXT_PUBLIC_*` is a build-time value,
+and a green deploy proves nothing about whether the thing it shipped works.
+
+What is *not* solved, and is now the standing risk rather than an open task: there is no
+staging environment and one Cloud SQL instance, so every merge reaches the only database the
+product has. See the migration rule in `CLAUDE.md` before merging anything with a Prisma
+migration in it.
 
 ### Steps 1 to 4: done, 16 to 20 August
 
