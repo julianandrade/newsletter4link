@@ -338,59 +338,70 @@ markup you changed. A green Vercel build is not evidence that the change shipped
 - **Repository:** https://github.com/julianandrade/newsletter4link
 
 **Deploy Process:** **every merge to master ships to production.** Julian's call,
-20 August. `.github/workflows/deploy.yml` runs on `push: branches: [master]` and on
-`workflow_dispatch`, authenticates with Workload Identity Federation so no key is
-involved, and will not deploy until its `verify` job passes `tsc`, `vitest` and `lint`
-on the merged sha. A `deploy-production` concurrency group serialises deploys, with
-`cancel-in-progress: false`, so two quick merges queue rather than racing.
+20 August 2026. `.github/workflows/deploy.yml` runs on `push: branches: [master]` and on
+`workflow_dispatch`. There is no separate deploy step to remember, and no gap between
+master and production.
 
-**If your change carries a Prisma migration, apply it before you merge.** This is the
-one thing deploy-on-push made materially riskier: code that expects a new column now
-reaches production minutes after merge, with nobody picking the moment. Run
-`prisma migrate deploy` first, against a schema the running code still tolerates, then
-merge. A rename or a drop needs two releases, the first additive.
+Three properties of that pipeline, each there for a reason:
 
-It first ran on **20 August 2026**, against master `08664a4`, and worked: every step
-green, WIF authenticating on its first ever use, image tagged with the commit sha in
-`europe-southwest1-docker.pkg.dev/newsletter-link-ai-radar/app/newsletter4link`, and
-revision `newsletter4link-00012-gbg` taking 100% of traffic. All nine required repo
-variables are set, so the workflow is **not inert**: `gh workflow run deploy.yml --ref
-master` is a real production deploy.
+- **A `verify` job gates it** on `tsc`, `vitest` and `lint`, and the deploy job will not
+  start until it passes. Master is behind a required PR, so this is usually a formality,
+  but a rebase merge lands a sha no check has ever seen: different parent, different
+  commit. That is why `ci.yml` re-runs on master, and it is not a gate if the deploy does
+  not wait for it.
+- **A `deploy-production` concurrency group** serialises deploys with
+  `cancel-in-progress: false`, so two quick merges queue instead of racing to
+  `gcloud run deploy` and leaving whichever finished last in charge.
+- **It authenticates with Workload Identity Federation**, so no key exists to leak or
+  rotate.
 
-A green run is still not a shipped change, which this project has proved more than once.
-Four cheap signals settle it, and all four were checked on 20 August. **Signals 1 and 4 now
-run inside the deploy itself**, as a gating step calling `.github/scripts/smoke.sh all`, the
-same script the daily bug hunt uses, so a broken revision fails its own deploy instead of
-waiting for the 06:17 sweep. Check 2 and 3 by hand when you want them:
+**If your change carries a Prisma migration, apply it before you merge.** This is the one
+thing deploy-on-push made materially riskier: code expecting a new column reaches
+production within minutes, with nobody picking the moment. Run `prisma migrate deploy`
+first, against a schema the running code still tolerates, then merge. Additive migrations
+make that easy; a rename or a drop needs two releases, the first additive.
 
-1. `/login` answers **200**.
-2. `/api/health` answers **307**, and always has. Not a regression, and the bug hunt
-   probes it without gating on it.
-3. The `/_next/static/chunks/*.js` hashes in `/login` differ from before the deploy.
-   Identical hashes mean nothing shipped, whatever the run said.
-4. One of those chunks contains `AIzaSy`. This is the only proof sign-in can work, for
-   the build-argument reason under Build Requirements below.
+**A red deploy means roll back, not "nothing shipped".** The smoke check runs after traffic
+has moved, so by the time it fails the revision is already serving:
 
-Local `gcloud` is no help for reading the running revision: it wants an interactive
-`gcloud auth login` and cannot prompt from a tool call. Take the revision from the
-workflow log instead.
+```bash
+gcloud run services update-traffic newsletter4link --region europe-southwest1 --to-revisions <previous-revision>=100
+```
 
-The smoke check runs **after** traffic has moved, so a red deploy means roll back rather than
-"nothing shipped". `gcloud run services update-traffic` to the previous revision is the
-rollback, and Cloud Run keeps them.
+Cloud Run keeps previous revisions, and the workflow log names the one it created.
+
+**Verifying a deploy.** A green run is not a shipped change, which this project has proved
+more than once. Two of the four signals now run inside the deploy itself, as a gating step
+calling `.github/scripts/smoke.sh all`, the same script the daily bug hunt uses:
+
+| | Signal | Who checks it |
+|---|---|---|
+| 1 | `/login` answers **200** | the deploy, and the 06:17 sweep |
+| 2 | a `/_next/static/chunks/*.js` chunk contains `AIzaSy` | the deploy, and the 06:17 sweep |
+| 3 | the chunk hashes differ from before the deploy | by hand; identical hashes mean nothing shipped |
+| 4 | sign in through a browser | by hand; 200 plus the key prove sign-in *can* work, not that it does |
+
+Signal 2 is the one that matters most and looks least important: `NEXT_PUBLIC_*` is inlined
+at build time, so it is the only evidence sign-in can work at all. See Build Requirements
+below. `/api/health` answers **307** by design, because every page goes through the identity
+seam, so it is reported and never gated.
 
 Service config (CPU, memory, env, secrets, scaling, ingress) belongs to Terraform. The
 workflow only patches the image, so never add `--set-env-vars` or `--set-secrets` to it.
 
-**Still open, and a policy call rather than a task:** whether master should deploy on
-push. Everything needed for it works now; the question is whether every merge should
-reach production without a person choosing the moment. Until that is answered, the
-dispatch stays manual.
+Local `gcloud` cannot tell you which revision is running: it wants an interactive
+`gcloud auth login` and cannot prompt from a tool call. Take the revision from the workflow
+log instead.
 
-`vercel.json` sets `git.deploymentEnabled: false`. The Vercel project is paused, so
-every push was producing a failed "Deployment was blocked" check on the pull request.
-It was never a required check and never blocked a merge, but a permanently red tick
-teaches people to ignore red ticks.
+For the record, the path was proved by hand before it was automated: the workflow first ran
+on 20 August against `08664a4` (revision `newsletter4link-00012-gbg`), then against
+`6d64a10` (`00013-82n`, sign-in confirmed in a browser), and the merge that added the push
+trigger deployed itself (`00014-bl6`).
+
+`vercel.json` sets `git.deploymentEnabled: false`. The Vercel project is paused, so every
+push was producing a failed "Deployment was blocked" check on the pull request. It was never
+a required check and never blocked a merge, but a permanently red tick teaches people to
+ignore red ticks.
 
 **Build Requirements:**
 - Node.js 18+
